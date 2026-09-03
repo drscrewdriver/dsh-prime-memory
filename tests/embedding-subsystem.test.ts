@@ -1,0 +1,386 @@
+/**
+ * 嵌入子系统单元测试:状态文件、初始解析、下载器状态机(断点续传/sha 校验/取消)、
+ * 运行时安装器(npm ci→install 回退/取消)、本地服务状态机(假通道)、代理解析。
+ */
+import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, describe, expect, it, vi } from 'vitest';
+import { EmbeddingSourceStore, remoteCeiling, resolveInitialEmbedding, EmbeddingManager, makeLocalServiceFactory } from '../src/store/embedding-source.js';
+import { ModelDownloadQueue, resolveProxyUrl, maskProxyUrl } from '../src/store/download-queue.js';
+import { RuntimeInstaller, PINNED_TRANSFORMERS_VERSION } from '../src/store/runtime-installer.js';
+import { LocalEmbeddingService, type EmbedWorkerChannel, type EmbedWorkerReply } from '../src/store/local-embedding.js';
+import { MODEL_CATALOG, catalogById, catalogTotalBytes } from '../src/store/model-catalog.js';
+import { NoopEmbeddingService } from '../src/store/embedding.js';
+import type { MemoryConfig } from '../src/config.js';
+import type { CatalogEntry } from '../src/store/model-catalog.js';
+import type { MemoryLogger } from '../src/types.js';
+
+let dir: string;
+async function tmp(): Promise<string> {
+  if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-emb-'));
+  return dir;
+}
+afterAll(async () => {
+  if (dir) await rm(dir, { recursive: true, force: true });
+});
+
+const noopLogger: MemoryLogger = { info: () => {}, warn: () => {}, error: () => {} };
+
+function cfg(over: Partial<MemoryConfig['embedding']> = {}): MemoryConfig {
+  return {
+    dataDir: '', family: 'auto',
+    capture: { enabled: true, stripCodeBlocks: true, maxMessageChars: 4000 },
+    extract: { enabled: true, minMessages: 6, idleSeconds: 300, backgroundMessages: 10, candidatePool: 5 },
+    l2: { enabled: true, minNewMemories: 5, maxScenes: 12, sceneContextLimit: 3 },
+    l3: { enabled: true, interval: 20 },
+    recall: { enabled: true, maxResults: 5, maxCharsPerMemory: 500, maxTotalRecallChars: 2000, timeoutMs: 5000, includePersona: true, includeSceneNav: true, strategy: 'hybrid', scoreThreshold: 0.3, decayHalfLifeDays: 30 },
+    embedding: { enabled: true, baseUrl: 'http://x/v1', apiKey: 'k', model: 'm', dimensions: 8, maxInputChars: 5000, timeoutMs: 10000, allowLocalModels: true, mirror: 'https://hf-mirror.com', proxy: '', ...over },
+    llm: { provider: '', model: '', mode: 'host', baseURL: '', apiKey: '', maxTokens: 65536, reasoningEffort: '', temperature: 0.3, maxInputChars: 700000, timeoutMs: 120000 },
+    hall: { enabled: ['work'] },
+    tokenCost: { retentionDays: 365 },
+    tools: true,
+    benchControl: false,
+  } as MemoryConfig;
+}
+
+describe('model catalog', () => {
+  it('carries three pinned models with intact integrity data', () => {
+    expect(MODEL_CATALOG.map((m) => m.id)).toEqual(['bge-small-zh-v1.5', 'embeddinggemma-300m', 'bge-m3']);
+    expect(MODEL_CATALOG.map((m) => m.dims)).toEqual([512, 768, 1024]);
+    for (const m of MODEL_CATALOG) {
+      for (const f of m.files) {
+        expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
+        expect(f.size).toBeGreaterThan(0);
+      }
+    }
+    expect(catalogById('bge-m3')?.pooling).toBe('cls');
+    expect(catalogTotalBytes(MODEL_CATALOG[0])).toBeGreaterThan(20_000_000);
+  });
+});
+
+describe('embedding source store', () => {
+  it('roundtrip and corrupt-file fallback to remote', async () => {
+    const dataDir = join(await tmp(), `src-${Date.now()}`);
+    await mkdir(dataDir, { recursive: true });
+    const s = new EmbeddingSourceStore(dataDir);
+    await s.init();
+    expect(s.get()).toEqual({ source: 'remote', activeModel: null }); // 无文件 = 历史行为
+    await s.set({ source: 'local', activeModel: 'bge-m3' });
+    const s2 = new EmbeddingSourceStore(dataDir);
+    await s2.init();
+    expect(s2.get()).toEqual({ source: 'local', activeModel: 'bge-m3' });
+
+    const badDir = join(await tmp(), `srcbad-${Date.now()}`);
+    await mkdir(badDir, { recursive: true });
+    await writeFile(join(badDir, 'embedding-source.json'), '{{{');
+    const s3 = new EmbeddingSourceStore(badDir);
+    await s3.init();
+    expect(s3.get().source).toBe('remote');
+  });
+});
+
+describe('remoteCeiling / resolveInitialEmbedding', () => {
+  it('remote ceiling requires baseUrl+model+dims+enabled (key optional)', () => {
+    expect(remoteCeiling(cfg())).toBe(true);
+    expect(remoteCeiling(cfg({ apiKey: '' }))).toBe(true); // 本地免 key 自托管放行
+    expect(remoteCeiling(cfg({ enabled: false }))).toBe(false);
+    expect(remoteCeiling(cfg({ dimensions: 0 }))).toBe(false);
+    expect(remoteCeiling(cfg({ baseUrl: '' }))).toBe(false);
+  });
+
+  it('resolves off/local-when-disabled/local-missing/remote/no-ceiling paths', async () => {
+    const dataDir = join(await tmp(), `init-${Date.now()}`);
+    await mkdir(dataDir, { recursive: true });
+    const downloader = new ModelDownloadQueue(dataDir, { mirror: 'https://hf-mirror.com' });
+    const makeLocal = vi.fn(() => null);
+    const store = new EmbeddingSourceStore(dataDir);
+
+    await store.init();
+    expect((await resolveInitialEmbedding(cfg({ enabled: false }), store, downloader, makeLocal)).dims).toBe(0);
+    const localDisabled = cfg({ allowLocalModels: false });
+    await store.set({ source: 'local', activeModel: 'bge-m3' });
+    const r1 = await resolveInitialEmbedding(localDisabled, store, downloader, makeLocal);
+    expect(r1.svc).toBeInstanceOf(NoopEmbeddingService);
+    expect(r1.note).toContain('禁用本地嵌入');
+    // 模型未下载 → 纯 FTS
+    const r2 = await resolveInitialEmbedding(cfg(), store, downloader, makeLocal);
+    expect(r2.note).toContain('文件缺失');
+    // remote 正常路径
+    await store.set({ source: 'remote', activeModel: null });
+    const r3 = await resolveInitialEmbedding(cfg(), store, downloader, makeLocal);
+    expect(r3.providerInfo).toEqual({ provider: 'remote', model: 'm', dimensions: 8 });
+  });
+});
+
+describe('model download queue', () => {
+  function tinyEntry(): CatalogEntry {
+    return {
+      id: 'tiny', name: 'Tiny', repo: 'x/tiny', revision: 'rev0', dims: 4, contextTokens: 8,
+      pooling: 'cls', tags: [], description: '合成模型',
+      files: [
+        { path: 'config.json', size: 11, sha256: shaOf('hello-part0') },
+        { path: 'onnx/model.onnx', size: 12, sha256: shaOf('hello-part1!') },
+      ],
+    };
+  }
+  const { createHash } = require('node:crypto') as typeof import('node:crypto');
+  function shaOf(s: string): string {
+    return createHash('sha256').update(s).digest('hex');
+  }
+
+  it('downloads, verifies sha256 and reports done; corrupt bytes retried with cache-bust then error', async () => {
+    const dataDir = join(await tmp(), `dl-${Date.now()}`);
+    await mkdir(dataDir, { recursive: true });
+    const entry = tinyEntry();
+    // 第一文件好;第二文件前两次吐坏字节(触发 sha 失配→删断点重下),第三次好
+    let badCalls = 0;
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      const pathPart = url.split('/resolve/rev0/')[1] ?? '';
+      const file = pathPart.split('?')[0];
+      const retryParam = url.includes('dshmem-retry=');
+      const body = file === 'config.json' ? 'hello-part0' : retryParam || badCalls >= 2 ? 'hello-part1!' : 'CORRUPT-BYTES';
+      if (file !== 'config.json' && !retryParam) badCalls++;
+      const stream = new ReadableStream({
+        start(c) {
+          c.enqueue(new TextEncoder().encode(body));
+          c.close();
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'content-length': String(body.length) } });
+    });
+    const q = new ModelDownloadQueue(dataDir, { mirror: 'https://mirror.test', fetchImpl, retryDelaysMs: [1, 1], logger: noopLogger });
+    const prog = await q.startEntry(entry);
+    expect(prog.phase).toBe('done');
+    expect(prog.overallReceived).toBe(23);
+    expect(fetchImpl.mock.calls.filter((u) => String(u[0]).includes('dshmem-retry=1')).length).toBeGreaterThan(0);
+    expect(await q.isDownloaded('tiny')).toBe(true);
+    expect(await q.deleteModel('tiny')).toEqual({ ok: true });
+  });
+
+  it('cancel keeps .part breakpoint and surfaces cancelled phase', async () => {
+    const dataDir = join(await tmp(), `dlc-${Date.now()}`);
+    await mkdir(dataDir, { recursive: true });
+    const entry = tinyEntry();
+    let started = new Promise<void>(() => {});
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes('config.json')) {
+        return new Response('hello-part0', { status: 200, headers: { 'content-length': '11' } });
+      }
+      // 第二文件:挂住直到 abort
+      started = new Promise((resolve) => setTimeout(resolve, 10));
+      await started;
+      return new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('x')); } }), { status: 200, headers: { 'content-length': '12' } });
+    });
+    const q = new ModelDownloadQueue(dataDir, { mirror: 'https://mirror.test', fetchImpl, logger: noopLogger });
+    const p = q.startEntry(entry);
+    // 等 fetch 起跑后取消
+    await new Promise((r) => setTimeout(r, 30));
+    expect(q.cancel()).toBe(true);
+    const prog = await p;
+    expect(prog.phase).toBe('cancelled');
+    expect(await q.isBusy()).toBe(false);
+  });
+});
+
+describe('runtime installer', () => {
+  function fakeSpawn(dataDir: string, codes: number[]) {
+    let call = 0;
+    const commands: Array<{ cmd: string; args: string[] }> = [];
+    const spawnImpl = vi.fn((cmd: string, args: string[], cwd: string): { onStdout: (cb: (l: string) => void) => void; onStderr: (cb: (l: string) => void) => void; kill: () => void; exited: Promise<number | null> } => {
+      commands.push({ cmd, args });
+      const callIndex = call;
+      const code = codes[Math.min(callIndex, codes.length - 1)];
+      call++;
+      const exited = (async () => {
+        if (code === 0) {
+          // 模拟 npm 成功效果:把钉死版本的 package.json 落盘(installedVersion 读盘判据)
+          const { mkdir, writeFile } = await import('node:fs/promises');
+          const pkgDir = join(cwd, 'node_modules', '@huggingface', 'transformers');
+          await mkdir(pkgDir, { recursive: true });
+          await writeFile(join(pkgDir, 'package.json'), JSON.stringify({ name: '@huggingface/transformers', version: PINNED_TRANSFORMERS_VERSION }));
+        }
+        return code;
+      })();
+      return {
+        onStdout: () => {},
+        onStderr: () => {},
+        kill: () => {},
+        exited,
+      };
+    });
+    return { spawnImpl, commands, getCalls: () => call };
+  }
+
+  it('ensures runtime via npm ci with lockfile, falls back to install on ci failure', async () => {
+    const dataDir = join(await tmp(), `ri-${Date.now()}`);
+    await mkdir(dataDir, { recursive: true });
+    const lock = JSON.stringify({ lockfileVersion: 3, name: 'dsh-memory-runtime' });
+    const lockPath = join(await tmp(), `lock-${Date.now()}.json`);
+    await writeFile(lockPath, lock);
+    const { spawnImpl, commands } = fakeSpawn(dataDir, [1, 0]);
+    const installer = new RuntimeInstaller(dataDir, PINNED_TRANSFORMERS_VERSION, { spawnImpl, lockfileSource: lockPath, logger: noopLogger });
+    expect(await installer.isReady()).toBe(false);
+    expect(await installer.ensure()).toBe(true);
+    // 第一次 ci(失败)→ 第二次 install 成功
+    expect(commands[0].args[0]).toBe('ci');
+    expect(commands[1].args[0]).toBe('install');
+    expect(commands[1].args.at(-1)).toBe(`@huggingface/transformers@${PINNED_TRANSFORMERS_VERSION}`);
+    const anchored = JSON.parse(await readFile(join(dataDir, 'runtime', 'package.json'), 'utf-8'));
+    expect(anchored.dependencies['@huggingface/transformers']).toBe(PINNED_TRANSFORMERS_VERSION);
+    expect(installer.getProgress().phase).toBe('ready');
+    // 二次 ensure 幂等就绪
+    expect(await installer.ensure()).toBe(true);
+  });
+
+  it('version-matched install short-circuits to ready without spawning npm', async () => {
+    const dataDir = join(await tmp(), `ri2-${Date.now()}`);
+    const { spawnImpl, getCalls } = fakeSpawn(dataDir, [0]);
+    const installer = new RuntimeInstaller(dataDir, PINNED_TRANSFORMERS_VERSION, { spawnImpl, lockfileSource: join(dataDir, 'none.json') });
+    // 预置已就位的 package.json
+    await mkdir(join(dataDir, 'runtime', 'node_modules', '@huggingface', 'transformers'), { recursive: true });
+    await writeFile(join(dataDir, 'runtime', 'node_modules', '@huggingface', 'transformers', 'package.json'), JSON.stringify({ name: 'x', version: PINNED_TRANSFORMERS_VERSION }));
+    expect(await installer.ensure()).toBe(true);
+    expect(getCalls()).toBe(0);
+  });
+});
+
+describe('local embedding service (fake channel)', () => {
+  function fakeChannel(): { channel: EmbedWorkerChannel; replies: Array<(call: { type: string }) => EmbedWorkerReply>; failAll: (e: string) => void } {
+    const pending: Array<(c: { type: string }) => EmbedWorkerReply> = [];
+    let crashCb: ((e: string) => void) | undefined;
+    return {
+      replies: pending,
+      failAll: (e: string) => crashCb?.(e),
+      channel: {
+        request: async (call) => {
+          const make = pending[pending.length - 1];
+          return make ? make(call) : { id: 0, ok: true, type: 'pong' };
+        },
+        terminate: () => {},
+        setOnCrash: (cb) => {
+          crashCb = cb;
+        },
+      },
+    };
+  }
+
+  function entry(): CatalogEntry {
+    return { ...MODEL_CATALOG[0], id: 'fake', files: [] };
+  }
+
+  it('state machine: warmup ready → embed → terminate rejects further use', async () => {
+    const dataDir = await tmp();
+    const f = fakeChannel();
+    f.replies.push(() => ({ id: 1, ok: true, type: 'ready' }));
+    const svc = new LocalEmbeddingService(entry(), join(dataDir, 'models', 'fake'), {
+      runtimeDir: join(dataDir, 'runtime'),
+      channel: f.channel,
+      logger: noopLogger,
+    });
+    expect(svc.isReady()).toBe(false);
+    f.replies.push((call) =>
+      call.type === 'embed'
+        ? { id: 2, ok: true, type: 'embedded', vectors: [new Float32Array(512).fill(0.5)] }
+        : { id: 2, ok: true, type: 'ready' },
+    );
+    await svc.waitForReady();
+    expect(svc.isReady()).toBe(true);
+    expect(svc.getState()).toBe('ready');
+    const vecs = await svc.embedBatch(['hello']);
+    expect(vecs[0].length).toBe(512);
+    svc.close();
+    expect(svc.getState()).toBe('terminated');
+    await expect(svc.embedBatch(['x'])).rejects.toThrow('不可复用');
+  });
+
+  it('load failure transitions to failed; embed throws until retried via warmup', async () => {
+    const dataDir = await tmp();
+    const f = fakeChannel();
+    f.replies.push(() => ({ id: 1, ok: false, stage: 'load', error: '模型文件坏' }));
+    const svc = new LocalEmbeddingService(entry(), join(dataDir, 'models', 'fake'), {
+      runtimeDir: join(dataDir, 'runtime'),
+      channel: f.channel,
+      logger: noopLogger,
+    });
+    await expect(svc.waitForReady()).rejects.toThrow('模型文件坏');
+    expect(svc.getState()).toBe('failed');
+    await expect(svc.embedBatch(['x'])).rejects.toThrow('加载失败');
+    // 恢复:warmup 成功
+    f.replies.push(() => ({ id: 3, ok: true, type: 'ready' }));
+    await svc.waitForReady();
+    expect(svc.isReady()).toBe(true);
+  });
+});
+
+describe('proxy resolution', () => {
+  it('three-state semantics with NO_PROXY respect and masking', () => {
+    expect(resolveProxyUrl('http://p:1', 'hf-mirror.com')).toBe('http://p:1');
+    expect(resolveProxyUrl('none', 'x')).toBe('');
+    const saved = { ...process.env };
+    delete process.env.HTTPS_PROXY; delete process.env.https_proxy; delete process.env.ALL_PROXY; delete process.env.all_proxy; delete process.env.HTTP_PROXY; delete process.env.http_proxy; delete process.env.NO_PROXY; delete process.env.no_proxy;
+    try {
+      expect(resolveProxyUrl(undefined, 'x')).toBe('');
+      process.env.HTTPS_PROXY = 'http://env-proxy:7890';
+      expect(resolveProxyUrl('', 'hf-mirror.com')).toBe('http://env-proxy:7890');
+      process.env.NO_PROXY = 'hf-mirror.com,.example.com';
+      expect(resolveProxyUrl('', 'hf-mirror.com')).toBe('');
+      expect(resolveProxyUrl('', 'sub.example.com')).toBe('');
+      expect(resolveProxyUrl('', 'other.com')).toBe('http://env-proxy:7890');
+    } finally {
+      process.env = saved;
+    }
+    expect(maskProxyUrl('http://user:pass@p:1')).toBe('http://p:1');
+    expect(maskProxyUrl('not a url')).toBe('<invalid-url>');
+  });
+});
+
+describe('embedding manager', () => {
+  it('apply chain switches to off and persists; busy guard works', async () => {
+    const dataDir = join(await tmp(), `mgr-${Date.now()}`);
+    await mkdir(dataDir, { recursive: true });
+    const c = cfg();
+    const store = new EmbeddingSourceStore(dataDir);
+    await store.init();
+    const downloader = new ModelDownloadQueue(dataDir, { mirror: 'https://hf-mirror.com' });
+    const installer = new RuntimeInstaller(dataDir, PINNED_TRANSFORMERS_VERSION, { logger: noopLogger });
+    const db = {
+      swapProvider: vi.fn(() => ({ ok: true, needsReindex: false })),
+      markEmbeddingSynced: vi.fn(),
+    } as never;
+    const l0 = { setEmbeddingService: vi.fn() } as never;
+    const l1 = { setEmbeddingService: vi.fn() } as never;
+    const manager = new EmbeddingManager({
+      dataDir, cfg: c, db, l0, l1, sourceStore: store, installer, downloader,
+      initial: { svc: new NoopEmbeddingService(), dims: 0 },
+      logger: noopLogger,
+    });
+    const accepted = manager.requestSource({ source: 'off' });
+    expect(accepted.accepted).toBe(true);
+    // 轮询等 apply 完成
+    for (let i = 0; i < 50 && manager.isBusy(); i++) await new Promise((r) => setTimeout(r, 10));
+    const snap = await manager.snapshot();
+    expect(snap.apply.phase).toBe('done');
+    expect(snap.source).toBe('off');
+    expect(store.get().source).toBe('off');
+    // off 档后 remote 请求:ceiling 按 eff() 判定(此处部署配置齐备)→ 接受
+    const acc2 = manager.requestSource({ source: 'remote' });
+    expect(acc2.accepted).toBe(true);
+    for (let i = 0; i < 50 && manager.isBusy(); i++) await new Promise((r) => setTimeout(r, 10));
+    expect((await manager.snapshot()).apply.phase).toBe('done');
+    manager.dispose();
+  });
+});
+
+describe('makeLocalServiceFactory', () => {
+  it('returns null for unknown model and wires dirs for known ones', async () => {
+    const dataDir = await tmp();
+    const installer = new RuntimeInstaller(dataDir, PINNED_TRANSFORMERS_VERSION, { logger: noopLogger });
+    const downloader = new ModelDownloadQueue(dataDir, { mirror: 'https://hf-mirror.com' });
+    const factory = makeLocalServiceFactory(installer, downloader, noopLogger, 4000);
+    expect(factory('no-such-model')).toBeNull();
+    const svc = factory('bge-m3');
+    expect(svc).not.toBeNull();
+    svc?.close();
+  });
+});

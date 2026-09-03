@@ -338,6 +338,13 @@ export interface EmbeddingStateView {
   source: EmbeddingSourceKind;
   activeModel: string | null;
   ceilings: { remote: boolean; local: boolean };
+  /** 生效的远程嵌入连接(运行时覆盖优先于部署;key 明文不回传只给布尔)。 */
+  remote: {
+    baseURL: string;
+    model: string;
+    dimensions: number;
+    apiKeySet: boolean;
+  };
   runtime: RuntimeProgress;
   models: Array<{
     id: string;
