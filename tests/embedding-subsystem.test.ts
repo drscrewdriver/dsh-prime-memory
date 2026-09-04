@@ -171,24 +171,35 @@ describe('model download queue', () => {
     const dataDir = join(await tmp(), `dlc-${Date.now()}`);
     await mkdir(dataDir, { recursive: true });
     const entry = tinyEntry();
-    let started = new Promise<void>(() => {});
-    const fetchImpl = vi.fn(async (url: string) => {
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes('config.json')) {
         return new Response('hello-part0', { status: 200, headers: { 'content-length': '11' } });
       }
-      // 第二文件:挂住直到 abort
-      started = new Promise((resolve) => setTimeout(resolve, 10));
-      await started;
-      return new Response(new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode('x')); } }), { status: 200, headers: { 'content-length': '12' } });
+      // 第二文件:流挂住直到 abort 信号,吐一个块后关闭——取消语义确定化
+      const signal = init?.signal as AbortSignal | undefined;
+      const stream = new ReadableStream({
+        async start(controller) {
+          await new Promise<void>((resolve) => {
+            if (signal?.aborted) resolve();
+            else signal?.addEventListener('abort', () => resolve(), { once: true });
+          });
+          controller.enqueue(new TextEncoder().encode('xx'));
+          controller.close();
+        },
+      });
+      return new Response(stream, { status: 200, headers: { 'content-length': '12' } });
     });
     const q = new ModelDownloadQueue(dataDir, { mirror: 'https://mirror.test', fetchImpl, logger: noopLogger });
     const p = q.startEntry(entry);
-    // 等 fetch 起跑后取消
+    // 等 file 1 完成、file 2 流挂住后取消
     await new Promise((r) => setTimeout(r, 30));
     expect(q.cancel()).toBe(true);
     const prog = await p;
     expect(prog.phase).toBe('cancelled');
     expect(await q.isBusy()).toBe(false);
+    // .part 断点保留(取消不删断点;取消检查先于写盘,故为 0 字节空断点)
+    const { stat } = await import('node:fs/promises');
+    expect((await stat(join(dataDir, 'models', 'tiny', 'onnx', 'model.onnx.part'))).isFile()).toBe(true);
   });
 });
 
