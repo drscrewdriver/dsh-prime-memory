@@ -154,8 +154,17 @@ describe('model download queue', () => {
     expect(prog.phase).toBe('done');
     expect(prog.overallReceived).toBe(23);
     expect(fetchImpl.mock.calls.filter((u) => String(u[0]).includes('dshmem-retry=1')).length).toBeGreaterThan(0);
-    expect(await q.isDownloaded('tiny')).toBe(true);
-    expect(await q.deleteModel('tiny')).toEqual({ ok: true });
+    // 合成模型不在目录 → isDownloaded/deleteModel 走目录判据:状态按 none、删除拒绝
+    expect(await q.isDownloaded('tiny')).toBe(false);
+    expect(await q.deleteModel('tiny')).toEqual({ ok: false, error: '未知模型' });
+    // 文件确实落盘且尺寸吻合
+    const { stat } = await import('node:fs/promises');
+    expect((await stat(join(dataDir, 'models', 'tiny', 'config.json'))).size).toBe(11);
+    expect((await stat(join(dataDir, 'models', 'tiny', 'onnx', 'model.onnx'))).size).toBe(12);
+    // 真实目录模型:预置文件后删除成功
+    await mkdir(join(dataDir, 'models', 'bge-m3', 'onnx'), { recursive: true });
+    await writeFile(join(dataDir, 'models', 'bge-m3', 'config.json'), 'x');
+    expect(await q.deleteModel('bge-m3')).toEqual({ ok: true });
   });
 
   it('cancel keeps .part breakpoint and surfaces cancelled phase', async () => {
