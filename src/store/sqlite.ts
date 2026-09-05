@@ -928,8 +928,8 @@ export class MemoryDb {
     return rows.map(rowToRecord);
   }
 
-  /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族过滤与分页。失败返回空。 */
-  listL1(opts: { type?: string; scene?: string; family?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
+  /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */
+  listL1(opts: { type?: string; scene?: string; family?: string; hall?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
     if (this.degraded) return { items: [], total: 0 };
     try {
       const where: string[] = [];
@@ -945,6 +945,11 @@ export class MemoryDb {
       if (opts.family) {
         where.push('family = ?');
         params.push(opts.family);
+      }
+      if (opts.hall) {
+        // Hall 存于 metadata_json,用 json_extract 过滤(表小,逐行代价可接受)
+        where.push(`json_extract(metadata_json, '$.hall') = ?`);
+        params.push(opts.hall);
       }
       const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
       const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params) as { n: number };
