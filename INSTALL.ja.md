@@ -19,7 +19,7 @@ npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
 dsh plugin --profile web add dsh-layered-memory
 
 # その他のソース：GitHub リポジトリ / ローカルパス（開発・デバッグ用。link: はリポジトリを指し、npm run build + dsh 再起動で反映）
-dsh plugin --profile web add https://github.com/JunNanLYS/dsh-layered-memory
+dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
 dsh plugin --profile web add /path/to/dsh-layered-memory
 ```
 

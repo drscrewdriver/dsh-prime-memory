@@ -63,8 +63,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JunNanLYS/dsh-layered-memory.git"
+    "url": "git+https://github.com/drscrewdriver/dsh-prime-memory.git"
   },
+  "author": "drscrewdriver <597093681@qq.com>",
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.1",

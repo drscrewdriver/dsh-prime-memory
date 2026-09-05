@@ -1,0 +1,90 @@
+/**
+ * Embedding 服务基座:类型、远程 OpenAI 兼容实现、降级助手。
+ *
+ * dsh 的 ctx.llm 只有 chat 流式接口、无 embeddings 端点,因此向量能力
+ * 需要用户自备任意 OpenAI 兼容 /embeddings 服务(OpenAI/SiliconFlow/Jina/自托管 BGE 等)。
+ * 默认关闭(Noop)——纯 FTS 模式即可运行,这是官方 provider="none" 的同款语义。
+ *
+ * 重写版远程服务内建两层此前缺失的可靠性纪律:
+ * - 重试退避:5xx/网络错误指数退避带抖动重试(默认 2 次),4xx(请求/维度错误)不重试;
+ * - 并发信号量:全局嵌入调用并发受限(默认 4),防 L1 去重候选一路 Promise.all 打爆上游。
+ * (嵌入源三态活切换、本地 worker、模型下载/运行时安装在嵌入子系统提交中落地。)
+ */
+import type { MemoryLogger } from '../types.js';
+export interface EmbeddingProviderInfo {
+    provider: string;
+    model: string;
+    dimensions: number;
+}
+/** 单次嵌入调用的可选参数:timeoutMs 只允许缩短服务配置的超时(内层钳制),
+ *  永不放大——召回路径用它给 FTS 降级留时间(规格 A 节)。本地实现经 worker
+ *  代理以 Promise.race 钳制(迟到回复丢弃,推理在 worker 线程无法真正取消)。 */
+export interface EmbedCallOptions {
+    timeoutMs?: number;
+}
+export interface EmbeddingService {
+    embed(text: string, callOpts?: EmbedCallOptions): Promise<Float32Array>;
+    embedBatch(texts: string[], callOpts?: EmbedCallOptions): Promise<Float32Array[]>;
+    getDimensions(): number;
+    getProviderInfo(): EmbeddingProviderInfo;
+    isReady(): boolean;
+    close?(): void;
+}
+/** 空实现:向量能力关闭/不可用时使用,一切调用安全返回。 */
+export declare class NoopEmbeddingService implements EmbeddingService {
+    getDimensions(): number;
+    getProviderInfo(): EmbeddingProviderInfo;
+    isReady(): boolean;
+    embed(): Promise<Float32Array>;
+    embedBatch(texts: string[]): Promise<Float32Array[]>;
+}
+export interface RemoteEmbeddingOptions {
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    /** 必填且须与模型输出一致(vec0 建表需要固定维度)。 */
+    dimensions: number;
+    maxInputChars?: number;
+    timeoutMs?: number;
+    logger?: MemoryLogger;
+    /** 5xx/网络错误的最大重试次数(默认 2;4xx 不重试)。 */
+    maxRetries?: number;
+    /** 全局并发信号量上限(默认 4)。 */
+    concurrency?: number;
+}
+/**
+ * OpenAI 兼容远程 embedding:POST {baseUrl}/embeddings。
+ * 向量在客户端做 L2 归一化(与余弦度量配套)。
+ */
+export declare class RemoteEmbeddingService implements EmbeddingService {
+    private readonly opts;
+    private readonly sem;
+    constructor(opts: RemoteEmbeddingOptions);
+    getDimensions(): number;
+    getProviderInfo(): EmbeddingProviderInfo;
+    isReady(): boolean;
+    embed(text: string, callOpts?: EmbedCallOptions): Promise<Float32Array>;
+    embedBatch(texts: string[], callOpts?: EmbedCallOptions): Promise<Float32Array[]>;
+    private callWithRetry;
+    private callOnce;
+}
+/**
+ * 嵌入调用降级助手(L0/L1 Store 共用):查询向量失败 → undefined(调用方降级 FTS);
+ * 批量嵌入失败 → 全 undefined(跳过向量写入,由周期性 backfill 补齐)。
+ * 同类失败只告警一次,避免刷屏。
+ */
+export declare class EmbedHelper {
+    private embed;
+    private readonly logger?;
+    private warned;
+    constructor(embed: EmbeddingService, logger?: MemoryLogger | undefined);
+    /** 活切换嵌入源:换掉底层服务并复位一次性告警(新服务重新获得告警机会)。 */
+    setService(svc: EmbeddingService): void;
+    vectorReady(): boolean;
+    /** 查询向量;失败或空向量返回 undefined(调用方降级 FTS)。
+     *  timeoutMs 为内层钳制(仅缩短服务超时),召回路径使用。 */
+    query(text: string, timeoutMs?: number): Promise<Float32Array | undefined>;
+    /** 批量嵌入;服务未就绪或失败时返回全 undefined(不阻断元数据/FTS 写入)。 */
+    batch(texts: string[]): Promise<Array<Float32Array | undefined>>;
+    private warn;
+}

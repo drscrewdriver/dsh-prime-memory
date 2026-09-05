@@ -19,7 +19,7 @@ npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
 dsh plugin --profile web add dsh-layered-memory
 
 # 包源备选：GitHub 仓库 / 本地路径（开发调试，link: 指向仓库，npm run build + 重启 dsh 即生效）
-dsh plugin --profile web add https://github.com/JunNanLYS/dsh-layered-memory
+dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
 dsh plugin --profile web add /path/to/dsh-layered-memory
 ```
 

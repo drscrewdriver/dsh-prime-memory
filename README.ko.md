@@ -7,7 +7,7 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 
 **DeepSeek Harness용 계층적 증류 기억 플러그인: 대화는 백그라운드에서 L0 포착 → L1 원자 기억 → L2 장면 통합 → L3 페르소나 증류를 거쳐 처리되며, 관련 기억은 모델의 매 스텝 전에 자동으로 컨텍스트에 주입됩니다.**
 
-[中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [최신 릴리스](https://github.com/JunNanLYS/dsh-layered-memory/releases/latest) · [문제 제보](https://github.com/JunNanLYS/dsh-layered-memory/issues)
+[中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [최신 릴리스](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [문제 제보](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
 [![npm version](https://img.shields.io/npm/v/dsh-layered-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-layered-memory)
 [![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -47,7 +47,7 @@ npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
 dsh plugin --profile web add dsh-layered-memory
 
 # 기타 소스: GitHub 저장소 / 로컬 경로（개발·디버깅용. link: 는 저장소를 가리키며, npm run build + dsh 재시작으로 반영）
-dsh plugin --profile web add https://github.com/JunNanLYS/dsh-layered-memory
+dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
 dsh plugin --profile web add /path/to/dsh-layered-memory
 ```
 
@@ -75,7 +75,7 @@ Agent는 설치 결과와 설정에 `dsh-layered-memory`가 나타났는지 보�
 ### 소스에서 개발
 
 ```bash
-git clone https://github.com/JunNanLYS/dsh-layered-memory
+git clone https://github.com/drscrewdriver/dsh-prime-memory
 cd dsh-layered-memory
 npm install && npm run build
 dsh plugin --profile web add .        # link: 설치. 코드 변경 후 npm run build + dsh 재시작으로 반영
@@ -279,7 +279,7 @@ dsh 호스트는 플러그인 로그를 콘솔로 출력합니다. 플러그인�
 
 ## 로드맵
 
-[Issues](https://github.com/JunNanLYS/dsh-layered-memory/issues)에서 요구와 우선순위 환영：
+[Issues](https://github.com/drscrewdriver/dsh-prime-memory/issues)에서 요구와 우선순위 환영：
 
 - [ ] **Git 브랜치 인식**：기억을 현재 git 브랜치와 연관, 회상을 브랜치로 필터/가중
 - [ ] **Claude Code / Codex 기억 가져오기**：기존 자산（`CLAUDE.md`, Claude Code 기억 파일, Codex `AGENTS.md` 등）1클릭 이전

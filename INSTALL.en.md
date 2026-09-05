@@ -19,7 +19,7 @@ npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
 dsh plugin --profile web add dsh-layered-memory
 
 # Alternative sources: GitHub repo / local path (dev & debugging, link: points at the repo; npm run build + restart dsh to apply)
-dsh plugin --profile web add https://github.com/JunNanLYS/dsh-layered-memory
+dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
 dsh plugin --profile web add /path/to/dsh-layered-memory
 ```
 

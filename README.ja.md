@@ -7,7 +7,7 @@ alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで�
 
 **DeepSeek Harness 向けの階層的蒸留記憶プラグイン：会話はバックグラウンドで L0 捕捉 → L1 原子記憶 → L2 シナリオ統合 → L3 ペルソナ蒸留を経て処理され、関連記憶はモデルの各ステップ前に自動でコンテキストへ注入されます。**
 
-[中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [最新リリース](https://github.com/JunNanLYS/dsh-layered-memory/releases/latest) · [問題を報告](https://github.com/JunNanLYS/dsh-layered-memory/issues)
+[中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [最新リリース](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [問題を報告](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
 [![npm version](https://img.shields.io/npm/v/dsh-layered-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-layered-memory)
 [![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -47,7 +47,7 @@ npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
 dsh plugin --profile web add dsh-layered-memory
 
 # その他のソース：GitHub リポジトリ / ローカルパス（開発・デバッグ用。link: はリポジトリを指し、npm run build + dsh 再起動で反映）
-dsh plugin --profile web add https://github.com/JunNanLYS/dsh-layered-memory
+dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
 dsh plugin --profile web add /path/to/dsh-layered-memory
 ```
 
@@ -75,7 +75,7 @@ Agent はインストール結果と、設定に `dsh-layered-memory` が現れ�
 ### ソースから開発
 
 ```bash
-git clone https://github.com/JunNanLYS/dsh-layered-memory
+git clone https://github.com/drscrewdriver/dsh-prime-memory
 cd dsh-layered-memory
 npm install && npm run build
 dsh plugin --profile web add .        # link: インストール。コード変更後は npm run build + dsh 再起動で反映
@@ -279,7 +279,7 @@ dsh ホストはプラグインのログをコンソールへ出力します。�
 
 ## ロードマップ
 
-[Issues](https://github.com/JunNanLYS/dsh-layered-memory/issues) で要望と優先度を募集中：
+[Issues](https://github.com/drscrewdriver/dsh-prime-memory/issues) で要望と優先度を募集中：
 
 - [ ] **Git ブランチ認識**：記憶を現在の git ブランチと関連付け、想起をブランチでフィルタ/強調
 - [ ] **Claude Code / Codex 記憶インポート**：既存資産（`CLAUDE.md`、Claude Code 記憶ファイル、Codex `AGENTS.md` 等）の1クリック移行

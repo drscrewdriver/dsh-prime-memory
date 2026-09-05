@@ -7,7 +7,7 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 
 **DeepSeek Harness 的分层蒸馏记忆插件：对话在后台自动完成 L0 捕获 → L1 原子记忆 → L2 场景整合 → L3 画像蒸馏，模型每一步前自动把相关记忆注入上下文。**
 
-[English](README.en.md) · [最新发行版](https://github.com/JunNanLYS/dsh-layered-memory/releases/latest) · [反馈问题](https://github.com/JunNanLYS/dsh-layered-memory/issues)
+[English](README.en.md) · [最新发行版](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [反馈问题](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
 [![npm version](https://img.shields.io/npm/v/dsh-layered-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-layered-memory)
 [![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -45,7 +45,7 @@ npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
 dsh plugin --profile web add dsh-layered-memory
 
 # 包源备选：GitHub 仓库 / 本地路径（开发调试，link: 指向仓库，npm run build + 重启 dsh 即生效）
-dsh plugin --profile web add https://github.com/JunNanLYS/dsh-layered-memory
+dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
 dsh plugin --profile web add /path/to/dsh-layered-memory
 ```
 
@@ -77,7 +77,7 @@ Agent 应当返回安装结果，并明确告诉你配置中是否已经出现 `
 ### 从源码开发
 
 ```bash
-git clone https://github.com/JunNanLYS/dsh-layered-memory
+git clone https://github.com/drscrewdriver/dsh-prime-memory
 cd dsh-layered-memory
 npm install && npm run build
 dsh plugin --profile web add .        # link: 安装，改代码后 npm run build + 重启 dsh 即生效
@@ -327,7 +327,7 @@ ONNX 量化 **CPU 推理**——无需 API Key，数据不出本机）。本地�
 
 ### 蒸馏回退链与慢 TTFT 模型
 
-部分推理供应商的免费/慢速档位**首 token 延迟（TTFT）可达 20 秒以上**，而部分上游网关会在连接静默约 20 秒时掐断——蒸馏调用以固定 \~20s 失败（`llm aborted`），插件侧 120s 超时根本轮不到生效（[#31](https://github.com/JunNanLYS/dsh-layered-memory/issues/31) 的实测场景）。三层缓解按需取用：
+部分推理供应商的免费/慢速档位**首 token 延迟（TTFT）可达 20 秒以上**，而部分上游网关会在连接静默约 20 秒时掐断——蒸馏调用以固定 \~20s 失败（`llm aborted`），插件侧 120s 超时根本轮不到生效（[#31](https://github.com/drscrewdriver/dsh-prime-memory/issues/31) 的实测场景）。三层缓解按需取用：
 
 1. **换路由**（最直接）：设置页 → 记忆 → 概览 → 蒸馏参数的路由链编辑器即时改主路由（或把快路由排到链首），或静态 pin `llm.provider`/`llm.model`。
 
@@ -395,7 +395,7 @@ fsync），断电等极端崩溃最多丢最后一小段尾部，检索库可用
 
 ## 路线图
 
-以下为规划中的功能，欢迎在 [Issues](https://github.com/JunNanLYS/dsh-layered-memory/issues) 反馈需求与优先级：
+以下为规划中的功能，欢迎在 [Issues](https://github.com/drscrewdriver/dsh-prime-memory/issues) 反馈需求与优先级：
 
 - [ ] **Git 分支感知**：记忆与当前 git 分支关联，召回可按分支过滤/加权（与现有记忆档位正交）
 

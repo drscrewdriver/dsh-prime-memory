@@ -1,0 +1,297 @@
+/**
+ * L1 原子记忆存储(双写架构):
+ * - records/YYYY-MM-DD.jsonl:追加式事实源(只增不改,备份/恢复用);
+ * - MemoryDb(SQLite):主检索引擎,upsert/delete 只动这里;
+ * - 检索三策略:keyword(FTS5 BM25)/ embedding(vec0 余弦)/ hybrid(双路 + RRF k=60)。
+ *
+ * 去重/合并的更新记录走 upsert(新 record id + 版本递增),不再全量重写文件。
+ */
+import { existsSync, promises as fs } from 'node:fs';
+import * as path from 'node:path';
+import { familyForType } from '../types.js';
+import { EmbedHelper, NoopEmbeddingService } from './embedding.js';
+import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
+import { applyDecayWeight, RRF_K, rrfMerge } from './search-utils.js';
+import { isZeroVector } from './sqlite.js';
+/** 官方过度召回倍数:候选池 = limit × 3(官方 tool 路径同款)。 */
+const CANDIDATE_MULTIPLIER = 3;
+export class L1Store {
+    db;
+    strategy;
+    recordsDir;
+    legacyFile;
+    helper;
+    embedSvc;
+    logger;
+    /** 时效衰减半衰期(天;0=关)。 */
+    decayHalfLifeDays;
+    constructor(dataDir, db, embed = new NoopEmbeddingService(), strategy = 'hybrid', logger, 
+    /** 时效衰减半衰期(天;0=关)。缺省 30 与 config 默认一致。 */
+    decayHalfLifeDays) {
+        this.db = db;
+        this.strategy = strategy;
+        this.recordsDir = path.join(dataDir, 'records');
+        this.legacyFile = path.join(dataDir, 'l1', 'records.jsonl');
+        this.embedSvc = embed;
+        this.helper = new EmbedHelper(embed, logger);
+        this.logger = logger;
+        this.decayHalfLifeDays = decayHalfLifeDays ?? 30;
+    }
+    async init() {
+        await ensureDir(this.recordsDir);
+        await this.importLegacy();
+    }
+    /** 旧版单文件 records.jsonl 一次性导入检索库,成功后改名 .imported。 */
+    async importLegacy() {
+        if (!existsSync(this.legacyFile))
+            return;
+        try {
+            const records = await readJsonl(this.legacyFile);
+            const valid = records.filter((r) => r && typeof r.id === 'string' && r.content);
+            const badCount = records.length - valid.length;
+            let n = 0;
+            if (valid.length > 0 && this.db.upsertL1Batch(valid))
+                n = valid.length;
+            // 只有确实导入成功才改名,避免把未入库的数据改名带走;判据按 valid 数——
+            // 坏行已在读取时过滤,按 records.length 判会让混入坏行的文件迁移永不完成
+            if (n === valid.length) {
+                const renamed = await fs
+                    .rename(this.legacyFile, `${this.legacyFile}.imported`)
+                    .then(() => true, () => false);
+                if (renamed) {
+                    this.logger?.info(`[memory] 旧版 L1 数据已导入检索库 ${n} 条${badCount > 0 ? `(另丢弃 ${badCount} 条坏行)` : ''}(l1/records.jsonl → .imported)`);
+                }
+                else {
+                    this.logger?.warn('[memory] 旧版 L1 导入完成但改名失败,下次启动会重复导入(upsert 幂等,无害)');
+                }
+            }
+            else {
+                this.logger?.warn(`[memory] 旧版 L1 导入不完整(${n}/${valid.length}),保留原文件下次重试`);
+            }
+        }
+        catch (err) {
+            this.logger?.warn(`[memory] 旧版 L1 数据导入失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    get size() {
+        return this.db.countL1();
+    }
+    /** 全量读取(调试/迁移用;检索请走 search)。 */
+    all() {
+        return this.db.getAllL1();
+    }
+    /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
+    getByIds(ids) {
+        return this.db.getL1ByIds(ids);
+    }
+    /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */
+    async appendNew(records) {
+        if (records.length === 0)
+            return;
+        for (const r of records) {
+            if (!r.family)
+                r.family = familyForType(r.type);
+        }
+        const byDay = new Map();
+        for (const r of records) {
+            const k = dayKey(r.createdAt || Date.now());
+            const arr = byDay.get(k) ?? [];
+            arr.push(r);
+            byDay.set(k, arr);
+        }
+        for (const [day, list] of byDay) {
+            await appendJsonl(path.join(this.recordsDir, `${day}.jsonl`), list);
+        }
+        const vecs = await this.helper.batch(records.map((r) => r.content));
+        // 单事务批量写:逐条开事务在 WAL FULL 下每条一次 fsync。
+        // 双写失败闭环:JSONL 事实源已先行追加,DB 缺行 = 这批记忆检索不可见、
+        // 去重候选缺失(重复记忆会累积)。upsert 内部已有逐条 warn,这里升 error
+        // 并给出自愈指引——检索库可由「重建记忆」从事实源全量重导修复。
+        if (!this.db.upsertL1Batch(records, vecs)) {
+            this.logger?.error(`[memory] L1 检索库批量写入失败(${records.length} 条,JSONL 事实源完好),` +
+                '这批记忆暂不可检索;可在设置页运行「重建记忆」修复');
+        }
+    }
+    /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。 */
+    async upsert(record) {
+        if (!record.family)
+            record.family = familyForType(record.type);
+        const vec = (await this.helper.batch([record.content]))[0];
+        if (!this.db.upsertL1(record, vec)) {
+            this.logger?.error(`[memory] L1 检索库写入失败 id=${record.id}(JSONL 事实源完好),该记忆暂不可检索,重建可修复`);
+        }
+    }
+    /** 活切换嵌入源:同步换底层服务(嵌入源三态切换用)。 */
+    setEmbeddingService(svc) {
+        this.embedSvc = svc;
+        this.helper.setService(svc);
+    }
+    async deleteBatch(ids) {
+        this.db.deleteL1Batch(ids);
+    }
+    /**
+     * 三策略检索(自动召回与 memory_search 工具共用接缝)。
+     * embedding 不可用时自动降级 keyword;type 后置过滤;
+     * scoreThreshold 仅对 keyword/embedding 单路策略生效——hybrid 按官方语义
+     * 融合完整列表(融合分已归一化 0~1,可直接用于展示/过滤)。
+     */
+    async search(query, limit, opts) {
+        const caps = this.db.getCapabilities();
+        const canVec = caps.vectorSearch && this.helper.vectorReady();
+        let strategy = this.strategy;
+        if (strategy !== 'keyword' && !canVec)
+            strategy = caps.ftsSearch ? 'keyword' : 'none';
+        const candidateK = limit * CANDIDATE_MULTIPLIER;
+        const threshold = opts?.scoreThreshold ?? 0;
+        if (strategy === 'none')
+            return [];
+        if (strategy === 'keyword') {
+            const fts = this.db.searchL1Fts(query, candidateK, opts?.family);
+            return this.postProcess(this.applyDecay(applyFtsThreshold(fts, threshold, limit)), opts?.type, limit);
+        }
+        if (strategy === 'embedding') {
+            const vec = await this.helper.query(query, opts?.embeddingTimeoutMs);
+            if (!vec) {
+                // embedding 调用失败:降级 FTS,不阻断
+                const fts = this.db.searchL1Fts(query, candidateK, opts?.family);
+                return this.postProcess(this.applyDecay(applyFtsThreshold(fts, threshold, limit)), opts?.type, limit);
+            }
+            const vecHits = this.db.searchL1Vector(vec, candidateK, opts?.family);
+            return this.postProcess(this.applyDecay(filterScore(vecHits, threshold)), opts?.type, limit);
+        }
+        // hybrid(官方语义):双路并行 → 完整列表 RRF 融合(融合前不过滤阈值)
+        // → 融合分归一化:rank1 双列表命中 = 1.0,单列表命中 ≤ 0.5,保持 0~1 语义
+        const [ftsList, vecRaw] = await Promise.all([
+            Promise.resolve(this.db.searchL1Fts(query, candidateK, opts?.family)),
+            this.helper.query(query, opts?.embeddingTimeoutMs),
+        ]);
+        const vecList = vecRaw ? this.db.searchL1Vector(vecRaw, candidateK, opts?.family) : [];
+        const merged = rrfMerge([ftsList, vecList], (h) => h.id);
+        return this.postProcess(this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore) }))), opts?.type, limit);
+    }
+    /**
+     * 时效衰减加权(#29):三路共用的读路径后处理——阈值过滤之后、截断之前
+     * (才能轮转名额,而不只是重排已截断的集合)。updated_at 经主表批量点查
+     * 回填(FTS 表无该列;候选池 ≤ limit×3 条主键查询,微秒级)。关闭时零开销。
+     */
+    applyDecay(hits) {
+        if (!(this.decayHalfLifeDays > 0) || hits.length === 0)
+            return hits;
+        const updatedAtById = new Map();
+        for (const r of this.db.getL1ByIds(hits.map((h) => h.id))) {
+            if (Number.isFinite(r.updatedAt))
+                updatedAtById.set(r.id, r.updatedAt);
+        }
+        return applyDecayWeight(hits, this.decayHalfLifeDays, (h) => updatedAtById.get(h.id));
+    }
+    /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall 过滤。 */
+    list(opts) {
+        return this.db.listL1(opts);
+    }
+    /** 场景名去重列表(UI 筛选器数据源)。 */
+    distinctScenes() {
+        return this.db.distinctL1Scenes();
+    }
+    /**
+     * 去重候选召回(官方 3 级):空库跳过 → 向量优先 → FTS 兜底。
+     * 传入 family 时只在同族记录里召回(去重永不跨族)。
+     */
+    async searchCandidates(query, limit, family) {
+        if (this.db.countL1() === 0)
+            return [];
+        const caps = this.db.getCapabilities();
+        if (caps.vectorSearch && this.helper.vectorReady()) {
+            try {
+                const vec = await this.helper.query(query);
+                if (vec) {
+                    const hits = this.db.searchL1Vector(vec, limit, family);
+                    if (hits.length > 0)
+                        return this.db.getL1ByIds(hits.map((h) => h.id));
+                }
+            }
+            catch (err) {
+                this.logger?.warn(`[memory] 向量候选召回失败,降级 FTS: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        const fts = this.db.searchL1Fts(query, limit * 2, family);
+        return this.db.getL1ByIds(fts.map((h) => h.id));
+    }
+    /**
+     * 增量重嵌入(embedding 配置变化 / 周期性补齐用):只处理缺失向量的记录,
+     * 排除已判定"当前 provider 不可嵌入"的 skip 集。返回写入/失败/跳过数——
+     * failed > 0 时调用方不应标记 meta 同步完成;skipped(零向量)不算失败、
+     * 不阻塞同步标记(否则补齐判据永不收敛,周期性全量重嵌死循环)。
+     * onProgress/shouldCancel 供活切换的进度展示与取消。
+     */
+    async reindex(opts) {
+        if (!this.helper.vectorReady())
+            return { written: 0, failed: 0, skipped: 0 };
+        const items = this.db.getL1ForReindex(this.db.getVecSkipSet('l1'));
+        const total = items.length;
+        let done = 0;
+        let written = 0;
+        let failed = 0;
+        let skipped = 0;
+        let cancelled = false;
+        const skippedNow = [];
+        const CHUNK = 16;
+        for (let i = 0; i < items.length; i += CHUNK) {
+            if (opts?.shouldCancel?.()) {
+                cancelled = true;
+                break;
+            }
+            const chunk = items.slice(i, i + CHUNK);
+            let vecs;
+            try {
+                vecs = await this.embedSvc.embedBatch(chunk.map((c) => c.content));
+            }
+            catch {
+                failed += chunk.length;
+                done += chunk.length;
+                opts?.onProgress?.(done, total);
+                continue;
+            }
+            const pending = [];
+            chunk.forEach((c, j) => {
+                if (isZeroVector(vecs[j])) {
+                    skipped++;
+                    skippedNow.push(c.id);
+                    return;
+                }
+                pending.push({ id: c.id, embedding: vecs[j] });
+            });
+            if (pending.length > 0) {
+                const ok = this.db.updateL1VecBatch(pending);
+                written += ok;
+                failed += pending.length - ok;
+            }
+            done += chunk.length;
+            opts?.onProgress?.(done, total);
+        }
+        if (skippedNow.length > 0)
+            this.db.addVecSkippedIds('l1', skippedNow);
+        return { written, failed, skipped, cancelled };
+    }
+    postProcess(hits, type, limit) {
+        const filtered = type ? hits.filter((h) => h.type === type) : hits;
+        return filtered.slice(0, limit);
+    }
+}
+/** RRF 原始分归一化到 0~1:双列表 rank1 命中 = 2/(k+1) → 1.0。 */
+function normalizeRrf(rrfScore) {
+    return (rrfScore * (RRF_K + 1)) / 2;
+}
+/** FTS 阈值过滤(含官方小语料例外:全部低于阈值但结果数 ≤ maxResults 时保留)。 */
+function applyFtsThreshold(hits, threshold, maxResults) {
+    if (threshold <= 0)
+        return hits;
+    const filtered = hits.filter((h) => h.score >= threshold);
+    if (filtered.length === 0 && hits.length > 0 && hits.length <= maxResults)
+        return hits;
+    return filtered;
+}
+function filterScore(hits, threshold) {
+    if (threshold <= 0)
+        return hits;
+    return hits.filter((h) => h.score >= threshold);
+}

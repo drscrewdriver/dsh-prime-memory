@@ -7,7 +7,7 @@
 
 **A layered distillation memory plugin for DeepSeek Harness: conversations are processed in the background through L0 capture → L1 atomic memories → L2 scene consolidation → L3 persona distillation, and relevant memories are automatically injected into context before every model step — neither the user nor the model needs to do anything.**
 
-[简体中文](README.md) · [Latest release](https://github.com/JunNanLYS/dsh-layered-memory/releases/latest) · [Report issues](https://github.com/JunNanLYS/dsh-layered-memory/issues)
+[简体中文](README.md) · [Latest release](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Report issues](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
 [![npm version](https://img.shields.io/npm/v/dsh-layered-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-layered-memory)
 [![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -46,7 +46,7 @@ npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
 dsh plugin --profile web add dsh-layered-memory
 
 # Alternative sources: GitHub repo / local path (dev & debugging, link: points at the repo; npm run build + restart dsh to apply)
-dsh plugin --profile web add https://github.com/JunNanLYS/dsh-layered-memory
+dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
 dsh plugin --profile web add /path/to/dsh-layered-memory
 ```
 
@@ -86,7 +86,7 @@ stays in `~/.dsh/memory/`; delete the whole directory manually if you don't need
 ### Development from Source
 
 ```bash
-git clone https://github.com/JunNanLYS/dsh-layered-memory
+git clone https://github.com/drscrewdriver/dsh-prime-memory
 cd dsh-layered-memory
 npm install && npm run build
 dsh plugin --profile web add .        # link: install; after code changes, npm run build + restart dsh
@@ -314,7 +314,7 @@ the bundle layer appends and causes `duplicate loader entry id` startup failure)
 
 ### Distillation fallback chain & slow-TTFT models
 
-Free/slow tiers of some inference providers have **first-token latencies (TTFT) upwards of 20 seconds**, while some upstream gateways cut a silent connection at ~20s — distillation calls then fail at a fixed ~20s (`llm aborted`) long before the plugin's 120s timeout could ever matter (the scenario measured in [#31](https://github.com/JunNanLYS/dsh-layered-memory/issues/31)). Three mitigations, pick as needed:
+Free/slow tiers of some inference providers have **first-token latencies (TTFT) upwards of 20 seconds**, while some upstream gateways cut a silent connection at ~20s — distillation calls then fail at a fixed ~20s (`llm aborted`) long before the plugin's 120s timeout could ever matter (the scenario measured in [#31](https://github.com/drscrewdriver/dsh-prime-memory/issues/31)). Three mitigations, pick as needed:
 
 1. **Switch route** (most direct): change the primary route live in the route-chain editor under Settings → Memory → Overview → distillation parameters (or move a fast route to the head of the chain), or pin `llm.provider`/`llm.model` statically.
 2. **Fallback chain** (automatic demotion): when the primary route fails, backup routes are tried in order with no manual intervention:
@@ -434,7 +434,7 @@ Thanks to the original project for open-sourcing its design and implementation.
 ## Roadmap
 
 Features under planning — feedback and priorities welcome in the
-[issue tracker](https://github.com/JunNanLYS/dsh-layered-memory/issues):
+[issue tracker](https://github.com/drscrewdriver/dsh-prime-memory/issues):
 
 - [ ] **Git branch awareness**: associate memories with the current git branch; recall can filter/boost by branch (orthogonal to the existing memory modes)
 - [ ] **Claude Code / Codex memory import**: one-click migration of existing memory assets (`CLAUDE.md`, Claude Code memory files, Codex `AGENTS.md`, etc.), fed into the layered distillation pipeline
