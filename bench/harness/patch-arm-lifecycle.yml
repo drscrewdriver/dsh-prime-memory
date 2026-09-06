@@ -1,0 +1,64 @@
+# lifecycle 赛道（A 组语义 + bench 控制服务）：在 patch-arm-on.yml 的基础上打开
+# benchControl——插件注册进程内服务 dsh-memory-bench（rebuild 触发/状态轮询/会话
+# 档位设置），供 bench-runner 的生命周期阶段使用（宿主侧 connection.rpc 无 call()，
+# 进程内 cordis 服务是唯一干净通道；生产部署不开此配置，零表面积）。
+- id: dsh-memory
+  config:
+    dataDir: !!js (() => { const v = process.env.DSH_BENCH_DATA_DIR; if (!v) throw new Error('A 组运行必须设置 DSH_BENCH_DATA_DIR'); return v; })()
+    benchControl: true
+    extract:
+      minMessages: 1
+      idleSeconds: 30
+    # 蒸馏模型：读 DSH_BENCH_DISTILL_PROVIDER/MODEL（run.mjs 从 --distill-* 参数或
+    # bench.env 注入，缺省回落 official/flash）——默认模型回落会命中 settings.yaml
+    # 的 deepseek-vision（bench profile 无此 adapter），故必须显式指定。
+    llm:
+      provider: !!js (() => process.env.DSH_BENCH_DISTILL_PROVIDER || 'deepseek-official')()
+      model: !!js (() => process.env.DSH_BENCH_DISTILL_MODEL || 'deepseek-v4-flash')()
+      reasoningEffort: !!js (() => process.env.DSH_BENCH_DISTILL_REASONING_EFFORT || 'off')()
+
+# ---- 基准无工具面（两组共用，防 Agent 用 shell/文件工具翻记忆库作弊或被真实数据污染）----
+# 只关面向模型的工具行；`tools` 运行时服务本身保留（dsh-layered-memory 硬依赖）。
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent-report
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: tool-ralph
+  disabled: true
+- id: tool-str-replace-editor
+  disabled: true
+- id: tool-web
+  disabled: true
+
+# 基准 persona：纯对话作答，禁工具，不知道就直说（答案变短也让关键词判分可靠）。
+- id: system-prompt
+  config:
+    persona: >-
+      You are a participant in a memory benchmark. Answer the user directly
+      from the conversation context and your own memory only. Never use tools;
+      never explore the file system. Keep answers short (1-3 sentences).
+      If you don't know, say so plainly — never invent details.

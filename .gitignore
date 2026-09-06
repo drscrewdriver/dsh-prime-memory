@@ -1,0 +1,27 @@
+node_modules/
+dist-smoke/
+.zcode/
+wayfinder/
+/AGENTS.md
+.scratch/
+docs/dsh-dev-experience.md
+docs/review-report-*.md
+docs/spec-*.md
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# 安全检查
+.mimosa/
+
+# DSH-MemBench 运行产物（正式基线留档 bench/baseline/ 除外）
+bench/results/
+
+# 基准模型配置（含 API key，从 bench.env.example 复制后本地填写，绝不入库）
+bench/harness/bench.env
+
+# git worktree 隔离工作区
+.worktree/
+
+# codegraph 本地代码图谱索引（二进制 SQLite，按机器重建即可）
+.codegraph/
