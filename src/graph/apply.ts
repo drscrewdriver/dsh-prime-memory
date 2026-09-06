@@ -28,10 +28,8 @@ import {
 } from './constraints.js';
 import type {
   GraphEdge,
-  GraphEdgeProjection,
   GraphFact,
   GraphNode,
-  GraphNodeProjection,
   GraphProjectionResult,
   GraphRecordStatus,
 } from './types.js';

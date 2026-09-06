@@ -1021,7 +1021,8 @@ var __defProp = Object.defineProperty;
 		  ["extract", "抽取"],
 		  ["dedup", "去重"],
 		  ["l2", "L2 场景"],
-		  ["l3", "L3 画像"]
+		  ["l3", "L3 画像"],
+		  ["graph", "图谱投影"]
 		];
 		var SCOPE_KEYS = {
 		  l1: ["extract", "dedup"],

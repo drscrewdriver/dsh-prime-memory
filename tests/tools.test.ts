@@ -101,12 +101,12 @@ describe('memory tools', () => {
     return { db, l1, l0, scenes, persona };
   }
 
-  it('registers exactly the five tools', async () => {
+  it('registers exactly the seven tools', async () => {
     const stores = await setupStores();
     const h = harness();
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
     expect(h.registered.map((t) => t.name).sort()).toEqual([
-      'conversation_search', 'memory_add', 'memory_delete', 'memory_read_scene', 'memory_search',
+      'conversation_search', 'memory_add', 'memory_delete', 'memory_expand_graph_node', 'memory_read_scene', 'memory_search', 'memory_search_graph',
     ]);
     stores.db.close();
   });
@@ -195,6 +195,47 @@ describe('memory tools', () => {
     const del1 = h1.registered.find((t) => t.name === 'memory_delete')!;
     const denied = (await del1.execute({ query: '咖啡' }, {})) as { notice: string };
     expect(denied.notice).toContain('高权限');
+    stores.db.close();
+  });
+
+  it('graph tools: 拒读门 + 族过滤 + expand 悬挂/跨族 id 不解析', async () => {
+    const stores = await setupStores();
+    const h = harness();
+    registerMemoryTools(h.ctx, h.cfg, { ...stores, graph: stores.db.graphStore }, noopLogger, h.modes, h.liveHandle);
+    // 投影一条 chat 族节点(来源 r1 = 用户喜欢手冲咖啡)
+    stores.db.graphStore.queueGraphProjection(['r1'], 10000);
+    const claim = stores.db.graphStore.claimNext()!;
+    stores.db.graphStore.complete(claim.job.id, {
+      reason: '',
+      nodes: [{ ref: 'a', name: '手冲咖啡', type: 'tool', sourceRecordIds: ['r1'], state: '用户的日常咖啡方式' }],
+      edges: [],
+    });
+    const search = h.registered.find((t) => t.name === 'memory_search_graph')!;
+    // auto 档:命中并返回紧凑卡(含 id 与匹配说明)
+    const auto = (await search.execute({ query: '手冲咖啡' }, { agent: { id: 'auto-sess' } })) as {
+      items: Array<{ id: string; name: string; match_reason: string }>;
+    };
+    expect(auto.items).toHaveLength(1);
+    expect(auto.items[0]!.name).toBe('手冲咖啡');
+    expect(auto.items[0]!.match_reason).toContain('命中');
+    // 纯档 work 会话:节点族为 chat → 族过滤不可见
+    const work = (await search.execute({ query: '手冲咖啡' }, { agent: { id: 'work-sess' } })) as { items: unknown[] };
+    expect(work.items).toHaveLength(0);
+    // off 档:拒读门
+    const off = (await search.execute({ query: 'x' }, { agent: { id: 'off-sess' } })) as { notice: string };
+    expect(off.notice).toContain('完全隐身');
+
+    const expand = h.registered.find((t) => t.name === 'memory_expand_graph_node')!;
+    // auto 会话展开:属性(含历史标注)与来源记忆 id
+    const detail = (await expand.execute({ id: auto.items[0]!.id }, { agent: { id: 'auto-sess' } })) as { node: string };
+    expect(detail.node).toContain('手冲咖啡');
+    expect(detail.node).toContain('用户的日常咖啡方式');
+    expect(detail.node).toContain('来源记忆: r1');
+    // 悬挂 id / 跨族 id 一律不解析
+    const missing = (await expand.execute({ id: 'no-such-node' }, { agent: { id: 'auto-sess' } })) as { notice: string };
+    expect(missing.notice).toContain('不存在');
+    const crossFamily = (await expand.execute({ id: auto.items[0]!.id }, { agent: { id: 'work-sess' } })) as { notice: string };
+    expect(crossFamily.notice).toContain('不存在');
     stores.db.close();
   });
 });

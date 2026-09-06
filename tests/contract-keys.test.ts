@@ -52,7 +52,7 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'memoryMutate',
 ] as const;
 
-/** 端点全集(24 个;含 records-delete)。 */
+/** 端点全集(26 个;含 records-delete 与图谱两端点)。 */
 const ENDPOINTS = [
   'dsh-memory/stats',
   'dsh-memory/token-cost',
@@ -63,6 +63,8 @@ const ENDPOINTS = [
   'dsh-memory/settings-set',
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
+  'dsh-memory/graph-search',
+  'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
   'dsh-memory/persona',
   'dsh-memory/log-tail',
@@ -95,9 +97,9 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 24 contracted endpoints, records-delete included', () => {
-    expect(ENDPOINTS.length).toBe(24);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(24);
+  it('exposes exactly the 26 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(26);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(26);
   });
 });
 

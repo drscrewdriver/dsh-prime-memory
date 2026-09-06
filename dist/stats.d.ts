@@ -3,6 +3,7 @@ import { type MemoryConfig } from './config.js';
 import { type RecallSessionStats } from './hooks/recall.js';
 import type { RebuildController } from './pipeline/rebuild.js';
 import { type LiveSettingsHandle } from './settings.js';
+import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
 import type { L1Store } from './store/l1.js';
 import type { PersonaStore } from './store/persona.js';
@@ -59,4 +60,6 @@ export declare function registerMemoryRpc(ctx: Context, cfg: MemoryConfig, store
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 图谱存储(可选:未装配时图谱端点返空,不报错)。 */
+    graph?: GraphStore;
 }, logger: MemoryLogger, status?: MemoryStatusSource, live?: LiveSettingsHandle, modes?: SessionModeStore, dataDir?: string, rebuild?: RebuildController, embedManager?: EmbeddingManager, sessionInfo?: SessionInfoSource): void;

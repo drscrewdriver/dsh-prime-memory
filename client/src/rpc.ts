@@ -1,8 +1,8 @@
 /**
- * 类型化 RPC 通道。端点全集 24 个（dsh-memory/*，含面板高权限删除
- * records-delete），请求/响应形状一律查 src/contract.ts 的两张映射表
- * （DshMemoryRequestMap / DshMemoryResponseMap——契约单一事实源）；
- * import type 在 esbuild 构建期被整段擦除，bundle 零运行时依赖。
+ * 类型化 RPC 通道。端点全集 26 个（dsh-memory/*，含面板高权限删除
+ * records-delete 与图谱 graph-search/graph-node-get），请求/响应形状一律查
+ * src/contract.ts 的两张映射表（DshMemoryRequestMap / DshMemoryResponseMap——
+ * 契约单一事实源）；import type 在 esbuild 构建期被整段擦除，bundle 零运行时依赖。
  */
 import type { DshMemoryEndpoint, DshMemoryRequestMap, DshMemoryResponseMap } from '../../src/contract.js';
 import type { MemoryClientCtx } from './env.js';

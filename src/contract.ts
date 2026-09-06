@@ -10,9 +10,11 @@
  * - 响应类型按端点实际返回逐字段建模,含 `chain.current[].reasoningEffort` 与
  *   `chain.effectiveChain[].effort` 这对故意不同名的字段——链上两种条目形状
  *   不同,不合并;
- * - 端点全集为 24 个(含面板高权限删除 records-delete)。
+ * - 端点全集为 26 个(含面板高权限删除 records-delete 与图谱两端点)。
  */
 import type { MemoryFamily, MemoryMode } from './types.js';
+// 纯类型导入:图谱域形状(运行时常量在 graph/types.ts,import type 不会拉入)
+import type { GraphEdge, GraphNode } from './graph/types.js';
 
 // ── 基础词汇 ──
 
@@ -543,6 +545,35 @@ export interface RecordsDeleteResponse {
   deleted: number;
 }
 
+// ── 知识图谱(graph-search / graph-node-get;面板图谱视图) ──
+
+/** dsh-memory/graph-search(图谱节点检索;紧凑节点卡)。 */
+export interface GraphSearchRequest {
+  /** 自然语言查询(≤4096 字符;空查询返回空)。 */
+  query?: string;
+  /** 1~20,默认 8。 */
+  limit?: number;
+}
+export interface GraphSearchResponse {
+  items: Array<{
+    node: GraphNode;
+    /** 排序分(仅排序语义,非事实置信度)。 */
+    score: number;
+    matchedFields: string[];
+    matchReason: string;
+  }>;
+}
+
+/** dsh-memory/graph-node-get(节点详情展开;悬挂 id 返回 node=null 不解析)。 */
+export interface GraphNodeGetRequest {
+  id: string;
+}
+export interface GraphNodeGetResponse {
+  node: GraphNode | null;
+  /** 与该节点相连的 active 边。 */
+  edges: GraphEdge[];
+}
+
 /** dsh-memory/scenes(两族拼接的混合视图)。 */
 export interface ScenesResponse {
   items: Array<{
@@ -692,6 +723,8 @@ export interface DshMemoryRequestMap {
   'dsh-memory/settings-set': SettingsSetRequest;
   'dsh-memory/list-records': ListRecordsRequest;
   'dsh-memory/records-delete': RecordsDeleteRequest;
+  'dsh-memory/graph-search': GraphSearchRequest;
+  'dsh-memory/graph-node-get': GraphNodeGetRequest;
   'dsh-memory/scenes': Record<string, never>;
   'dsh-memory/persona': Record<string, never>;
   'dsh-memory/log-tail': LogTailRequest;
@@ -719,6 +752,8 @@ export interface DshMemoryResponseMap {
   'dsh-memory/settings-set': SettingsSetResponse;
   'dsh-memory/list-records': ListRecordsResponse;
   'dsh-memory/records-delete': RecordsDeleteResponse;
+  'dsh-memory/graph-search': GraphSearchResponse;
+  'dsh-memory/graph-node-get': GraphNodeGetResponse;
   'dsh-memory/scenes': ScenesResponse;
   'dsh-memory/persona': PersonaResponse;
   'dsh-memory/log-tail': LogTailResponse;

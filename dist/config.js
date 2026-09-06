@@ -38,6 +38,10 @@ export const memorySchema = Schema.object({
         enabled: Schema.boolean().default(true),
         interval: Schema.number().min(1).max(200).default(20),
     }),
+    // 知识图谱投影:默认关(新功能默认关,用户显式开启;开启后受运行时蒸馏门约束)
+    graph: Schema.object({
+        enabled: Schema.boolean().default(false),
+    }),
     recall: Schema.object({
         enabled: Schema.boolean().default(true),
         maxResults: Schema.number().min(1).max(20).default(5),

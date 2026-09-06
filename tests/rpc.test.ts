@@ -111,7 +111,7 @@ async function harness(opts: { live?: LiveSettingsHandle; sessionInfo?: SessionI
     llm: {} as never,
   } as unknown as Parameters<typeof registerMemoryRpc>[0];
 
-  registerMemoryRpc(ctx, cfg(), { l0, l1, scenes, persona, state }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo);
+  registerMemoryRpc(ctx, cfg(), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo);
   return {
     call: async (endpoint, payload) => {
       const r = (await handler!(endpoint, payload)) as { ok: boolean; value?: unknown; error?: { message: string } };
@@ -289,6 +289,62 @@ describe('rpc: session-stats via SessionInfoSource', () => {
     expect(r.distill.threshold).toBe(6);
     h.db.close();
   });
+});
+
+describe('rpc: graph endpoints', () => {
+  it('graph-search returns compact cards; graph-node-get resolves and tolerates dangling ids', async () => {
+    const h = await harness();
+    h.db.upsertL1({
+      id: 'rec-1', content: '张三参与 GraphX 项目', type: 'episodic', priority: 60, scene_name: '默认',
+      timestamps: [Date.now()], createdAt: Date.now(), updatedAt: Date.now(), family: 'chat',
+    });
+    h.db.graphStore.queueGraphProjection(['rec-1'], 10000);
+    const claim = h.db.graphStore.claimNext()!;
+    h.db.graphStore.complete(claim.job.id, {
+      reason: '',
+      nodes: [
+        { ref: 'a', name: '张三', type: 'person', sourceRecordIds: ['rec-1'], state: '参与 GraphX' },
+      ],
+      edges: [],
+    });
+    // 检索:返回紧凑卡(score/matchedFields/matchReason)
+    const search = await h.call('dsh-memory/graph-search', { query: '张三' }) as {
+      items: Array<{ node: { id: string; name: string; currentState: string }; score: number; matchReason: string }>;
+    };
+    expect(search.items).toHaveLength(1);
+    expect(search.items[0]!.node.name).toBe('张三');
+    expect(search.items[0]!.node.currentState).toContain('GraphX');
+    expect(search.items[0]!.matchReason).toContain('命中');
+    // 详情:node + edges;悬挂 id → node=null 不解析
+    const got = await h.call('dsh-memory/graph-node-get', { id: search.items[0]!.node.id }) as { node: { name: string } | null; edges: unknown[] };
+    expect(got.node?.name).toBe('张三');
+    expect(got.edges).toEqual([]);
+    const dangling = await h.call('dsh-memory/graph-node-get', { id: 'no-such-node' }) as { node: unknown; edges: unknown[] };
+    expect(dangling.node).toBeNull();
+    h.db.close();
+  });
+
+  it('graph endpoints validate inputs and degrade to empty without graph store', async () => {
+    const h = await harness();
+    // 入参校验:超长 query / 缺失 id
+    const badQuery = (await handlerError(h, 'dsh-memory/graph-search', { query: 'x'.repeat(5000) }));
+    expect(badQuery).toContain('4096');
+    const badId = (await handlerError(h, 'dsh-memory/graph-node-get', { id: '' }));
+    expect(badId).toContain('id');
+    // limit 钳制到 1~20:超界值不炸
+    const clamped = await h.call('dsh-memory/graph-search', { query: '张三', limit: 999 }) as { items: unknown[] };
+    expect(Array.isArray(clamped.items)).toBe(true);
+    h.db.close();
+  });
+
+  async function handlerError(h: Harness, endpoint: string, payload: unknown): Promise<string> {
+    try {
+      await h.call(endpoint, payload);
+      return '';
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  }
 });
 
 describe('bench control service', () => {

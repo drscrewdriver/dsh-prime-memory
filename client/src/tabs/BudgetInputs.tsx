@@ -1,13 +1,13 @@
 /**
- * 蒸馏预算编辑：分层输出 token 上限（extract/dedup/l2/l3 四键）+ 单次输入字符上限。
+ * 蒸馏预算编辑：分层输出 token 上限（extract/dedup/l2/l3/graph 五键）+ 单次输入字符上限。
  * 数据源：settings-get 的 budgets（current 运行时覆盖（0=跟随默认）/ defaults
  * 内置默认 / effective 实际生效）与 inputBudget（current 0=跟随配置 / fallback
- * 静态配置 / effective）。输出四键经 settings-set 的 distillBudgets 整组提交；
+ * 静态配置 / effective）。输出五键经 settings-set 的 distillBudgets 整组提交；
  * 输入走 distillMaxInputChars 单键提交。思考档 high/xhigh/max 的 ×4 放大只作用
  * 于输出预算（行提示注明）。
  *
- * scope（#34 B 分段）：'all'（缺省：四输出 + 输入）| 'input'（仅输入，全局面板）
- * | 'l1' | 'l2' | 'l3'（仅该层输出行；l1 = 抽取 + 去重两行）。提交始终整组四键，
+ * scope（#34 B 分段）：'all'（缺省：五输出 + 输入）| 'input'（仅输入，全局面板）
+ * | 'l1' | 'l2' | 'l3'（仅该层输出行；l1 = 抽取 + 去重两行）。提交始终整组五键，
  * 未编辑键带现值回写，避免互相清零。
  */
 import { useState } from 'react';
@@ -21,6 +21,7 @@ const LAYERS: Array<[string, string]> = [
   ['dedup', '去重'],
   ['l2', 'L2 场景'],
   ['l3', 'L3 画像'],
+  ['graph', '图谱投影'],
 ];
 
 /** 层范围 → 该面板显示的输出键（l1 同管抽取 + 去重两个调用点）。 */
@@ -106,7 +107,7 @@ export function BudgetInputs(props: {
       });
   };
 
-  /** 输出四键整组提交（distillBudgets）。 */
+  /** 输出五键整组提交（distillBudgets）。 */
   const commitOutputs = () => {
     commitPart(
       ['extract', 'dedup', 'l2', 'l3'],

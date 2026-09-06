@@ -14,6 +14,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { type MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
+import type { GraphStore } from '../store/graph-store.js';
 import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
 import type { PersonaStore } from '../store/persona.js';
@@ -27,13 +28,18 @@ export interface MemoryStores {
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 图谱存储(可选:测试缝/未装配时图谱泵整体停用;GraphStore 自带降级 no-op)。 */
+    graph?: GraphStore;
 }
-/** 管线任务(优先级调度:live 优先于 rebuild)。 */
+/** 管线任务(优先级调度:live > graph > rebuild)。 */
 export interface PipelineTask {
-    kind: 'live' | 'rebuild';
+    kind: 'live' | 'rebuild' | 'graph';
     run: () => Promise<unknown>;
 }
-/** 选取下一个要执行的任务下标:最早的 live 优先,否则队首(rebuild 分块让位)。 */
+/**
+ * 选取下一个要执行的任务下标:最早的 live 优先,其次 graph(图谱投影单批短、
+ * 让位用户轮次但优先于重建分块),否则队首。
+ */
 export declare function pickNextTaskIndex(tasks: PipelineTask[]): number;
 /**
  * 运行时调参视图:设置页运行时链(distillChain)与旧单路由/档位键、分层输出预算、
@@ -70,6 +76,8 @@ export declare class MemoryRunner {
     private sessionProduced;
     /** 抽取连续失败退避(瞬态,不持久化:重启后允许首试再退避)。 */
     private extractFailures;
+    /** 图谱泵在队列中的占位标志(同一时刻至多一个 graph 任务;护栏四件套之一)。 */
+    private graphPumpQueued;
     private readonly pendingFile;
     /** 分族 checkpoint(init 后可用;重建收尾也从这里读活引用)。 */
     states: FamilyStates;
@@ -124,6 +132,20 @@ export declare class MemoryRunner {
      */
     onModeChange(sessionId: string, oldMode: string, newMode: string): void;
     private pushTask;
+    /**
+     * 图谱泵任务入队(护栏四件套,见 maybeQueueGraphTask;成功投影后有积压则续排,
+     * 每轮 drain 至多消费一个 graph 任务且永远让位 live)。
+     */
+    startGraphBackfillTimer(): void;
+    /**
+     * 图谱投影泵入队判定:
+     * - 双门:部署级 cfg.graph.enabled + 运行时 live.enabled/distill,任一为假不入队;
+     * - 占位:同一时刻至多一个 graph 任务在队列(靠 graphPumpQueued 标志),永不与
+     *   live 抢位(pickNextTaskIndex 保证 live > graph);
+     * - 退避/attempts 封顶:由 GraphStore.claimNext 的 WHERE 过滤与 fail 转 dead 承接,
+     *   退避窗口内的 claim 是廉价空转,不在此重复实现。
+     */
+    private maybeQueueGraphTask;
     private drain;
     /** 该会话是否处于抽取退避窗口内。 */
     private inExtractBackoff;

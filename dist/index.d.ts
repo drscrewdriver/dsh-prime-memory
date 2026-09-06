@@ -51,6 +51,11 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         interval: import("@deepseek-ai/schemastery").default<number, number>;
     }>>;
+    graph: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>>;
     recall: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxResults: import("@deepseek-ai/schemastery").default<number, number>;
@@ -306,6 +311,11 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
     }>, Schemastery.ObjectT<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         interval: import("@deepseek-ai/schemastery").default<number, number>;
+    }>>;
+    graph: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>>;
     recall: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;

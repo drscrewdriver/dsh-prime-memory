@@ -6,6 +6,21 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [0.10.0] — 2026-09-06
+
+### 新增
+
+- **知识图谱投影**(L1 的可重建投影,回答"人物/项目/组织/工具/地点现在是什么状态"):L1 蒸馏产出的记录按批喂给模型提案实体与有向关系,`applyGraphProjection` 硬校验落库——**零无来源事实**:每个节点/fact/边的 `sourceRecordIds` 必须全部属于本批认领的记录,越批提案整条静默丢弃,任何图谱结论都能沿 `节点 → sourceRecordIds → L1 记录 → JSONL 事实源` 回查。实体消歧(NFKC 归一 + 类型一致合并,别名累积)、状态历史(supersede + validTo 闭合,`currentState` 只由 active facts 重建)、时间锚四级链(`activity_start_time → activity_end_time → timestamps → createdAt`,无证据不猜日期)。图谱表族可随时 drop 重造,不作事实源。
+- **投影任务队列**(GraphStore,独立降级:初始化失败仅图谱 no-op,不传染主存储):持久化 job 状态机 pending → running → completed/dead,去重下推 SQL(在途 mapping + 投影台账两张索引表,不做全 job 扫描);优先级不倒挂(新蒸馏 10000 > 存量补投影 100);attempts 封顶转 dead、指数退避 `nextAttemptAt`、启动回收 running→pending;`deleteL1Batch` 后删除传播(来源全失效的节点/边惰性标 archived)。LLM 调用永不进事务(claim 与 complete 是两个事务缝,complete 单事务原子提交)。
+- **图谱检索与工具**:字段加权检索(name×6/aliases×5/tags×5/currentState×4/facts×4/relations×3/type×2),仅关系词命中的邻接噪声过滤,`matchedFields` + 中文 `matchReason` 可解释输出;新工具 `memory_search_graph`(紧凑节点卡)与 `memory_expand_graph_node`(facts 全量含历史 + 关系边),受与 `memory_search` 同款的档位/注入拒读门约束,并按会话族过滤(纯档只见本族衍生节点)。
+- **RPC 端点 24→26**:`dsh-memory/graph-search`(检索)与 `dsh-memory/graph-node-get`(详情展开;悬挂 id 返回 `node=null` 不解析);契约单一事实源同步,client 泛型调用面零改动自动获得新端点类型。
+- **预算键扩容**:`DistillBudgets` 加 `graph` 键(默认 8000,设置页图谱行可编辑);`layerKeyFor('graph')` 显式回全局解析,绝不落入 l1 层链;图谱投影成本进总额与按模型分组,不进 l1→l2→l3 分层表与趋势(旁路豁免)。
+
+### 变更
+
+- **新配置**:`config.graph.enabled`(部署级,默认 **false**——开启后还需运行时蒸馏开关同时为真;泵护栏:每轮 drain 至多一个图谱任务、永远让位实时蒸馏轮次)。
+- 插件版本 0.9.0 → 0.10.0(端点面变化)。
+
 ## [0.9.0] — 2026-09-01
 
 ### 新增

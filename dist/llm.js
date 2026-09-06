@@ -12,21 +12,25 @@ export const LAYER_MAX_TOKENS_DEDUP = 8_000;
 export const LAYER_MAX_TOKENS_L2 = 32_000;
 /** L3 画像(完整 persona 文档)。 */
 export const LAYER_MAX_TOKENS_L3 = 16_000;
+/** 图谱投影(节点/边提案 JSON;单批 ≤8 条记录,输出比 L1 抽取短)。 */
+export const LAYER_MAX_TOKENS_GRAPH = 8_000;
 /** 各层内置默认预算(设置页"0 = 跟随默认"的默认值来源)。 */
 export const LAYER_DEFAULT_BUDGETS = {
     extract: LAYER_MAX_TOKENS_EXTRACT,
     dedup: LAYER_MAX_TOKENS_DEDUP,
     l2: LAYER_MAX_TOKENS_L2,
     l3: LAYER_MAX_TOKENS_L3,
+    graph: LAYER_MAX_TOKENS_GRAPH,
 };
 /**
  * 解析某蒸馏层的生效输出预算:运行时覆盖(cfg.llm.budgets,0/缺省 = 跟随)
  * → 内置默认 → 思考档放大(high/xhigh/max ×4,reasoning 计入输出预算的历史事故
- * 防线)。放大触发档位跟层走:层链头档位候选 > 全局主路由档位候选。
+ * 防线)。放大触发档位跟层走:层链头档位候选 > 全局主路由档位候选;
+ * graph 层无层链(不落 l1 路由),恒走全局候选。
  */
 export function resolveLayerTokens(cfg, layer) {
     const override = cfg.llm.budgets?.[layer];
-    const key = layer === 'l2' ? 'l2' : layer === 'l3' ? 'l3' : 'l1';
+    const key = layer === 'l2' ? 'l2' : layer === 'l3' ? 'l3' : layer === 'graph' ? null : 'l1';
     return layerMaxTokens(override && override > 0 ? override : LAYER_DEFAULT_BUDGETS[layer], layerEffortTrigger(cfg, key));
 }
 /**
@@ -78,9 +82,13 @@ export function buildRouteChain(primary, fallbacks, globalEffort) {
 // 层链非空即完整替换该层解析(该层主路由与回退都归层链管,全局链对该层不参与);
 // 档位是全局偏好轴:层链空档位条目/头行仍回退全局档位。pin 只废运行时侧
 // (effectiveCfg 不注入),静态层链天然穿透。
-/** DistillLayer(调用点四键)→ 路由层键(三键):l1-extract/l1-dedup 同属 l1。 */
+/**
+ * DistillLayer(调用点五键)→ 路由层键(三键):l1-extract/l1-dedup 同属 l1;
+ * graph 无层路由键——返回 null,调用侧按"该层无层链"回全局解析,绝不落入 l1
+ * (图谱投影误用 L1 抽取链是路由配置错误,静默错路由最难排查)。
+ */
 export function layerKeyFor(layer) {
-    return layer === 'l2' ? 'l2' : layer === 'l3' ? 'l3' : 'l1';
+    return layer === 'l2' ? 'l2' : layer === 'l3' ? 'l3' : layer === 'graph' ? null : 'l1';
 }
 /**
  * 取某层的生效层链(运行时优先)。头行残缺(provider/model 缺失——手写 YAML 错误
@@ -96,9 +104,10 @@ function layerChainOf(cfg, key) {
         return st;
     return undefined;
 }
-/** 该层的预算放大触发档位:层链头档位候选 > 全局主路由档位候选(primaryEffort > 静态全局)。 */
+/** 该层的预算放大触发档位:层链头档位候选 > 全局主路由档位候选(primaryEffort > 静态全局)。
+ *  key=null(graph 层无层链)→ 恒走全局候选。 */
 export function layerEffortTrigger(cfg, key) {
-    const chain = layerChainOf(cfg, key);
+    const chain = key ? layerChainOf(cfg, key) : undefined;
     return chain
         ? chain[0].reasoningEffort || cfg.llm.primaryEffort || cfg.llm.reasoningEffort
         : cfg.llm.primaryEffort || cfg.llm.reasoningEffort;

@@ -13,6 +13,7 @@ import { CostLedger } from './cost-ledger.js';
 import type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
+import { GraphStore } from './graph-store.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
     id: string;
@@ -50,6 +51,8 @@ export declare class MemoryDb {
     private stmtL1FtsSearchFamily;
     /** 成本账本(token_cost 表族;init 内初始化,未就绪时方法返回零值)。 */
     readonly costLedger: CostLedger;
+    /** 图谱存储(graph_* 表族;init 独立 try/catch,失败仅图谱 no-op)。 */
+    readonly graphStore: GraphStore;
     private stmtUpsertL0;
     private stmtGetL0;
     private stmtL0Exists;
@@ -118,7 +121,8 @@ export declare class MemoryDb {
     upsertL1Batch(records: MemoryRecord[], embeddings?: Array<Float32Array | undefined>): boolean;
     /** 事务内的单条写入体(upsertL1 / upsertL1Batch 共用;调用方负责事务)。 */
     private upsertL1InTx;
-    /** 批量删除 L1(元数据 + 向量 + FTS),返回删除条数。IN 按 ≤900 分块(避变量数上限)。 */
+    /** 批量删除 L1(元数据 + 向量 + FTS),返回删除条数。IN 按 ≤900 分块(避变量数上限)。
+     *  删除成功后触发图谱删除传播(来源全失效的节点/边惰性标 archived;失败不影响删除结果)。 */
     deleteL1Batch(ids: string[]): number;
     private inStatement;
     /**
@@ -126,6 +130,7 @@ export declare class MemoryDb {
      * 向量表走 DROP + 重建(vec0 的全表 DELETE 语义不可靠,dropVectorTables
      * 会连 l0_vec 一起删——L0 向量必须保留——故此处单独处理 l1_vec)。
      * L0 表与 embedding_meta 不动:backfill 的行数比对天然重新一致。
+     * 图谱表族一并清空——图谱是 L1 的可重建投影,记录清空即投影作废(B2)。
      */
     clearL1(): boolean;
     countL1(): number;

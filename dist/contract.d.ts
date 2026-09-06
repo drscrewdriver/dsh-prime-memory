@@ -10,16 +10,17 @@
  * - 响应类型按端点实际返回逐字段建模,含 `chain.current[].reasoningEffort` 与
  *   `chain.effectiveChain[].effort` 这对故意不同名的字段——链上两种条目形状
  *   不同,不合并;
- * - 端点全集为 24 个(含面板高权限删除 records-delete)。
+ * - 端点全集为 26 个(含面板高权限删除 records-delete 与图谱两端点)。
  */
 import type { MemoryFamily, MemoryMode } from './types.js';
+import type { GraphEdge, GraphNode } from './graph/types.js';
 /** 蒸馏思考档位:'' = 自动(模型默认档 → high)。运行时词汇表源是 config.ts 的
  *  EFFORT_CHOICES(satisfies readonly EffortChoice[] 反向锁定防漂移)。 */
 export type EffortChoice = '' | 'off' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-/** 蒸馏用量/成本记账的层标识(调用点口径)。 */
-export type DistillLayer = 'l1-extract' | 'l1-dedup' | 'l2' | 'l3';
+/** 蒸馏用量/成本记账的层标识(调用点口径)。graph = 知识图谱投影调用。 */
+export type DistillLayer = 'l1-extract' | 'l1-dedup' | 'l2' | 'l3' | 'graph';
 /** 分层输出预算的层键(与 DistillLayer 不同:预算按管线阶段,用量按调用点)。 */
-export type DistillBudgetLayer = 'extract' | 'dedup' | 'l2' | 'l3';
+export type DistillBudgetLayer = 'extract' | 'dedup' | 'l2' | 'l3' | 'graph';
 /** 分层输出预算(token):0 = 跟随内置默认。 */
 export type DistillBudgets = Record<DistillBudgetLayer, number>;
 /**
@@ -39,7 +40,7 @@ export interface StaticFallbackEntry {
     reasoningEffort?: string;
 }
 /** 按层路由的层键:l1 同管 l1-extract + l1-dedup 两个调用点(与成本看板按层归并同源);
- *  预算键(DistillBudgetLayer)是另一套四键词表,不混用。 */
+ *  graph 投影不配层链(回全局解析);预算键(DistillBudgetLayer)是另一套五键词表,不混用。 */
 export type LayerRouteKey = 'l1' | 'l2' | 'l3';
 /** 记忆模式运行时开关(settings-get/set 的 settings 载荷)。 */
 export interface MemoryLiveSettings {
@@ -61,7 +62,7 @@ export interface MemoryLiveSettings {
     /** 运行时统一路由链;非空即权威(旧 distillProvider/distillModel/reasoningEffort 不再参与),
      *  空数组 = 跟随部署静态配置与默认模型。 */
     distillChain: DistillChainEntry[];
-    /** 分层输出预算运行时覆盖(token):extract/dedup/l2/l3 四层,0 = 跟随内置默认;
+    /** 分层输出预算运行时覆盖(token):extract/dedup/l2/l3/graph 五层,0 = 跟随内置默认;
      *  思考档 high/max 的 ×4 放大在覆盖值之上照常生效。 */
     distillBudgets: DistillBudgets;
     /** 输入预算运行时覆盖(字符,≈token):单次蒸馏调用的输入上限,L1 按此分块、
@@ -471,6 +472,7 @@ export interface SettingsSetRequest {
         dedup: number;
         l2: number;
         l3: number;
+        graph: number;
     };
     distillMaxInputChars?: number;
     /** 蒸馏通道运行时覆盖:'' = 跟随部署 config;'host' = 复用宿主;'direct' = 插件原生直连。 */
@@ -540,6 +542,31 @@ export interface RecordsDeleteRequest {
 }
 export interface RecordsDeleteResponse {
     deleted: number;
+}
+/** dsh-memory/graph-search(图谱节点检索;紧凑节点卡)。 */
+export interface GraphSearchRequest {
+    /** 自然语言查询(≤4096 字符;空查询返回空)。 */
+    query?: string;
+    /** 1~20,默认 8。 */
+    limit?: number;
+}
+export interface GraphSearchResponse {
+    items: Array<{
+        node: GraphNode;
+        /** 排序分(仅排序语义,非事实置信度)。 */
+        score: number;
+        matchedFields: string[];
+        matchReason: string;
+    }>;
+}
+/** dsh-memory/graph-node-get(节点详情展开;悬挂 id 返回 node=null 不解析)。 */
+export interface GraphNodeGetRequest {
+    id: string;
+}
+export interface GraphNodeGetResponse {
+    node: GraphNode | null;
+    /** 与该节点相连的 active 边。 */
+    edges: GraphEdge[];
 }
 /** dsh-memory/scenes(两族拼接的混合视图)。 */
 export interface ScenesResponse {
@@ -696,6 +723,8 @@ export interface DshMemoryRequestMap {
     'dsh-memory/settings-set': SettingsSetRequest;
     'dsh-memory/list-records': ListRecordsRequest;
     'dsh-memory/records-delete': RecordsDeleteRequest;
+    'dsh-memory/graph-search': GraphSearchRequest;
+    'dsh-memory/graph-node-get': GraphNodeGetRequest;
     'dsh-memory/scenes': Record<string, never>;
     'dsh-memory/persona': Record<string, never>;
     'dsh-memory/log-tail': LogTailRequest;
@@ -722,6 +751,8 @@ export interface DshMemoryResponseMap {
     'dsh-memory/settings-set': SettingsSetResponse;
     'dsh-memory/list-records': ListRecordsResponse;
     'dsh-memory/records-delete': RecordsDeleteResponse;
+    'dsh-memory/graph-search': GraphSearchResponse;
+    'dsh-memory/graph-node-get': GraphNodeGetResponse;
     'dsh-memory/scenes': ScenesResponse;
     'dsh-memory/persona': PersonaResponse;
     'dsh-memory/log-tail': LogTailResponse;

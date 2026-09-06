@@ -294,7 +294,7 @@ async function handleEndpoint(endpoint, payload, deps) {
         }
         case 'dsh-memory/settings-get': {
             const s = live?.get();
-            const budgets = s?.distillBudgets ?? { extract: 0, dedup: 0, l2: 0, l3: 0 };
+            const budgets = s?.distillBudgets ?? { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 };
             // 蒸馏思考档位:current 是运行时值('' = 自动);effective 是能力探询后实际发送值
             // ('' = 不传,跟随模型默认);options 是当前生效模型声明的档位表(空声明 → 只显示
             // high,用户规则:无声明默认 high),fallback 是静态部署值。
@@ -319,7 +319,7 @@ async function handleEndpoint(endpoint, payload, deps) {
                 settings: sanitizeSettings(s ?? {
                     enabled: true, capture: true, distill: true, recall: true,
                     reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
-                    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0 }, distillMaxInputChars: 0,
+                    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
                     distillLayerChains: { l1: [], l2: [], l3: [] },
                     distillMode: '', directBaseURL: '', directApiKey: '',
                     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
@@ -344,6 +344,7 @@ async function handleEndpoint(endpoint, payload, deps) {
                         dedup: budgets.dedup > 0 ? budgets.dedup : LAYER_DEFAULT_BUDGETS.dedup,
                         l2: budgets.l2 > 0 ? budgets.l2 : LAYER_DEFAULT_BUDGETS.l2,
                         l3: budgets.l3 > 0 ? budgets.l3 : LAYER_DEFAULT_BUDGETS.l3,
+                        graph: budgets.graph > 0 ? budgets.graph : LAYER_DEFAULT_BUDGETS.graph,
                     },
                 },
                 // 输入预算(字符):current 是运行时覆盖(0 = 跟随配置),fallback 是静态配置值
@@ -410,11 +411,12 @@ async function handleEndpoint(endpoint, payload, deps) {
                     clean[key] = v;
                 }
             }
-            // 分层输出预算:四键一起校验,非负整数 ≤ 100 万;0 = 跟随内置默认
+            // 分层输出预算:五键一起校验,非负整数 ≤ 100 万;0 = 跟随内置默认
+            // (键表与 DistillBudgetLayer 同步——漏白名单键 = 静默丢预算,C 节坑①)
             if (patch.distillBudgets !== undefined) {
                 const raw = (patch.distillBudgets ?? {});
                 const budgets = {};
-                for (const key of ['extract', 'dedup', 'l2', 'l3']) {
+                for (const key of ['extract', 'dedup', 'l2', 'l3', 'graph']) {
                     const n = Number(raw[key] ?? 0);
                     if (!Number.isInteger(n) || n < 0 || n > 1_000_000) {
                         throw new Error(`distillBudgets.${key} 须为 0~1000000 的整数(0 = 跟随默认)`);
@@ -545,6 +547,40 @@ async function handleEndpoint(endpoint, payload, deps) {
             await stores.l1.deleteBatch(ids);
             deps.logger.info(`[memory] 高权限删除记忆 ${ids.length} 条(${ids.join('，')})`);
             return { deleted: ids.length };
+        }
+        // ── 知识图谱(面板图谱视图;graph 未装配时返空不报错) ──
+        case 'dsh-memory/graph-search': {
+            const p = (payload ?? {});
+            const query = typeof p.query === 'string' ? p.query : '';
+            if (query.length > 4096)
+                throw new Error('query 过长(≤4096 字符)');
+            const limit = Math.min(Math.max(Math.floor(Number(p.limit)) || 8, 1), 20);
+            const graph = stores.graph;
+            if (!graph)
+                return { items: [] };
+            const hits = graph.searchNodes(query, limit);
+            return {
+                items: hits.map((h) => ({
+                    node: h.node,
+                    score: Math.round(h.score * 100) / 100,
+                    matchedFields: h.matchedFields,
+                    matchReason: h.matchReason,
+                })),
+            };
+        }
+        case 'dsh-memory/graph-node-get': {
+            const p = (payload ?? {});
+            const id = typeof p.id === 'string' ? p.id : '';
+            if (!id || id.length > 200)
+                throw new Error('id 缺失或过长(≤200 字符)');
+            const graph = stores.graph;
+            if (!graph)
+                return { node: null, edges: [] };
+            // 悬挂 id(已归档/不存在)不解析:node=null,调用方展示"节点不存在"
+            const node = graph.getNode(id);
+            if (!node)
+                return { node: null, edges: [] };
+            return { node, edges: graph.edgesOf(id) };
         }
         case 'dsh-memory/scenes': {
             // 两族拼接展示(浏览器保持混合视图;路径冲突时后写入的族覆盖显示名,读取仍各自独立)

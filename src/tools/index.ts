@@ -15,12 +15,14 @@ import type { Context } from '@deepseek-ai/cordis';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
+import type { GraphStore } from '../store/graph-store.js';
 import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryFamily, MemoryLogger } from '../types.js';
+import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
 const WRITE_ONLY_NOTICE = '本会话为只写模式:记忆照常沉淀,但不读取。';
@@ -34,6 +36,8 @@ export function registerMemoryTools(
     l1: L1Store;
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
+    /** 图谱存储(可选:未装配时图谱工具返回未启用提示)。 */
+    graph?: GraphStore;
   },
   logger: MemoryLogger,
   modes: SessionModeStore,
@@ -314,7 +318,143 @@ export function registerMemoryTools(
     }),
   );
 
-  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene,及高权限 memory_add/memory_delete');
+  // ── 图谱工具(读;受与 memory_search 同款的档位/注入拒读门 + 族过滤) ──
+  const GRAPH_OFF_NOTICE = '图谱功能未启用:部署配置 graph.enabled 未开启,当前没有可用的知识图谱。';
+
+  // memory_search_graph: 图谱节点检索(紧凑节点卡)
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_search_graph',
+      description:
+        '搜索知识图谱(实体节点:人物/项目/组织/工具/地点)。返回实体的当前状态摘要与匹配说明,适用于查"某人/某项目现在什么状态"这类问题;需要完整属性与关系时再用 memory_expand_graph_node 展开。',
+      parameters: {
+        query: { type: 'string', required: true, description: '搜索查询文本(实体名、别名、标签或状态关键词)' },
+        limit: { type: 'number', description: '最大返回条数(默认 8,上限 20)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string' },
+                  type: { type: 'string' },
+                  status: { type: 'string' },
+                  current_state: { type: 'string' },
+                  score: { type: 'number' },
+                  match_reason: { type: 'string' },
+                },
+                additionalProperties: false,
+              },
+            },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: value.notice ?? renderGraphCards(value.items ?? []) }],
+      },
+      execute: async (args, exec) => {
+        const family = familyOfCaller(exec.agent?.id);
+        if (family === null) return { items: [], notice: blockNoticeOf(exec.agent?.id) };
+        const graph = stores.graph;
+        if (!graph) return { items: [], notice: GRAPH_OFF_NOTICE };
+        const query = String(args.query ?? '').trim();
+        if (!query) return { items: [], notice: 'query 为空' };
+        const limit = Math.min(Math.max(args.limit ?? 8, 1), 20);
+        // 族过滤:纯档会话只见本族衍生节点(auto/fail-open 不过滤)
+        const hits = graph.searchNodes(query, limit, family ? [family] : undefined);
+        return {
+          items: hits.map((h) => ({
+            id: h.node.id,
+            name: h.node.name,
+            type: h.node.type,
+            status: h.node.status,
+            current_state: h.node.currentState,
+            score: Math.round(h.score * 100) / 100,
+            match_reason: h.matchReason,
+          })),
+        };
+      },
+    }),
+  );
+
+  // memory_expand_graph_node: 展开单个节点(facts 全量含历史 + 关系边)
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_expand_graph_node',
+      description:
+        '展开一个图谱节点的完整详情:全部属性(facts,含已被更新的历史值与生效区间)、关联关系边与来源记忆 id。先用 memory_search_graph 拿到节点 id。',
+      parameters: {
+        id: { type: 'string', required: true, description: '节点 id(memory_search_graph 返回的 id)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            node: { type: 'string', description: '节点详情文本(不存在为空串)' },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: value.notice ?? (value.node || '(节点不存在)') }],
+      },
+      execute: async (args, exec) => {
+        const family = familyOfCaller(exec.agent?.id);
+        if (family === null) return { notice: blockNoticeOf(exec.agent?.id) };
+        const graph = stores.graph;
+        if (!graph) return { notice: GRAPH_OFF_NOTICE };
+        const id = String(args.id ?? '').trim();
+        if (!id || id.length > 200) return { notice: 'id 缺失或过长' };
+        const node = graph.getNode(id);
+        // 悬挂 id 与跨族节点一律"不解析":纯档会话探测不到他族节点的存在
+        if (!node || (family && !node.families.includes(family))) return { notice: '(节点不存在)' };
+        const lines: string[] = [
+          `[${node.name}](类型 ${node.type},${GRAPH_STATUS_LABELS[node.status]})`,
+          ...(node.aliases.length > 0 ? [`别名: ${node.aliases.join('、')}`] : []),
+          ...(node.tags?.length ? [`标签: ${node.tags.join('、')}`] : []),
+          ...(node.currentState ? [`当前状态:\n${node.currentState}`] : []),
+          '',
+          '属性(含历史):',
+        ];
+        for (const f of node.facts) {
+          const value = Array.isArray(f.value) ? f.value.join('、') : f.value;
+          const span = [f.validFrom ? `自 ${f.validFrom}` : '', f.validTo ? `至 ${f.validTo}` : ''].filter(Boolean).join(' ');
+          lines.push(
+            `- ${f.key}: ${value}(${GRAPH_STATUS_LABELS[f.status]}${span ? `,${span}` : ''})`,
+          );
+        }
+        const edges = graph.edgesOf(id);
+        if (edges.length > 0) {
+          lines.push('', '关系:');
+          for (const e of edges) {
+            const other = e.fromNodeId === id ? e.toNodeId : e.fromNodeId;
+            const arrow = e.fromNodeId === id ? '→' : '←';
+            lines.push(`- ${arrow} ${other}(${e.relation},${GRAPH_STATUS_LABELS[e.status]})`);
+          }
+        }
+        lines.push('', `来源记忆: ${node.sourceRecordIds.join('、') || '(无)'}`);
+        return { node: lines.join('\n') };
+      },
+    }),
+  );
+
+  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_delete');
+}
+
+function renderGraphCards(
+  items: Array<{ id?: string; name?: string; type?: string; current_state?: string; match_reason?: string }>,
+): string {
+  if (!items || items.length === 0) return '(图谱中没有找到相关实体)';
+  return items
+    .map((it, i) => {
+      const state = it.current_state ? `\n   状态: ${it.current_state.replaceAll('\n', ' / ')}` : '';
+      return `${i + 1}. ${it.name ?? ''}(类型 ${it.type ?? ''},id=${it.id ?? ''})${state}\n   匹配: ${it.match_reason ?? ''}`;
+    })
+    .join('\n');
 }
 
 function renderMemoryItems(

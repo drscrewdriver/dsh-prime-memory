@@ -10,12 +10,10 @@
  * 运行:npm run smoke(先 build:smoke 编译本文件,再 node 执行)。
  */
 import { readFile, access } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
 
-const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 let failures = 0;
@@ -72,8 +70,9 @@ async function main(): Promise<void> {
   // ── 类型契约与端点面 ──
   const contractDts = await readFile(path.join(dist, 'contract.d.ts'), 'utf-8');
   const endpointCount = (contractDts.match(/'dsh-memory\//g) ?? []).length;
-  check('contract.d.ts 含 24 端点字面量(48 = 请求+响应映射)', endpointCount >= 48, `实际 ${endpointCount}`);
+  check('contract.d.ts 含 26 端点字面量(52 = 请求+响应映射)', endpointCount >= 52, `实际 ${endpointCount}`);
   check('contract.d.ts 含 records-delete', contractDts.includes("'dsh-memory/records-delete'"));
+  check('contract.d.ts 含图谱端点', contractDts.includes("'dsh-memory/graph-search'") && contractDts.includes("'dsh-memory/graph-node-get'"));
   check('contract.d.ts 含 memoryMutate/embedRemote*', contractDts.includes('memoryMutate') && contractDts.includes('embedRemoteBaseURL'));
 
   // ── 包元数据 ──

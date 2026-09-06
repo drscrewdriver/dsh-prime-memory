@@ -51,6 +51,11 @@ export interface MemoryConfig {
         /** 距上次 L3 蒸馏的新记忆数量阈值。 */
         interval: number;
     };
+    graph: {
+        /** 知识图谱投影总开关(部署级,默认关):开启后还需运行时蒸馏开关(live.distill)
+         *  同时为真才执行;图谱是 L1 的可重建投影,关闭不影响记忆主链路。 */
+        enabled: boolean;
+    };
     recall: {
         enabled: boolean;
         /** 每步自动召回注入的 L1 条数。 */
@@ -134,6 +139,7 @@ export interface MemoryConfig {
             dedup: number;
             l2: number;
             l3: number;
+            graph: number;
         }>;
     };
     /** Hall(粗分类属性通道):参与 L1 自动打标与记忆库过滤的 Hall id 列表。
@@ -193,6 +199,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
     }>, Schemastery.ObjectT<{
         enabled: Schema<boolean, boolean>;
         interval: Schema<number, number>;
+    }>>;
+    graph: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
     }>>;
     recall: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
@@ -449,6 +460,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
     }>, Schemastery.ObjectT<{
         enabled: Schema<boolean, boolean>;
         interval: Schema<number, number>;
+    }>>;
+    graph: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
     }>>;
     recall: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;

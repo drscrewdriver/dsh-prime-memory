@@ -28,6 +28,8 @@ const TAG = '[memory][sqlite]';
 // 成本账本(token_cost 表族)独立职责,此处 re-export 不断裂既有引用;
 // MemoryDb 的四个公开方法为一行委托。
 import { CostLedger } from './cost-ledger.js';
+// 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
+import { GraphStore } from './graph-store.js';
 /** vec0 KNN 对遗留零向量的补偿缓冲。 */
 const ZERO_VEC_BUFFER = 10;
 /** IN 查询/删除的分块大小(保守避开 SQLite 变量数上限:现代构建 32766,老版 999)。 */
@@ -64,6 +66,8 @@ export class MemoryDb {
     stmtL1FtsSearchFamily;
     /** 成本账本(token_cost 表族;init 内初始化,未就绪时方法返回零值)。 */
     costLedger = new CostLedger();
+    /** 图谱存储(graph_* 表族;init 独立 try/catch,失败仅图谱 no-op)。 */
+    graphStore = new GraphStore();
     stmtUpsertL0;
     stmtGetL0;
     stmtL0Exists;
@@ -354,6 +358,8 @@ export class MemoryDb {
         this.prepareL0VecStatements();
         // ── token_cost:蒸馏成本明细表(成本账本自治) ──
         this.costLedger.init(this.db, this.logger);
+        // ── graph_*:知识图谱投影表族(GraphStore.init 自带 try/catch,失败仅图谱 no-op) ──
+        this.graphStore.init(this.db, this.logger);
         // ── FTS5 全文索引(建表失败仅停用 FTS,不降级整个库) ──
         try {
             // 索引重建判据(FTS5 无法 ALTER,只能 drop 后从源表全量回灌):
@@ -702,7 +708,8 @@ export class MemoryDb {
             this.stmtL1FtsInsert.run(tokenizeForFts(record.content), record.content, record.id, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, JSON.stringify(record.metadata ?? {}), family);
         }
     }
-    /** 批量删除 L1(元数据 + 向量 + FTS),返回删除条数。IN 按 ≤900 分块(避变量数上限)。 */
+    /** 批量删除 L1(元数据 + 向量 + FTS),返回删除条数。IN 按 ≤900 分块(避变量数上限)。
+     *  删除成功后触发图谱删除传播(来源全失效的节点/边惰性标 archived;失败不影响删除结果)。 */
     deleteL1Batch(ids) {
         if (this.degraded || ids.length === 0)
             return 0;
@@ -719,6 +726,7 @@ export class MemoryDb {
                         this.inStatement('l1_fts', 'delete', chunk.length).run(...chunk);
                 }
             });
+            this.graphStore.markSourcesDeleted(ids);
             return ids.length;
         }
         catch (err) {
@@ -744,6 +752,7 @@ export class MemoryDb {
      * 向量表走 DROP + 重建(vec0 的全表 DELETE 语义不可靠,dropVectorTables
      * 会连 l0_vec 一起删——L0 向量必须保留——故此处单独处理 l1_vec)。
      * L0 表与 embedding_meta 不动:backfill 的行数比对天然重新一致。
+     * 图谱表族一并清空——图谱是 L1 的可重建投影,记录清空即投影作废(B2)。
      */
     clearL1() {
         if (this.degraded)
@@ -754,6 +763,7 @@ export class MemoryDb {
                 if (this.ftsAvailable)
                     this.db.exec('DELETE FROM l1_fts');
             });
+            this.graphStore.resetAll();
             // vec0 全表 DELETE 语义不可靠 → DROP + 重建空表;放事务外(vtab DDL 事务性弱)。
             // 中间态:向量行短暂孤儿——检索侧对缺 meta 的向量本就跳过(searchL1Vector 回查过滤)。
             if (this.stmtDeleteL1Vec) {

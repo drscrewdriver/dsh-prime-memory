@@ -25,6 +25,7 @@ import { emptyRecallStats, type RecallSessionStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import type { RebuildController } from './pipeline/rebuild.js';
 import { projectDistillChain, validateDistillChain, type DistillChainEntry, type LiveSettingsHandle } from './settings.js';
+import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
 import type { L1Store } from './store/l1.js';
 import type { PersonaStore } from './store/persona.js';
@@ -115,6 +116,8 @@ export function registerMemoryRpc(
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 图谱存储(可选:未装配时图谱端点返空,不报错)。 */
+    graph?: GraphStore;
   },
   logger: MemoryLogger,
   status?: MemoryStatusSource,
@@ -263,6 +266,7 @@ interface EndpointDeps {
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    graph?: GraphStore;
   };
   status?: MemoryStatusSource;
   live?: LiveSettingsHandle;
@@ -666,6 +670,37 @@ async function handleEndpoint(endpoint: string, payload: unknown, deps: Endpoint
       await stores.l1.deleteBatch(ids);
       deps.logger.info(`[memory] 高权限删除记忆 ${ids.length} 条(${ids.join('，')})`);
       return { deleted: ids.length };
+    }
+
+    // ── 知识图谱(面板图谱视图;graph 未装配时返空不报错) ──
+    case 'dsh-memory/graph-search': {
+      const p = (payload ?? {}) as { query?: string; limit?: number };
+      const query = typeof p.query === 'string' ? p.query : '';
+      if (query.length > 4096) throw new Error('query 过长(≤4096 字符)');
+      const limit = Math.min(Math.max(Math.floor(Number(p.limit)) || 8, 1), 20);
+      const graph = stores.graph;
+      if (!graph) return { items: [] };
+      const hits = graph.searchNodes(query, limit);
+      return {
+        items: hits.map((h) => ({
+          node: h.node,
+          score: Math.round(h.score * 100) / 100,
+          matchedFields: h.matchedFields,
+          matchReason: h.matchReason,
+        })),
+      };
+    }
+
+    case 'dsh-memory/graph-node-get': {
+      const p = (payload ?? {}) as { id?: string };
+      const id = typeof p.id === 'string' ? p.id : '';
+      if (!id || id.length > 200) throw new Error('id 缺失或过长(≤200 字符)');
+      const graph = stores.graph;
+      if (!graph) return { node: null, edges: [] };
+      // 悬挂 id(已归档/不存在)不解析:node=null,调用方展示"节点不存在"
+      const node = graph.getNode(id);
+      if (!node) return { node: null, edges: [] };
+      return { node, edges: graph.edgesOf(id) };
     }
 
     case 'dsh-memory/scenes': {

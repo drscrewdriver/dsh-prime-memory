@@ -14,6 +14,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
+import type { GraphStore } from '../store/graph-store.js';
 import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
 import type { PersonaStore } from '../store/persona.js';
@@ -25,4 +26,6 @@ export declare function registerMemoryTools(ctx: Context, cfg: MemoryConfig, sto
     l1: L1Store;
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
+    /** 图谱存储(可选:未装配时图谱工具返回未启用提示)。 */
+    graph?: GraphStore;
 }, logger: MemoryLogger, modes: SessionModeStore, live: LiveSettingsHandle): void;

@@ -28,6 +28,8 @@ export declare const LAYER_MAX_TOKENS_DEDUP = 8000;
 export declare const LAYER_MAX_TOKENS_L2 = 32000;
 /** L3 画像(完整 persona 文档)。 */
 export declare const LAYER_MAX_TOKENS_L3 = 16000;
+/** 图谱投影(节点/边提案 JSON;单批 ≤8 条记录,输出比 L1 抽取短)。 */
+export declare const LAYER_MAX_TOKENS_GRAPH = 8000;
 /** 分层输出预算键(契约单一事实源在 src/contract.ts)。 */
 import type { DistillBudgetLayer, LayerRouteKey, StaticFallbackEntry } from './contract.js';
 export type { DistillBudgetLayer } from './contract.js';
@@ -46,7 +48,8 @@ export interface LayerRouteCfgView {
 /**
  * 解析某蒸馏层的生效输出预算:运行时覆盖(cfg.llm.budgets,0/缺省 = 跟随)
  * → 内置默认 → 思考档放大(high/xhigh/max ×4,reasoning 计入输出预算的历史事故
- * 防线)。放大触发档位跟层走:层链头档位候选 > 全局主路由档位候选。
+ * 防线)。放大触发档位跟层走:层链头档位候选 > 全局主路由档位候选;
+ * graph 层无层链(不落 l1 路由),恒走全局候选。
  */
 export declare function resolveLayerTokens(cfg: LayerRouteCfgView, layer: DistillBudgetLayer): number;
 /**
@@ -87,10 +90,15 @@ export declare function buildRouteChain(primary: {
     model: string;
     effort?: string;
 }, fallbacks: FallbackRouteEntry[] | undefined, globalEffort: string): DistillRoute[];
-/** DistillLayer(调用点四键)→ 路由层键(三键):l1-extract/l1-dedup 同属 l1。 */
-export declare function layerKeyFor(layer: DistillLayer): LayerRouteKey;
-/** 该层的预算放大触发档位:层链头档位候选 > 全局主路由档位候选(primaryEffort > 静态全局)。 */
-export declare function layerEffortTrigger(cfg: LayerRouteCfgView, key: LayerRouteKey): string;
+/**
+ * DistillLayer(调用点五键)→ 路由层键(三键):l1-extract/l1-dedup 同属 l1;
+ * graph 无层路由键——返回 null,调用侧按"该层无层链"回全局解析,绝不落入 l1
+ * (图谱投影误用 L1 抽取链是路由配置错误,静默错路由最难排查)。
+ */
+export declare function layerKeyFor(layer: DistillLayer): LayerRouteKey | null;
+/** 该层的预算放大触发档位:层链头档位候选 > 全局主路由档位候选(primaryEffort > 静态全局)。
+ *  key=null(graph 层无层链)→ 恒走全局候选。 */
+export declare function layerEffortTrigger(cfg: LayerRouteCfgView, key: LayerRouteKey | null): string;
 /**
  * 解析某次蒸馏调用的实际路由链(callLLM 入口):有层标签且该层配了层链 → 层链
  * 完整替换(buildRouteChain 复用:头行在前、条目去重、档位三级候选);否则现行
