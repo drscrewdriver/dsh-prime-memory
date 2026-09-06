@@ -53,7 +53,7 @@ function liveHandle(over: Partial<MemoryLiveSettings> = {}): LiveSettingsHandle 
   const s: MemoryLiveSettings = {
     enabled: true, capture: true, distill: true, recall: true,
     reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
-    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0 }, distillMaxInputChars: 0,
+    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
     distillLayerChains: { l1: [], l2: [], l3: [] }, distillMode: '', directBaseURL: '', directApiKey: '',
     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0, memoryMutate: false,
     ...over,

@@ -93,7 +93,7 @@ const ALWAYS_ON: MemoryLiveSettings = {
   distillProvider: '',
   distillModel: '',
   distillChain: [],
-  distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0 },
+  distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 },
   distillMaxInputChars: 0,
   distillLayerChains: { l1: [], l2: [], l3: [] },
   distillMode: '',
@@ -148,7 +148,9 @@ export function liveSettingsSchema(): Schema<MemoryLiveSettings> {
       dedup: budget(),
       l2: budget(),
       l3: budget(),
-    }).default({ extract: 0, dedup: 0, l2: 0, l3: 0 }),
+      // 图谱投影输出预算(投影 job 单批 ≤8 条记录,默认 8000)
+      graph: budget(),
+    }).default({ extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }),
     distillMaxInputChars: Schema.number().min(0).max(1_000_000).default(0),
     // 蒸馏通道运行时覆盖:'' = 跟随部署 config / 'host' = 复用宿主 / 'direct' = 原生直连
     distillMode: Schema.union(['', 'host', 'direct']).default(''),
@@ -181,8 +183,8 @@ export function registerLiveSettings(ctx: Context, logger: MemoryLogger): LiveSe
       const prev = current;
       current = resolveSettings(next);
       const b = current.distillBudgets;
-      const budgetNote = (b.extract || b.dedup || b.l2 || b.l3)
-        ? `,输出预算=抽取 ${b.extract || '默认'}/去重 ${b.dedup || '默认'}/L2 ${b.l2 || '默认'}/L3 ${b.l3 || '默认'}`
+      const budgetNote = (b.extract || b.dedup || b.l2 || b.l3 || b.graph)
+        ? `,输出预算=抽取 ${b.extract || '默认'}/去重 ${b.dedup || '默认'}/L2 ${b.l2 || '默认'}/L3 ${b.l3 || '默认'}/图谱 ${b.graph || '默认'}`
         : '';
       const inputNote = current.distillMaxInputChars > 0 ? `,输入预算=${current.distillMaxInputChars}` : '';
       logger.info(
@@ -320,6 +322,7 @@ function resolveSettings(value: unknown): MemoryLiveSettings {
       dedup: num(rawBudgets.dedup),
       l2: num(rawBudgets.l2),
       l3: num(rawBudgets.l3),
+      graph: num(rawBudgets.graph),
     },
     distillMaxInputChars: num(v.distillMaxInputChars),
     // 蒸馏通道:mode 白名单(非法归 '' = 跟随部署);端点与密钥截断防御但保留原始内容

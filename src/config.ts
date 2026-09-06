@@ -133,7 +133,7 @@ export interface MemoryConfig {
     timeoutMs: number;
     /** 分层输出预算运行时覆盖(设置页 distillBudgets 经 effectiveCfg 注入;
      *  0/缺省 = 用内置默认。非静态 schema——预算无部署上限语义)。 */
-    budgets?: Partial<{ extract: number; dedup: number; l2: number; l3: number }>;
+    budgets?: Partial<{ extract: number; dedup: number; l2: number; l3: number; graph: number }>;
   };
   /** Hall(粗分类属性通道):参与 L1 自动打标与记忆库过滤的 Hall id 列表。
    *  空数组 = 关闭 Hall 功能(不自动打标)。 */

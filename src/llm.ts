@@ -37,6 +37,8 @@ export const LAYER_MAX_TOKENS_DEDUP = 8_000;
 export const LAYER_MAX_TOKENS_L2 = 32_000;
 /** L3 画像(完整 persona 文档)。 */
 export const LAYER_MAX_TOKENS_L3 = 16_000;
+/** 图谱投影(节点/边提案 JSON;单批 ≤8 条记录,输出比 L1 抽取短)。 */
+export const LAYER_MAX_TOKENS_GRAPH = 8_000;
 
 /** 分层输出预算键(契约单一事实源在 src/contract.ts)。 */
 import type { DistillBudgetLayer, LayerRouteKey, StaticFallbackEntry } from './contract.js';
@@ -48,6 +50,7 @@ export const LAYER_DEFAULT_BUDGETS: Record<DistillBudgetLayer, number> = {
   dedup: LAYER_MAX_TOKENS_DEDUP,
   l2: LAYER_MAX_TOKENS_L2,
   l3: LAYER_MAX_TOKENS_L3,
+  graph: LAYER_MAX_TOKENS_GRAPH,
 };
 
 /** resolveLayerTokens/layerEffortTrigger 需要的最小 cfg 视图(决策表用窄对象即可构造)。 */
@@ -64,11 +67,12 @@ export interface LayerRouteCfgView {
 /**
  * 解析某蒸馏层的生效输出预算:运行时覆盖(cfg.llm.budgets,0/缺省 = 跟随)
  * → 内置默认 → 思考档放大(high/xhigh/max ×4,reasoning 计入输出预算的历史事故
- * 防线)。放大触发档位跟层走:层链头档位候选 > 全局主路由档位候选。
+ * 防线)。放大触发档位跟层走:层链头档位候选 > 全局主路由档位候选;
+ * graph 层无层链(不落 l1 路由),恒走全局候选。
  */
 export function resolveLayerTokens(cfg: LayerRouteCfgView, layer: DistillBudgetLayer): number {
   const override = cfg.llm.budgets?.[layer];
-  const key: LayerRouteKey = layer === 'l2' ? 'l2' : layer === 'l3' ? 'l3' : 'l1';
+  const key: LayerRouteKey | null = layer === 'l2' ? 'l2' : layer === 'l3' ? 'l3' : layer === 'graph' ? null : 'l1';
   return layerMaxTokens(override && override > 0 ? override : LAYER_DEFAULT_BUDGETS[layer], layerEffortTrigger(cfg, key));
 }
 
@@ -152,9 +156,13 @@ export function buildRouteChain(
 // 档位是全局偏好轴:层链空档位条目/头行仍回退全局档位。pin 只废运行时侧
 // (effectiveCfg 不注入),静态层链天然穿透。
 
-/** DistillLayer(调用点四键)→ 路由层键(三键):l1-extract/l1-dedup 同属 l1。 */
-export function layerKeyFor(layer: DistillLayer): LayerRouteKey {
-  return layer === 'l2' ? 'l2' : layer === 'l3' ? 'l3' : 'l1';
+/**
+ * DistillLayer(调用点五键)→ 路由层键(三键):l1-extract/l1-dedup 同属 l1;
+ * graph 无层路由键——返回 null,调用侧按"该层无层链"回全局解析,绝不落入 l1
+ * (图谱投影误用 L1 抽取链是路由配置错误,静默错路由最难排查)。
+ */
+export function layerKeyFor(layer: DistillLayer): LayerRouteKey | null {
+  return layer === 'l2' ? 'l2' : layer === 'l3' ? 'l3' : layer === 'graph' ? null : 'l1';
 }
 
 /**
@@ -170,9 +178,10 @@ function layerChainOf(cfg: LayerRouteCfgView, key: LayerRouteKey): StaticFallbac
   return undefined;
 }
 
-/** 该层的预算放大触发档位:层链头档位候选 > 全局主路由档位候选(primaryEffort > 静态全局)。 */
-export function layerEffortTrigger(cfg: LayerRouteCfgView, key: LayerRouteKey): string {
-  const chain = layerChainOf(cfg, key);
+/** 该层的预算放大触发档位:层链头档位候选 > 全局主路由档位候选(primaryEffort > 静态全局)。
+ *  key=null(graph 层无层链)→ 恒走全局候选。 */
+export function layerEffortTrigger(cfg: LayerRouteCfgView, key: LayerRouteKey | null): string {
+  const chain = key ? layerChainOf(cfg, key) : undefined;
   return chain
     ? chain[0].reasoningEffort || cfg.llm.primaryEffort || cfg.llm.reasoningEffort
     : cfg.llm.primaryEffort || cfg.llm.reasoningEffort;

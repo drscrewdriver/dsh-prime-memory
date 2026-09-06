@@ -74,7 +74,14 @@ const WINDOW_DEFS: ReadonlyArray<{ range: CostWindow['range']; ms: number }> = [
 const TREND_MS: Record<Granularity, number> = { day: 24 * 3600_000, week: 7 * 24 * 3600_000, month: 30 * 24 * 3600_000 };
 const TREND_COUNT: Record<Granularity, number> = { day: 30, week: 12, month: 12 };
 
-/** 三个归并层级。 */
+/**
+ * 三个归并层级(层级表格/趋势的分组口径)。
+ * 豁免约定:graph 投影调用(DistillLayer 'graph')的成本**进总额窗口与按模型
+ * 分组**(windows/byModel),但**不进分层表格与趋势**(byLayer/byLayerStats/
+ * trend)——层级表是"蒸馏管线 l1→l2→l3"的产物结构视图,图谱投影是旁路增强,
+ * 混入会破坏该表"逐层产物成本"的语义。aggregateCostByLayer 的 SQL 会原样带出
+ * 'graph' 行,此处映射时丢弃(聚合口径变更只需改这一处)。
+ */
 const LAYERS: ReadonlyArray<'l1' | 'l2' | 'l3'> = ['l1', 'l2', 'l3'];
 
 /** 本地时区偏移(东正西负):把 SQL 端 UTC epoch 桶边界对齐到本地午夜。 */

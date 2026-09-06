@@ -427,7 +427,7 @@ async function handleEndpoint(endpoint: string, payload: unknown, deps: Endpoint
 
     case 'dsh-memory/settings-get': {
       const s = live?.get();
-      const budgets = s?.distillBudgets ?? { extract: 0, dedup: 0, l2: 0, l3: 0 };
+      const budgets = s?.distillBudgets ?? { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 };
       // 蒸馏思考档位:current 是运行时值('' = 自动);effective 是能力探询后实际发送值
       // ('' = 不传,跟随模型默认);options 是当前生效模型声明的档位表(空声明 → 只显示
       // high,用户规则:无声明默认 high),fallback 是静态部署值。
@@ -450,7 +450,7 @@ async function handleEndpoint(endpoint: string, payload: unknown, deps: Endpoint
         settings: sanitizeSettings(s ?? {
           enabled: true, capture: true, distill: true, recall: true,
           reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
-          distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0 }, distillMaxInputChars: 0,
+          distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
           distillLayerChains: { l1: [], l2: [], l3: [] },
           distillMode: '', directBaseURL: '', directApiKey: '',
           embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
@@ -475,6 +475,7 @@ async function handleEndpoint(endpoint: string, payload: unknown, deps: Endpoint
             dedup: budgets.dedup > 0 ? budgets.dedup : LAYER_DEFAULT_BUDGETS.dedup,
             l2: budgets.l2 > 0 ? budgets.l2 : LAYER_DEFAULT_BUDGETS.l2,
             l3: budgets.l3 > 0 ? budgets.l3 : LAYER_DEFAULT_BUDGETS.l3,
+            graph: budgets.graph > 0 ? budgets.graph : LAYER_DEFAULT_BUDGETS.graph,
           },
         },
         // 输入预算(字符):current 是运行时覆盖(0 = 跟随配置),fallback 是静态配置值
@@ -490,7 +491,7 @@ async function handleEndpoint(endpoint: string, payload: unknown, deps: Endpoint
     case 'dsh-memory/settings-set': {
       if (!live) throw new Error('开关通道未初始化');
       const patch = (payload ?? {}) as Record<string, unknown>;
-      const clean: Record<string, boolean | string | number | DistillChainEntry[] | { extract: number; dedup: number; l2: number; l3: number } | { l1: DistillChainEntry[]; l2: DistillChainEntry[]; l3: DistillChainEntry[] }> = {};
+      const clean: Record<string, boolean | string | number | DistillChainEntry[] | { extract: number; dedup: number; l2: number; l3: number; graph: number } | { l1: DistillChainEntry[]; l2: DistillChainEntry[]; l3: DistillChainEntry[] }> = {};
       // 布尔开关组:memoryMutate(高权限写删门)与主开关同列
       for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
@@ -536,18 +537,19 @@ async function handleEndpoint(endpoint: string, payload: unknown, deps: Endpoint
           clean[key] = v;
         }
       }
-      // 分层输出预算:四键一起校验,非负整数 ≤ 100 万;0 = 跟随内置默认
+      // 分层输出预算:五键一起校验,非负整数 ≤ 100 万;0 = 跟随内置默认
+      // (键表与 DistillBudgetLayer 同步——漏白名单键 = 静默丢预算,C 节坑①)
       if (patch.distillBudgets !== undefined) {
         const raw = (patch.distillBudgets ?? {}) as Record<string, unknown>;
         const budgets: Record<string, number> = {};
-        for (const key of ['extract', 'dedup', 'l2', 'l3'] as const) {
+        for (const key of ['extract', 'dedup', 'l2', 'l3', 'graph'] as const) {
           const n = Number(raw[key] ?? 0);
           if (!Number.isInteger(n) || n < 0 || n > 1_000_000) {
             throw new Error(`distillBudgets.${key} 须为 0~1000000 的整数(0 = 跟随默认)`);
           }
           budgets[key] = n;
         }
-        clean.distillBudgets = budgets as { extract: number; dedup: number; l2: number; l3: number };
+        clean.distillBudgets = budgets as { extract: number; dedup: number; l2: number; l3: number; graph: number };
       }
       // 输入预算(字符):0 = 跟随静态配置;正值须落在静态 schema 同款范围(1000~100 万)
       if (patch.distillMaxInputChars !== undefined) {

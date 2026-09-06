@@ -103,13 +103,15 @@ export function effectiveCfg(cfg: MemoryConfig, live?: LiveSettingsHandle): Memo
       ? { provider: s.distillProvider, model: s.distillModel }
       : null;
   const b = s?.distillBudgets;
+  // 守卫必须含 graph(只配图谱预算也要注入 budgets 子树——漏键 = 静默丢预算)
   const budgets =
-    b && (b.extract > 0 || b.dedup > 0 || b.l2 > 0 || b.l3 > 0)
+    b && (b.extract > 0 || b.dedup > 0 || b.l2 > 0 || b.l3 > 0 || b.graph > 0)
       ? {
           ...(b.extract > 0 ? { extract: b.extract } : {}),
           ...(b.dedup > 0 ? { dedup: b.dedup } : {}),
           ...(b.l2 > 0 ? { l2: b.l2 } : {}),
           ...(b.l3 > 0 ? { l3: b.l3 } : {}),
+          ...(b.graph > 0 ? { graph: b.graph } : {}),
         }
       : null;
   // 运行时按层路由链:非空层链逐层注入 layerChainsRuntime(解析侧层内第一优先级);

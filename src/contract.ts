@@ -20,11 +20,11 @@ import type { MemoryFamily, MemoryMode } from './types.js';
  *  EFFORT_CHOICES(satisfies readonly EffortChoice[] 反向锁定防漂移)。 */
 export type EffortChoice = '' | 'off' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
-/** 蒸馏用量/成本记账的层标识(调用点口径)。 */
-export type DistillLayer = 'l1-extract' | 'l1-dedup' | 'l2' | 'l3';
+/** 蒸馏用量/成本记账的层标识(调用点口径)。graph = 知识图谱投影调用。 */
+export type DistillLayer = 'l1-extract' | 'l1-dedup' | 'l2' | 'l3' | 'graph';
 
 /** 分层输出预算的层键(与 DistillLayer 不同:预算按管线阶段,用量按调用点)。 */
-export type DistillBudgetLayer = 'extract' | 'dedup' | 'l2' | 'l3';
+export type DistillBudgetLayer = 'extract' | 'dedup' | 'l2' | 'l3' | 'graph';
 
 /** 分层输出预算(token):0 = 跟随内置默认。 */
 export type DistillBudgets = Record<DistillBudgetLayer, number>;
@@ -48,7 +48,7 @@ export interface StaticFallbackEntry {
 }
 
 /** 按层路由的层键:l1 同管 l1-extract + l1-dedup 两个调用点(与成本看板按层归并同源);
- *  预算键(DistillBudgetLayer)是另一套四键词表,不混用。 */
+ *  graph 投影不配层链(回全局解析);预算键(DistillBudgetLayer)是另一套五键词表,不混用。 */
 export type LayerRouteKey = 'l1' | 'l2' | 'l3';
 
 /** 记忆模式运行时开关(settings-get/set 的 settings 载荷)。 */
@@ -71,7 +71,7 @@ export interface MemoryLiveSettings {
   /** 运行时统一路由链;非空即权威(旧 distillProvider/distillModel/reasoningEffort 不再参与),
    *  空数组 = 跟随部署静态配置与默认模型。 */
   distillChain: DistillChainEntry[];
-  /** 分层输出预算运行时覆盖(token):extract/dedup/l2/l3 四层,0 = 跟随内置默认;
+  /** 分层输出预算运行时覆盖(token):extract/dedup/l2/l3/graph 五层,0 = 跟随内置默认;
    *  思考档 high/max 的 ×4 放大在覆盖值之上照常生效。 */
   distillBudgets: DistillBudgets;
   /** 输入预算运行时覆盖(字符,≈token):单次蒸馏调用的输入上限,L1 按此分块、
@@ -470,7 +470,7 @@ export interface SettingsSetRequest {
   reasoningEffort?: EffortChoice;
   distillProvider?: string;
   distillModel?: string;
-  distillBudgets?: { extract: number; dedup: number; l2: number; l3: number };
+  distillBudgets?: { extract: number; dedup: number; l2: number; l3: number; graph: number };
   distillMaxInputChars?: number;
   /** 蒸馏通道运行时覆盖:'' = 跟随部署 config;'host' = 复用宿主;'direct' = 插件原生直连。 */
   distillMode?: '' | 'host' | 'direct';
