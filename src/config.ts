@@ -55,6 +55,11 @@ export interface MemoryConfig {
     /** 距上次 L3 蒸馏的新记忆数量阈值。 */
     interval: number;
   };
+  graph: {
+    /** 知识图谱投影总开关(部署级,默认关):开启后还需运行时蒸馏开关(live.distill)
+     *  同时为真才执行;图谱是 L1 的可重建投影,关闭不影响记忆主链路。 */
+    enabled: boolean;
+  };
   recall: {
     enabled: boolean;
     /** 每步自动召回注入的 L1 条数。 */
@@ -175,6 +180,10 @@ export const memorySchema = Schema.object({
   l3: Schema.object({
     enabled: Schema.boolean().default(true),
     interval: Schema.number().min(1).max(200).default(20),
+  }),
+  // 知识图谱投影:默认关(新功能默认关,用户显式开启;开启后受运行时蒸馏门约束)
+  graph: Schema.object({
+    enabled: Schema.boolean().default(false),
   }),
   recall: Schema.object({
     enabled: Schema.boolean().default(true),

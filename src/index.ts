@@ -160,6 +160,8 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       work: new PersonaStore(dataDir, 'work', logger),
     },
     state: new StateStore(StateStore.pathFor(dataDir)),
+    // 图谱存储(MemoryDb 内自治:初始化失败仅图谱 no-op,不影响主链路)
+    graph: db.graphStore,
   };
   if (storageOk) {
     try {
@@ -315,6 +317,8 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   modes.setModeChangeHandler((sessionId, oldMode, newMode) => runner.onModeChange(sessionId, oldMode, newMode));
   // 闲置兜底:静默达标会话的未蒸馏切片自动落袋(idleSeconds=0 关闭)
   runner.startIdleTimer();
+  // 图谱周期补投影(cfg.graph.enabled 门控;30 分钟一次低速收敛)
+  runner.startGraphBackfillTimer();
 
   // 重建控制器(存储降级时不建——RPC 端点走 supported=false 分支)
   const rebuild =
@@ -380,6 +384,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     return (async () => {
       await flushL0?.();
       db.close();
+      db.graphStore.close();
       resetTokenCost();
     })();
   });

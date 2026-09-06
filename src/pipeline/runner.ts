@@ -14,6 +14,8 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { resolveDataDir, type MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
+import { GRAPH_PRIORITY_NEW } from '../graph/types.js';
+import type { GraphStore } from '../store/graph-store.js';
 import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
 import {
@@ -44,6 +46,7 @@ import {
 } from './trigger.js';
 import { runExtraction } from './l1.js';
 import type { FamilyStates } from './l1.js';
+import { runGraphProjection } from './graph.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
 
@@ -53,18 +56,26 @@ export interface MemoryStores {
   scenes: Record<MemoryFamily, SceneStore>;
   persona: Record<MemoryFamily, PersonaStore>;
   state: StateStore;
+  /** 图谱存储(可选:测试缝/未装配时图谱泵整体停用;GraphStore 自带降级 no-op)。 */
+  graph?: GraphStore;
 }
 
-/** 管线任务(优先级调度:live 优先于 rebuild)。 */
+/** 管线任务(优先级调度:live > graph > rebuild)。 */
 export interface PipelineTask {
-  kind: 'live' | 'rebuild';
+  kind: 'live' | 'rebuild' | 'graph';
   run: () => Promise<unknown>;
 }
 
-/** 选取下一个要执行的任务下标:最早的 live 优先,否则队首(rebuild 分块让位)。 */
+/**
+ * 选取下一个要执行的任务下标:最早的 live 优先,其次 graph(图谱投影单批短、
+ * 让位用户轮次但优先于重建分块),否则队首。
+ */
 export function pickNextTaskIndex(tasks: PipelineTask[]): number {
   for (let i = 0; i < tasks.length; i++) {
     if (tasks[i].kind === 'live') return i;
+  }
+  for (let i = 0; i < tasks.length; i++) {
+    if (tasks[i].kind === 'graph') return i;
   }
   return 0;
 }
@@ -208,6 +219,8 @@ export class MemoryRunner {
   private sessionProduced = new Map<string, { count: number; lastAt: number }>();
   /** 抽取连续失败退避(瞬态,不持久化:重启后允许首试再退避)。 */
   private extractFailures = new Map<string, { streak: number; nextAt: number }>();
+  /** 图谱泵在队列中的占位标志(同一时刻至多一个 graph 任务;护栏四件套之一)。 */
+  private graphPumpQueued = false;
   private readonly pendingFile: string;
   /** 分族 checkpoint(init 后可用;重建收尾也从这里读活引用)。 */
   states!: FamilyStates;
@@ -252,6 +265,26 @@ export class MemoryRunner {
       }
     } catch (err) {
       this.logger.warn(`[memory] 未蒸馏缓冲恢复失败(空桶起步): ${errDetail(err)}`);
+    }
+
+    // 图谱:启动回收上次进程退出卡在 running 的投影任务(dispose 缝不永久卡批),
+    // 存量补投影延后单次限速入队(≤9000,由 20s 后的启动补跑与周期泵低速收敛)
+    const graphs = this.stores.graph;
+    if (graphs) {
+      graphs.recoverRunning();
+      if (this.cfg.graph?.enabled) {
+        this.ctx.effect(() => {
+          const timer = setTimeout(() => {
+            if (this.stopped) return;
+            const jobs = graphs.queueMissing(9000);
+            if (jobs > 0) {
+              this.logger.info(`[memory] 图谱存量补投影:${jobs} 个任务入队`);
+              this.maybeQueueGraphTask();
+            }
+          }, STARTUP_RETRY_DELAY_MS);
+          return () => clearTimeout(timer);
+        });
+      }
     }
   }
 
@@ -431,6 +464,53 @@ export class MemoryRunner {
     void this.drain();
   }
 
+  /**
+   * 图谱泵任务入队(护栏四件套,见 maybeQueueGraphTask;成功投影后有积压则续排,
+   * 每轮 drain 至多消费一个 graph 任务且永远让位 live)。
+   */
+  startGraphBackfillTimer(): void {
+    const graphs = this.stores.graph;
+    if (!graphs || !this.cfg.graph?.enabled) return;
+    this.ctx.effect(() => {
+      const timer = setInterval(() => {
+        if (this.stopped) return;
+        const jobs = graphs.queueMissing(500);
+        if (jobs > 0) {
+          this.logger.debug?.(`[memory] 图谱周期补投影:${jobs} 个任务入队`);
+          this.maybeQueueGraphTask();
+        }
+      }, 30 * 60_000);
+      return () => clearInterval(timer);
+    });
+  }
+
+  /**
+   * 图谱投影泵入队判定:
+   * - 双门:部署级 cfg.graph.enabled + 运行时 live.enabled/distill,任一为假不入队;
+   * - 占位:同一时刻至多一个 graph 任务在队列(靠 graphPumpQueued 标志),永不与
+   *   live 抢位(pickNextTaskIndex 保证 live > graph);
+   * - 退避/attempts 封顶:由 GraphStore.claimNext 的 WHERE 过滤与 fail 转 dead 承接,
+   *   退避窗口内的 claim 是廉价空转,不在此重复实现。
+   */
+  private maybeQueueGraphTask(): void {
+    const graphs = this.stores.graph;
+    if (!graphs || this.stopped || this.graphPumpQueued) return;
+    if (!this.cfg.graph?.enabled) return;
+    const liveNow = this.live.get();
+    if (!(liveNow.enabled && liveNow.distill)) return;
+    this.graphPumpQueued = true;
+    this.pushTask({
+      kind: 'graph',
+      run: async () => {
+        this.graphPumpQueued = false;
+        if (this.stopped) return;
+        const had = await runGraphProjection(this.ctx, effectiveCfg(this.cfg, this.live), graphs, this.logger);
+        // 有实际投影(说明队列还有积压)才续排;claim 落空则停泵,等下一个触发源
+        if (had) this.maybeQueueGraphTask();
+      },
+    });
+  }
+
   private async drain(): Promise<void> {
     if (this.draining) return;
     this.draining = true;
@@ -507,6 +587,12 @@ export class MemoryRunner {
       const backedOff = !opts?.noBufferCap && this.inExtractBackoff(sessionId);
       if ((opts?.force || sliceLen >= effective) && !backedOff) {
         newRecords = await this.extractSessionSlice(sessionId, mode, cfg, effective, opts);
+        // 新记录入投影队列(优先级恒高于存量补投影)并拉起图谱泵;入队本身廉价,
+        // 部署未开图谱(cfg.graph.enabled)时不入队——用户后续开启由启动补投影兜底
+        if (newRecords.length > 0 && this.stores.graph && this.cfg.graph?.enabled) {
+          this.stores.graph.queueGraphProjection(newRecords.map((r) => r.id), GRAPH_PRIORITY_NEW);
+          this.maybeQueueGraphTask();
+        }
       } else {
         this.logger.debug?.(
           backedOff
