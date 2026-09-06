@@ -1,6 +1,6 @@
 // dsh-bench-runner — DSH-MemBench 自动化基准驱动器。
 //
-// 装入专用 bench profile（dsh-base + dsh-layered-memory + 本包），apply 即开始执行：
+// 装入专用 bench profile（dsh-base + dsh-prime-memory + 本包），apply 即开始执行：
 //   逐场景 → 教学会话 → 变更会话 →（A 组）轮询蒸馏落袋 → 探针会话逐题提问 →
 //   判分（contains-all 程序判 / llm·abstain 判卷模型）→ 逐场景落盘 result.json。
 // 运行全程向 DSH_BENCH_OUT/progress.json 增量写实时进度（消息粒度 + 5s 心跳），

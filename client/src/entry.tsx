@@ -1,5 +1,5 @@
 /**
- * dsh-layered-memory — 浏览器半边入口（TS/TSX 源，scripts/build-client.mjs 经
+ * dsh-prime-memory — 浏览器半边入口（TS/TSX 源，scripts/build-client.mjs 经
  * esbuild 打包为 dist/client.js 单文件 bundle）。
  *
  * 两处 slot 挂载：

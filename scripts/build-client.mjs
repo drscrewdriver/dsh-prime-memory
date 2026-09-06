@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PLUGIN_ID = 'dsh-layered-memory';
+const PLUGIN_ID = 'dsh-prime-memory';
 
 const result = await build({
   entryPoints: [path.join(root, 'client/src/entry.tsx')],

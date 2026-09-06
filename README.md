@@ -3,13 +3,13 @@
 <img src="./assets/img/Hero.png" width="100%"
 alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型每步前自动召回注入——右侧对话气泡逐层溶解为三层渐亮光带，流入带发光圆球与渐变轨道的玻璃胶囊（下有 日常·工作·智能·关闭 四档刻度），光丝回流示意召回注入">
 
-# dsh-layered-memory
+# dsh-prime-memory
 
 **DeepSeek Harness 的分层蒸馏记忆插件：对话在后台自动完成 L0 捕获 → L1 原子记忆 → L2 场景整合 → L3 画像蒸馏，模型每一步前自动把相关记忆注入上下文。**
 
 [English](README.en.md) · [最新发行版](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [反馈问题](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
-[![npm version](https://img.shields.io/npm/v/dsh-layered-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-layered-memory)
+[![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
 
@@ -38,15 +38,15 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 需要 Node ≥ 22.16。两种调用方式任选（`npx` 前缀可替换下面任何 `dsh` 命令）：
 
 ```bash
-# 方式一：npx 直接跑官方 CLI（无需预装 dsh；可 pin 版本，如 dsh-layered-memory@0.8.4）
-npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
+# 方式一：npx 直接跑官方 CLI（无需预装 dsh；可 pin 版本，如 dsh-prime-memory@0.8.4）
+npx -y @deepseek-ai/dsh plugin --profile web add dsh-prime-memory
 
 # 方式二：已装 dsh CLI（dsh 是 pnpm 转发器，未装 pnpm 时先 npm i -g pnpm）
-dsh plugin --profile web add dsh-layered-memory
+dsh plugin --profile web add dsh-prime-memory
 
 # 包源备选：GitHub 仓库 / 本地路径（开发调试，link: 指向仓库，npm run build + 重启 dsh 即生效）
 dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
-dsh plugin --profile web add /path/to/dsh-layered-memory
+dsh plugin --profile web add /path/to/dsh-prime-memory
 ```
 
 ### 让 Agent 安装（推荐）
@@ -54,31 +54,31 @@ dsh plugin --profile web add /path/to/dsh-layered-memory
 如果当前 Agent 可以执行终端命令，把下面这段话完整发送给它：
 
 ```text
-请为 DeepSeek Harness 的 web Profile 安装 dsh-layered-memory 插件。
+请为 DeepSeek Harness 的 web Profile 安装 dsh-prime-memory 插件。
 
 只执行下面两条命令，不要修改其他 Profile：
-dsh plugin --profile web add dsh-layered-memory
+dsh plugin --profile web add dsh-prime-memory
 dsh --profile web --dump-config
 
-确认输出中出现 dsh-layered-memory 后告诉我安装结果。
+确认输出中出现 dsh-prime-memory 后告诉我安装结果。
 不要替我关闭或重启正在运行的 DSH；安装完成后提醒我手动重启 DSH Web Host。
 ```
 
-Agent 应当返回安装结果，并明确告诉你配置中是否已经出现 `dsh-layered-memory`。
+Agent 应当返回安装结果，并明确告诉你配置中是否已经出现 `dsh-prime-memory`。
 
 本包声明了 `dsh.bundle` 组合包层（`cordis.patch.yml`），安装后会**自动挂载插件行**——
 不需要再手改 `$DSH_HOME/profiles/web/cordis.patch.yml`。然后重启 DeepSeek Harness，
 验证：`~/.dsh/memory/` 下出现 `conversations/ records/ scenes/` 目录和 `memory.db`
 即插件 apply 成功；设置页出现"记忆"页面、输入栏出现档位 pill 即 client 半边就绪。
 
-**卸载**：`dsh plugin --profile web remove dsh-layered-memory` + 重启。数据保留在
+**卸载**：`dsh plugin --profile web remove dsh-prime-memory` + 重启。数据保留在
 `~/.dsh/memory/`，不需要时手动删除整个目录即可。
 
 ### 从源码开发
 
 ```bash
 git clone https://github.com/drscrewdriver/dsh-prime-memory
-cd dsh-layered-memory
+cd dsh-prime-memory
 npm install && npm run build
 dsh plugin --profile web add .        # link: 安装，改代码后 npm run build + 重启 dsh 即生效
 npm run smoke                         # 冒烟测试（先重编：见下方命令）
@@ -89,7 +89,7 @@ npx tsc src/smoke.ts --outDir dist-smoke --module nodenext --moduleResolution no
 
 <p align="center">
   <img src="./assets/readme/flow.svg" width="100%"
-       alt="dsh-layered-memory 运行时数据流：左侧 User 与 Assistant 的会话事件流入插件（L0 捕获、L1–L3 蒸馏、检索召回、记忆工具），插件经 agent/pre-step 把相关记忆注入右侧 DSH 核心；蒸馏复用核心的 ctx.llm，数据双写 ~/.dsh/memory/">
+       alt="dsh-prime-memory 运行时数据流：左侧 User 与 Assistant 的会话事件流入插件（L0 捕获、L1–L3 蒸馏、检索召回、记忆工具），插件经 agent/pre-step 把相关记忆注入右侧 DSH 核心；蒸馏复用核心的 ctx.llm，数据双写 ~/.dsh/memory/">
 </p>
 
 插件挂在 dsh 原生事件上（`session/event` 捕获、`agent/pre-step` 注入），蒸馏调用复用宿主 `ctx.llm`。召回以**消息侧注入**呈现：相关记忆作为一条合成消息排在用户新消息之前，会话流里显示为\*\*"上下文注入 · memory"\*\*行（点开看命中内容）——用户能直接看到"记忆生效了"；注入内容有长度预算与时间预算，超限截断/超时跳过，绝不拖慢对话。**同会话去重**：已注入过的记忆不再重复注入（模型上下文里已经有了，追问同类问题时省 token）；上下文被 `/compact` 压缩或清空时自动重置，记忆可重新注入；被更新的记忆（内容变化换新 id）不受旧压制。**时效加权**：召回排序按 `相关度 × max(0.5, 0.5^(距上次更新天数/30))` 软加权——相关度相近的候选之间新鲜记忆优先（名额自然轮转），相关度足够高的老记忆照常召回（地板保证最多损失一半排序分，长期事实不沉底）；`recall.decayHalfLifeDays` 可调，0=关闭。
@@ -267,7 +267,7 @@ ONNX 量化 **CPU 推理**——无需 API Key，数据不出本机）。本地�
 
 ```yaml
 - id: dsh-memory
-  name: dsh-layered-memory
+  name: dsh-prime-memory
   config:                    # 键按行整体替换（不深合并），按需写全要保留的键
     family: auto             # 新会话默认档：auto | chat | work
     llm:                     # 蒸馏模型静态路由（双字段齐 = 部署 pin，优先于设置页路由链；

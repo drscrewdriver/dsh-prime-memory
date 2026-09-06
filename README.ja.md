@@ -3,13 +3,13 @@
 <img src="./assets/img/Hero.png" width="100%"
 alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで階層的に蒸留されて記憶に、モデルの各ステップ前に自動で想起・注入される">
 
-# dsh-layered-memory
+# dsh-prime-memory
 
 **DeepSeek Harness 向けの階層的蒸留記憶プラグイン：会話はバックグラウンドで L0 捕捉 → L1 原子記憶 → L2 シナリオ統合 → L3 ペルソナ蒸留を経て処理され、関連記憶はモデルの各ステップ前に自動でコンテキストへ注入されます。**
 
 [中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [最新リリース](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [問題を報告](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
-[![npm version](https://img.shields.io/npm/v/dsh-layered-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-layered-memory)
+[![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
 
@@ -40,15 +40,15 @@ alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで�
 Node ≥ 22.16 が必要です。2 通りの呼び出し方式から選べます（`npx` 接頭辞は以下のどの `dsh` コマンドも置き換え可能）：
 
 ```bash
-# 方法1：npx で公式 CLI を直接実行（dsh の事前導入不要。バージョン固定も可、例: dsh-layered-memory@0.8.4）
-npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
+# 方法1：npx で公式 CLI を直接実行（dsh の事前導入不要。バージョン固定も可、例: dsh-prime-memory@0.8.4）
+npx -y @deepseek-ai/dsh plugin --profile web add dsh-prime-memory
 
 # 方法2：dsh CLI 導入済みの場合（dsh は pnpm フォワーダ。未導入なら先に npm i -g pnpm）
-dsh plugin --profile web add dsh-layered-memory
+dsh plugin --profile web add dsh-prime-memory
 
 # その他のソース：GitHub リポジトリ / ローカルパス（開発・デバッグ用。link: はリポジトリを指し、npm run build + dsh 再起動で反映）
 dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
-dsh plugin --profile web add /path/to/dsh-layered-memory
+dsh plugin --profile web add /path/to/dsh-prime-memory
 ```
 
 ### Agent にインストールさせる（推奨）
@@ -56,27 +56,27 @@ dsh plugin --profile web add /path/to/dsh-layered-memory
 現在の Agent がターミナルコマンドを実行できるなら、以下の文をそのまま送ってください：
 
 ```text
-DeepSeek Harness の web プロファイルに dsh-layered-memory プラグインをインストールしてください。
+DeepSeek Harness の web プロファイルに dsh-prime-memory プラグインをインストールしてください。
 
 以下の2コマンドのみを実行し、他のプロファイルは変更しないでください：
-dsh plugin --profile web add dsh-layered-memory
+dsh plugin --profile web add dsh-prime-memory
 dsh --profile web --dump-config
 
-出力に dsh-layered-memory が表示されたら、インストール結果を教えてください。
+出力に dsh-prime-memory が表示されたら、インストール結果を教えてください。
 稼働中の DSH を勝手に閉じたり再起動したりしないでください。インストール後、DSH Web Host の手動再起動を促してください。
 ```
 
-Agent はインストール結果と、設定に `dsh-layered-memory` が現れたかを報告します。
+Agent はインストール結果と、設定に `dsh-prime-memory` が現れたかを報告します。
 
 本パッケージは `dsh.bundle` 合成層（`cordis.patch.yml`）を宣言しており、インストール後に**プラグイン行が自動マウント**されます——`$DSH_HOME/profiles/web/cordis.patch.yml` を手修正する必要はありません。その後 DeepSeek Harness を再起動し、確認：`~/.dsh/memory/` 配下に `conversations/ records/ scenes/` ディレクトリと `memory.db` が現れればプラグイン適用成功；設定画面に「記憶」ページ、入力バーにモードピルが現れればクライアント側準備完了です。
 
-**アンインストール**：`dsh plugin --profile web remove dsh-layered-memory` + 再起動。データは `~/.dsh/memory/` に残ります。不要ならそのディレクトリごと手動削除してください。
+**アンインストール**：`dsh plugin --profile web remove dsh-prime-memory` + 再起動。データは `~/.dsh/memory/` に残ります。不要ならそのディレクトリごと手動削除してください。
 
 ### ソースから開発
 
 ```bash
 git clone https://github.com/drscrewdriver/dsh-prime-memory
-cd dsh-layered-memory
+cd dsh-prime-memory
 npm install && npm run build
 dsh plugin --profile web add .        # link: インストール。コード変更後は npm run build + dsh 再起動で反映
 npm run smoke                         # スモークテスト（先に再ビルド：下記コマンド参照）
@@ -87,7 +87,7 @@ npx tsc src/smoke.ts --outDir dist-smoke --module nodenext --moduleResolution no
 
 <p align="center">
   <img src="./assets/readme/flow.svg" width="100%"
-       alt="dsh-layered-memory のランタイム・データフロー：左のユーザーとアシスタントのセッションイベントがプラグイン（L0 捕捉、L1–L3 蒸留、検索想起、記憶ツール）に流れ込み、プラグインが関連記憶を agent/pre-step で右の DSH コアへ注入。蒸留はコアの ctx.llm を再利用、データは ~/.dsh/memory/ に二重書き込み">
+       alt="dsh-prime-memory のランタイム・データフロー：左のユーザーとアシスタントのセッションイベントがプラグイン（L0 捕捉、L1–L3 蒸留、検索想起、記憶ツール）に流れ込み、プラグインが関連記憶を agent/pre-step で右の DSH コアへ注入。蒸留はコアの ctx.llm を再利用、データは ~/.dsh/memory/ に二重書き込み">
 </p>
 
 プラグインは DSH ネイティブのイベントシームに付着します（`session/event` で捕捉、`agent/pre-step` で注入）、蒸留はホストの `ctx.llm` を再利用します。想起は**メッセージ側注入**として提示されます——関連記憶はユーザーの新メッセージの直前に置かれた合成メッセージとして表示され、チャットフローには **「コンテキスト注入 · memory」** 行（展開でヒット内容を表示）として現れます。注入内容は長さ・時間予算で上限があり、超過は切り捨て/タイムアウトでスキップされ、対話を遅延させることはありません。**同一セッション重複排除**：すでに注入済みの記憶は再注入しません（コンテキストにあればトークン節約）。`/compact` 等でリセットされれば再注入可能。**時効重み付け**：想起順位は `関連度 × max(0.5, 0.5^(最終更新からの日数/30))` でソフト重み付けされます（`recall.decayHalfLifeDays` で調整、`0`=無効）。
@@ -199,7 +199,7 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 
 ```yaml
 - id: dsh-memory
-  name: dsh-layered-memory
+  name: dsh-prime-memory
   config:                    # キーは行単位で全体置換（ディープマージなし）
     family: auto             # 新セッションの既定档：auto | chat | work
     llm:

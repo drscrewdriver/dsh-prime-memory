@@ -3,13 +3,13 @@
 <img src="./assets/img/Hero.png" width="100%"
 alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계층적으로 증류되어 기억으로, 모델의 매 스텝 전에 자동으로 회상·주입됨">
 
-# dsh-layered-memory
+# dsh-prime-memory
 
 **DeepSeek Harness용 계층적 증류 기억 플러그인: 대화는 백그라운드에서 L0 포착 → L1 원자 기억 → L2 장면 통합 → L3 페르소나 증류를 거쳐 처리되며, 관련 기억은 모델의 매 스텝 전에 자동으로 컨텍스트에 주입됩니다.**
 
 [中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [최신 릴리스](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [문제 제보](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
-[![npm version](https://img.shields.io/npm/v/dsh-layered-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-layered-memory)
+[![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
 
@@ -40,15 +40,15 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 Node ≥ 22.16 필요. 두 가지 호출 방식 중 선택（`npx` 접두사는 아래 모든 `dsh` 명령을 대체 가능）：
 
 ```bash
-# 방식 1: npx로 공식 CLI 직접 실행（dsh 사전 설치 불필요. 버전 고정 가능, 예: dsh-layered-memory@0.8.4）
-npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
+# 방식 1: npx로 공식 CLI 직접 실행（dsh 사전 설치 불필요. 버전 고정 가능, 예: dsh-prime-memory@0.8.4）
+npx -y @deepseek-ai/dsh plugin --profile web add dsh-prime-memory
 
 # 방식 2: dsh CLI 설치된 경우（dsh는 pnpm 포워더. 없으면 먼저 npm i -g pnpm）
-dsh plugin --profile web add dsh-layered-memory
+dsh plugin --profile web add dsh-prime-memory
 
 # 기타 소스: GitHub 저장소 / 로컬 경로（개발·디버깅용. link: 는 저장소를 가리키며, npm run build + dsh 재시작으로 반영）
 dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
-dsh plugin --profile web add /path/to/dsh-layered-memory
+dsh plugin --profile web add /path/to/dsh-prime-memory
 ```
 
 ### Agent에게 설치시키기（권장）
@@ -56,27 +56,27 @@ dsh plugin --profile web add /path/to/dsh-layered-memory
 현재 Agent가 터미널 명령을 실행할 수 있다면 아래 문장을 그대로 보내세요：
 
 ```text
-DeepSeek Harness의 web 프로파일에 dsh-layered-memory 플러그인을 설치해 주세요.
+DeepSeek Harness의 web 프로파일에 dsh-prime-memory 플러그인을 설치해 주세요.
 
 다른 프로파일은 수정하지 말고 아래 두 명령만 실행해 주세요:
-dsh plugin --profile web add dsh-layered-memory
+dsh plugin --profile web add dsh-prime-memory
 dsh --profile web --dump-config
 
-출력에 dsh-layered-memory가 나타나면 설치 결과를 알려 주세요.
+출력에 dsh-prime-memory가 나타나면 설치 결과를 알려 주세요.
 실행 중인 DSH를 임의로 닫거나 재시작하지 마세요. 설치 후 DSH Web Host 수동 재시작을 알려 주세요.
 ```
 
-Agent는 설치 결과와 설정에 `dsh-layered-memory`가 나타났는지 보고합니다.
+Agent는 설치 결과와 설정에 `dsh-prime-memory`가 나타났는지 보고합니다.
 
 본 패키지는 `dsh.bundle` 합성 계층（`cordis.patch.yml`）을 선언하며, 설치 후 **플러그인 행이 자동 마운트**됩니다——`$DSH_HOME/profiles/web/cordis.patch.yml`을 손으로 고칠 필요가 없습니다. 이후 DeepSeek Harness를 재시작하고 확인：`~/.dsh/memory/` 아래에 `conversations/ records/ scenes/` 디렉터리와 `memory.db`가 나타나면 플러그인 적용 성공；설정 페이지에 "기억" 페이지, 입력 바에 모드 pill이 나타나면 클라이언트 준비 완료.
 
-**제거**：`dsh plugin --profile web remove dsh-layered-memory` + 재시작. 데이터는 `~/.dsh/memory/`에 남습니다. 필요 없으면 해당 디렉터리 전체를 수동 삭제하세요.
+**제거**：`dsh plugin --profile web remove dsh-prime-memory` + 재시작. 데이터는 `~/.dsh/memory/`에 남습니다. 필요 없으면 해당 디렉터리 전체를 수동 삭제하세요.
 
 ### 소스에서 개발
 
 ```bash
 git clone https://github.com/drscrewdriver/dsh-prime-memory
-cd dsh-layered-memory
+cd dsh-prime-memory
 npm install && npm run build
 dsh plugin --profile web add .        # link: 설치. 코드 변경 후 npm run build + dsh 재시작으로 반영
 npm run smoke                         # 스모크 테스트（먼저 재빌드: 아래 명령 참조）
@@ -87,7 +87,7 @@ npx tsc src/smoke.ts --outDir dist-smoke --module nodenext --moduleResolution no
 
 <p align="center">
   <img src="./assets/readme/flow.svg" width="100%"
-       alt="dsh-layered-memory 런타임 데이터 흐름: 좌측 사용자·어시스턴트 세션 이벤트가 플러그인(L0 포착, L1–L3 증류, 검색 회상, 기억 도구)으로 흐르고, 플러그인이 관련 기억을 agent/pre-step에서 우측 DSH 코어로 주입. 증류는 코어의 ctx.llm 재사용, 데이터는 ~/.dsh/memory/에 이중 기록">
+       alt="dsh-prime-memory 런타임 데이터 흐름: 좌측 사용자·어시스턴트 세션 이벤트가 플러그인(L0 포착, L1–L3 증류, 검색 회상, 기억 도구)으로 흐르고, 플러그인이 관련 기억을 agent/pre-step에서 우측 DSH 코어로 주입. 증류는 코어의 ctx.llm 재사용, 데이터는 ~/.dsh/memory/에 이중 기록">
 </p>
 
 플러그인은 DSH 네이티브 이벤트 심（`session/event`로 포착, `agent/pre-step`로 주입）에 부착되며, 증류는 호스트의 `ctx.llm`을 재사용합니다. 회상은 **메시지 측 주입**으로 표시됩니다——관련 기억은 사용자의 새 메시지 바로 앞에 배치된 합성 메시지로 표시되며, 채팅 흐름에는 **"컨텍스트 주입 · memory"** 행（펼치면 히트 내용 표시）으로 나타납니다. 주입 내용은 길이·시간 예산으로 제한되며, 초과는 잘림/타임아웃으로 건너뛰어 대화를 지연시키지 않습니다. **동일 세션 중복 제거**：이미 주입된 기억은 재주입하지 않습니다（`/compact` 등으로 리셋되면 재주입 가능）. **신선도 가중**：회상 순위는 `관련도 × max(0.5, 0.5^(마지막 갱신 후 경과일/30))`로 소프트 가중됩니다（`recall.decayHalfLifeDays`로 조정, `0`=비활성）.
@@ -199,7 +199,7 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 
 ```yaml
 - id: dsh-memory
-  name: dsh-layered-memory
+  name: dsh-prime-memory
   config:                    # 키는 행 단위 전체 교체（딥 머지 아님）
     family: auto             # 새 세션 기본档: auto | chat | work
     llm:

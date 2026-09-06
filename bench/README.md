@@ -1,4 +1,4 @@
-# DSH-MemBench — dsh-layered-memory 自动化记忆准确率基准
+# DSH-MemBench — dsh-prime-memory 自动化记忆准确率基准
 
 纯对话记忆场景库 + 无头自动驱动 + 程序/LLM 双级判分。对话赛道只跑 A 组（记忆开）出准确率硬数字；工作流赛道跑「A 组（记忆开）vs B 组（记忆关）」同输入对照（完成度 / 反问 / token 成本）。题型设计借鉴 [LongMemEval](https://github.com/xiaowu0162/longmemeval) / [LoCoMo](https://snap-research.github.io/locomo/) / [AMB](https://github.com/vectorize-io/agent-memory-benchmark)，0.8.5 起参照 [MemoryAgentBench](https://arxiv.org/abs/2507.05257) / [GoodAI LTM](https://github.com/GoodAI/goodai-ltm-benchmark) / BEAM 扩了四种题型与检索层离线指标。
 
@@ -198,7 +198,7 @@ compare 的判定规则：环境头一致 + A 组总分提升超 ±5pp 噪声带
 - **A/B 组切换与记忆隔离**：同一场景库、逐字相同教学输入；A 组插件全开（dataDir 指向本次运行专属目录，未设置直接启动失败防误写日常库），B 组插件整行 `disabled: true`（无捕获/无蒸馏/无召回/无工具注入）。组间与用户日常记忆库三层互不可见。对话赛道只跑 A 组（见上）；工作流赛道支持 `--arm AB` 双进程并行。
 - **记忆生命周期（rep 粒度）**：一个 rep 的记忆库**从第一次蒸馏起全程保留、跨场景累积，rep 结束才废弃**——越靠后的场景记忆越多、检索干扰越大，抗干扰能力由 contamination 指标量化（每个场景埋唯一 `marker` 词，探针召回注入里出现**其他场景**的 marker 即计污染，report 汇总；工作流探针同样实测）。rep 之间换新库：重复测量的独立性要求每次都从"新用户从零积累"起步。
 - **仓库外 workspace + 运行前清扫**：对话会话与工作流沙箱的 cwd 都在系统临时目录的干净 workspace（`%TEMP%/dsh-mem-bench/<run>-rep<N>/`），斩断宿主 agent-instructions 沿父链读取仓库 AGENTS.md 的路径（曾使每个会话首请求多 19KB 注入）。每次运行开始前清扫历史残留（跨运行"考古"通道）：`%TEMP%/dsh-mem-bench/` 全部旧沙箱与 `~/.dsh/sessions` 里 projectKey 含 `dsh-mem-bench` 的会话目录——只匹配 bench 命名空间，用户自己的会话与数据不受影响；AB 并行模式清扫只在父进程做一次。
-- **代码指纹与链接守卫**：结果头 environment 记 `pluginVersion` + `gitSha`（版本号反映不了"实际加载的代码"）；run.mjs 启动时校验 bench profile 的 `dsh-layered-memory` / `dsh-bench-runner` 链接指向被测仓库，指向别的工作树（旧代码）直接拒绝运行——2026-08-21 实测被旧 runner 静默咬过（change 会话整段缺失、判据空过）。
+- **代码指纹与链接守卫**：结果头 environment 记 `pluginVersion` + `gitSha`（版本号反映不了"实际加载的代码"）；run.mjs 启动时校验 bench profile 的 `dsh-prime-memory` / `dsh-bench-runner` 链接指向被测仓库，指向别的工作树（旧代码）直接拒绝运行——2026-08-21 实测被旧 runner 静默咬过（change 会话整段缺失、判据空过）。
 - **越界读取双档审计**（工作流赛道）：权限模型只限写不限读，硬防线在审计——严格档（参数出现 `~/.dsh`、`memory.db`、records/conversations/scenes 存储路径）命中即**该场景全部检查判负**并逐条写明原因；宽松档（`.dsh` 泛匹配等）仅提示人工复核。合法主动召回通道（memory_search / conversation_search / memory_read_scene 的调用）不进审计，防误判。
 - **无工具面**（对话赛道）：patch 禁掉全部面向模型的工具行（bash/fs/web/subagent…），并注入基准 persona——否则 Agent 会拿 shell 翻真实 `~/.dsh/memory` 作弊/污染（冒烟期实测踩过）。`tools` 运行时服务本身保留（记忆插件硬依赖）。
 - **蒸馏等待**：A 组 patch 设 `extract.minMessages=1, idleSeconds=30`；runner 轮询 `records/*.jsonl` 行数稳定后进探针，超时标记 `distillTimeout` 不中断。

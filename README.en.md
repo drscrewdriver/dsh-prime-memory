@@ -3,13 +3,13 @@
 <img src="./assets/img/Hero.png" width="100%"
      alt="DeepSeek Harness hero banner: conversations distilled into layered memories and recalled before every model step — chat bubbles dissolve into three progressively brighter light layers flowing into a frosted-glass capsule with a glowing orb and gradient track (tick labels: 日常·工作·智能·关闭), with light threads looping back to suggest recall">
 
-# dsh-layered-memory
+# dsh-prime-memory
 
 **A layered distillation memory plugin for DeepSeek Harness: conversations are processed in the background through L0 capture → L1 atomic memories → L2 scene consolidation → L3 persona distillation, and relevant memories are automatically injected into context before every model step — neither the user nor the model needs to do anything.**
 
 [简体中文](README.md) · [Latest release](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Report issues](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
-[![npm version](https://img.shields.io/npm/v/dsh-layered-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-layered-memory)
+[![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
 
@@ -39,15 +39,15 @@ Requires Node ≥ 22.16. Two invocation styles — the `npx` prefix can replace 
 any command below:
 
 ```bash
-# Option 1: run the official CLI directly via npx (no pre-installed dsh; version can be pinned, e.g. dsh-layered-memory@0.8.4)
-npx -y @deepseek-ai/dsh plugin --profile web add dsh-layered-memory
+# Option 1: run the official CLI directly via npx (no pre-installed dsh; version can be pinned, e.g. dsh-prime-memory@0.8.4)
+npx -y @deepseek-ai/dsh plugin --profile web add dsh-prime-memory
 
 # Option 2: with the dsh CLI installed (dsh is a pnpm forwarder; npm i -g pnpm first if missing)
-dsh plugin --profile web add dsh-layered-memory
+dsh plugin --profile web add dsh-prime-memory
 
 # Alternative sources: GitHub repo / local path (dev & debugging, link: points at the repo; npm run build + restart dsh to apply)
 dsh plugin --profile web add https://github.com/drscrewdriver/dsh-prime-memory
-dsh plugin --profile web add /path/to/dsh-layered-memory
+dsh plugin --profile web add /path/to/dsh-prime-memory
 ```
 
 ### Install via an AI Agent (Recommended)
@@ -55,18 +55,18 @@ dsh plugin --profile web add /path/to/dsh-layered-memory
 If your current agent can run terminal commands, send it this message as-is:
 
 ```text
-Please install the dsh-layered-memory plugin for the web profile of DeepSeek Harness.
+Please install the dsh-prime-memory plugin for the web profile of DeepSeek Harness.
 
 Run only the two commands below and do not modify any other profile:
-dsh plugin --profile web add dsh-layered-memory
+dsh plugin --profile web add dsh-prime-memory
 dsh --profile web --dump-config
 
-Confirm that dsh-layered-memory appears in the output, then report the result to me.
+Confirm that dsh-prime-memory appears in the output, then report the result to me.
 Do not close or restart my running DSH yourself; after installation, remind me to manually restart the DSH Web Host.
 ```
 
 The agent should report the installation result and explicitly tell you whether
-`dsh-layered-memory` has appeared in the configuration.
+`dsh-prime-memory` has appeared in the configuration.
 
 This package declares a `dsh.bundle` composition layer (`cordis.patch.yml`); after
 installation the **plugin entry is mounted automatically** — no need to hand-edit
@@ -80,14 +80,14 @@ and the mode pill in the input bar mean the client half is ready.
 > and calls the LLM/embedding services you configured; if that concerns you, review
 > the source first (`src/`).
 
-**Uninstall**: `dsh plugin --profile web remove dsh-layered-memory` + restart. Data
+**Uninstall**: `dsh plugin --profile web remove dsh-prime-memory` + restart. Data
 stays in `~/.dsh/memory/`; delete the whole directory manually if you don't need it.
 
 ### Development from Source
 
 ```bash
 git clone https://github.com/drscrewdriver/dsh-prime-memory
-cd dsh-layered-memory
+cd dsh-prime-memory
 npm install && npm run build
 dsh plugin --profile web add .        # link: install; after code changes, npm run build + restart dsh
 npm run smoke                         # smoke test (rebuild first: see command below)
@@ -254,7 +254,7 @@ the bundle layer appends and causes `duplicate loader entry id` startup failure)
 
 ```yaml
 - id: dsh-memory
-  name: dsh-layered-memory
+  name: dsh-prime-memory
   config:                    # keys replace whole lines (no deep merge); write out all keys you want to keep
     family: auto             # default mode for new sessions: auto | chat | work
     llm:                     # static distillation route (both fields set = deployment pin,

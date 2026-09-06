@@ -1,6 +1,6 @@
 # npm Trusted Publishing（OIDC）：push v* tag 自动发布，无需 token / 2FA。
-# 前提（npmjs.com → dsh-layered-memory → Settings → Trusted Publisher）：
-#   Repository: JunNanLYS/dsh-layered-memory，Workflow filename: publish.yml，
+# 前提（npmjs.com → dsh-prime-memory → Settings → Trusted Publisher）：
+#   Repository: JunNanLYS/dsh-prime-memory，Workflow filename: publish.yml，
 #   Allowed actions: npm publish（未配置前此工作流会在 publish 步骤鉴权失败）。
 # 发版流程：改 package.json 版本 → 提交推送 → git tag vX.Y.Z && git push origin vX.Y.Z。
 # npm 发布成功后自动创建 GitHub Release（正文取 CHANGELOG 对应版本小节，已存在则跳过）。

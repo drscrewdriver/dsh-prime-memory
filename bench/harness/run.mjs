@@ -118,7 +118,7 @@ if (!dshBin) {
     let rootReal = repoRoot;
     try { rootReal = fs.realpathSync(repoRoot); } catch { /* 保底用原路径 */ }
     const rootNorm = rootReal.toLowerCase();
-    for (const name of ['dsh-layered-memory', 'dsh-bench-runner']) {
+    for (const name of ['dsh-prime-memory', 'dsh-bench-runner']) {
       const link = path.join(profileDir, 'node_modules', name);
       let real = null;
       try { real = fs.realpathSync(link); } catch { /* 链接缺失交给 dsh 启动报错 */ }

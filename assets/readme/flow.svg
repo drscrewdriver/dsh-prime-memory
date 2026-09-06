@@ -2,8 +2,8 @@
      xmlns:xlink="http://www.w3.org/1999/xlink"
      width="1200" height="600" viewBox="0 0 1200 600"
      role="img" aria-labelledby="flowTitle flowDesc">
-  <title id="flowTitle">dsh-layered-memory 运行时数据流</title>
-  <desc id="flowDesc">左侧 User 与 Assistant 的会话事件（session/event）流入中间的 dsh-layered-memory 插件：L0 捕获、L1–L3 蒸馏、检索召回与记忆工具；插件在 agent/pre-step 把相关记忆注入右侧 DeepSeek Harness 核心，蒸馏调用复用核心的 ctx.llm；数据双写 ~/.dsh/memory/。</desc>
+  <title id="flowTitle">dsh-prime-memory 运行时数据流</title>
+  <desc id="flowDesc">左侧 User 与 Assistant 的会话事件（session/event）流入中间的 dsh-prime-memory 插件：L0 捕获、L1–L3 蒸馏、检索召回与记忆工具；插件在 agent/pre-step 把相关记忆注入右侧 DeepSeek Harness 核心，蒸馏调用复用核心的 ctx.llm；数据双写 ~/.dsh/memory/。</desc>
 
   <defs>
     <marker id="arr-teal" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto">
@@ -45,7 +45,7 @@
     <g id="node-plugin">
       <rect x="430" y="96" width="290" height="356" rx="18" fill="#15223A" stroke="#FFD15D" stroke-opacity="0.55" stroke-width="1.5"/>
       <text x="575" y="138" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
-            font-size="22" font-weight="700" fill="#EFF3FA">dsh-layered-memory</text>
+            font-size="22" font-weight="700" fill="#EFF3FA">dsh-prime-memory</text>
       <text x="575" y="166" text-anchor="middle" font-size="18" fill="#8296B3">分层蒸馏记忆插件</text>
 
       <g id="plugin-modules">

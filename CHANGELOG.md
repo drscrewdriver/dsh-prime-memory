@@ -1,6 +1,6 @@
 # 更新日志（Changelog）
 
-本文件记录 dsh-layered-memory（0.5.0 前名为 dsh-memory-plugin）的显著变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
+本文件记录 dsh-prime-memory（0.5.0 前名为 dsh-memory-plugin）的显著变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
@@ -788,14 +788,14 @@
 ## [0.5.1] — 2026-08-16
 
 修复 0.5.0 改名的客户端注册 bug（真实事故：从 GitHub 安装后浏览器端报
-`client-modules: bundle ... loaded without registering "dsh-layered-memory"`，
+`client-modules: bundle ... loaded without registering "dsh-prime-memory"`，
 设置页与输入栏记忆控件全部不可用）。
 
 ### 修复
 
 - **client bundle 注册 id 随包名更新**：`client/client.js` 的
   `window.__ModuleLoader__.load({ id: ... })` 从旧名 `dsh-memory-plugin` 改为
-  `dsh-layered-memory`——0.5.0 改名时只改了 host 侧与打包声明，漏掉浏览器半边，
+  `dsh-prime-memory`——0.5.0 改名时只改了 host 侧与打包声明，漏掉浏览器半边，
   导致 loader 条目名与注册名不一致、bundle 加载即失败。host 侧插件名
   `dsh-memory-plugin`、配置键 `dsh-memory`、RPC 端点 `dsh-memory/*` 均保持不动
   （改它们会破坏既有配置与数据通道）。
@@ -808,7 +808,7 @@
 
 ## [0.5.0] — 2026-08-16
 
-公开发布改造：包更名为 **`dsh-layered-memory`**（旧名 `dsh-memory-plugin` 在 npm 已被
+公开发布改造：包更名为 **`dsh-prime-memory`**（旧名 `dsh-memory-plugin` 在 npm 已被
 同类插件占用），并按官方组合包（bundle）规范完成打包。
 
 ### 变更

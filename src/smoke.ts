@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   // ── client handoff 协议(react external + ModuleLoader 包装 + bundle id) ──
   const client = await readFile(path.join(dist, 'client.js'), 'utf-8');
   check('client.js: __ModuleLoader__.load 包装', client.startsWith('window.__ModuleLoader__.load({'));
-  check('client.js: bundle id 与包名一致', client.includes('"dsh-layered-memory"'));
+  check('client.js: bundle id 与包名一致', client.includes('"dsh-prime-memory"'));
   check('client.js: react external(require 调用存在)', client.includes('require("react")'));
   check('client.js: 无裸 import(纯 CJS 体)', !/^import[\s{"' ]/m.test(client));
 

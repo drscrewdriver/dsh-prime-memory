@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-	id: "dsh-layered-memory",
+	id: "dsh-prime-memory",
 	factory: (require) => {
 		var module = { exports: {} };
 		var exports = module.exports;
