@@ -84,10 +84,11 @@ async function main(): Promise<void> {
   };
   check('package.json version 与 PLUGIN_VERSION 同步', PLUGIN_VERSION_SYNC === pkg.version);
   check('package.json main 指向 dist/index.js', pkg.main === 'dist/index.js');
+  // 逐个核验 files 白名单的每一项(此前只查 README*/INSTALL*/CHANGELOG* 前缀,
+  // 其余条目如 ENGINEERING-NOTES.md 会被静默跳过 → 文档漏发包也无人发现)。
+  // access() 对目录同样有效,故 dist/assets 无需特判。
   for (const f of pkg.files) {
-    if (f === 'dist' || f === 'assets' || f === 'cordis.patch.yml' || f.startsWith('README') || f.startsWith('INSTALL') || f.startsWith('CHANGELOG')) {
-      check(`files 字段 ${f} 就位`, await exists(path.join(root, f)));
-    }
+    check(`files 字段 ${f} 就位`, await exists(path.join(root, f)));
   }
   check('repository 指向 drscrewdriver 仓库', pkg.repository?.url?.includes('drscrewdriver') === true);
 

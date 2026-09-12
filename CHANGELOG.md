@@ -8,6 +8,14 @@
 
 ## [未发布]
 
+> 📘 **踩坑与修复方向手册**：本轮及前两轮实际踩过的坑、走错过的方向已系统沉淀到
+> [`ENGINEERING-NOTES.md`](./ENGINEERING-NOTES.md)（一页速查表 + 逐条「现象 / 根因 / 正确做法 / 如何验证」
+> + 交付前验证清单）。涵盖：`nullable` 崩溃整棵插件树、deps 漏注入被降级分支掩盖、
+> 重复解析器必然腐烂、守卫标志位放 `finally` 等于没放、长任务不置 `running` 导致界面无进度、
+> 可选字段让 `tsc` 抓不到未定义标识符、空数据测试掩盖必崩缺陷、`vitest` 只转译导致契约漂移、
+> 沙箱 `spawn EPERM`（含 `ESBUILD_BINARY_PATH` 为何无效）、PowerShell 管道捕获让 `tsc` 错误数变 0、
+> 编码 BOM/乱码/行号漂移，以及 `git amend -m` 清空提交正文等 Git 陷阱。
+
 ### 修复
 
 - **插件树加载失败：工具输出 schema 使用了 DSL 不支持的 `nullable` 关键字**（回归修复，会导致 DSH 完全无法启动）。`memory_ruminate` 与 `memory_ruminate_status` 的输出 schema 在 `startedAt`/`finishedAt`/`error` 上声明了 `nullable: true`，而 DSH 的 value schema DSL 只接受一组白名单作者键（`description`/`title`/`default`/`examples`/`required`/`enum`/`const` 及各类型的 `type`/`properties`/`additionalProperties`/`items`/`oneOf`）。`defineTool()` 编译 schema 时抛 `JsonSchemaError: schema.properties.startedAt.nullable is not supported by the value schema DSL`，loader 随之判定 `dsh-memory (dsh-prime-memory)` 条目加载失败，整个插件树 apply 中止，进程以未捕获异常退出。

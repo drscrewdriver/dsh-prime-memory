@@ -40,7 +40,8 @@
     "CHANGELOG.md",
     "CHANGELOG.en.md",
     "CHANGELOG.ja.md",
-    "CHANGELOG.ko.md"
+    "CHANGELOG.ko.md",
+    "ENGINEERING-NOTES.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/copy-client.mjs",
