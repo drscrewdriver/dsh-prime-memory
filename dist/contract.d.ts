@@ -772,6 +772,9 @@ export interface DshMemoryRequestMap {
     'dsh-memory/rebuild-status': Record<string, never>;
     'dsh-memory/rebuild-start': Record<string, never>;
     'dsh-memory/rebuild-cancel': Record<string, never>;
+    'dsh-memory/ruminate-status': Record<string, never>;
+    'dsh-memory/ruminate-start': Record<string, never>;
+    'dsh-memory/ruminate-cancel': Record<string, never>;
     'dsh-memory/llm-providers': Record<string, never>;
     'dsh-memory/llm-models': LlmModelsRequest;
     'dsh-memory/embedding-state-get': Record<string, never>;

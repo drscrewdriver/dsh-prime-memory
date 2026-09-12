@@ -32,6 +32,7 @@
 ### 变更
 
 - **`RuminateStatus` 新增 `detail`；`RuminatePhase` 新增 `refreshing`**：为分钟级步骤提供可观测性（向后兼容：新增可选字段 + 联合类型新增成员）。`detail` 在蒸馏阶段给出「会话 <id>（第 i/N 个）」，在收尾/刷新阶段给出当前 L2/L3 动作。
+- **`DshMemoryRequestMap` 补上反刍三键**（契约修复，恢复 CI 类型门禁）：响应映射表早已声明 `dsh-memory/ruminate-status|start|cancel`，而 `DshMemoryEndpoint = keyof DshMemoryResponseMap` 因此把它们纳入端点联合类型，但**请求映射表漏了对应三键**——于是 `client/src/rpc.ts` 的 `DshMemoryRequestMap[K]` 报 `TS2536`，`tsc -p tsconfig.client.json` 恒失败，**CI 的 `npm run typecheck` 必红**。修复为与 `rebuild-*` 同形的三行 `Record<string, never>`（三个端点均无入参）。验证：三份 tsconfig 全部 exit 0，`npm run typecheck` 完整链路 exit 0。
 - **`registerMemoryRpc` deps 组装抽为 `buildEndpointDeps()`**：为"哪个控制器落入哪个字段"提供可测接缝，并以 `EndpointDepsInput` 类型约束注入面，使漏注入字段在编译期即可暴露（此前该缺陷是运行时静默降级）。`handleEndpoint` 与 `EndpointDeps` 一并导出以供测试直调。
 - **反刍增加启动锁 `starting`**：`loadPending` 使 `start()` 在守卫与 `status.running` 置位之间多出一个事件循环让出点，双击/连发 RPC 可双双穿过守卫、两套 `sessions` 互相覆盖。新增标志位封住该窗口。**注意**：该标志在 distilling 分支末尾显式复位，而非放在 `finally`——因为 `doEnqueue` 是异步入队，`finally` 会立刻清旗使守卫失效；跨 `await` 的持久守卫是 `status.running`。
 
@@ -44,10 +45,10 @@
 
 ### 已知限制
 
-- **`DshMemoryRequestMap` 缺少反刍三端点**：`DshMemoryEndpoint = keyof DshMemoryResponseMap` 已包含 `dsh-memory/ruminate-status|start|cancel`，但请求映射表未声明对应键，导致 `client/src/rpc.ts` 的 `DshMemoryRequestMap[K]` 索引报 `TS2536`（`tsc -p tsconfig.client.json` 失败；esbuild 构建不受影响，bundle 可正常产出）。属本次反刍改动引入，尚未修复。**影响 `npm run typecheck` 与 CI**，需按 `pending-issues.md` P1 补三行键。
 - **`tests/` 类型门禁仅部分开启（ratchet）**：新增 `tsconfig.test.json` 并纳入 `npm run typecheck`，但因 8 个既有测试文件存在约 60 个类型错误（`MemoryConfig` 模块错位、`DistillBudgets` 缺 `graph`、`UserMessage.turn`、只读数组赋值、`rpc.test.ts` 大量裸 `as` 等），当前只纳入 `tests/ruminate.test.ts` 与 `tests/stores.test.ts`。详见 `pending-issues.md` P8——**这反映测试已与类型契约漂移，而 vitest 只转译不检查，故运行时全绿却无人察觉**。
 - **反刍存在磁盘/内存双事实源**：会话清单取自磁盘 `pending.json`，但实际抽取在 `runner.ts:667` 从**内存桶**按 `sessionId` 取消息，故传入的 `session.messages` 对结果无影响。窗口内可能漏蒸馏或空转（`total` 虚高）。建议由 runner 暴露内存只读视图根治，见 `pending-issues.md` P9。
 - **反刍收尾竞态**：`setImmediate` 链不等队列排空，单会话也会立刻 `finalize`，使 L2/L3 对着陈旧 L1 白跑一次（记录经 `l1.ts:264` 后续补整合，**非丢失**）。见 `pending-issues.md` P10。
+- **反刍进行中的单次 LLM 调用不可中断**：点「取消整理」只会在**当前那一步完成后**停止后续步骤。L2/L3 单次可达分钟级，这是取消延迟的成因。
 
 ## [0.10.0] — 2026-09-06
 
