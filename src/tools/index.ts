@@ -15,6 +15,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
+import type { RuminateController } from '../pipeline/ruminate.js';
 import type { GraphStore } from '../store/graph-store.js';
 import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
@@ -42,6 +43,8 @@ export function registerMemoryTools(
   logger: MemoryLogger,
   modes: SessionModeStore,
   live: LiveSettingsHandle,
+  /** 反刍控制器(可选:未装配时 ruminate 工具返回未启用提示)。 */
+  ruminate?: RuminateController,
 ): void {
   if (!cfg.tools) return;
 
@@ -442,7 +445,141 @@ export function registerMemoryTools(
     }),
   );
 
-  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_delete');
+  // ── 反刍工具(按需触发 L1→L2→L3 消化,受蒸馏开关门控) ──
+  const RUMINATE_OFF_NOTICE = '反刍功能未开放:请在记忆库面板开启「蒸馏」开关后使用。';
+  const RUMINATE_UNAVAIL_NOTICE = '反刍未初始化:存储处于降级态,无法反刍。';
+  const RUMINATE_RUNNING_NOTICE = '反刍已在进行中,请稍后再试。';
+
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_ruminate',
+      description:
+        '触发记忆反刍:把未蒸馏的对话缓冲冲刷出来,跑一轮 L1 抽取 → L2 场景整合 → L3 画像更新。与重建不同,不清库不改 L0,仅消化攒而未蒸馏的切片;无缓冲时做轻量 L2/L3 刷新。',
+      parameters: {},
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            running: { type: 'boolean' },
+            phase: { type: 'string' },
+            done: { type: 'number' },
+            total: { type: 'number' },
+            recordsBuilt: { type: 'number' },
+            startedAt: { type: 'string' },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          { type: 'text', text: value.notice ?? renderRuminateStatus(value) },
+        ],
+      },
+      execute: async () => {
+        if (!ruminate) return { notice: RUMINATE_UNAVAIL_NOTICE, running: false, phase: 'idle', done: 0, total: 0, recordsBuilt: 0, startedAt: undefined };
+        const s = live.get();
+        if (!s.enabled || !s.distill) return { notice: RUMINATE_OFF_NOTICE, running: false, phase: 'idle', done: 0, total: 0, recordsBuilt: 0, startedAt: undefined };
+        try {
+          const result = await ruminate.start();
+          return {
+            running: result.running,
+            phase: result.phase,
+            done: result.done,
+            total: result.total,
+            recordsBuilt: result.recordsBuilt,
+            startedAt: result.startedAt ? new Date(result.startedAt).toISOString() : undefined,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('已在进行中')) return { notice: RUMINATE_RUNNING_NOTICE, running: true, phase: (err as any).phase ?? 'distilling', done: 0, total: 0, recordsBuilt: 0, startedAt: undefined };
+          return { notice: `反刍启动失败: ${msg}`, running: false, phase: 'failed', done: 0, total: 0, recordsBuilt: 0, startedAt: undefined };
+        }
+      },
+    }),
+  );
+
+  // ── 取消反刍(按需取消正在进行的反刍) ──
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_ruminate_cancel',
+      description:
+        '取消正在进行的记忆反刍。已蒸馏部分保留,pending 切片中未被消费的部分维持原状。',
+      parameters: {},
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            notice: { type: 'string' },
+            phase: { type: 'string' },
+            running: { type: 'boolean' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: value.notice ?? `反刍已取消(当前阶段:${value.phase})` }],
+      },
+      execute: async () => {
+        if (!ruminate) return { notice: RUMINATE_UNAVAIL_NOTICE, phase: 'idle', running: false };
+        try {
+          const result = ruminate.requestCancel();
+          return {
+            notice: result.phase === 'cancelled' ? '反刍已取消' : '取消请求已发送',
+            phase: result.phase,
+            running: result.running,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { notice: msg, phase: 'idle', running: false };
+        }
+      },
+    }),
+  );
+
+  // ── 反刍状态查询(查看当前反刍进度) ──
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_ruminate_status',
+      description:
+        '查询当前记忆反刍的状态与进度(是否运行中、当前阶段、已完成/总会话数等)。\n\n注意:在 DSH Web GUI 的对话中无法直接调用此工具,因为模型可调用工具列表不包含 ruminate_status。如需查询进度,请在记忆库面板的蒸馏面板查看。',
+      parameters: {},
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            running: { type: 'boolean' },
+            phase: { type: 'string' },
+            done: { type: 'number' },
+            total: { type: 'number' },
+            recordsBuilt: { type: 'number' },
+            cancelRequested: { type: 'boolean' },
+            startedAt: { type: 'string' },
+            finishedAt: { type: 'string' },
+            error: { type: 'string' },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          { type: 'text', text: value.notice ?? renderRuminateStatus(value) },
+        ],
+      },
+      execute: async () => {
+        if (!ruminate) return { notice: RUMINATE_UNAVAIL_NOTICE, running: false, phase: 'idle', done: 0, total: 0, recordsBuilt: 0, cancelRequested: false, startedAt: undefined, finishedAt: undefined, error: undefined };
+        const result = ruminate.getStatus();
+        return {
+          running: result.running,
+          phase: result.phase,
+          done: result.done,
+          total: result.total,
+          recordsBuilt: result.recordsBuilt,
+          cancelRequested: result.cancelRequested,
+          startedAt: result.startedAt ? new Date(result.startedAt).toISOString() : undefined,
+          finishedAt: result.finishedAt ? new Date(result.finishedAt).toISOString() : undefined,
+          error: result.error ?? undefined,
+        };
+      },
+    }),
+  );
+
+  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_delete / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
 }
 
 function renderGraphCards(
@@ -476,4 +613,54 @@ function renderConversationItems(
       return `${i + 1}. [${it.role ?? ''}]${time ? ` ${time}` : ''} (session=${it.session_id ?? ''})\n${it.content ?? ''}`;
     })
     .join('\n\n');
+}
+
+interface RuminateStatusView {
+  running?: boolean;
+  phase?: string;
+  done?: number;
+  total?: number;
+  recordsBuilt?: number;
+  cancelRequested?: boolean;
+  startedAt?: string;
+  finishedAt?: string;
+  error?: string;
+  notice?: string;
+}
+
+function renderRuminateStatus(v: RuminateStatusView): string {
+  const running = v.running ?? false;
+  const status = running ? `🔄 反刍运行中` : '✅ 反刍已完成';
+  const phaseMap: Record<string, string> = {
+    idle: '空闲',
+    distilling: 'L1 蒸馏中',
+    consolidating: 'L2 场景整合中',
+    updating: 'L3 画像更新中',
+    done: '完成',
+    cancelled: '已取消',
+    failed: '失败',
+  };
+  const phase = phaseMap[v.phase ?? 'idle'] ?? v.phase ?? 'idle';
+  const total = v.total ?? 0;
+  const done = v.done ?? 0;
+  const parts = [`${status} [${phase}]`];
+  if (running || total > 0) {
+    parts.push(`进度: ${done}/${total} 会话`);
+  }
+  if ((v.recordsBuilt ?? 0) > 0) {
+    parts.push(`产出: ${v.recordsBuilt} 条记忆`);
+  }
+  if (v.startedAt) {
+    parts.push(`开始: ${v.startedAt}`);
+  }
+  if (v.finishedAt) {
+    parts.push(`结束: ${v.finishedAt}`);
+  }
+  if (v.error) {
+    parts.push(`错误: ${v.error}`);
+  }
+  if (v.cancelRequested) {
+    parts.push('⚠️ 已请求取消');
+  }
+  return parts.join(' | ');
 }

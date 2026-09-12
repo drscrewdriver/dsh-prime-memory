@@ -5,8 +5,9 @@
  *
  * 与 state.json / session-modes.json 同款原子写;读取宽容(坏行丢弃、坏文件空桶起步)。
  */
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { atomicWriteJson, readJsonIfExists } from '../util/io.js';
+import { atomicWriteJson } from '../util/io.js';
 /** 旧格式(无 sessionId 字段)条目加载时归属的会话组。 */
 export const LEGACY_SESSION = 'legacy';
 /** 全新起步:三档都从 1 爬坡(首轮即触发抽取)。 */
@@ -26,14 +27,20 @@ function isMessage(m) {
  *  旧格式条目(无 sessionId)归 legacy 组;warmup 缺省 = 全新起步。 */
 export async function loadPending(file, logger) {
     const out = emptyPending();
+    // 直接读文件而非 readJsonIfExists:后者把"不存在"、"不可读"、"JSON 损坏"压成同一个 undefined,
+    // 会让形状/内容损坏静默降级为空桶(与"合法空 pending"不可区分)。此处区分 ENOENT(正常)与其余(需告警)。
     let raw;
     try {
-        raw = await readJsonIfExists(file);
+        raw = JSON.parse(await fs.readFile(file, 'utf-8'));
     }
-    catch {
-        raw = undefined;
+    catch (err) {
+        if (err?.code !== 'ENOENT') {
+            logger?.warn(`[memory] 未蒸馏缓冲读取失败(按空桶起步): ${file} — ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return { buckets: out, warmup: freshWarmup() };
     }
     if (!raw || typeof raw !== 'object' || !raw.buckets || typeof raw.buckets !== 'object') {
+        logger?.warn(`[memory] 未蒸馏缓冲格式不符(缺 buckets,按空桶起步): ${file}`);
         return { buckets: out, warmup: freshWarmup() };
     }
     let dropped = 0;

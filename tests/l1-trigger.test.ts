@@ -25,7 +25,7 @@ describe('warmup ramp (ADR-0003 渐进阈值)', () => {
   it('advance doubles and graduates at steady; graduated stays 0', () => {
     expect(advanceWarmupThreshold(1, 8)).toBe(2);
     expect(advanceWarmupThreshold(2, 8)).toBe(4);
-    expect(advanceWarmupThreshold(4, 8)).toBe(8 >= 8 ? 0 : 8); // 达稳态毕业
+    expect(advanceWarmupThreshold(4, 8)).toBe(0); // 达稳态毕业
     expect(advanceWarmupThreshold(0, 8)).toBe(0);
     expect(advanceWarmupThreshold(Number.NaN, 8)).toBe(0);
   });

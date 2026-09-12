@@ -5,9 +5,10 @@
  *
  * 与 state.json / session-modes.json 同款原子写;读取宽容(坏行丢弃、坏文件空桶起步)。
  */
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { ConversationMessage, ExtractMode, MemoryLogger } from '../types.js';
-import { atomicWriteJson, readJsonIfExists } from '../util/io.js';
+import { atomicWriteJson } from '../util/io.js';
 
 /** 带会话标识的未蒸馏消息(会话切片的成员;CONTEXT.md「会话切片」「捕获档位」)。 */
 export interface PendingMessage extends ConversationMessage {
@@ -57,13 +58,19 @@ export async function loadPending(
   logger?: MemoryLogger,
 ): Promise<{ buckets: PendingBuckets; warmup: WarmupState }> {
   const out = emptyPending();
+  // 直接读文件而非 readJsonIfExists:后者把"不存在"、"不可读"、"JSON 损坏"压成同一个 undefined,
+  // 会让形状/内容损坏静默降级为空桶(与"合法空 pending"不可区分)。此处区分 ENOENT(正常)与其余(需告警)。
   let raw: (PendingFile & { buckets?: Record<string, unknown> }) | undefined;
   try {
-    raw = await readJsonIfExists<PendingFile & { buckets?: Record<string, unknown> }>(file);
-  } catch {
-    raw = undefined;
+    raw = JSON.parse(await fs.readFile(file, 'utf-8')) as PendingFile & { buckets?: Record<string, unknown> };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+      logger?.warn(`[memory] 未蒸馏缓冲读取失败(按空桶起步): ${file} — ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return { buckets: out, warmup: freshWarmup() };
   }
   if (!raw || typeof raw !== 'object' || !raw.buckets || typeof raw.buckets !== 'object') {
+    logger?.warn(`[memory] 未蒸馏缓冲格式不符(缺 buckets,按空桶起步): ${file}`);
     return { buckets: out, warmup: freshWarmup() };
   }
   let dropped = 0;

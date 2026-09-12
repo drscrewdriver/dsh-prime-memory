@@ -2,6 +2,7 @@
  * 嵌入子系统单元测试:状态文件、初始解析、下载器状态机(断点续传/sha 校验/取消)、
  * 运行时安装器(npm ci→install 回退/取消)、本地服务状态机(假通道)、代理解析。
  */
+import { createHash } from 'node:crypto';
 import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -124,7 +125,6 @@ describe('model download queue', () => {
       ],
     };
   }
-  const { createHash } = require('node:crypto') as typeof import('node:crypto');
   function shaOf(s: string): string {
     return createHash('sha256').update(s).digest('hex');
   }
@@ -135,7 +135,7 @@ describe('model download queue', () => {
     const entry = tinyEntry();
     // 第一文件好;第二文件前两次吐坏字节(触发 sha 失配→删断点重下),第三次好
     let badCalls = 0;
-    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+    const fetchImpl = vi.fn(async (url: string, _init?: RequestInit) => {
       const pathPart = url.split('/resolve/rev0/')[1] ?? '';
       const file = pathPart.split('?')[0];
       const retryParam = url.includes('dshmem-retry=');

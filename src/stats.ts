@@ -24,6 +24,7 @@ import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats, type RecallSessionStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import type { RebuildController } from './pipeline/rebuild.js';
+import type { RuminateController } from './pipeline/ruminate.js';
 import { projectDistillChain, validateDistillChain, type DistillChainEntry, type LiveSettingsHandle } from './settings.js';
 import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
@@ -90,6 +91,7 @@ import type {
   MemoryStats,
   RebuildStatusResponse,
   RecallDisabledReason,
+  RuminateStatusResponse,
   ScenesResponse,
   SessionModeGetResponse,
   SessionModeSetResponse,
@@ -107,6 +109,43 @@ type FamilyStores = {
 };
 
 /** 注册状态 RPC(web 侧 connection 服务可选,缺失时跳过,不影响插件主体)。 */
+/** registerMemoryRpc 形参中需要落入端点 deps 的部分。 */
+interface MemoryRpcSources {
+  status?: MemoryStatusSource;
+  live?: LiveSettingsHandle;
+  modes?: SessionModeStore;
+  dataDir?: string;
+  rebuild?: RebuildController;
+  embedManager?: EmbeddingManager;
+  sessionInfo?: SessionInfoSource;
+}
+
+/** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
+export type EndpointDepsInput = Omit<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>;
+
+/**
+ * 组装端点 deps。抽成函数是为了让"哪个控制器落入哪个字段"成为可测接缝:
+ * 反刍端点读 deps.ruminate,若此处漏注入,端点会静默恒返 {supported:false}(面板整块不渲染)。
+ * @param controller - 反刍控制器;由 index.ts 在存储可用时装配,降级时为 undefined。
+ */
+export function buildEndpointDeps(
+  base: Pick<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>,
+  sources: MemoryRpcSources,
+  controller: RuminateController | undefined,
+): EndpointDeps {
+  const injected: EndpointDepsInput = {
+    status: sources.status,
+    live: sources.live,
+    modes: sources.modes,
+    dataDir: sources.dataDir ?? resolveDataDir(base.cfg),
+    rebuild: sources.rebuild,
+    embedManager: sources.embedManager,
+    sessionInfo: sources.sessionInfo,
+    ruminate: controller,
+  };
+  return { ...base, ...injected };
+}
+
 export function registerMemoryRpc(
   ctx: Context,
   cfg: MemoryConfig,
@@ -127,6 +166,8 @@ export function registerMemoryRpc(
   rebuild?: RebuildController,
   embedManager?: EmbeddingManager,
   sessionInfo?: SessionInfoSource,
+  /** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
+  ruminate?: RuminateController,
 ): void {
   /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
   let holding = false;
@@ -144,19 +185,11 @@ export function registerMemoryRpc(
       '/rpc',
       async (endpoint, payload) => {
         try {
-          const value = await handleEndpoint(endpoint, payload, {
-            ctx,
-            cfg,
-            stores,
-            status,
-            live,
-            modes,
-            dataDir: dataDir ?? resolveDataDir(cfg),
-            logger,
-            rebuild,
-            embedManager,
-            sessionInfo,
-          });
+          const value = await handleEndpoint(endpoint, payload, buildEndpointDeps(
+            { ctx, cfg, stores, logger },
+            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo },
+            ruminate,
+          ));
           return { ok: true, value };
         } catch (err) {
           return {
@@ -257,7 +290,7 @@ async function buildStats(
 // 端点分发(记忆浏览器 + 开关面板数据通道)
 // ============================================================
 
-interface EndpointDeps {
+export interface EndpointDeps {
   ctx: Context;
   cfg: MemoryConfig;
   stores: {
@@ -274,6 +307,7 @@ interface EndpointDeps {
   dataDir: string;
   logger: MemoryLogger;
   rebuild?: RebuildController;
+  ruminate?: RuminateController;
   embedManager?: EmbeddingManager;
   sessionInfo?: SessionInfoSource;
 }
@@ -292,8 +326,9 @@ function sanitizeSettings(s: MemoryLiveSettings): MemoryLiveSettings {
   return { ...s, directApiKey: '', embedRemoteApiKey: '' };
 }
 
-async function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown> {
-  const { cfg, stores, status, live, modes, dataDir, rebuild, embedManager, sessionInfo } = deps;
+/** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
+export async function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown> {
+  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo } = deps;
   switch (endpoint) {
     case 'dsh-memory/stats':
       return buildStats(cfg, stores, status);
@@ -751,6 +786,31 @@ async function handleEndpoint(endpoint: string, payload: unknown, deps: Endpoint
     case 'dsh-memory/rebuild-cancel': {
       if (!rebuild) throw new Error('重建控制器未初始化');
       return rebuild.requestCancel();
+    }
+
+    // ── 反刍(记忆消化:按需消化未蒸馏缓冲) ──
+    case 'dsh-memory/ruminate-status': {
+      if (!ruminate) {
+        const v: RuminateStatusResponse = { supported: false, running: false, phase: 'idle' };
+        return v;
+      }
+      return ruminate.getStatus();
+    }
+
+    case 'dsh-memory/ruminate-start': {
+      if (!ruminate) throw new Error('反刍控制器未初始化(存储不可用)');
+      if (status?.degraded()) throw new Error('存储处于降级状态,无法反刍');
+      const s = live?.get();
+      if (s && (!s.enabled || !s.distill)) throw new Error('蒸馏开关已关闭,请先开启蒸馏再反刍');
+      if (!cfg.extract.enabled) throw new Error('部署配置已停用蒸馏(extract.enabled=false),无法反刍');
+      const result = await ruminate.start();
+      deps.logger.info('[memory] 收到反刍指令(设置页按钮)');
+      return result;
+    }
+
+    case 'dsh-memory/ruminate-cancel': {
+      if (!ruminate) throw new Error('反刍控制器未初始化');
+      return ruminate.requestCancel();
     }
 
     // ── 蒸馏模型选择器(用户已配置的供应商路由) ──

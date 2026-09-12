@@ -1,7 +1,7 @@
 /**
  * Hooks 层单元测试:捕获缓冲裁剪铁律/轮次转换/召回查询构造/占用流水持久化。
  */
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';

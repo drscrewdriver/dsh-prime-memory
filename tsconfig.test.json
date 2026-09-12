@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "tests/ruminate.test.ts", "tests/stores.test.ts"],
+  "exclude": ["src/smoke.ts", "dist", "dist-smoke", "node_modules"]
+}

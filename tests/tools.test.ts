@@ -5,7 +5,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { registerMemoryTools } from '../src/tools/index.js';
 import { MemoryDb } from '../src/store/sqlite.js';
 import { L0Store } from '../src/store/l0.js';
@@ -15,7 +15,7 @@ import { PersonaStore } from '../src/store/persona.js';
 import { SessionModeStore } from '../src/store/session-modes.js';
 import type { LiveSettingsHandle } from '../src/settings.js';
 import type { MemoryConfig, MemoryLiveSettings } from '../src/contract.js';
-import type { MemoryFamily, MemoryLogger } from '../src/types.js';
+import type { MemoryLogger } from '../src/types.js';
 import type { Tool } from '@deepseek-ai/dsh-tools';
 
 let dir: string;
@@ -101,13 +101,26 @@ describe('memory tools', () => {
     return { db, l1, l0, scenes, persona };
   }
 
-  it('registers exactly the seven tools', async () => {
+  it('registers the seven retrieval/mutation tools plus the three ruminate tools', async () => {
     const stores = await setupStores();
     const h = harness();
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
     expect(h.registered.map((t) => t.name).sort()).toEqual([
-      'conversation_search', 'memory_add', 'memory_delete', 'memory_expand_graph_node', 'memory_read_scene', 'memory_search', 'memory_search_graph',
+      'conversation_search', 'memory_add', 'memory_delete', 'memory_expand_graph_node', 'memory_read_scene', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
     ]);
+    stores.db.close();
+  });
+
+  it('ruminate tools degrade to a notice when no controller is assembled', async () => {
+    // 回归护栏:工具 schema 必须始终能被 defineTool 编译通过(DSH 的 value schema DSL
+    // 只认一组作者键,历史上 nullable 曾让整个插件树加载失败)。
+    const stores = await setupStores();
+    const h = harness();
+    registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
+    const status = h.registered.find((t) => t.name === 'memory_ruminate_status')!;
+    const res = (await status.execute({})) as { notice: string; running: boolean };
+    expect(res.notice).toContain('反刍未初始化');
+    expect(res.running).toBe(false);
     stores.db.close();
   });
 

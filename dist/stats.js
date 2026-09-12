@@ -21,8 +21,27 @@ import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
 export const PLUGIN_VERSION = require('../package.json').version;
-/** 注册状态 RPC(web 侧 connection 服务可选,缺失时跳过,不影响插件主体)。 */
-export function registerMemoryRpc(ctx, cfg, stores, logger, status, live, modes, dataDir, rebuild, embedManager, sessionInfo) {
+/**
+ * 组装端点 deps。抽成函数是为了让"哪个控制器落入哪个字段"成为可测接缝:
+ * 反刍端点读 deps.ruminate,若此处漏注入,端点会静默恒返 {supported:false}(面板整块不渲染)。
+ * @param controller - 反刍控制器;由 index.ts 在存储可用时装配,降级时为 undefined。
+ */
+export function buildEndpointDeps(base, sources, controller) {
+    const injected = {
+        status: sources.status,
+        live: sources.live,
+        modes: sources.modes,
+        dataDir: sources.dataDir ?? resolveDataDir(base.cfg),
+        rebuild: sources.rebuild,
+        embedManager: sources.embedManager,
+        sessionInfo: sources.sessionInfo,
+        ruminate: controller,
+    };
+    return { ...base, ...injected };
+}
+export function registerMemoryRpc(ctx, cfg, stores, logger, status, live, modes, dataDir, rebuild, embedManager, sessionInfo, 
+/** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
+ruminate) {
     /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
     let holding = false;
     /** 当前 handle 绑定的 connection 实例(internal/service 第二参;用于识别实例替换)。 */
@@ -38,19 +57,7 @@ export function registerMemoryRpc(ctx, cfg, stores, logger, status, live, modes,
         // handle() 同步注册并返回异步 disposer(() => Promise<void>)。
         const dispose = connection.rpc.handle('/rpc', async (endpoint, payload) => {
             try {
-                const value = await handleEndpoint(endpoint, payload, {
-                    ctx,
-                    cfg,
-                    stores,
-                    status,
-                    live,
-                    modes,
-                    dataDir: dataDir ?? resolveDataDir(cfg),
-                    logger,
-                    rebuild,
-                    embedManager,
-                    sessionInfo,
-                });
+                const value = await handleEndpoint(endpoint, payload, buildEndpointDeps({ ctx, cfg, stores, logger }, { status, live, modes, dataDir, rebuild, embedManager, sessionInfo }, ruminate));
                 return { ok: true, value };
             }
             catch (err) {
@@ -154,8 +161,9 @@ function sanitizeSettings(s) {
         return s;
     return { ...s, directApiKey: '', embedRemoteApiKey: '' };
 }
-async function handleEndpoint(endpoint, payload, deps) {
-    const { cfg, stores, status, live, modes, dataDir, rebuild, embedManager, sessionInfo } = deps;
+/** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
+export async function handleEndpoint(endpoint, payload, deps) {
+    const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo } = deps;
     switch (endpoint) {
         case 'dsh-memory/stats':
             return buildStats(cfg, stores, status);
@@ -632,6 +640,33 @@ async function handleEndpoint(endpoint, payload, deps) {
             if (!rebuild)
                 throw new Error('重建控制器未初始化');
             return rebuild.requestCancel();
+        }
+        // ── 反刍(记忆消化:按需消化未蒸馏缓冲) ──
+        case 'dsh-memory/ruminate-status': {
+            if (!ruminate) {
+                const v = { supported: false, running: false, phase: 'idle' };
+                return v;
+            }
+            return ruminate.getStatus();
+        }
+        case 'dsh-memory/ruminate-start': {
+            if (!ruminate)
+                throw new Error('反刍控制器未初始化(存储不可用)');
+            if (status?.degraded())
+                throw new Error('存储处于降级状态,无法反刍');
+            const s = live?.get();
+            if (s && (!s.enabled || !s.distill))
+                throw new Error('蒸馏开关已关闭,请先开启蒸馏再反刍');
+            if (!cfg.extract.enabled)
+                throw new Error('部署配置已停用蒸馏(extract.enabled=false),无法反刍');
+            const result = await ruminate.start();
+            deps.logger.info('[memory] 收到反刍指令(设置页按钮)');
+            return result;
+        }
+        case 'dsh-memory/ruminate-cancel': {
+            if (!ruminate)
+                throw new Error('反刍控制器未初始化');
+            return ruminate.requestCancel();
         }
         // ── 蒸馏模型选择器(用户已配置的供应商路由) ──
         case 'dsh-memory/llm-providers': {

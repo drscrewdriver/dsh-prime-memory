@@ -6,6 +6,49 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [未发布]
+
+### 修复
+
+- **插件树加载失败：工具输出 schema 使用了 DSL 不支持的 `nullable` 关键字**（回归修复，会导致 DSH 完全无法启动）。`memory_ruminate` 与 `memory_ruminate_status` 的输出 schema 在 `startedAt`/`finishedAt`/`error` 上声明了 `nullable: true`，而 DSH 的 value schema DSL 只接受一组白名单作者键（`description`/`title`/`default`/`examples`/`required`/`enum`/`const` 及各类型的 `type`/`properties`/`additionalProperties`/`items`/`oneOf`）。`defineTool()` 编译 schema 时抛 `JsonSchemaError: schema.properties.startedAt.nullable is not supported by the value schema DSL`，loader 随之判定 `dsh-memory (dsh-prime-memory)` 条目加载失败，整个插件树 apply 中止，进程以未捕获异常退出。
+  **修复**：删除 4 处 `nullable: true`。语义不变——该 DSL 中属性默认即为可选，仅显式 `required: true` 才必填；且运行时校验对 `undefined` 做跳过处理，`execute` 返回的 `startedAt: undefined` 依旧合法。校验步骤：`tsc` 编译通过 + dist 产物已无该关键字 + 新增工具注册回归用例。
+- **反刍（ruminate）RPC 端点全部不可达：控制器从未注入端点 deps**。`dsh-memory/ruminate-status` 恒返 `{supported:false,running:false,phase:'idle'}`，`ruminate-start`/`ruminate-cancel` 恒抛「反刍控制器未初始化」。根因是 `EndpointDeps.ruminate` 虽已声明、三个端点实现也已写好，但 `registerMemoryRpc` 组装 deps 实参时未把控制器注入，`deps.ruminate` 恒为 `undefined`，端点被永久钉在降级分支上。
+  **用户可见影响**：反刍面板（`RuminatePanel.tsx`）依据 `supported === false` 整块 `return null`，因此表现为"功能不存在"而非报错，故障因此长期未被察觉；修复后面板首次实际渲染。
+  **修复**：把 deps 组装抽为可测接缝 `buildEndpointDeps()`（单一所属者），由它显式把控制器写入 `ruminate` 字段；`rebuild`/`embedManager`/`sessionInfo` 由此与 `ruminate` 走完全同一条注入路径，不再有第二条位置形参。
+  **校验**：`dsh-memory/ruminate-status` 在注入 stub 后返回 `supported !== false`。
+
+- **反刍必崩：`pending.json` 被二次解析且漏解包 `buckets`，`TypeError: messages is not iterable`**。`RuminateController.start()` 用自带的 `readPendingBuckets()` 把 `JSON.parse(readFileSync(file))` 直接断言成 `PendingBuckets`（`{auto,chat,work}`），但磁盘真实形状是 `PendingFile`（`{version,buckets:{auto,chat,work},warmup}`）——**漏了一层 `buckets` 解包**，于是 `buckets[mode]` 恒为 `undefined`，在 `groupPendingBySession` 的 `for (const m of messages)` 抛错。
+  **用户可见影响**：**该功能从未成功过一次**。错误只在"文件不存在"时才被 `catch` 兜成空桶走通；而 `persistPending` 每轮都会写这个文件，所以在任何有缓冲的真实部署里点反刍必然失败，面板显示红字。**注意与直觉相反**：抛错与桶里有没有数据**无关**，空桶同样抛——此前"三桶为空所以未暴露"的判断是错的，真实原因是反刍从未被触发过（`memory.log` 无 `反刍开始` 记录）。
+  **修复**：删除 `readPendingBuckets()` 与 `readFileSync`，改为复用 `store/pending.ts` 的 `loadPending()`——它是桶形状的**唯一权威**，并免费带来形状校验、逐桶 `Array.isArray` 校验、`isMessage` 坏行丢弃计数、旧格式 `LEGACY_SESSION` 归组与 `warmup` 校验。**不在 `pending.ts` 新增第二个入口**（那正是本缺陷的成因：同一语义两条实现路径，其中一条腐烂且无人察觉）。
+  **校验**：新增控制器级用例先红后绿（红：`TypeError: messages is not iterable` @ `pending.ts:104` ← `ruminate.ts:75` ← `:139`；绿：`total` == 会话组数、`mode` 由桶键推导）；`dist/pipeline/ruminate.js` 已无 `readPendingBuckets`。
+- **反刍失败后状态与界面自相矛盾**。失败路径从不写 `this.status`（原 `:149-155` 仅成功路径赋值），于是 `ruminate-status` 仍返回 `phase:'idle'`/`error:null`，UI 的 `failed` 分支永不亮——用户看到报错红字，状态端点却说一切正常。**修复**：catch 内写入 `phase:'failed'` 与 `error`，并 `logger.warn` 后再抛出。
+- **反刍进度与产出恒为 0，导致修复效果无法判定**。`totalL1` 只被声明/归零/读出而**从不累加**，`status.done` 无任何自增点，因此 `recordsBuilt` 恒 `0`，完成日志恒为 `0/N 会话, 产出 0 条记录`。**修复**：`PipelineTask` 增加 `onDone` 完成回调（`drain` 内调用且回调异常不影响管线），`enqueue` 透出 `onTurnDone`，反刍据此累加真实记录数；`doEnqueue` 收尾时置 `status.done = index`。
+- **三处静默失败点**：`loadPending` 的 `catch` 与 `doLightRefresh` 的 `.catch(() => {})` 把"文件不存在（正常）"、"不可读/损坏（需告警）"、"形状不符（需告警）"压成同一个静默降级，与"合法空 pending 的轻量刷新"在日志和状态上完全不可区分，用户看到 `phase:'done'` 误判成功。**修复**：`loadPending` 区分 `ENOENT`（静默）与其余（`warn` 含文件路径与原因），形状不符亦 `warn`；`doLightRefresh` 改为 `await` 且**仅在成功后归零** flag，失败记 `warn`（原先失败也归零，等于吞掉重试机会）。
+- **反刍"轻量刷新"期间谎报空闲、无进度、无取消**（用户实测反馈）。`start()` 在无 pending 切片时 `return await this.doLightRefresh()`，而该分支**从不置 `running`**——于是等待期间 `ruminate-status` 仍返回 `phase:'idle'`/`running:false`。但这里的 L2/L3 是**真实 LLM 调用**（实测单次 70 秒以上），期间 `start()` 一直挂在 await 上占住守卫。
+  **用户可见影响**：点反刍后界面只有一句静态说明，**无进度条、无取消按钮、无阶段、无耗时**；此时再点一次就得到「反刍已在进行中」——正确但毫无信息量，无法判断"在跑"还是"卡死"。
+  **修复**：轻量刷新改为**如实上报**——先按 L2/L3 待办族数登记 `total`，逐步骤自增 `done`，并新增 `RuminatePhase='refreshing'` 与 `detail` 描述当前动作（如「L2 场景整合(chat)」）；完成日志由静默改为 `反刍轻量刷新结束:2/3 步,耗时 84s`。面板相应显示阶段名、`已完成/总步数(百分比)`、**实时已用时长**与当前动作，并把 `refreshing` 视为运行态。
+- **反刍进行中不显示已用时长**：L2/L3 单次调用可达分钟级，只显示"运行中"无法区分"在跑"与"卡死"。**修复**：运行期间每秒重算并显示 `已用 X分Y秒`。
+
+### 变更
+
+- **`RuminateStatus` 新增 `detail`；`RuminatePhase` 新增 `refreshing`**：为分钟级步骤提供可观测性（向后兼容：新增可选字段 + 联合类型新增成员）。`detail` 在蒸馏阶段给出「会话 <id>（第 i/N 个）」，在收尾/刷新阶段给出当前 L2/L3 动作。
+- **`registerMemoryRpc` deps 组装抽为 `buildEndpointDeps()`**：为"哪个控制器落入哪个字段"提供可测接缝，并以 `EndpointDepsInput` 类型约束注入面，使漏注入字段在编译期即可暴露（此前该缺陷是运行时静默降级）。`handleEndpoint` 与 `EndpointDeps` 一并导出以供测试直调。
+- **反刍增加启动锁 `starting`**：`loadPending` 使 `start()` 在守卫与 `status.running` 置位之间多出一个事件循环让出点，双击/连发 RPC 可双双穿过守卫、两套 `sessions` 互相覆盖。新增标志位封住该窗口。**注意**：该标志在 distilling 分支末尾显式复位，而非放在 `finally`——因为 `doEnqueue` 是异步入队，`finally` 会立刻清旗使守卫失效；跨 `await` 的持久守卫是 `status.running`。
+
+### 测试
+
+- 新增 RPC 层「控制器端点注入护栏」5 例：`rebuild` 与 `ruminate` 两族各自覆盖「已装配 → status/start/cancel 可达」与「未装配 → status 降级、start/cancel 报未初始化」，另含 `rebuild-start` 的存储降级守卫分支。两族共用同一范式（可选控制器 + 降级响应 + deps 注入），`rebuild` 注入本就正确，作为对照组锁住范式形状。测试用例数 194 → 199。
+- 新增 `tests/ruminate.test.ts` 5 例，钉死**控制器真实读取路径**这条此前零覆盖的契约：三桶含真实消息时不抛且 `total`/`mode` 正确、手写磁盘形状 JSON（**不经 `savePending` 往返**，避免"读写两侧同时改错仍通过"）、三桶皆空走轻量刷新、文件缺失走轻量刷新（ENOENT 正常路径）、并发 `start()` 仅一次通过。测试用例数 199 → 204。
+- **顺手清理 `tests/` 的 10 个既有 lint error**（未使用导入/变量、`require()` 改为顶层 ESM 导入、恒真条件），使 `lint` 范围得以纳入 `tests`。**此前测试目录完全游离于 lint 之外**。
+- **`npm test` 与 `npm run lint` 首次接入 CI**：`.github/workflows/ci.yml` 原先只跑 `typecheck → build → build:smoke → smoke → verify-catalog`，**从不跑测试**——测试写了等于没写。现已补入门禁。
+
+### 已知限制
+
+- **`DshMemoryRequestMap` 缺少反刍三端点**：`DshMemoryEndpoint = keyof DshMemoryResponseMap` 已包含 `dsh-memory/ruminate-status|start|cancel`，但请求映射表未声明对应键，导致 `client/src/rpc.ts` 的 `DshMemoryRequestMap[K]` 索引报 `TS2536`（`tsc -p tsconfig.client.json` 失败；esbuild 构建不受影响，bundle 可正常产出）。属本次反刍改动引入，尚未修复。**影响 `npm run typecheck` 与 CI**，需按 `pending-issues.md` P1 补三行键。
+- **`tests/` 类型门禁仅部分开启（ratchet）**：新增 `tsconfig.test.json` 并纳入 `npm run typecheck`，但因 8 个既有测试文件存在约 60 个类型错误（`MemoryConfig` 模块错位、`DistillBudgets` 缺 `graph`、`UserMessage.turn`、只读数组赋值、`rpc.test.ts` 大量裸 `as` 等），当前只纳入 `tests/ruminate.test.ts` 与 `tests/stores.test.ts`。详见 `pending-issues.md` P8——**这反映测试已与类型契约漂移，而 vitest 只转译不检查，故运行时全绿却无人察觉**。
+- **反刍存在磁盘/内存双事实源**：会话清单取自磁盘 `pending.json`，但实际抽取在 `runner.ts:667` 从**内存桶**按 `sessionId` 取消息，故传入的 `session.messages` 对结果无影响。窗口内可能漏蒸馏或空转（`total` 虚高）。建议由 runner 暴露内存只读视图根治，见 `pending-issues.md` P9。
+- **反刍收尾竞态**：`setImmediate` 链不等队列排空，单会话也会立刻 `finalize`，使 L2/L3 对着陈旧 L1 白跑一次（记录经 `l1.ts:264` 后续补整合，**非丢失**）。见 `pending-issues.md` P10。
+
 ## [0.10.0] — 2026-09-06
 
 ### 新增

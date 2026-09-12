@@ -35,6 +35,8 @@ export interface MemoryStores {
 export interface PipelineTask {
     kind: 'live' | 'rebuild' | 'graph';
     run: () => Promise<unknown>;
+    /** 任务跑完后的回调(携带 run 的产出)——供反刍统计真实产出记录数。 */
+    onDone?: (result: unknown) => void;
 }
 /**
  * 选取下一个要执行的任务下标:最早的 live 优先,其次 graph(图谱投影单批短、
@@ -109,9 +111,11 @@ export declare class MemoryRunner {
     private noteSessionDistill;
     /** 管线跑完一轮后的回调(用于召回缓存失效)。 */
     setAfterRun(fn: () => void): void;
-    /** 一轮对话结束后入队(L0 落盘由 capture 在 turn/end 即时完成,不排蒸馏队列)。 */
+    /** 一轮对话结束后入队(L0 落盘由 capture 在 turn/end 即时完成,不排蒸馏队列)。
+     *  onTurnDone 在该任务真正跑完后回调,携带本轮新增记录数(供反刍统计真实产出)。 */
     enqueue(sessionId: string, messages: ConversationMessage[], mode: ExtractMode, opts?: {
         force?: boolean;
+        onTurnDone?: (records: number) => void;
     }): void;
     /** 重建任务入队(低优先级:让位于正常轮次;由 RebuildController 分块驱动)。 */
     enqueueRebuildTask(run: () => Promise<unknown>): void;

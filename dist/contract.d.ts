@@ -144,6 +144,41 @@ export interface RebuildStatus {
     /** 归档产物名(提示用户可手工找回)。 */
     archiveNote: string | null;
 }
+/** 反刍阶段。 */
+export type RuminatePhase = 'idle' | 'refreshing' | 'distilling' | 'consolidating' | 'updating' | 'done' | 'cancelled' | 'failed';
+/** 反刍状态(ruminate-status/start/cancel 端点返回值)。 */
+export interface RuminateStatus {
+    running: boolean;
+    phase: RuminatePhase;
+    /** 已完成的会话数(反刍中为已完成蒸馏的切片数,轻量刷新为已完成步骤数)。 */
+    done: number;
+    /** 待处理会话数(distilling 阶段为会话组数;轻量刷新为待执行步骤数)。 */
+    total: number;
+    /** 反刍产出的 L1 记录累计条数(反刍控制器追踪)。 */
+    recordsBuilt: number;
+    /** 当前动作的人类可读描述(L2/L3 单次调用可达分钟级,无此字段界面只能显示"运行中")。 */
+    detail?: string | null;
+    cancelRequested: boolean;
+    startedAt: number | null;
+    finishedAt: number | null;
+    error: string | null;
+}
+/** 反刍结果(含按族分组摘要)。 */
+export interface RuminateResult {
+    status: RuminateStatus;
+    byFamily: {
+        chat: {
+            l1Extracted: number;
+            l2Scenes: number;
+            l3Updated: boolean;
+        };
+        work: {
+            l1Extracted: number;
+            l2Scenes: number;
+            l3Updated: boolean;
+        };
+    };
+}
 /** 概览统计(dsh-memory/stats 端点返回值)。 */
 export interface MemoryStats {
     ok: boolean;
@@ -597,6 +632,12 @@ export type RebuildStatusResponse = {
     running: false;
     phase: 'idle';
 } | RebuildStatus;
+/** dsh-memory/ruminate-* */
+export type RuminateStatusResponse = {
+    supported: false;
+    running: false;
+    phase: 'idle';
+} | RuminateStatus;
 /** dsh-memory/llm-providers(蒸馏路由链编辑器数据源)。 */
 /** 生效链条目:effort 与 DistillChainEntry.reasoningEffort 不同名不合并(链上两种条目形状的事实)。 */
 export interface EffectiveChainRoute {
@@ -759,6 +800,9 @@ export interface DshMemoryResponseMap {
     'dsh-memory/rebuild-status': RebuildStatusResponse;
     'dsh-memory/rebuild-start': RebuildStatus;
     'dsh-memory/rebuild-cancel': RebuildStatus;
+    'dsh-memory/ruminate-status': RuminateStatusResponse;
+    'dsh-memory/ruminate-start': RuminateStatus;
+    'dsh-memory/ruminate-cancel': RuminateStatus;
     'dsh-memory/llm-providers': LlmProvidersResponse;
     'dsh-memory/llm-models': LlmModelsResponse;
     'dsh-memory/embedding-state-get': EmbeddingStateResponse;

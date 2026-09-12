@@ -64,6 +64,8 @@ export interface MemoryStores {
 export interface PipelineTask {
   kind: 'live' | 'rebuild' | 'graph';
   run: () => Promise<unknown>;
+  /** 任务跑完后的回调(携带 run 的产出)——供反刍统计真实产出记录数。 */
+  onDone?: (result: unknown) => void;
 }
 
 /**
@@ -374,9 +376,19 @@ export class MemoryRunner {
     this.afterRun = fn;
   }
 
-  /** 一轮对话结束后入队(L0 落盘由 capture 在 turn/end 即时完成,不排蒸馏队列)。 */
-  enqueue(sessionId: string, messages: ConversationMessage[], mode: ExtractMode, opts?: { force?: boolean }): void {
-    this.pushTask({ kind: 'live', run: () => this.runTurn(sessionId, messages, mode, opts) });
+  /** 一轮对话结束后入队(L0 落盘由 capture 在 turn/end 即时完成,不排蒸馏队列)。
+   *  onTurnDone 在该任务真正跑完后回调,携带本轮新增记录数(供反刍统计真实产出)。 */
+  enqueue(
+    sessionId: string,
+    messages: ConversationMessage[],
+    mode: ExtractMode,
+    opts?: { force?: boolean; onTurnDone?: (records: number) => void },
+  ): void {
+    this.pushTask({
+      kind: 'live',
+      run: () => this.runTurn(sessionId, messages, mode, opts),
+      ...(opts?.onTurnDone ? { onDone: (r) => opts.onTurnDone?.(typeof r === 'number' ? r : 0) } : {}),
+    });
   }
 
   /** 重建任务入队(低优先级:让位于正常轮次;由 RebuildController 分块驱动)。 */
@@ -518,7 +530,13 @@ export class MemoryRunner {
       while (!this.stopped && this.tasks.length > 0) {
         const [task] = this.tasks.splice(pickNextTaskIndex(this.tasks), 1);
         try {
-          await task.run();
+          const result = await task.run();
+          // 回调失败不得影响管线
+          try {
+            task.onDone?.(result);
+          } catch (err) {
+            this.logger.warn(`[memory] 任务完成回调失败(已忽略): ${errDetail(err)}`);
+          }
         } catch (err) {
           this.logger.warn(`[memory] 管线失败(已兜底): ${errDetail(err)}`);
         }

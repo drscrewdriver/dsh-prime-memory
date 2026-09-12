@@ -187,7 +187,6 @@ describe('graph apply:supersede 与 currentState', () => {
   });
 
   it('同一 (from,to,relation) 重复投影 → 合并来源而非建重边', () => {
-    const records = [rec({ id: 'r1' }), rec({ id: 'r2' })];
     const scope = { nodes: [] as GraphNode[], edges: [] as GraphEdge[] };
     for (const rid of ['r1', 'r2']) {
       applyBatch(

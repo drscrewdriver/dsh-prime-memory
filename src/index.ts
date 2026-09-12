@@ -16,6 +16,7 @@ import { registerCapture } from './hooks/capture.js';
 import { registerRecall } from './hooks/recall.js';
 import { MemoryRunner } from './pipeline/runner.js';
 import { RebuildController } from './pipeline/rebuild.js';
+import { RuminateController } from './pipeline/ruminate.js';
 import { registerMemoryRpc, PLUGIN_VERSION } from './stats.js';
 import { registerLiveSettings } from './settings.js';
 import { NoopEmbeddingService, type EmbeddingProviderInfo } from './store/embedding.js';
@@ -41,6 +42,7 @@ import type { MemoryLogger } from './types.js';
 import { errDetail, withFileLog } from './util/filelog.js';
 import { buildRouteChain, resolveModelRoute, invalidateEffortCache } from './llm.js';
 import { effectiveCfg } from './pipeline/runner.js';
+import { pendingPathFor } from './store/pending.js';
 import { initTokenCost, resetTokenCost } from './token-cost.js';
 
 export const name = 'dsh-memory-plugin';
@@ -326,13 +328,20 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       ? new RebuildController(ctx, config, stores, db, runner, logger, live)
       : undefined;
 
+  // 反刍控制器(与重建共用数据,但更轻量;存储降级时不建)
+  const ruminateFile = storageOk ? pendingPathFor(resolveDataDir(config)) : '';
+  const ruminate =
+    storageOk && !db.isDegraded() && ruminateFile
+      ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile)
+      : undefined;
+
   let flushL0: (() => Promise<void>) | undefined;
   if (storageOk) {
     flushL0 = registerCapture(ctx, config, runner, stores.l0, logger, live, modes);
   }
   const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir);
   runner.setAfterRun(recall.invalidateProfile);
-  registerMemoryTools(ctx, config, stores, logger, modes, live);
+  registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate);
   registerMemoryRpc(
     ctx,
     config,
@@ -357,6 +366,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       l0Count: (sid) => stores.l0.countBySession(sid),
       capabilities: () => db.getCapabilities(),
     },
+    ruminate,
   );
 
   // bench 控制服务(config.benchControl 门控,默认关):仅基准/调试部署注册,

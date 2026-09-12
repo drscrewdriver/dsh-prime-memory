@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import { type MemoryConfig } from './config.js';
 import { type RecallSessionStats } from './hooks/recall.js';
 import type { RebuildController } from './pipeline/rebuild.js';
+import type { RuminateController } from './pipeline/ruminate.js';
 import { type LiveSettingsHandle } from './settings.js';
 import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
@@ -54,6 +55,24 @@ export interface SessionInfoSource {
 import type { MemoryOccupancy } from './contract.js';
 export type { MemoryStats } from './contract.js';
 /** 注册状态 RPC(web 侧 connection 服务可选,缺失时跳过,不影响插件主体)。 */
+/** registerMemoryRpc 形参中需要落入端点 deps 的部分。 */
+interface MemoryRpcSources {
+    status?: MemoryStatusSource;
+    live?: LiveSettingsHandle;
+    modes?: SessionModeStore;
+    dataDir?: string;
+    rebuild?: RebuildController;
+    embedManager?: EmbeddingManager;
+    sessionInfo?: SessionInfoSource;
+}
+/** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
+export type EndpointDepsInput = Omit<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>;
+/**
+ * 组装端点 deps。抽成函数是为了让"哪个控制器落入哪个字段"成为可测接缝:
+ * 反刍端点读 deps.ruminate,若此处漏注入,端点会静默恒返 {supported:false}(面板整块不渲染)。
+ * @param controller - 反刍控制器;由 index.ts 在存储可用时装配,降级时为 undefined。
+ */
+export declare function buildEndpointDeps(base: Pick<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>, sources: MemoryRpcSources, controller: RuminateController | undefined): EndpointDeps;
 export declare function registerMemoryRpc(ctx: Context, cfg: MemoryConfig, stores: {
     l0: L0Store;
     l1: L1Store;
@@ -62,4 +81,29 @@ export declare function registerMemoryRpc(ctx: Context, cfg: MemoryConfig, store
     state: StateStore;
     /** 图谱存储(可选:未装配时图谱端点返空,不报错)。 */
     graph?: GraphStore;
-}, logger: MemoryLogger, status?: MemoryStatusSource, live?: LiveSettingsHandle, modes?: SessionModeStore, dataDir?: string, rebuild?: RebuildController, embedManager?: EmbeddingManager, sessionInfo?: SessionInfoSource): void;
+}, logger: MemoryLogger, status?: MemoryStatusSource, live?: LiveSettingsHandle, modes?: SessionModeStore, dataDir?: string, rebuild?: RebuildController, embedManager?: EmbeddingManager, sessionInfo?: SessionInfoSource, 
+/** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
+ruminate?: RuminateController): void;
+export interface EndpointDeps {
+    ctx: Context;
+    cfg: MemoryConfig;
+    stores: {
+        l0: L0Store;
+        l1: L1Store;
+        scenes: Record<MemoryFamily, SceneStore>;
+        persona: Record<MemoryFamily, PersonaStore>;
+        state: StateStore;
+        graph?: GraphStore;
+    };
+    status?: MemoryStatusSource;
+    live?: LiveSettingsHandle;
+    modes?: SessionModeStore;
+    dataDir: string;
+    logger: MemoryLogger;
+    rebuild?: RebuildController;
+    ruminate?: RuminateController;
+    embedManager?: EmbeddingManager;
+    sessionInfo?: SessionInfoSource;
+}
+/** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
+export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;

@@ -6,8 +6,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { registerMemoryRpc, PLUGIN_VERSION, type MemoryStatusSource, type SessionInfoSource } from '../src/stats.js';
-import { registerBenchControl, BENCH_CONTROL_SERVICE } from '../src/bench-control.js';
+import { registerMemoryRpc, handleEndpoint, buildEndpointDeps, PLUGIN_VERSION, type MemoryStatusSource, type SessionInfoSource, type EndpointDeps } from '../src/stats.js';
+import { registerBenchControl } from '../src/bench-control.js';
 import { MemoryDb } from '../src/store/sqlite.js';
 import { L0Store } from '../src/store/l0.js';
 import { L1Store } from '../src/store/l1.js';
@@ -69,7 +69,27 @@ interface Harness {
   dataDir: string;
 }
 
-async function harness(opts: { live?: LiveSettingsHandle; sessionInfo?: SessionInfoSource; status?: MemoryStatusSource } = {}): Promise<Harness> {
+/** 直调端点分发层:经生产同款 buildEndpointDeps 组装 deps,验证 rebuild/ruminate 接线。 */
+function ctlDeps(over: { rebuild?: unknown; ruminate?: unknown; status?: unknown } = {}): EndpointDeps {
+  return buildEndpointDeps(
+    { ctx: {} as never, cfg: cfg(), stores: {} as never, logger: noopLogger },
+    {
+      status: over.status as never,
+      // 守卫链要求 enabled/distill 皆真,否则 start 被"蒸馏开关已关闭"拦下
+      live: { supported: true, get: () => ({ enabled: true, distill: true, recall: true }), update: async () => {} } as never,
+      modes: new SessionModeStore('/nonexistent', 'auto'),
+      dataDir: tmpdir(),
+      rebuild: over.rebuild as never,
+    },
+    over.ruminate as never,
+  );
+}
+
+async function harness(opts: {
+  live?: LiveSettingsHandle;
+  sessionInfo?: SessionInfoSource;
+  status?: MemoryStatusSource;
+} = {}): Promise<Harness> {
   const dataDir = join(await tmp(), `rpc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
   const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
   db.init();
@@ -111,7 +131,7 @@ async function harness(opts: { live?: LiveSettingsHandle; sessionInfo?: SessionI
     llm: {} as never,
   } as unknown as Parameters<typeof registerMemoryRpc>[0];
 
-  registerMemoryRpc(ctx, cfg(), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo);
+  registerMemoryRpc(ctx, cfg(), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined);
   return {
     call: async (endpoint, payload) => {
       const r = (await handler!(endpoint, payload)) as { ok: boolean; value?: unknown; error?: { message: string } };
@@ -327,24 +347,93 @@ describe('rpc: graph endpoints', () => {
   it('graph endpoints validate inputs and degrade to empty without graph store', async () => {
     const h = await harness();
     // 入参校验:超长 query / 缺失 id
-    const badQuery = (await handlerError(h, 'dsh-memory/graph-search', { query: 'x'.repeat(5000) }));
+    const badQuery = (await callError(h, 'dsh-memory/graph-search', { query: 'x'.repeat(5000) }));
     expect(badQuery).toContain('4096');
-    const badId = (await handlerError(h, 'dsh-memory/graph-node-get', { id: '' }));
+    const badId = (await callError(h, 'dsh-memory/graph-node-get', { id: '' }));
     expect(badId).toContain('id');
     // limit 钳制到 1~20:超界值不炸
     const clamped = await h.call('dsh-memory/graph-search', { query: '张三', limit: 999 }) as { items: unknown[] };
     expect(Array.isArray(clamped.items)).toBe(true);
     h.db.close();
   });
+});
 
-  async function handlerError(h: Harness, endpoint: string, payload: unknown): Promise<string> {
-    try {
-      await h.call(endpoint, payload);
-      return '';
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err);
-    }
+/** 捕获端点抛错文案:模块级共用(rebuild/ruminate 块与 graph 块都需要)。 */
+async function callError(h: Harness, endpoint: string, payload: unknown): Promise<string> {
+  try {
+    await h.call(endpoint, payload);
+    return '';
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
   }
+}
+
+describe('rpc: rebuild/ruminate 控制器端点(注入护栏)', () => {
+  // rebuild 与 ruminate 是同一范式:可选控制器 + 降级响应 + deps 注入。
+  // 差异仅一处:rebuild.start() 同步返 RebuildStatus,ruminate.start() 为 async。
+  const running = {
+    running: true, phase: 'distilling', done: 2, total: 5, recordsBuilt: 3,
+    cancelRequested: false, startedAt: 1700000000000, finishedAt: null, error: null,
+  };
+  const ctlStub = () => ({
+    getStatus: () => running,
+    start: () => ({ ...running }),                                  // RebuildController.start():同步
+    requestCancel: () => ({ ...running, cancelRequested: true }),
+  });
+  const ruminateStub = () => ({
+    getStatus: () => running,
+    start: async () => ({ ...running }),                            // RuminateController.start():async
+    requestCancel: () => ({ ...running, cancelRequested: true }),
+  });
+
+  it('rebuild: 控制器已装配时 status/start/cancel 可达', async () => {
+    const deps = ctlDeps({ rebuild: ctlStub() });
+    const s = await handleEndpoint('dsh-memory/rebuild-status', {}, deps) as { supported?: boolean; running: boolean; done: number };
+    // 未接通时该端点恒返 {supported:false} → 此断言即注入护栏
+    expect(s.supported).not.toBe(false);
+    expect(s.running).toBe(true);
+    expect(s.done).toBe(2);
+    const st = await handleEndpoint('dsh-memory/rebuild-start', {}, deps) as { running: boolean };
+    expect(st.running).toBe(true);
+    const ca = await handleEndpoint('dsh-memory/rebuild-cancel', {}, deps) as { cancelRequested: boolean };
+    expect(ca.cancelRequested).toBe(true);
+  });
+
+  it('rebuild: 未装配时 status 降级、start/cancel 报未初始化', async () => {
+    const deps = ctlDeps();
+    const s = await handleEndpoint('dsh-memory/rebuild-status', {}, deps) as { supported?: boolean; running: boolean };
+    expect(s.supported).toBe(false);
+    expect(s.running).toBe(false);
+    await expect(handleEndpoint('dsh-memory/rebuild-start', {}, deps)).rejects.toThrow('重建控制器未初始化');
+    await expect(handleEndpoint('dsh-memory/rebuild-cancel', {}, deps)).rejects.toThrow('重建控制器未初始化');
+  });
+
+  it('rebuild-start: 存储降级时被守卫拦下', async () => {
+    const deps = ctlDeps({ rebuild: ctlStub(), status: { degraded: () => true, pending: () => 0 } });
+    await expect(handleEndpoint('dsh-memory/rebuild-start', {}, deps)).rejects.toThrow('存储处于降级状态');
+  });
+
+  it('ruminate: 控制器已装配时 status/start/cancel 可达', async () => {
+    const deps = ctlDeps({ ruminate: ruminateStub() });
+    const s = await handleEndpoint('dsh-memory/ruminate-status', {}, deps) as { supported?: boolean; running: boolean; done: number };
+    // 现行 deps 装配漏注入 ruminate 时该端点恒返 {supported:false} → 此断言即接线护栏
+    expect(s.supported).not.toBe(false);
+    expect(s.running).toBe(true);
+    expect(s.done).toBe(2);
+    const st = await handleEndpoint('dsh-memory/ruminate-start', {}, deps) as { running: boolean };
+    expect(st.running).toBe(true);
+    const ca = await handleEndpoint('dsh-memory/ruminate-cancel', {}, deps) as { cancelRequested: boolean };
+    expect(ca.cancelRequested).toBe(true);
+  });
+
+  it('ruminate: 未装配时 status 降级、start/cancel 报未初始化', async () => {
+    const deps = ctlDeps();
+    const s = await handleEndpoint('dsh-memory/ruminate-status', {}, deps) as { supported?: boolean; running: boolean };
+    expect(s.supported).toBe(false);
+    expect(s.running).toBe(false);
+    await expect(handleEndpoint('dsh-memory/ruminate-start', {}, deps)).rejects.toThrow('未初始化');
+    await expect(handleEndpoint('dsh-memory/ruminate-cancel', {}, deps)).rejects.toThrow('未初始化');
+  });
 });
 
 describe('bench control service', () => {

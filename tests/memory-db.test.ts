@@ -15,10 +15,6 @@ let dir: string;
 afterAll(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
 });
-async function tmpDir(): Promise<string> {
-  if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-db-'));
-  return dir;
-}
 
 function rec(id: string, content: string, overrides: Partial<MemoryRecord> = {}): MemoryRecord {
   const now = Date.now();
@@ -232,7 +228,6 @@ describe('MemoryDb', () => {
   it('cost ledger aggregates by window/model/layer/bucket', async () => {
     const db = new MemoryDb(join(await tmpDirSafe(), 't8.db'), 0);
     db.init();
-    const now = Date.now();
     db.insertCostCall('p1', 'm1', 'l1-extract', 100, 50, 10, 365);
     db.insertCostCall('p1', 'm1', 'l1-dedup', 80, 30, 5, 365);
     db.insertCostCall('p2', 'm2', 'l2', 200, 90, 20, 365);

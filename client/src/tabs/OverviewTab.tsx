@@ -9,6 +9,7 @@ import { SwitchRow } from '../ui/controls.js';
 import { DistillSettings } from './DistillSettings.js';
 import { EmbeddingSection } from './EmbeddingSection.js';
 import { RebuildPanel } from './RebuildPanel.js';
+import { RuminatePanel } from './RuminatePanel.js';
 
 /** 可通过开关切换的 settings 键。 */
 type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate';
@@ -170,6 +171,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
       ) : null}
       <EmbeddingSection rpc={rpc} />
       <RebuildPanel rpc={rpc} />
+      <RuminatePanel rpc={rpc} />
       {degraded ? (
         <div style={{ ...S.error, marginBottom: 10 }}>
           {'⚠ ' + stats!.message + '。上方数据为最后一次成功读取的值，记忆功能当前未工作。'}
