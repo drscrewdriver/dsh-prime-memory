@@ -21,12 +21,19 @@ export type RpcFn = <K extends DshMemoryEndpoint>(
   payload?: DshMemoryRequestMap[K],
 ) => Promise<RpcResult<DshMemoryResponseMap[K]>>;
 
+/** 每次调用现取 connection(懒解析):apply 时它可能尚未就绪,快照会永久踩空。 */
+function connectionOf(ctx: MemoryClientCtx): MemoryClientCtx['connection'] {
+  const lazy = typeof ctx.get === 'function' ? (ctx.get('connection') as MemoryClientCtx['connection']) : undefined;
+  return lazy ?? ctx.connection;
+}
+
 export function makeRpc(ctx: MemoryClientCtx): RpcFn {
   return (endpoint, payload) => {
     // connection 是可选服务，可能晚于本插件就绪；缺席直接失败（fail loud）
-    if (!ctx.connection || !ctx.connection.rpc) return Promise.reject(new Error('connection 服务不可用'));
+    const conn = connectionOf(ctx);
+    if (!conn || !conn.rpc) return Promise.reject(new Error('connection 服务不可用'));
     // 信封由宿主 rpc 层保证；RpcResult<never> 协变可赋给任意 RpcResult<K>
-    return ctx.connection.rpc.call('/rpc', endpoint, payload ?? {}) as unknown as Promise<RpcResult<never>>;
+    return conn.rpc.call('/rpc', endpoint, payload ?? {}) as unknown as Promise<RpcResult<never>>;
   };
 }
 
