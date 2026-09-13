@@ -178,7 +178,7 @@ export function registerMemoryRpc(
     if (holding) return;
     const connection = ctx.get('connection');
     if (!connection) return;
-    let dispose: () => Promise<void> | void;
+    let dispose: () => Promise<void> | void = () => {};
     try {
       holding = true;
       let active = true;

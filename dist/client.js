@@ -2041,11 +2041,25 @@ var __defProp = Object.defineProperty;
 		  const lazy = typeof ctx.get === "function" ? ctx.get("connection") : void 0;
 		  return lazy ?? ctx.connection;
 		}
+		var RPC_CHANNELS = ["/api", "/rpc"];
+		var rpcChannel;
 		function makeRpc(ctx) {
 		  return (endpoint, payload) => {
 		    const conn = connectionOf(ctx);
 		    if (!conn || !conn.rpc) return Promise.reject(new Error("connection 服务不可用"));
-		    return conn.rpc.call("/rpc", endpoint, payload ?? {});
+		    const call = (channel) => conn.rpc.call(channel, endpoint, payload ?? {});
+		    const attempt = async (i) => {
+		      const channel = rpcChannel ?? RPC_CHANNELS[i];
+		      try {
+		        const result = await call(channel);
+		        if (rpcChannel === void 0) rpcChannel = channel;
+		        return result;
+		      } catch (err) {
+		        if (i + 1 < RPC_CHANNELS.length) return attempt(i + 1);
+		        throw err;
+		      }
+		    };
+		    return attempt(0);
 		  };
 		}
 		function asLoose(rpc) {

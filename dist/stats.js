@@ -52,7 +52,7 @@ ruminate) {
         const connection = ctx.get('connection');
         if (!connection)
             return;
-        let dispose;
+        let dispose = () => { };
         try {
             holding = true;
             let active = true;
