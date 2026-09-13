@@ -22,6 +22,41 @@ import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
 export const PLUGIN_VERSION = require('../package.json').version;
 /**
+ * 端点全集运行时清单(26 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
+ * 用途:0.1.5 共享通道 /api 的 interceptor 是单槽(多插件会抛 already has an
+ * interceptor),精确 Fetch 路由按路径 key 可共存且分发优先于 interceptor——
+ * 因此逐端点注册 `POST /api/<endpoint>` 精确路由,彻底绕开槽位竞争。
+ */
+export const MEMORY_ENDPOINTS = [
+    'dsh-memory/stats',
+    'dsh-memory/token-cost',
+    'dsh-memory/session-mode-get',
+    'dsh-memory/session-mode-set',
+    'dsh-memory/session-stats',
+    'dsh-memory/settings-get',
+    'dsh-memory/settings-set',
+    'dsh-memory/list-records',
+    'dsh-memory/records-delete',
+    'dsh-memory/graph-search',
+    'dsh-memory/graph-node-get',
+    'dsh-memory/scenes',
+    'dsh-memory/persona',
+    'dsh-memory/log-tail',
+    'dsh-memory/rebuild-status',
+    'dsh-memory/rebuild-start',
+    'dsh-memory/rebuild-cancel',
+    'dsh-memory/llm-providers',
+    'dsh-memory/llm-models',
+    'dsh-memory/embedding-state-get',
+    'dsh-memory/embedding-source-set',
+    'dsh-memory/embedding-download-start',
+    'dsh-memory/embedding-download-cancel',
+    'dsh-memory/embedding-model-delete',
+    'dsh-memory/embedding-runtime-cancel',
+    'dsh-memory/embedding-reindex-cancel',
+];
+/**
  * 组装端点 deps。抽成函数是为了让"哪个控制器落入哪个字段"成为可测接缝:
  * 反刍端点读 deps.ruminate,若此处漏注入,端点会静默恒返 {supported:false}(面板整块不渲染)。
  * @param controller - 反刍控制器;由 index.ts 在存储可用时装配,降级时为 undefined。
@@ -69,25 +104,76 @@ ruminate) {
                     };
                 }
             };
-            // 通道选择:0.1.5 起 handle() 注册的自定义前缀通道在 webServer 分发层
-            // 静默 405(讨论区 #6337 实锤),官方契约改走共享通道 /api + endpoint
-            // 匹配(rpc.intercept)。intercept 自 0.1.1-rc.2 起存在,故优先;缺失或
-            // /api 槽被其他插件占用时回退 handle(0.1.5 上会 405,仅作旧版兜底)。
-            // 0.1.5 还按调用方 fiber 校验 webServer 授权(index.ts 已声明);
+            // 通道选择(0.1.5 实测 + 讨论区 #6337/#6227 契约):
+            // ① 精确 Fetch 路由 POST /api/<endpoint> —— 按路径 key 多插件共存,
+            //    分发优先于 /api interceptor,彻底绕开"共享通道单槽被占"与
+            //    handle 前缀通道在 0.1.5 webServer 分发层的静默 405;
+            // ② 回退 rpc.intercept('/api', dsh-memory/* 匹配) —— 0.1.1-rc.2 起存在,
+            //    但 0.1.2 系为单槽,被其他插件先占时抛错;
+            // ③ 再回退 handle('/rpc') —— 0.1.5 上会 405,仅兜 0.1.1/0.1.2 旧宿主。
+            // 0.1.5 按调用方 fiber 校验 webServer 授权(index.ts 已声明);
             // 注册期任何抛错只降级 RPC,不拖垮宿主启动。
             const rpcFace = connection.rpc;
-            let interceptFailed = false;
-            if (typeof rpcFace.intercept === 'function') {
+            const fetchFace = connection.fetch;
+            let registered = false;
+            if (typeof fetchFace?.register === 'function') {
+                // 首选:精确 Fetch 路由(按路径 key 多插件共存,分发优先于 /api interceptor)。
+                // 信封协议与宿主 rpcFetchHandler 对齐:请求 {type:'client-request',rpcId,method,payload},
+                // 响应 {type:'server-response',rpcId,result};鉴权(401/403)由 connection 的
+                // /api 前缀路由统一先行处理,这里只做分发。
+                try {
+                    const routeDisposers = [];
+                    for (const endpoint of MEMORY_ENDPOINTS) {
+                        routeDisposers.push(fetchFace.register({
+                            path: `/api/${endpoint}`,
+                            methods: ['POST'],
+                            fetch: async (request) => {
+                                let body;
+                                try {
+                                    body = await request.json();
+                                }
+                                catch {
+                                    return new Response('body is not JSON', { status: 400 });
+                                }
+                                const rpcId = typeof body?.rpcId === 'string' ? body.rpcId : 'invalid-request';
+                                if (body?.method !== endpoint) {
+                                    return Response.json({
+                                        type: 'server-response',
+                                        rpcId,
+                                        result: {
+                                            ok: false,
+                                            error: { code: 'gateway/bad-request', message: `method does not match endpoint ${endpoint}`, details: {} },
+                                        },
+                                    });
+                                }
+                                const result = await rpcHandler(endpoint, body.payload);
+                                return Response.json({ type: 'server-response', rpcId, result });
+                            },
+                        }));
+                    }
+                    dispose = () => {
+                        for (const d of routeDisposers.splice(0))
+                            void d();
+                    };
+                    registered = true;
+                    logger.debug?.('[memory] 状态 RPC 已注册(/api 精确路由 × 26 → dsh-memory/*)');
+                }
+                catch (err) {
+                    // 精确路由不可用(极旧宿主无 fetch 面/路径被占):落回 intercept/handle
+                    logger.debug?.(`[memory] /api 精确路由注册未成功,回退共享通道: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+            if (!registered && typeof rpcFace.intercept === 'function') {
                 try {
                     dispose = rpcFace.intercept('/api', (endpoint) => endpoint.startsWith('dsh-memory/'), rpcHandler);
+                    registered = true;
                 }
                 catch (err) {
                     // /api 槽被其他插件先占(0.1.2 系单槽):回退 handle 通道
-                    interceptFailed = true;
                     logger.debug?.(`[memory] /api 共享通道注册未成功,回退 /rpc 前缀通道: ${err instanceof Error ? err.message : String(err)}`);
                 }
             }
-            if (typeof rpcFace.intercept !== 'function' || interceptFailed) {
+            if (!registered) {
                 dispose = rpcFace.handle('/rpc', rpcHandler, { authority: 'loopback' });
             }
             registeredImpl = connection;

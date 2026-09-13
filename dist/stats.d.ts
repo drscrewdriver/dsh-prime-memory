@@ -22,6 +22,14 @@ export interface MemoryStatusSource {
     pending(): number;
 }
 /**
+ * 端点全集运行时清单(26 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
+ * 用途:0.1.5 共享通道 /api 的 interceptor 是单槽(多插件会抛 already has an
+ * interceptor),精确 Fetch 路由按路径 key 可共存且分发优先于 interceptor——
+ * 因此逐端点注册 `POST /api/<endpoint>` 精确路由,彻底绕开槽位竞争。
+ */
+export declare const MEMORY_ENDPOINTS: readonly string[];
+/**
  * 会话级统计数据源(悬浮卡信息区;index.ts 注入)。
  * 硬规则:本端点按"打开期间 2~5s 轮询"设计,实现只允许内存注册表读取与
  * 索引化 SQL 点查——禁止任何文件读/目录扫描(scenes.list()/persona.read()
