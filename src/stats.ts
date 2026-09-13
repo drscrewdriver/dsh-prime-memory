@@ -178,39 +178,50 @@ export function registerMemoryRpc(
     if (holding) return;
     const connection = ctx.get('connection');
     if (!connection) return;
-    holding = true;
-    let active = true;
-    // handle() 同步注册并返回异步 disposer(() => Promise<void>)。
-    const dispose = connection.rpc.handle(
-      '/rpc',
-      async (endpoint, payload) => {
-        try {
-          const value = await handleEndpoint(endpoint, payload, buildEndpointDeps(
-            { ctx, cfg, stores, logger },
-            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo },
-            ruminate,
-          ));
-          return { ok: true, value };
-        } catch (err) {
-          return {
-            ok: false,
-            error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
-          };
-        }
-      },
-      { authority: 'loopback' },
-    );
-    registeredImpl = connection;
-    if (!active) {
-      void dispose();
-      return;
-    }
-    logger.debug?.('[memory] 状态 RPC 已注册(/rpc → dsh-memory/*)');
-    disposers.push(() => {
-      active = false;
+    let dispose: () => Promise<void> | void;
+    try {
+      holding = true;
+      let active = true;
+      // handle() 同步注册并返回异步 disposer(() => Promise<void>)。
+      // 0.1.5 按调用方 fiber 校验 webServer 授权(index.ts 已声明);防御旧宿主
+      // 反向差异:授权模型变化导致的抛错只降级 RPC,不拖垮宿主启动。
+      dispose = connection.rpc.handle(
+        '/rpc',
+        async (endpoint, payload) => {
+          try {
+            const value = await handleEndpoint(endpoint, payload, buildEndpointDeps(
+              { ctx, cfg, stores, logger },
+              { status, live, modes, dataDir, rebuild, embedManager, sessionInfo },
+              ruminate,
+            ));
+            return { ok: true, value };
+          } catch (err) {
+            return {
+              ok: false,
+              error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
+            };
+          }
+        },
+        { authority: 'loopback' },
+      );
+      registeredImpl = connection;
+      if (!active) {
+        void dispose();
+        holding = false;
+        return;
+      }
+      logger.debug?.('[memory] 状态 RPC 已注册(/rpc → dsh-memory/*)');
+      disposers.push(() => {
+        active = false;
+        holding = false;
+        void dispose();
+      });
+    } catch (err) {
       holding = false;
-      void dispose();
-    });
+      logger.warn(
+        `[memory] 状态 RPC 注册失败(设置面板将不可用,其余功能不受影响): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   };
 
   /** 释放全部持有注册(handle 随旧服务实例失效,holding 复位以允许重挂)。 */
