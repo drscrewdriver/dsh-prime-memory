@@ -44,7 +44,7 @@ export function makeRpc(ctx: MemoryClientCtx): RpcFn {
     const call = (channel: string) =>
       conn.rpc.call(channel, endpoint, payload ?? {}) as unknown as Promise<RpcResult<never>>;
     const attempt = async (i: number): Promise<RpcResult<never>> => {
-      const channel = rpcChannel ?? RPC_CHANNELS[i];
+      const channel: string = rpcChannel ?? RPC_CHANNELS[i];
       try {
         const result = await call(channel);
         if (rpcChannel === undefined) rpcChannel = channel;
