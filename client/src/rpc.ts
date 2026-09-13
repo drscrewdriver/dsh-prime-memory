@@ -27,13 +27,35 @@ function connectionOf(ctx: MemoryClientCtx): MemoryClientCtx['connection'] {
   return lazy ?? ctx.connection;
 }
 
+/**
+ * RPC 通道优先级:0.1.5 起宿主把插件 RPC 收编到共享通道 /api(rpc.intercept),
+ * 自定义前缀通道(旧 handle 注册的 /rpc)在 webServer 分发层静默 405。因此
+ * 先试 /api,传输层失败(HTTP 4xx/5xx throw,信封 ok:false 不会 throw)自动
+ * 回退 /rpc 兜旧宿主,成功后记忆通道避免每次双发。
+ */
+const RPC_CHANNELS = ['/api', '/rpc'] as const;
+let rpcChannel: (typeof RPC_CHANNELS)[number] | undefined;
+
 export function makeRpc(ctx: MemoryClientCtx): RpcFn {
   return (endpoint, payload) => {
     // connection 是可选服务，可能晚于本插件就绪；缺席直接失败（fail loud）
     const conn = connectionOf(ctx);
     if (!conn || !conn.rpc) return Promise.reject(new Error('connection 服务不可用'));
-    // 信封由宿主 rpc 层保证；RpcResult<never> 协变可赋给任意 RpcResult<K>
-    return conn.rpc.call('/rpc', endpoint, payload ?? {}) as unknown as Promise<RpcResult<never>>;
+    const call = (channel: string) =>
+      conn.rpc.call(channel, endpoint, payload ?? {}) as unknown as Promise<RpcResult<never>>;
+    const attempt = async (i: number): Promise<RpcResult<never>> => {
+      const channel = rpcChannel ?? RPC_CHANNELS[i];
+      try {
+        const result = await call(channel);
+        if (rpcChannel === undefined) rpcChannel = channel;
+        return result;
+      } catch (err) {
+        // 信封内业务错误正常返回;走到这里 = 传输层失败(通道不存在/405/404)
+        if (i + 1 < RPC_CHANNELS.length) return attempt(i + 1);
+        throw err;
+      }
+    };
+    return attempt(0) as unknown as Promise<RpcResult<never>>;
   };
 }
 

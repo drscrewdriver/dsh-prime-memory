@@ -182,28 +182,45 @@ export function registerMemoryRpc(
     try {
       holding = true;
       let active = true;
-      // handle() 同步注册并返回异步 disposer(() => Promise<void>)。
-      // 0.1.5 按调用方 fiber 校验 webServer 授权(index.ts 已声明);防御旧宿主
-      // 反向差异:授权模型变化导致的抛错只降级 RPC,不拖垮宿主启动。
-      dispose = connection.rpc.handle(
-        '/rpc',
-        async (endpoint, payload) => {
-          try {
-            const value = await handleEndpoint(endpoint, payload, buildEndpointDeps(
-              { ctx, cfg, stores, logger },
-              { status, live, modes, dataDir, rebuild, embedManager, sessionInfo },
-              ruminate,
-            ));
-            return { ok: true, value };
-          } catch (err) {
-            return {
-              ok: false,
-              error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
-            };
-          }
-        },
-        { authority: 'loopback' },
-      );
+      // 端点处理器:两代注册 API 的 handler 签名一致 (endpoint, payload[, signal])。
+      const rpcHandler = async (endpoint: string, payload: unknown) => {
+        try {
+          const value = await handleEndpoint(endpoint, payload, buildEndpointDeps(
+            { ctx, cfg, stores, logger },
+            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo },
+            ruminate,
+          ));
+          return { ok: true, value };
+        } catch (err) {
+          return {
+            ok: false,
+            error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
+          };
+        }
+      };
+      // 通道选择:0.1.5 起 handle() 注册的自定义前缀通道在 webServer 分发层
+      // 静默 405(讨论区 #6337 实锤),官方契约改走共享通道 /api + endpoint
+      // 匹配(rpc.intercept)。intercept 自 0.1.1-rc.2 起存在,故优先;缺失或
+      // /api 槽被其他插件占用时回退 handle(0.1.5 上会 405,仅作旧版兜底)。
+      // 0.1.5 还按调用方 fiber 校验 webServer 授权(index.ts 已声明);
+      // 注册期任何抛错只降级 RPC,不拖垮宿主启动。
+      const rpcFace = connection.rpc as {
+        handle?(channel: string, handler: unknown, options?: object): () => Promise<void> | void;
+        intercept?(channel: string, matches: (endpoint: string) => boolean, handler: unknown): () => Promise<void> | void;
+      };
+      let interceptFailed = false;
+      if (typeof rpcFace.intercept === 'function') {
+        try {
+          dispose = rpcFace.intercept('/api', (endpoint: string) => endpoint.startsWith('dsh-memory/'), rpcHandler);
+        } catch (err) {
+          // /api 槽被其他插件先占(0.1.2 系单槽):回退 handle 通道
+          interceptFailed = true;
+          logger.debug?.(`[memory] /api 共享通道注册未成功,回退 /rpc 前缀通道: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (typeof rpcFace.intercept !== 'function' || interceptFailed) {
+        dispose = rpcFace.handle!('/rpc', rpcHandler, { authority: 'loopback' });
+      }
       registeredImpl = connection;
       if (!active) {
         void dispose();
