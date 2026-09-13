@@ -33,8 +33,8 @@ function connectionOf(ctx: MemoryClientCtx): MemoryClientCtx['connection'] {
  * 先试 /api,传输层失败(HTTP 4xx/5xx throw,信封 ok:false 不会 throw)自动
  * 回退 /rpc 兜旧宿主,成功后记忆通道避免每次双发。
  */
-const RPC_CHANNELS = ['/api', '/rpc'] as const;
-let rpcChannel: (typeof RPC_CHANNELS)[number] | undefined;
+const RPC_CHANNELS: readonly string[] = ['/api', '/rpc'];
+let rpcChannel: string | undefined;
 
 export function makeRpc(ctx: MemoryClientCtx): RpcFn {
   return (endpoint, payload) => {
