@@ -2049,7 +2049,7 @@ var __defProp = Object.defineProperty;
 		    if (!conn || !conn.rpc) return Promise.reject(new Error("connection 服务不可用"));
 		    const call = (channel) => conn.rpc.call(channel, endpoint, payload ?? {});
 		    const attempt = async (i) => {
-		      const channel = rpcChannel ?? RPC_CHANNELS[i];
+		      const channel = rpcChannel ?? RPC_CHANNELS[i] ?? RPC_CHANNELS[RPC_CHANNELS.length - 1];
 		      try {
 		        const result = await call(channel);
 		        if (rpcChannel === void 0) rpcChannel = channel;
