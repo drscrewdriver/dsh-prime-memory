@@ -5,6 +5,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { registerMemoryRpc, handleEndpoint, buildEndpointDeps, PLUGIN_VERSION, type MemoryStatusSource, type SessionInfoSource, type EndpointDeps } from '../src/stats.js';
 import { registerBenchControl } from '../src/bench-control.js';
@@ -108,16 +109,15 @@ async function harness(opts: {
   const modes = new SessionModeStore(dataDir, 'auto');
   await modes.init();
 
-  let handler: ((endpoint: string, payload: unknown) => Promise<unknown>) | undefined;
+  let handler: ((req: unknown, res: unknown) => Promise<void>) | undefined;
   const ctx = {
     get: (name: string) => {
-      if (name === 'connection') {
+      // 0.1.5 契约:宿主半直接向 webServer 注册 prefix 路由(不再走 connection.rpc)
+      if (name === 'webServer') {
         return {
-          rpc: {
-            handle: (_ep: string, h: (endpoint: string, payload: unknown) => Promise<unknown>) => {
-              handler = h;
-              return async () => {};
-            },
+          register: (route: { handler: (req: unknown, res: unknown) => Promise<void> }) => {
+            handler = route.handler;
+            return () => {};
           },
         };
       }
@@ -134,9 +134,25 @@ async function harness(opts: {
   registerMemoryRpc(ctx, cfg(), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined);
   return {
     call: async (endpoint, payload) => {
-      const r = (await handler!(endpoint, payload)) as { ok: boolean; value?: unknown; error?: { message: string } };
-      if (!r.ok) throw new Error(r.error?.message ?? 'rpc error');
-      return r.value;
+      // 模拟 HTTP 层:构造 loopback req(流式 body)+ 捕获型 res,过完整 handler
+      const req = new PassThrough() as PassThrough & { headers: Record<string, string>; method: string; url: string };
+      req.headers = { host: 'localhost' };
+      req.method = 'POST';
+      req.url = `/dsh-memory/rpc/${endpoint.slice('dsh-memory/'.length)}`;
+      req.end(JSON.stringify(payload ?? {}));
+      const captured = { statusCode: 0, body: '' };
+      const res = {
+        writeHead(status: number) {
+          captured.statusCode = status;
+        },
+        end(body?: string) {
+          captured.body = body ?? '';
+        },
+      };
+      await handler!(req as unknown, res as unknown);
+      const parsed = JSON.parse(captured.body) as { ok: boolean; value?: unknown; error?: { message: string } };
+      if (captured.statusCode !== 200 || !parsed.ok) throw new Error(parsed.error?.message ?? `HTTP ${captured.statusCode}`);
+      return parsed.value;
     },
     stores: { l0, l1, scenes, persona, state },
     db,
@@ -172,7 +188,7 @@ describe('rpc: stats / token-cost / unknown', () => {
 
   it('unknown endpoint errors via ok:false envelope (call wrapper turns into throw)', async () => {
     const h = await harness();
-    await expect(h.call('dsh-memory/nope')).rejects.toThrow('unknown endpoint');
+    await expect(h.call('dsh-memory/nope')).rejects.toThrow('unknown api method');
     h.db.close();
   });
 });

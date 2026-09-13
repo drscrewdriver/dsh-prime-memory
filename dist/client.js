@@ -2037,30 +2037,24 @@ var __defProp = Object.defineProperty;
 		var import_react9 = require("react");
 		
 		// client/src/rpc.ts
-		function connectionOf(ctx) {
-		  const lazy = typeof ctx.get === "function" ? ctx.get("connection") : void 0;
-		  return lazy ?? ctx.connection;
+		function shortMethod(endpoint) {
+		  return endpoint.startsWith("dsh-memory/") ? endpoint.slice("dsh-memory/".length) : endpoint;
 		}
-		var RPC_CHANNELS = ["/api", "/rpc"];
-		var rpcChannel;
-		function makeRpc(ctx) {
-		  return (endpoint, payload) => {
-		    const conn = connectionOf(ctx);
-		    if (!conn || !conn.rpc) return Promise.reject(new Error("connection 服务不可用"));
-		    const call = (channel) => conn.rpc.call(channel, endpoint, payload ?? {});
-		    const attempt = async (i) => {
-		      const channel = rpcChannel ?? RPC_CHANNELS[i] ?? RPC_CHANNELS[RPC_CHANNELS.length - 1];
-		      try {
-		        const result = await call(channel);
-		        if (rpcChannel === void 0) rpcChannel = channel;
-		        return result;
-		      } catch (err) {
-		        if (i + 1 < RPC_CHANNELS.length) return attempt(i + 1);
-		        throw err;
-		      }
-		    };
-		    return attempt(0);
-		  };
+		function makeRpc(_ctx) {
+		  return (async (endpoint, payload) => {
+		    let response;
+		    try {
+		      response = await fetch(`/dsh-memory/rpc/${shortMethod(endpoint)}`, {
+		        method: "POST",
+		        headers: { "content-type": "application/json" },
+		        body: JSON.stringify(payload ?? {})
+		      });
+		    } catch (err) {
+		      throw new Error(`transport failure for ${endpoint}: ${err instanceof Error ? err.message : String(err)}`);
+		    }
+		    if (!response.ok) throw new Error(`transport failure for ${endpoint}: HTTP ${response.status}`);
+		    return await response.json();
+		  });
 		}
 		function asLoose(rpc) {
 		  return rpc;
