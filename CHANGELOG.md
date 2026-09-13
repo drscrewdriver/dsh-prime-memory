@@ -6,6 +6,26 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [0.11.0] — 2026-09-13
+
+### 兼容性（按 DSH 插件框架文档适配）
+
+- **settings 注册跨版本兼容（0.1.1-rc.2 ~ 0.1.5-rc.2）**。`src/settings.ts` 此前从 `@deepseek-ai/dsh-settings` **值导入** `settingsNamespace()`，而 v0.1.3+ 已移除该导出符号——在 0.1.3+ 的宿主上模块加载即抛 `Failed to load plugins`，整棵插件树被拖垮。现改为：
+  - 命名空间用字符串字面量 `'dsh-memory'`（浏览器半只看原始字符串，新旧宿主等价）；仅保留类型导入（编译后擦除，无加载风险）；
+  - 注册走运行时三分支：优先 `settings.register()`（全部目标版本存在，返回 get/watch/update scope，live 开关与 UI 写入全走它）；回退 `settings.installSection()` 桥接（v0.1.2+ 服务面，仅 register 缺失时；运行时写入显式报业务错误）；两者皆无则降级为恒开——"settings 缺失绝不拖垮宿主"的铁律不变；
+  - `SettingsScope` 改为本地结构类型，不再依赖包级类型导出。
+- **新增 `dsh.plugin.json`**（DSH 发现清单：id / engines.dsh `>=0.1.1-rc.2 <0.2.0-0` / components 指向 `dist/` 产物），对齐 `dsh-plugin-template` 标准文件结构。
+- **`@deepseek-ai/dsh-*` peerDependencies 转 optional 并放宽版本范围**（`^0.1.1-rc.2 || ^0.1.2-rc.1 || ^0.1.3-rc.1 || ^0.1.5-rc.2`），`@deepseek-ai/cordis` 保持必选——对齐 awesome-dsh-plugin 投稿要求 B.3。
+- **新增 `screenshots.json`**（8 张，引用 `assets/img/`），投稿卡片可展示。
+
+### 变更
+
+- `package.json` `version` 升至 0.11.0；npm `files` 补 `dsh.plugin.json`（`screenshots.json` 按 awesome-dsh-plugin 探测约定仅存于 git 仓库，不入 npm 包）。
+
+### 待实测
+
+- v0.1.5-rc.2 上 `conversation.input.left` / `settings.section` 槽位与 Session V3 `session.surface.nodes` 语义（occupancy 估算）尚未实测，兼容矩阵见 README。
+
 ## [未发布]
 
 > 📘 **踩坑与修复方向手册**：本轮及前两轮实际踩过的坑、走错过的方向已系统沉淀到

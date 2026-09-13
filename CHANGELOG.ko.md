@@ -7,26 +7,24 @@
 
 > **호환성 참고**: 본 플러그인은 한국어 문서를 제공하지만, 공식 DSH의 `LocaleRuntime`이 등록하는 언어는 `zh` / `en`뿐입니다. `ko`를 선택하면 `locale "ko" is not registered` 오류가 납니다. DSH를 fork하여 `LOCALE_IDS`와 `LOCALES` 라벨을 갱신하고 재빌드하면 사용 가능해집니다.
 
-이 파일은 **0.9.0** 릴리스 노트의 한국어판입니다. 전체 이력은 [CHANGELOG.md](./CHANGELOG.md)（中文）를 참조하세요.
+이 파일은 **0.11.0** 릴리스 노트의 한국어판입니다. 전체 이력은 [CHANGELOG.md](./CHANGELOG.md)（中文）를 참조하세요.
 
-## [0.9.0] — 2026-09-01
+## [0.11.0] — 2026-09-13
 
-### 추가
+### 호환성（DSH 플러그인 프레임워크 문서 적합화）
 
-- **Hall 조분류 채널**: `family` / `type`과 직교하는 조속성 축. `types.ts`가 `HALL_CATALOG`（정典 소스: 기본 활성 `work` / `relationships` / `general` 에 더해 실험적 `finance` / `journey`）를 정의. `config.hall.enabled`로 참여 Hall 제어. L1 추출 단계가 활성 목록에서 `metadata.hall`을 자동 태그（명확한 해당 없으면 생략, 강제 `general` 없음）. `ListRecordsRequest.hall`과 `UiRecord.hall`이 계약을 확장하고, 레코드 브라우저에 Hall 필터 dropdown과 각 카드의 Hall 태그 추가.
-- **원격 임베딩 런타임 오버라이드**: 임베딩 `baseUrl` / `apiKey` / `model` / `dimensions`가 **설정 UI에서 편집 가능**해지고, 배포 YAML을 런타임에서 오버라이드（`effectiveCfg`가 `cfg.embedding`에 주입, LLM 채널과 독립된 서브트리）. `EmbeddingManager`에 `getEff()`가 추가되어 설정 편집이 즉시 반영.
-- **고권한 쓰기/삭제 도구**: `memory_add`（명시적 "기억해 X" → L1 직접 쓰기, 임의 `hall`）와 `memory_delete`（의미 검색 히트 삭제, 최대 10건）를 등록. `live.memoryMutate`（설정의 고권한 모드）로 게이트. 레코드 브라우저에 고권한 스위치（확인 포함）와 각 레코드 삭제 버튼 추가.
-- **다국어 문서**（`multilingual-docs-skill` 사양 준수）: `README` / `INSTALL` / `CHANGELOG`를 `zh` / `en` / `ja` / `ko`로 구비. 각 페이지 머리에 언어 전환（각 언어 모어 표기）과, ja/ko 페이지의 DSH 호환성 참고 배치.
-- **툴체인**: ESLint 9（flat config）와 Vitest 도입. `npm run lint` / `npm run test` 추가. `HALL_CATALOG`와 Hall 추출 프롬프트를 커버하는 첫 Vitest 케이스 추가.
+- **settings 등록 크로스 버전 대응（0.1.1-rc.2 ~ 0.1.5-rc.2）**. 기존 `src/settings.ts`는 `@deepseek-ai/dsh-settings`에서 `settingsNamespace()`를 **값 임포트**했는데, v0.1.3+에서는 이 익스포트가 제거되어 새 호스트에서는 모듈 로드 시점에 `Failed to load plugins`이 발생해 플러그인 트리 전체가 함께 깨집니다. 현재는:
+  - 네임스페이스는 문자열 리터럴 `'dsh-memory'`（브라우저 측은 원시 문자열만 읽으므로 신구 호스트에서 동등）. 타입 임포트만 남기고（컴파일 시 소거, 로드 리스크 없음）.
+  - 등록은 3분기 런타임 분기: 우선 `settings.register()`（모든 대상 버전에 존재, get/watch/update 스코프를 반환하며 라이브 토글과 UI 쓰기가 모두 이를 경유）; 폴백은 `settings.installSection()` 브리지（v0.1.2+ 서비스 표면, `register`이 없을 때만. 런타임 쓰기는 비즈니스 오류로 명시 거부）; 둘 다 없으면 상시 온으로 강등——"settings 장애가 호스트를 꺾지 않는다"는 원칙은 불변.
+  - `SettingsScope`는 로컬 구조 타입으로 변경, 패키지 수준 타입 익스포트에 의존하지 않음.
+- **`dsh.plugin.json` 추가**（DSH 발견 매니페스트: id / `engines.dsh` `>=0.1.1-rc.2 <0.2.0-0` / components는 `dist/` 산출물 지정）. `dsh-plugin-template` 표준 파일 구조 준수.
+- **`@deepseek-ai/dsh-*` peerDependencies를 optional로 전환하고 범위 확대**（`^0.1.1-rc.2 || ^0.1.2-rc.1 || ^0.1.3-rc.1 || ^0.1.5-rc.2`）. `@deepseek-ai/cordis`는 필수 유지——awesome-dsh-plugin 제출 요건 B.3 준수.
+- **`screenshots.json` 추가**（`assets/img/` 참조 8장）, 제출 카드에 표시 가능.
 
 ### 변경
 
-- **원격 임베딩 `apiKey`가 임의로**: 키 불필요 self-host `/embeddings` 서비스 수용（`remoteCeiling`이 `apiKey`를 필수로 하지 않음）. 키 미설정 시 `authorization` 헤더를 생략하여 빈 `Bearer`가 거부되는 것 방지.
+- `package.json` 버전을 0.11.0으로 상향. npm `files`에 `dsh.plugin.json` 추가（`screenshots.json`은 awesome-dsh-plugin 탐색 규약에 따라 git 리포지토리 전용, npm 패키지에는 미포함）.
 
-### 수정
+### 실측 대기
 
-- `apiKey`가 빈 경우 원격 임베딩이 빈 `Bearer` 헤더를 보내지 않게 됨.
-
-### 알려진 제한
-
-- `EmbeddingManager` 구축 지점（`src/index.ts`）의 `getEff()` 배선이 아직 연결되지 않아, 런타임 오버라이드가 매니저 내부 임베딩 서비스에 아직 반영되지 않습니다. 후속에서 완료 예정.
+- v0.1.5-rc.2에서의 `conversation.input.left` / `settings.section` 슬롯과 Session V3의 `session.surface.nodes` 시맨틱스（occupancy 추정）는 미검증. README의 호환성 매트릭스 참조.

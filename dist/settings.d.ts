@@ -30,6 +30,15 @@ export declare function projectDistillChain(s: Partial<MemoryLiveSettings> | und
 export declare function validateDistillChain(chain: unknown, opts?: {
     requireExplicitHead?: boolean;
 }): string | null;
+/**
+ * settings scope 的本地结构类型:与官方 SettingsScope<T> 的 owner 面一致
+ * (get/watch/update),但不依赖包级类型导出,跨 DSH 版本稳定。
+ */
+export interface SettingsScope<T> {
+    get(): T;
+    watch(callback: (next: T, prev: T) => void | Promise<void>): () => void;
+    update(patch: object): Promise<void>;
+}
 export interface LiveSettingsHandle {
     /** settings 服务是否可用(不可用时 UI 侧隐藏开关面板) */
     supported: boolean;

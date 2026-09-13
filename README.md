@@ -33,6 +33,19 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 
 </details>
 
+## DSH 版本兼容矩阵
+
+| DSH 版本 | settings 注册 API | 状态 |
+|---|---|---|
+| 0.1.1-rc.2 | `settings.register()`（live scope） | ✅ 已验证 |
+| 0.1.2-rc.1 | `settings.register()`（回退可用） | ⚠️ 按框架文档推断，未实测 |
+| 0.1.3-rc.1 | `settings.register()`（回退可用） | ⚠️ 未实测（0.1.3+ 命名空间已改字符串，本插件已兼容） |
+| 0.1.5-rc.2 | `settings.register()`（回退可用） | ⚠️ 未实测；Session V3 surface 语义与输入栏/设置槽位待回归 |
+
+> 兼容机制：settings 注册走运行时三分支（`register` → `installSection` 桥接 → 恒开降级），
+> 详见 [CHANGELOG.md](./CHANGELOG.md) 的 0.11.0 条目。`dsh.plugin.json` 声明
+> `engines.dsh: ">=0.1.1-rc.2 <0.2.0-0"`。
+
 ## 快速开始
 
 需要 Node ≥ 22.16。两种调用方式任选（`npx` 前缀可替换下面任何 `dsh` 命令）：

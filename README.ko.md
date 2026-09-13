@@ -35,6 +35,19 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 
 > **호환성 참고**: 본 플러그인은 일본어·한국어 문서를 제공하지만, 공식 DSH의 `LocaleRuntime`이 등록하는 언어는 `zh` / `en`뿐입니다. `ja` / `ko`를 선택하면 `locale "<id>" is not registered` 오류가 납니다. 플러그인은 자체 사전을 들고 있을 수 있으나 DSH 전역 로케일 목록은 확장할 수 없습니다. DSH를 fork하여 `LOCALE_IDS`(locale-settings.ts)와 `LOCALES` 라벨(client/index.ts)을 갱신하고 재빌드하면 사용 가능해집니다.
 
+## DSH 버전 호환성 매트릭스
+
+| DSH 버전 | settings 등록 API | 상태 |
+|---|---|---|
+| 0.1.1-rc.2 | `settings.register()`（라이브 스코프） | ✅ 검증됨 |
+| 0.1.2-rc.1 | `settings.register()`（폴백 가능） | ⚠️ 프레임워크 문서 기반 추정, 미실측 |
+| 0.1.3-rc.1 | `settings.register()`（폴백 가능） | ⚠️ 미실측（0.1.3+에서 네임스페이스가 문자열화, 본 플러그인은 대응 완료） |
+| 0.1.5-rc.2 | `settings.register()`（폴백 가능） | ⚠️ 미실측. Session V3 surface 시맨틱스와 입력바/설정 슬롯 회귀 대기 |
+
+> 호환 메커니즘: settings 등록은 3분기 런타임 분기（`register` → `installSection` 브리지 → 상시 온 강등）.
+> 자세한 내용은 [CHANGELOG.md](./CHANGELOG.md)의 0.11.0 항목 참조. `dsh.plugin.json`은
+> `engines.dsh: ">=0.1.1-rc.2 <0.2.0-0"` 선언.
+
 ## 빠른 시작
 
 Node ≥ 22.16 필요. 두 가지 호출 방식 중 선택（`npx` 접두사는 아래 모든 `dsh` 명령을 대체 가능）：

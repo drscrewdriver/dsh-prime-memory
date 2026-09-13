@@ -7,10 +7,13 @@
  * (自 dist 逆向补全——settings 缺键 = 用户已存值被静默丢弃,红线)。
  */
 import type { Context } from '@deepseek-ai/cordis';
-// 纯类型导入:拉入 ctx.settings 的 Context 声明合并
+// 纯类型导入:拉入 ctx.settings 的 Context 声明合并 + namespace 品牌类型。
+// 铁律:禁止从 '@deepseek-ai/dsh-settings' 做**值**导入——v0.1.3+ 移除了
+// settingsNamespace 等导出符号,值导入会让模块加载期直接 Failed to load plugins;
+// 类型导入编译后擦除,无加载风险。
 import type {} from '@deepseek-ai/dsh-settings';
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings';
 import Schema from '@deepseek-ai/schemastery';
-import { settingsNamespace, type SettingsScope } from '@deepseek-ai/dsh-settings';
 import { EFFORT_CHOICES } from './config.js';
 import type { MemoryLogger } from './types.js';
 
@@ -74,6 +77,16 @@ export function validateDistillChain(
   return null;
 }
 
+/**
+ * settings scope 的本地结构类型:与官方 SettingsScope<T> 的 owner 面一致
+ * (get/watch/update),但不依赖包级类型导出,跨 DSH 版本稳定。
+ */
+export interface SettingsScope<T> {
+  get(): T;
+  watch(callback: (next: T, prev: T) => void | Promise<void>): () => void;
+  update(patch: object): Promise<void>;
+}
+
 export interface LiveSettingsHandle {
   /** settings 服务是否可用(不可用时 UI 侧隐藏开关面板) */
   supported: boolean;
@@ -82,7 +95,7 @@ export interface LiveSettingsHandle {
   update(patch: Partial<MemoryLiveSettings>): Promise<void>;
 }
 
-const NS = settingsNamespace('dsh-memory');
+const NS = 'dsh-memory' as SettingsNamespace;
 
 const ALWAYS_ON: MemoryLiveSettings = {
   enabled: true,
@@ -230,20 +243,72 @@ export function registerLiveSettings(ctx: Context, logger: MemoryLogger): LiveSe
         invalidateCache();
       }
     }
-    try {
-      const scope = settings.register(NS, liveSettingsSchema(), { applies: 'live' });
-      cachedScope = scope;
-      cachedSvc = settings;
-      inner = wireScope(scope);
-      logger.info(
-        `[memory] 记忆模式开关就绪(settings 命名空间 dsh-memory,当前:总=${inner.get().enabled} 捕获=${inner.get().capture} 蒸馏=${inner.get().distill} 召回=${inner.get().recall}` +
-          `,蒸馏思考=${inner.get().reasoningEffort || '跟随配置'})`,
-      );
-      return true;
-    } catch (err) {
-      logger.warn(`[memory] 记忆模式开关注册失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
-      return true; // 已拿到服务但注册失败,不再重试
+    // 分支 1(全版本存在):register 返回 owner 面的 SettingsScope(get/watch/update),
+    // 本插件的 live 开关读写/UI 写入全走它——优先级高于 installSection:
+    // 后者返回 void 只走 hooks(setSource/onChange),桥接后 update 写路径不可用,
+    // 仅当宿主只暴露 installSection 时才作降级回退(见分支 2)。
+    if (typeof (settings as { register?: unknown }).register === 'function') {
+      try {
+        const scope = (settings as { register: <T>(ns: SettingsNamespace, schema: Schema, options?: object) => SettingsScope<T> })
+          .register<MemoryLiveSettings>(NS, liveSettingsSchema(), { applies: 'live' });
+        cachedScope = scope;
+        cachedSvc = settings;
+        inner = wireScope(scope);
+        logger.info(
+          `[memory] 记忆模式开关就绪(settings.register,命名空间 dsh-memory,当前:总=${inner.get().enabled} 捕获=${inner.get().capture} 蒸馏=${inner.get().distill} 召回=${inner.get().recall}` +
+            `,蒸馏思考=${inner.get().reasoningEffort || '跟随配置'})`,
+        );
+        return true;
+      } catch (err) {
+        logger.warn(`[memory] 记忆模式开关注册失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
+        return true; // 已拿到服务但注册失败,不再重试
+      }
     }
+    // 分支 2(v0.1.2+ 服务面,仅 register 缺失时):installSection(owner, ns, schema,
+    // entry, hooks) 只回 hooks——get 走 setSource 注入的 thunk,变更通知走 onChange,
+    // update 桥接为显式拒绝(UI 写入报业务错误;宿主未删 register 时不会走到这)。
+    if (typeof (settings as { installSection?: unknown }).installSection === 'function') {
+      try {
+        let source: () => MemoryLiveSettings = () => ({ ...ALWAYS_ON });
+        let notify: (() => void) | undefined;
+        const bridge: SettingsScope<MemoryLiveSettings> = {
+          get: () => resolveSettings(source()),
+          watch: (callback) => {
+            notify = () => void callback(bridge.get(), bridge.get());
+            return () => {
+              notify = undefined;
+            };
+          },
+          update: () => Promise.reject(new Error('installSection 桥接模式不支持运行时写入')),
+        };
+        (settings as unknown as {
+          installSection: (
+            owner: Context,
+            ns: SettingsNamespace,
+            schema: Schema,
+            entry: MemoryLiveSettings,
+            hooks: { setSource(current: () => MemoryLiveSettings): void; onChange(): void },
+          ) => void;
+        }).installSection(ctx, NS, liveSettingsSchema(), { ...ALWAYS_ON }, {
+          setSource: (current) => {
+            source = current;
+          },
+          onChange: () => notify?.(),
+        });
+        cachedScope = bridge;
+        cachedSvc = settings;
+        inner = wireScope(bridge);
+        logger.info('[memory] 记忆模式开关就绪(settings.installSection 桥接,运行时写入不可用)');
+        return true;
+      } catch (err) {
+        logger.warn(`[memory] 记忆模式开关 installSection 桥接失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
+        return true;
+      }
+    }
+    // 分支 3(双 API 皆无):settings 服务在但没有可用注册面——保持全开降级,
+    // 不再重试(服务面不会凭空长出新 API)。
+    logger.warn('[memory] settings 服务无可用的 register/installSection API,记忆模式开关降级为恒开');
+    return true;
   };
 
   if (!tryAttach()) {

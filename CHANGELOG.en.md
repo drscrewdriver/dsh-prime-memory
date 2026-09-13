@@ -5,26 +5,24 @@
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
 
-This file covers the **0.9.0** release notes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
+This file covers the **0.11.0** release notes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 
-## [0.9.0] — 2026-09-01
+## [0.11.0] — 2026-09-13
 
-### Added
+### Compatibility (adapted to the DSH plugin framework docs)
 
-- **Hall coarse-classification channel**: a coarse attribute axis orthogonal to `family`/`type`. `types.ts` defines `HALL_CATALOG` (canonical source: `work` / `relationships` / `general` enabled by default, plus experimental `finance` / `journey`); `config.hall.enabled` controls which halls participate. The L1 extraction stage auto-tags `metadata.hall` from the enabled list (omitted when no clear fit — no forced `general`). `ListRecordsRequest.hall` and `UiRecord.hall` extend the contract, and the Records browser gains a Hall filter dropdown plus a Hall tag on each card.
-- **Remote embedding runtime override**: the embedding `baseUrl` / `apiKey` / `model` / `dimensions` become **editable in the settings UI** and override the deploy YAML at runtime (injected by `effectiveCfg` into `cfg.embedding`, in a subtree independent of the LLM channel). `EmbeddingManager` gains `getEff()` to read the runtime-overridden effective config so the settings edits take effect live.
-- **High-privilege write/delete tools**: `memory_add` (explicit "remember X" → a direct L1 write, optional `hall`) and `memory_delete` (semantic-hit delete, up to 10) are registered, gated behind `live.memoryMutate` (the high-privilege mode toggle in settings). The Records browser adds a high-privilege switch (with confirmation) and a per-record delete button.
-- **Multilingual docs** (per the `multilingual-docs-skill` spec): `README` / `INSTALL` / `CHANGELOG` across `zh` / `en` / `ja` / `ko`, with top-of-page language switchers (native-language links) and a DSH-compatibility note on the `ja` / `ko` pages.
-- **Tooling**: ESLint 9 (flat config) and Vitest are wired in; `npm run lint` and `npm run test` are added, with the first Vitest cases covering `HALL_CATALOG` and the Hall extraction prompt.
+- **Cross-version settings registration (0.1.1-rc.2 ~ 0.1.5-rc.2)**. `src/settings.ts` previously **value-imported** `settingsNamespace()` from `@deepseek-ai/dsh-settings`, an export that v0.1.3+ removed — on newer hosts the module fails at load time with `Failed to load plugins`, taking down the whole plugin tree. Now:
+  - The namespace is the string literal `'dsh-memory'` (the browser half only reads the raw string; equivalent on old and new hosts). Only type imports remain (erased at compile time, no load risk).
+  - Registration uses a three-way runtime branch: prefer `settings.register()` (present in every target version; returns a get/watch/update scope used by the live toggles and UI writes); fall back to an `settings.installSection()` bridge (v0.1.2+ service surface, only when `register` is absent; runtime writes reject with a business error); if neither exists, degrade to always-on — the "settings failure must never take down the host" rule is unchanged.
+  - `SettingsScope` is now a local structural type, no longer tied to package-level type exports.
+- **Added `dsh.plugin.json`** (DSH discovery manifest: id / `engines.dsh` `>=0.1.1-rc.2 <0.2.0-0` / components pointing at `dist/` artifacts), aligned with the `dsh-plugin-template` standard file structure.
+- **`@deepseek-ai/dsh-*` peerDependencies are now optional with widened ranges** (`^0.1.1-rc.2 || ^0.1.2-rc.1 || ^0.1.3-rc.1 || ^0.1.5-rc.2`); `@deepseek-ai/cordis` stays required — per awesome-dsh-plugin submission requirement B.3.
+- **Added `screenshots.json`** (8 entries referencing `assets/img/`) for the submission card.
 
 ### Changed
 
-- **Remote embedding `apiKey` is now optional**: key-less self-hosted `/embeddings` services are accepted (`remoteCeiling` no longer requires `apiKey`); the request omits the `authorization` header when no key is set, so an empty `Bearer` no longer gets rejected.
+- `package.json` version bumped to 0.11.0; npm `files` adds `dsh.plugin.json` (`screenshots.json` stays git-only per the awesome-dsh-plugin probe convention, not shipped in the npm package).
 
-### Fixed
+### Pending field verification
 
-- Remote embedding no longer sends an empty `Bearer` header when `apiKey` is empty.
-
-### Known limitations
-
-- The `getEff()` wiring at the `EmbeddingManager` construction site (`src/index.ts`) is not yet connected, so the runtime override does not yet flow into the manager's internal embedding service — expected to be completed in a follow-up.
+- The `conversation.input.left` / `settings.section` slots and the Session V3 `session.surface.nodes` semantics (occupancy estimate) on v0.1.5-rc.2 are not yet field-tested; see the compatibility matrix in the README.

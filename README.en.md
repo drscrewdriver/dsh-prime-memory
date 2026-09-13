@@ -33,6 +33,20 @@
 
 </details>
 
+## DSH Version Compatibility Matrix
+
+| DSH version | settings registration API | Status |
+|---|---|---|
+| 0.1.1-rc.2 | `settings.register()` (live scope) | ✅ Verified |
+| 0.1.2-rc.1 | `settings.register()` (fallback available) | ⚠️ Inferred from framework docs, not field-tested |
+| 0.1.3-rc.1 | `settings.register()` (fallback available) | ⚠️ Not field-tested (0.1.3+ namespaces became plain strings; this plugin is compatible) |
+| 0.1.5-rc.2 | `settings.register()` (fallback available) | ⚠️ Not field-tested; Session V3 surface semantics and input-bar/settings slots pending regression |
+
+> Compatibility mechanism: settings registration uses a three-way runtime branch
+> (`register` → `installSection` bridge → always-on degradation); see the 0.11.0 entry
+> in [CHANGELOG.md](./CHANGELOG.md). `dsh.plugin.json` declares
+> `engines.dsh: ">=0.1.1-rc.2 <0.2.0-0"`.
+
 ## Getting Started
 
 Requires Node ≥ 22.16. Two invocation styles — the `npx` prefix can replace `dsh` in

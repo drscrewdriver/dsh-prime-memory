@@ -1,5 +1,4 @@
 import Schema from '@deepseek-ai/schemastery';
-import { settingsNamespace } from '@deepseek-ai/dsh-settings';
 import { EFFORT_CHOICES } from './config.js';
 /** 运行时路由链上限(写入门与 UI 同限,防误粘贴巨数组撑爆 settings 存储)。 */
 export const DISTILL_CHAIN_MAX = 8;
@@ -59,7 +58,7 @@ export function validateDistillChain(chain, opts) {
     }
     return null;
 }
-const NS = settingsNamespace('dsh-memory');
+const NS = 'dsh-memory';
 const ALWAYS_ON = {
     enabled: true,
     capture: true,
@@ -198,19 +197,64 @@ export function registerLiveSettings(ctx, logger) {
                 invalidateCache();
             }
         }
-        try {
-            const scope = settings.register(NS, liveSettingsSchema(), { applies: 'live' });
-            cachedScope = scope;
-            cachedSvc = settings;
-            inner = wireScope(scope);
-            logger.info(`[memory] 记忆模式开关就绪(settings 命名空间 dsh-memory,当前:总=${inner.get().enabled} 捕获=${inner.get().capture} 蒸馏=${inner.get().distill} 召回=${inner.get().recall}` +
-                `,蒸馏思考=${inner.get().reasoningEffort || '跟随配置'})`);
-            return true;
+        // 分支 1(全版本存在):register 返回 owner 面的 SettingsScope(get/watch/update),
+        // 本插件的 live 开关读写/UI 写入全走它——优先级高于 installSection:
+        // 后者返回 void 只走 hooks(setSource/onChange),桥接后 update 写路径不可用,
+        // 仅当宿主只暴露 installSection 时才作降级回退(见分支 2)。
+        if (typeof settings.register === 'function') {
+            try {
+                const scope = settings
+                    .register(NS, liveSettingsSchema(), { applies: 'live' });
+                cachedScope = scope;
+                cachedSvc = settings;
+                inner = wireScope(scope);
+                logger.info(`[memory] 记忆模式开关就绪(settings.register,命名空间 dsh-memory,当前:总=${inner.get().enabled} 捕获=${inner.get().capture} 蒸馏=${inner.get().distill} 召回=${inner.get().recall}` +
+                    `,蒸馏思考=${inner.get().reasoningEffort || '跟随配置'})`);
+                return true;
+            }
+            catch (err) {
+                logger.warn(`[memory] 记忆模式开关注册失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
+                return true; // 已拿到服务但注册失败,不再重试
+            }
         }
-        catch (err) {
-            logger.warn(`[memory] 记忆模式开关注册失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
-            return true; // 已拿到服务但注册失败,不再重试
+        // 分支 2(v0.1.2+ 服务面,仅 register 缺失时):installSection(owner, ns, schema,
+        // entry, hooks) 只回 hooks——get 走 setSource 注入的 thunk,变更通知走 onChange,
+        // update 桥接为显式拒绝(UI 写入报业务错误;宿主未删 register 时不会走到这)。
+        if (typeof settings.installSection === 'function') {
+            try {
+                let source = () => ({ ...ALWAYS_ON });
+                let notify;
+                const bridge = {
+                    get: () => resolveSettings(source()),
+                    watch: (callback) => {
+                        notify = () => void callback(bridge.get(), bridge.get());
+                        return () => {
+                            notify = undefined;
+                        };
+                    },
+                    update: () => Promise.reject(new Error('installSection 桥接模式不支持运行时写入')),
+                };
+                settings.installSection(ctx, NS, liveSettingsSchema(), { ...ALWAYS_ON }, {
+                    setSource: (current) => {
+                        source = current;
+                    },
+                    onChange: () => notify?.(),
+                });
+                cachedScope = bridge;
+                cachedSvc = settings;
+                inner = wireScope(bridge);
+                logger.info('[memory] 记忆模式开关就绪(settings.installSection 桥接,运行时写入不可用)');
+                return true;
+            }
+            catch (err) {
+                logger.warn(`[memory] 记忆模式开关 installSection 桥接失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
+                return true;
+            }
         }
+        // 分支 3(双 API 皆无):settings 服务在但没有可用注册面——保持全开降级,
+        // 不再重试(服务面不会凭空长出新 API)。
+        logger.warn('[memory] settings 服务无可用的 register/installSection API,记忆模式开关降级为恒开');
+        return true;
     };
     if (!tryAttach()) {
         logger.warn('[memory] settings 服务未就绪,记忆模式开关暂不可用(保持全开,等待服务上线)');

@@ -7,26 +7,24 @@
 
 > **互換性の注意**：本プラグインは日本語ドキュメントを提供しますが、公式 DSH の `LocaleRuntime` が登録する言語は `zh` / `en` のみです。`ja` を選択すると `locale "ja" is not registered` となります。DSH を fork して `LOCALE_IDS` と `LOCALES` ラベルを更新し再ビルドすることで利用可能になります。
 
-本ファイルは **0.9.0** リリースノートの日本語版です。全履歴は [CHANGELOG.md](./CHANGELOG.md)（中文）を参照してください。
+本ファイルは **0.11.0** リリースノートの日本語版です。全履歴は [CHANGELOG.md](./CHANGELOG.md)（中文）を参照してください。
 
-## [0.9.0] — 2026-09-01
+## [0.11.0] — 2026-09-13
 
-### 追加
+### 互換性（DSH プラグインフレームワークドキュメントへの適合）
 
-- **Hall 粗分類チャネル**：`family` / `type` と直交する粗属性軸。`types.ts` が `HALL_CATALOG`（正典ソース：既定有効の `work` / `relationships` / `general` に加え、実験的な `finance` / `journey`）を定義。`config.hall.enabled` で参加する Hall を制御。L1 抽出段階が有効リストから `metadata.hall` を自動タグ付け（明確な該当がない場合は省略、強制 `general` なし）。`ListRecordsRequest.hall` と `UiRecord.hall` が契約を拡張し、レコードブラウザに Hall フィルタ dropdown と各カードの Hall タグが追加。
-- **リモート埋め込みのランタイム上書き**：埋め込み `baseUrl` / `apiKey` / `model` / `dimensions` が**設定 UI で編集可能**になり、デプロイ YAML をランタイムで上書き（`effectiveCfg` が `cfg.embedding` へ注入、LLM チャネルとは独立したサブツリー）。`EmbeddingManager` に `getEff()` が追加され、設定編集が即時反映される。
-- **高権限書き込み/削除ツール**：`memory_add`（明示的な「覚えておいて X」→ L1 直接書き込み、任意の `hall`）と `memory_delete`（意味検索ヒット削除、最大 10 件）を登録。`live.memoryMutate`（設定の高権限モード）でゲート。レコードブラウザに高権限スイッチ（確認付き）と各レコード削除ボタンを追加。
-- **多言語ドキュメント**（`multilingual-docs-skill` 仕様準拠）：`README` / `INSTALL` / `CHANGELOG` を `zh` / `en` / `ja` / `ko` で整備。各ページ冒頭に言語切替（各言語母語表記）と、ja/ko ページの DSH 互換性注意を配置。
-- **ツールチェイン**：ESLint 9（flat config）と Vitest を導入。`npm run lint` / `npm run test` を追加。`HALL_CATALOG` と Hall 抽出プロンプトをカバーする最初の Vitest ケースを追加。
+- **settings 登録のクロスバージョン対応（0.1.1-rc.2 ～ 0.1.5-rc.2）**。`src/settings.ts` は以前、`@deepseek-ai/dsh-settings` から `settingsNamespace()` を**値インポート**していましたが、v0.1.3+ ではこのエクスポートが削除されており、新しいホストではモジュールのロード時に `Failed to load plugins` が発生してプラグインツリー全体が巻き込まれます。現在は：
+  - 名前空間は文字列リテラル `'dsh-memory'`（ブラウザ側は生の文字列のみを読み、新旧ホストで等価）。型インポートのみ残し（コンパイル時に消去、ロードリスクなし）。
+  - 登録は 3 分岐のランタイム判定：まず `settings.register()`（全対象バージョンに存在、get/watch/update スコープを返し、ライブ切替と UI 書き込みのすべてがこれ経由）；フォールバックは `settings.installSection()` ブリッジ（v0.1.2+ のサービスマフェース、`register` がない場合のみ。ランタイム書き込みはビジネスエラーで明示拒否）；いずれも存在しなければ常時オンへ縮退——「settings 障害でホストを落とさない」原則は不変。
+  - `SettingsScope` はローカル構造型に変更し、パッケージレベルの型エクスポートに依存しない。
+- **`dsh.plugin.json` を追加**（DSH 発見マニフェスト：id / `engines.dsh` `>=0.1.1-rc.2 <0.2.0-0` / components は `dist/` 成果物を指す）。`dsh-plugin-template` 標準ファイル構成に準拠。
+- **`@deepseek-ai/dsh-*` peerDependencies を optional 化し範囲を拡大**（`^0.1.1-rc.2 || ^0.1.2-rc.1 || ^0.1.3-rc.1 || ^0.1.5-rc.2`）。`@deepseek-ai/cordis` は必須のまま——awesome-dsh-plugin 投稿要件 B.3 に準拠。
+- **`screenshots.json` を追加**（`assets/img/` 参照の 8 枚）、投稿カードに表示可能。
 
 ### 変更
 
-- **リモート埋め込みの `apiKey` が任意に**：キー不要な自己ホスト `/embeddings` サービスを受け入れ（`remoteCeiling` は `apiKey` を必須としなくなった）。キー未設定時は `authorization` ヘッダを省略し、空 `Bearer` が拒否されることを防ぐ。
+- `package.json` のバージョンを 0.11.0 に更新。npm `files` に `dsh.plugin.json` を追加（`screenshots.json` は awesome-dsh-plugin の探知規約に従い git リポジトリのみ、npm パッケージには含めない）。
 
-### 修正
+### 実地検証待ち
 
-- `apiKey` が空のとき、リモート埋め込みが空 `Bearer` ヘッダを送らなくなった。
-
-### 既知の制限
-
-- `EmbeddingManager` 構築箇所（`src/index.ts`）の `getEff()` 配線がまだ接続されておらず、ランタイム上書きがマネージャ内部の埋め込みサービスにまだ反映されません。フォローアップで完了予定。
+- v0.1.5-rc.2 での `conversation.input.left` / `settings.section` スロットと Session V3 の `session.surface.nodes` セマンティクス（occupancy 推定）は未検証。README の互換性マトリクスを参照。
