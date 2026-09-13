@@ -22,7 +22,8 @@ import type { L1Store } from '../store/l1.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
-import type { MemoryFamily, MemoryLogger } from '../types.js';
+import type { MemoryFamily, MemoryLogger, MemoryRecord, Persistence } from '../types.js';
+import { normPersistence } from '../types.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
@@ -230,6 +231,109 @@ export function registerMemoryTools(
   const ADD_TYPES = ['persona', 'episodic', 'instruction', 'work_fact', 'work_task', 'work_method', 'work_artifact'];
   const newMemId = () => 'mem-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
 
+  // ── 工具刷写的公共装配(时间轴 + 溯源 + 冲突标记) ──
+  //
+  // 时间被拆成三条**互不替代**的轴:created_at/updated_at(进库/变更时刻)、
+  // valid_from/valid_to(事实在真实世界成立的时间区间)、persistence(是否会随时间失效)。
+  // 把事件发生时间填进 created_at 是最常见的误用——那会让时效衰减与"目前是否成立"
+  // 同时失准,所以两者在入参层面就分开。
+  const MAX_IMPORT = 200;
+  const DEFAULT_IMPORT_SCENE = '外部导入';
+
+  interface WriteItem {
+    content?: string;
+    type?: string;
+    hall?: string;
+    persistence?: string;
+    valid_from?: string;
+    valid_to?: string;
+    created_at?: string;
+    updated_at?: string;
+    origin?: string;
+    conflict?: boolean;
+    rewritten?: boolean;
+    priority?: number;
+  }
+
+  /** ISO/epoch → epoch ms;非法或非正一律 undefined(不猜测时间)。 */
+  const parseTime = (raw: unknown): number | undefined => {
+    if (typeof raw !== 'string' && typeof raw !== 'number') return undefined;
+    const t = typeof raw === 'number' ? raw : Date.parse(raw);
+    return Number.isFinite(t) && t > 0 ? t : undefined;
+  };
+
+  const toIsoOrNull = (ms: number | undefined): string | null =>
+    ms === undefined ? null : new Date(ms).toISOString();
+
+  /**
+   * 入参 → L1 记录。
+   *
+   * 时间轴同时写顶层字段(时间增强列)与 metadata(列迁移前的兼容层,
+   * 也是面板与图谱时间锚的读取点);`cf`/`rw` 落在 metadata.conflict/rewritten。
+   */
+  function buildRecord(item: WriteItem, sceneName: string, now: number): MemoryRecord {
+    const content = String(item.content ?? '').trim();
+    const type = ADD_TYPES.includes(String(item.type ?? '')) ? String(item.type) : 'episodic';
+    const family: MemoryFamily = type.startsWith('work') ? 'work' : 'chat';
+    const validFrom = parseTime(item.valid_from);
+    const validTo = parseTime(item.valid_to);
+    const persistence: Persistence | undefined = normPersistence(item.persistence);
+    const createdAt = parseTime(item.created_at) ?? now;
+    const updatedAt = parseTime(item.updated_at) ?? createdAt;
+    const hall =
+      typeof item.hall === 'string' && item.hall.trim() ? item.hall.trim().slice(0, 40) : undefined;
+    const origin =
+      typeof item.origin === 'string' && item.origin.trim() ? item.origin.trim().slice(0, 200) : undefined;
+    const metadata: Record<string, unknown> = {
+      temporal: { st: persistence ?? '?', vf: toIsoOrNull(validFrom), vt: toIsoOrNull(validTo) },
+    };
+    if (hall) metadata.hall = hall;
+    if (origin) metadata.origin = origin;
+    if (validFrom !== undefined) metadata.activity_start_time = toIsoOrNull(validFrom);
+    if (validTo !== undefined) metadata.activity_end_time = toIsoOrNull(validTo);
+    if (item.conflict === true) metadata.conflict = true;
+    if (item.rewritten === true) metadata.rewritten = true;
+    const priority = Number(item.priority);
+    return {
+      id: newMemId(),
+      content,
+      type,
+      priority: Number.isFinite(priority) && priority >= 0 ? Math.min(priority, 100) : 80,
+      scene_name: sceneName,
+      timestamps: Array.from(new Set([validFrom ?? createdAt, createdAt, updatedAt])).sort((a, b) => a - b),
+      createdAt,
+      updatedAt,
+      version: 0,
+      metadata,
+      family,
+      ...(validFrom !== undefined ? { validFrom } : {}),
+      ...(validTo !== undefined ? { validTo } : {}),
+      ...(persistence !== undefined ? { persistence } : {}),
+    };
+  }
+
+  /** 时间轴/溯源字段的可选入参(两个写工具共用同一形状)。 */
+  const writeFields = {
+    type: {
+      type: 'string',
+      description:
+        '记忆类型(persona/episodic/instruction/work_fact/work_task/work_method/work_artifact;缺省 episodic)',
+    },
+    hall: { type: 'string', description: '可选的粗分类 Hall(work/relationships/general/finance/journey)' },
+    persistence: {
+      type: 'string',
+      description:
+        '持续性:t 无时间性(规则/偏好/恒真事实)、o 仍在持续、s 已结束的区间、p 时点事件;缺省=未判定',
+    },
+    valid_from: { type: 'string', description: '有效期起(ISO 8601):该事实在真实世界开始成立的时间' },
+    valid_to: { type: 'string', description: '有效期止(ISO 8601):留空表示尚未结束或无时间性' },
+    created_at: { type: 'string', description: '记录时间(ISO 8601):缺省为当前时刻' },
+    updated_at: { type: 'string', description: '变更时间(ISO 8601):缺省等于记录时间' },
+    origin: { type: 'string', description: '溯源:这条记忆来自哪里(文件路径/工具名/会话)' },
+    conflict: { type: 'boolean', description: '是否与库内既有记忆存在未裁决的冲突' },
+    rewritten: { type: 'boolean', description: '是否已被后续条目改写/取代' },
+  } as const;
+
   // memory_add:显式"记得X"直接落库一条 L1 记忆(绕过抽取管线,需高权限)。
   ctx.tools.register(
     defineTool({
@@ -238,8 +342,12 @@ export function registerMemoryTools(
         '直接写入一条结构化记忆(L1)。仅当用户显式要求"记住/记下 X"时用;需高权限模式开启。内容须是待记忆的事实/偏好/任务/规则,不应包含对话过程。',
       parameters: {
         content: { type: 'string', required: true, description: '要记忆的完整内容(一句话事实,语义完整)' },
-        type: { type: 'string', description: '记忆类型(persona/episodic/instruction/work_fact/work_task/work_method/work_artifact;缺省 episodic)' },
-        hall: { type: 'string', description: '可选的粗分类 Hall(work/relationships/general/finance/journey)' },
+        ...writeFields,
+        scene: {
+          type: 'string',
+          description: '归属场景名(缺省 __manual__;导入外部记忆建议填"外部导入/<来源>")',
+        },
+        priority: { type: 'number', description: '优先级 0-100(缺省 80)' },
       },
       output: {
         schema: {
@@ -256,27 +364,114 @@ export function registerMemoryTools(
         if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
         const content = String(args.content ?? '').trim();
         if (!content) return { notice: 'content 为空,未写入' };
-        const type = ADD_TYPES.includes(String(args.type ?? '')) ? String(args.type) : 'episodic';
-        const family: MemoryFamily = type.startsWith('work') ? 'work' : 'chat';
-        const hall = typeof args.hall === 'string' && args.hall.trim() ? args.hall.trim().slice(0, 40) : undefined;
-        const now = Date.now();
-        const id = newMemId();
-        await stores.l1.appendNew([
-          {
-            id,
-            content,
-            type,
-            priority: 80,
-            scene_name: '__manual__',
-            timestamps: [now],
-            createdAt: now,
-            updatedAt: now,
-            metadata: hall ? { hall } : {},
-            family,
+        const scene =
+          typeof args.scene === 'string' && args.scene.trim() ? args.scene.trim().slice(0, 120) : '__manual__';
+        const record = buildRecord(args, scene, Date.now());
+        await stores.l1.appendNew([record]);
+        logger.info(
+          `[memory] 高权限写入记忆(${record.type}${record.metadata?.hall ? '/' + String(record.metadata.hall) : ''},时间轴 ${record.persistence ?? '?'}):${record.content.slice(0, 120)}`,
+        );
+        return { id: record.id };
+      },
+    }),
+  );
+
+  // memory_import:批量写入(工具刷写通道——外部记忆包导入/迁移,免逐条调用)。
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_import',
+      description:
+        '批量写入多条记忆(L1)。用于把已整理好的外部记忆(其他 AI 工具导出的记忆包)一次性导入;需高权限模式开启。去重与冲突判定由调用方先行完成(见 memport Skill):本工具只做结构校验与批内重复拦截,不替调用方裁决语义冲突。单次上限 200 条。',
+      parameters: {
+        records: {
+          type: 'array',
+          required: true,
+          description: '待写入的记录数组(content 必填,其余字段语义同 memory_add)',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              content: {
+                type: 'string',
+                required: true,
+                description: '要记忆的完整内容(一句话事实,语义完整)',
+              },
+              ...writeFields,
+              priority: { type: 'number', description: '优先级 0-100(缺省 80)' },
+            },
           },
-        ]);
-        logger.info(`[memory] 高权限写入记忆(${type}${hall ? '/' + hall : ''}):${content.slice(0, 120)}`);
-        return { id };
+        },
+        scene: {
+          type: 'string',
+          description: `归属场景名(缺省 ${DEFAULT_IMPORT_SCENE};建议用"${DEFAULT_IMPORT_SCENE}/<来源>")`,
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            written: { type: 'number' },
+            ids: { type: 'array', items: { type: 'string' } },
+            skipped: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  index: { type: 'number' },
+                  reason: { type: 'string' },
+                },
+                additionalProperties: false,
+              },
+            },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          { type: 'text', text: value.notice ?? `已导入 ${value.written ?? 0} 条记忆` },
+        ],
+      },
+      execute: async (args) => {
+        if (!live.get().memoryMutate) {
+          return { written: 0, ids: [], skipped: [], notice: MUTATE_OFF_NOTICE };
+        }
+        const raw = Array.isArray(args.records) ? args.records : [];
+        if (raw.length === 0) {
+          return { written: 0, ids: [], skipped: [], notice: 'records 为空,未写入' };
+        }
+        if (raw.length > MAX_IMPORT) {
+          return {
+            written: 0,
+            ids: [],
+            skipped: [],
+            notice: `单次上限 ${MAX_IMPORT} 条(收到 ${raw.length} 条),请拆批导入`,
+          };
+        }
+        const scene =
+          typeof args.scene === 'string' && args.scene.trim()
+            ? args.scene.trim().slice(0, 120)
+            : DEFAULT_IMPORT_SCENE;
+        const now = Date.now();
+        const seen = new Set<string>();
+        const records: MemoryRecord[] = [];
+        const skipped: Array<{ index: number; reason: string }> = [];
+        raw.forEach((item, index) => {
+          const content = String(item?.content ?? '').trim();
+          if (!content) {
+            skipped.push({ index, reason: 'content 为空' });
+            return;
+          }
+          const key = content.replace(/\s+/g, ' ').toLowerCase();
+          if (seen.has(key)) {
+            skipped.push({ index, reason: '与本批前面的记录内容重复' });
+            return;
+          }
+          seen.add(key);
+          records.push(buildRecord(item, scene, now));
+        });
+        if (records.length > 0) await stores.l1.appendNew(records);
+        logger.info(`[memory] 批量导入 ${records.length} 条(跳过 ${skipped.length} 条,场景 ${scene})`);
+        return { written: records.length, ids: records.map((r) => r.id), skipped };
       },
     }),
   );
@@ -579,7 +774,7 @@ export function registerMemoryTools(
     }),
   );
 
-  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_delete / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
+  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
 }
 
 function renderGraphCards(

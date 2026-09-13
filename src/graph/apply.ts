@@ -97,9 +97,12 @@ function recordFamily(r: MemoryRecord): MemoryFamily {
 }
 
 /**
- * 时间锚四级链:对来源记录逐条取 activity_start_time → activity_end_time →
- * timestamps 最新 → createdAt 四级证据,跨来源取最晚。任何一级都无法解析
- * (缺字段/非法日期)时落到下一级;全部无证据才用 fallback(now),绝不猜测。
+ * 时间锚:有效期为先,提及/入库时间为后。
+ *
+ * 逐条记录按六级证据取最晚,任何一级无法解析(缺字段/非法日期)即落到下一级:
+ * validTo → validFrom(时间增强列,新写入路径)→ metadata.activity_end_time →
+ * metadata.activity_start_time(列迁移前的存量数据)→ timestamps 最新 → createdAt。
+ * 全部无证据才用 fallback(now),绝不猜测。
  */
 export function anchorTimeFromRecords(records: readonly MemoryRecord[], fallbackIso: string): string {
   let latest = Number.NaN;
@@ -108,6 +111,9 @@ export function anchorTimeFromRecords(records: readonly MemoryRecord[], fallback
     if (Number.isFinite(t) && t > 0 && (Number.isNaN(latest) || t > latest)) latest = t;
   };
   for (const r of records) {
+    // 时间增强列优先(新写入路径),再回落 metadata.activity_*(列迁移前的存量数据)
+    consider(r.validTo);
+    consider(r.validFrom);
     const meta = r.metadata as { activity_start_time?: unknown; activity_end_time?: unknown } | undefined;
     consider(meta?.activity_start_time);
     consider(meta?.activity_end_time);

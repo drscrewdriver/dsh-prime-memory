@@ -28,6 +28,19 @@ export type HallId = (typeof HALL_CATALOG)[number]['id'];
 export declare function hallLabel(id: string): string;
 /** 记录族标签推断:work_* 前缀 → work,其余(含 auto 档兜底)→ chat。 */
 export declare function familyForType(type: string): MemoryFamily;
+/**
+ * 记忆的持续性(时间轴第三维,与 createdAt/updatedAt 正交):
+ * - 'p' point     时点事件(某事在某刻发生)——历史事实,永不被"取代"
+ * - 's' span      已结束的持续区间——validTo 是关键信息,不可被后来者改写
+ * - 'o' open      仍在持续——被矛盾事实取代时应闭合 validTo 并标 rw
+ * - 't' timeless  无时间性(规则/偏好/恒真事实)——不随时间失效
+ *
+ * 缺省(undefined)= 未判定:不参与取代/闭合判定,只当普通事实。
+ */
+export type Persistence = 'p' | 's' | 'o' | 't';
+export declare const PERSISTENCE_VALUES: readonly Persistence[];
+/** 持续性取值归一:只认 p/s/o/t,其余(缺省/非法)返回 undefined。 */
+export declare function normPersistence(raw: unknown): Persistence | undefined;
 /** 日志接口(适配 ctx.logger)。 */
 export interface MemoryLogger {
     debug?(msg: string): void;
@@ -81,7 +94,7 @@ export interface MemoryRecord {
     timestamps: number[];
     createdAt: number;
     updatedAt: number;
-    /** 每次 update/merge 合并 +1。 */
+    /** 每条 update/merge 合并 +1。 */
     version?: number;
     /** 来源消息 id(JSONL 事实源保留;检索库不存该列)。 */
     source_message_ids?: string[];
@@ -91,6 +104,20 @@ export interface MemoryRecord {
     sessionId?: string;
     /** 所属族(写入缺省由 familyForType(type) 回填;召回/浏览/去重候选按族过滤的唯一依据)。 */
     family?: MemoryFamily;
+    /**
+     * 有效期起(epoch ms):该事实在**真实世界**开始成立的时间。
+     * 与 createdAt(入库时间)是两条不同的轴——"2026-03 在 A 项目"这条事实,
+     * createdAt 是它进库的时刻,validFrom 才是 2026-03。缺省 = 未知。
+     */
+    validFrom?: number;
+    /**
+     * 有效期止(epoch ms):该事实停止成立的时间。
+     * 为空(undefined)表示**仍在持续**(persistence='o')或**无时间性**(persistence='t'),
+     * 二者由 persistence 区分——这正是不能用"空值"当"已结束"的原因。
+     */
+    validTo?: number;
+    /** 持续性(见 Persistence);缺省 = 未判定。 */
+    persistence?: Persistence;
 }
 /** L2 场景块摘要(META 解析结果)。 */
 export interface SceneSummary {

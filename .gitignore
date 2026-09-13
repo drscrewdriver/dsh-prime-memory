@@ -25,3 +25,4 @@ bench/harness/bench.env
 
 # codegraph 本地代码图谱索引（二进制 SQLite，按机器重建即可）
 .codegraph/
+registry-save.json

@@ -60,9 +60,12 @@ function recordFamily(r) {
     return r.family ?? familyForType(r.type);
 }
 /**
- * 时间锚四级链:对来源记录逐条取 activity_start_time → activity_end_time →
- * timestamps 最新 → createdAt 四级证据,跨来源取最晚。任何一级都无法解析
- * (缺字段/非法日期)时落到下一级;全部无证据才用 fallback(now),绝不猜测。
+ * 时间锚:有效期为先,提及/入库时间为后。
+ *
+ * 逐条记录按六级证据取最晚,任何一级无法解析(缺字段/非法日期)即落到下一级:
+ * validTo → validFrom(时间增强列,新写入路径)→ metadata.activity_end_time →
+ * metadata.activity_start_time(列迁移前的存量数据)→ timestamps 最新 → createdAt。
+ * 全部无证据才用 fallback(now),绝不猜测。
  */
 export function anchorTimeFromRecords(records, fallbackIso) {
     let latest = Number.NaN;
@@ -72,6 +75,9 @@ export function anchorTimeFromRecords(records, fallbackIso) {
             latest = t;
     };
     for (const r of records) {
+        // 时间增强列优先(新写入路径),再回落 metadata.activity_*(列迁移前的存量数据)
+        consider(r.validTo);
+        consider(r.validFrom);
         const meta = r.metadata;
         consider(meta?.activity_start_time);
         consider(meta?.activity_end_time);

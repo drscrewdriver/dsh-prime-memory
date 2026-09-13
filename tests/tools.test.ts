@@ -106,7 +106,7 @@ describe('memory tools', () => {
     const h = harness();
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
     expect(h.registered.map((t) => t.name).sort()).toEqual([
-      'conversation_search', 'memory_add', 'memory_delete', 'memory_expand_graph_node', 'memory_read_scene', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
+      'conversation_search', 'memory_add', 'memory_delete', 'memory_expand_graph_node', 'memory_import', 'memory_read_scene', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
     ]);
     stores.db.close();
   });
@@ -185,10 +185,99 @@ describe('memory tools', () => {
     expect(rec.family).toBe('work');
     expect(rec.priority).toBe(80);
     expect(rec.scene_name).toBe('__manual__');
-    expect(rec.metadata).toEqual({ hall: 'work' });
+    expect(rec.metadata).toEqual({ hall: 'work', temporal: { st: '?', vf: null, vt: null } });
     // 非法 type 缺省 episodic
     const fallback = (await add2.execute({ content: '随便记一条' }, {})) as { id: string };
     expect(stores.l1.getByIds([fallback.id])[0].type).toBe('episodic');
+    stores.db.close();
+  });
+
+  it('memory_add: 时间轴三轴独立落库(有效期/持续性不与记录时间混用)', async () => {
+    const stores = await setupStores();
+    const h = harness({ liveMutate: true });
+    registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
+    const add = h.registered.find((t) => t.name === 'memory_add')!;
+    const res = (await add.execute(
+      {
+        content: '用户目前在做 dsh-prime-memory 的记忆时间轴改造',
+        type: 'work_task',
+        persistence: 'o',
+        valid_from: '2026-09-01T00:00:00+08:00',
+        created_at: '2026-09-10T09:00:00+08:00',
+        origin: '.workbuddy/memory/2026-09-01.md#L48',
+        conflict: true,
+      },
+      {},
+    )) as { id: string };
+    const rec = stores.l1.getByIds([res.id])[0];
+    // 有效期起 = vf;记录时间 = created_at;两者是不同的轴,不得相等地互相顶替
+    expect(rec.validFrom).toBe(Date.parse('2026-09-01T00:00:00+08:00'));
+    expect(rec.createdAt).toBe(Date.parse('2026-09-10T09:00:00+08:00'));
+    expect(rec.validTo).toBeUndefined(); // o 仍在持续 → 未闭合
+    expect(rec.persistence).toBe('o');
+    expect(rec.metadata).toMatchObject({
+      origin: '.workbuddy/memory/2026-09-01.md#L48',
+      conflict: true,
+      temporal: { st: 'o', vf: '2026-08-31T16:00:00.000Z', vt: null },
+    });
+    // 持续性缺省 = 未判定,不参与取代判定
+    const plain = (await add.execute({ content: '没有时间信息的普通事实' }, {})) as { id: string };
+    const plainRec = stores.l1.getByIds([plain.id])[0];
+    expect(plainRec.persistence).toBeUndefined();
+    expect(plainRec.validFrom).toBeUndefined();
+    stores.db.close();
+  });
+
+  it('memory_import: 批量写入 + 批内重复拦截 + 上限拒绝 + 高权限门控', async () => {
+    const stores = await setupStores();
+    const deniedHarness = harness({ liveMutate: false });
+    registerMemoryTools(deniedHarness.ctx, deniedHarness.cfg, stores, noopLogger, deniedHarness.modes, deniedHarness.liveHandle);
+    const deniedTool = deniedHarness.registered.find((t) => t.name === 'memory_import')!;
+    const denied = (await deniedTool.execute({ records: [{ content: '外部记忆' }] }, {})) as { written: number; notice: string };
+    expect(denied.written).toBe(0);
+    expect(denied.notice).toContain('高权限');
+
+    const h = harness({ liveMutate: true });
+    registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
+    const imp = h.registered.find((t) => t.name === 'memory_import')!;
+    const res = (await imp.execute(
+      {
+        scene: '外部导入/trae',
+        records: [
+          {
+            content: 'pnpm 首次交互确认可用 `pnpm --yes` 规避',
+            type: 'instruction',
+            persistence: 't',
+            origin: '~/.trae/memories/rules.md#L2',
+          },
+          { content: 'pnpm 首次交互确认可用 `pnpm --yes` 规避', type: 'instruction' }, // 批内重复
+          { content: '   ' }, // 空内容
+          {
+            content: 'dsh-perm-gate 的 lib/ 已被 .gitignore 忽略',
+            type: 'work_artifact',
+            persistence: 'o',
+            valid_from: '2026-09-01',
+            hall: 'work',
+          },
+        ],
+      },
+      {},
+    )) as { written: number; ids: string[]; skipped: Array<{ index: number; reason: string }> };
+    expect(res.written).toBe(2);
+    expect(res.skipped.map((s) => s.index)).toEqual([1, 2]);
+    const recs = stores.l1.getByIds(res.ids);
+    expect(recs.every((r) => r.scene_name === '外部导入/trae')).toBe(true);
+    const artifact = recs.find((r) => r.type === 'work_artifact')!;
+    expect(artifact.persistence).toBe('o');
+    expect(artifact.validFrom).toBe(Date.parse('2026-09-01'));
+
+    // 上限拒绝:超过 MAX_IMPORT 不写入
+    const over = (await imp.execute(
+      { records: Array.from({ length: 201 }, (_, i) => ({ content: `批量记忆 ${i}` })) },
+      {},
+    )) as { written: number; notice: string };
+    expect(over.written).toBe(0);
+    expect(over.notice).toContain('上限');
     stores.db.close();
   });
 

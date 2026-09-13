@@ -20,7 +20,7 @@
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync } from 'node:fs';
 import * as path from 'node:path';
-import { familyForType } from '../types.js';
+import { familyForType, normPersistence } from '../types.js';
 import { bm25RankToScore, buildFtsQuery, tokenizeForFts } from './search-utils.js';
 import { describeTokenizer, ensureTokenizer, tokenizerStamp } from '../util/tokenizer.js';
 const require = createRequire(import.meta.url);
@@ -298,16 +298,19 @@ export class MemoryDb {
             .run().changes;
         if (backfilled > 0)
             this.logger?.info(`${TAG} family 回填 ${backfilled} 条 work 记录`);
+        this.ensureTemporalColumns();
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_type ON l1_records(type)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_scene ON l1_records(scene_name)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_ts_start ON l1_records(timestamp_start)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_updated ON l1_records(updated_time)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_family ON l1_records(family)');
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_valid_from ON l1_records(valid_from)');
         this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
         record_id, content, type, priority, scene_name, session_id, version,
-        timestamp_str, timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        timestamp_str, timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family,
+        valid_from, valid_to, persistence
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         content=excluded.content,
         type=excluded.type,
@@ -319,11 +322,15 @@ export class MemoryDb {
         timestamp_end=excluded.timestamp_end,
         updated_time=excluded.updated_time,
         metadata_json=excluded.metadata_json,
-        family=excluded.family
+        family=excluded.family,
+        valid_from=excluded.valid_from,
+        valid_to=excluded.valid_to,
+        persistence=excluded.persistence
     `);
         this.stmtGetL1 = this.db.prepare(`
       SELECT record_id, content, type, priority, scene_name, version, timestamp_str,
-             timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family
+             timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family,
+             valid_from, valid_to, persistence
       FROM l1_records WHERE record_id = ?
     `);
         this.stmtL1Exists = this.db.prepare('SELECT 1 FROM l1_records WHERE record_id = ?');
@@ -540,6 +547,24 @@ export class MemoryDb {
         const rows = this.db.prepare(`PRAGMA table_info(${table})`).all();
         return rows.some((r) => r.name === column);
     }
+    /**
+     * 时间增强列:valid_from / valid_to / persistence。
+     *
+     * 与 family 列同款增量迁移——DDL 契约不改,只在缺列时补,幂等。
+     * 存储形态与 created_time/updated_time 一致(ISO-8601 UTC 的 TEXT),
+     * 于是区间比较既可按字典序,也能沿用 idx_l1_updated 的既有用法。
+     *
+     * 存量数据的 metadata.activity_start_time/activity_end_time 是这两列的前身,不回填:
+     * 图谱时间锚仍读 metadata,列由新写入路径填充。
+     */
+    ensureTemporalColumns() {
+        for (const column of ['valid_from', 'valid_to', 'persistence']) {
+            if (this.hasColumn('l1_records', column))
+                continue;
+            this.db.exec(`ALTER TABLE l1_records ADD COLUMN ${column} TEXT DEFAULT ''`);
+            this.logger?.info(`${TAG} l1_records 补 ${column} 列(时间增强)`);
+        }
+    }
     /** 重建后的 l1_fts 从 l1_records 全量回灌(仅在 drop 重建时调用;iterate 流式防大库内存峰值)。 */
     backfillL1Fts() {
         let count = 0;
@@ -692,7 +717,7 @@ export class MemoryDb {
         // 全扫(批量写整体 O(N²))。只有主表已有该行(覆盖/合并)才可能有旧 FTS 行需要删。
         // 同批重复 id 也能正确处理:首条插入后,第二条的点查在同一事务内已见新行。
         const ftsExisted = this.ftsAvailable ? this.stmtL1Exists.get(record.id) !== undefined : false;
-        this.stmtUpsertL1.run(record.id, record.content, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, toIso(record.createdAt), toIso(record.updatedAt), JSON.stringify(record.metadata ?? {}), family);
+        this.stmtUpsertL1.run(record.id, record.content, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, toIso(record.createdAt), toIso(record.updatedAt), JSON.stringify(record.metadata ?? {}), family, toIso(record.validFrom), toIso(record.validTo), normPersistence(record.persistence) ?? '');
         // vec0 不支持 ON CONFLICT → 先删后插;零向量跳过(cosine 未定义)
         if (this.stmtDeleteL1Vec && this.stmtInsertL1Vec) {
             this.stmtDeleteL1Vec.run(record.id);
@@ -739,10 +764,17 @@ export class MemoryDb {
         let stmt = this.inStmts.get(key);
         if (!stmt) {
             const ph = Array.from({ length: size }, () => '?').join(',');
+            // 时间增强列只存在于主表;l1_fts / l1_vec 没有这三列,共用列清单会直接报 no such column。
+            // 主表自身也按实际形状探测:未迁移的旧库不应因缺列而让按 id 取记录整条路径失败。
+            const temporal = table === 'l1_records' && this.hasColumn('l1_records', 'valid_from')
+                ? ', valid_from, valid_to, persistence'
+                : '';
+            const metaCols = 'record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family' +
+                temporal;
             stmt =
                 action === 'delete'
                     ? this.db.prepare(`DELETE FROM ${table} WHERE record_id IN (${ph})`)
-                    : this.db.prepare(`SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family FROM ${table} WHERE record_id IN (${ph})`);
+                    : this.db.prepare(`SELECT ${metaCols} FROM ${table} WHERE record_id IN (${ph})`);
             this.inStmts.set(key, stmt);
         }
         return stmt;
@@ -798,7 +830,7 @@ export class MemoryDb {
         if (this.degraded)
             return [];
         const rows = this.db
-            .prepare('SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family FROM l1_records')
+            .prepare('SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence FROM l1_records')
             .all();
         return rows.map(rowToRecord);
     }
@@ -838,7 +870,7 @@ export class MemoryDb {
             const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
             const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params);
             const rows = this.db
-                .prepare(`SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family FROM l1_records${whereSql} ORDER BY updated_time DESC LIMIT ? OFFSET ?`)
+                .prepare(`SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence FROM l1_records${whereSql} ORDER BY updated_time DESC LIMIT ? OFFSET ?`)
                 .all(...params, opts.limit, opts.offset);
             return { items: rows.map(rowToRecord), total: totalRow?.n ?? 0 };
         }
@@ -1397,6 +1429,10 @@ function rowToRecord(row) {
         version: row.version ?? 0,
         metadata,
         family: normFamily(row.family, row.type),
+        // 时间轴回读:空串 → undefined(空串表示"未填",不是"时间 0")
+        validFrom: row.valid_from ? Date.parse(row.valid_from) || undefined : undefined,
+        validTo: row.valid_to ? Date.parse(row.valid_to) || undefined : undefined,
+        persistence: normPersistence(row.persistence),
     };
 }
 /** epoch 数组 → {逗号连接 ISO, 首尾 ISO}(磁盘格式契约:逗号连接、升序、ISO)。 */

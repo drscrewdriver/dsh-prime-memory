@@ -21,6 +21,13 @@ export function hallLabel(id) {
 export function familyForType(type) {
     return type.startsWith('work') ? 'work' : 'chat';
 }
+export const PERSISTENCE_VALUES = ['p', 's', 'o', 't'];
+/** 持续性取值归一:只认 p/s/o/t,其余(缺省/非法)返回 undefined。 */
+export function normPersistence(raw) {
+    return typeof raw === 'string' && PERSISTENCE_VALUES.includes(raw)
+        ? raw
+        : undefined;
+}
 /** 抽取输出 family 字段归一:只认 chat|work,其余(缺省/非法值)交由调用方回落。 */
 export function normExtractedFamily(raw) {
     return raw === 'chat' || raw === 'work' ? raw : undefined;

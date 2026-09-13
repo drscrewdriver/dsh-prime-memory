@@ -95,6 +95,17 @@ export declare class MemoryDb {
     private dropVectorTables;
     private tableExists;
     private hasColumn;
+    /**
+     * 时间增强列:valid_from / valid_to / persistence。
+     *
+     * 与 family 列同款增量迁移——DDL 契约不改,只在缺列时补,幂等。
+     * 存储形态与 created_time/updated_time 一致(ISO-8601 UTC 的 TEXT),
+     * 于是区间比较既可按字典序,也能沿用 idx_l1_updated 的既有用法。
+     *
+     * 存量数据的 metadata.activity_start_time/activity_end_time 是这两列的前身,不回填:
+     * 图谱时间锚仍读 metadata,列由新写入路径填充。
+     */
+    private ensureTemporalColumns;
     /** 重建后的 l1_fts 从 l1_records 全量回灌(仅在 drop 重建时调用;iterate 流式防大库内存峰值)。 */
     private backfillL1Fts;
     /** 重建后的 l0_fts 从 l0_conversations 全量回灌(仅 drop 重建时调用;iterate 流式)。 */

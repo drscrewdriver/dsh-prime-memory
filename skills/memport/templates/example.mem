@@ -1,0 +1,11 @@
+#memport 1.1
+#src=trae+workbuddy;project=rewrite-agently;exported=2026-09-12T10:30+08:00;count=8;sha256=af1247329ce5
+#cols=type|created|updated|vf|vt|st|cf|rw|tags|content
+in|2026-03-22|2026-03-22|-|-|t|0|0|hall:work;src:~/.trae/memories/rules.md#L2;key:pnpm-noninteractive|pnpm 首次交互确认可用 `pnpm --yes` 规避,或设 `PNPM_CONFIG_YES=true`;corepack 下载确认设 `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`
+wm|2026-03-22|2026-03-22|-|-|t|0|0|hall:work;src:~/.trae/memories/rules.md#L3|执行外部命令默认按非交互策略:优先查 help 找 --yes/-y/--no-input/CI=1;没有可靠非交互模式就不运行
+wm|2026-03-22|2026-03-22|-|-|t|0|0|hall:work;src:~/.trae/memories/rules.md#L4|能在 WSL 完成的构建/测试/搜索优先用 wsl-runner;仅当需要 Windows 产物/路径/注册表/GUI 时才用 PowerShell
+wf|2026-09-01|2026-09-01|-|-|t|0|0|hall:work;src:.workbuddy/memory/2026-09-01.md#L30;scope:dsh;key:dsh-locale|官方 DSH 的 LOCALE_IDS 只有 zh/en,ja/ko 字典随包发布但客户端无法选中
+wm|2026-09-01|2026-09-01|-|-|t|0|0|hall:work;src:.workbuddy/memory/2026-09-01.md#L34;scope:dsh|DSH bundle patch 的 `permission.config.presets` 是整体替换而非逐 key 合并,`cordis.patch.yml` 必须重述所有要保留的 preset
+wa|2026-09-01|2026-09-01|2026-09-01|-|o|0|0|hall:work;src:.workbuddy/memory/2026-09-01.md#L36;scope:dsh-perm-gate|dsh-perm-gate 的 `lib/` 已被 .gitignore 忽略,构建产物不入库
+wf|2026-09-01|2026-09-01|2026-09-01|-|o|1|0|hall:work;src:.workbuddy/memory/2026-09-01.md#L48;scope:dsh-layered-memory|dsh-layered-memory 的 `src/index.ts:304` 构造 `EmbeddingManager` 时未传 `getEff`,远程嵌入运行时覆盖对管理器内部嵌入服务不生效
+wt|2026-09-01|2026-09-12|2026-09-01|-|o|0|1|hall:work;src:.workbuddy/memory/2026-09-01.md#L50;scope:dsh-layered-memory;sup:mem-abc123|dsh-layered-memory 补齐 `EmbeddingManager` 的 `getEff` 接线(原缺口已在 CHANGELOG 0.9.0 标注为已知限制)

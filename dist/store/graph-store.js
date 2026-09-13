@@ -21,6 +21,7 @@ import { randomBytes } from 'node:crypto';
 import { applyGraphProjection } from '../graph/apply.js';
 import { searchGraphNodes } from '../graph/search.js';
 import { GRAPH_JOB_BACKOFF_BASE_MS, GRAPH_JOB_BATCH, GRAPH_JOB_MAX_ATTEMPTS, GRAPH_PRIORITY_BACKFILL, GRAPH_PROJECTOR_VERSION, } from '../graph/types.js';
+import { normPersistence } from '../types.js';
 const TAG = '[memory][graph]';
 /** 坏 JSON 容忍解析:图谱表列损坏只损失该行派生信息,不抛。 */
 function parseJsonSafe(raw, fallback) {
@@ -51,9 +52,30 @@ function rowToRecord(r) {
         version: Number(r.version ?? 0),
         metadata: parseJsonSafe(r.metadata_json, {}),
         family: family === 'work' || family === 'chat' ? family : undefined,
+        // 时间增强列(与主库同源):图谱时间锚优先取它们
+        validFrom: r.valid_from ? Date.parse(String(r.valid_from)) || undefined : undefined,
+        validTo: r.valid_to ? Date.parse(String(r.valid_to)) || undefined : undefined,
+        persistence: normPersistence(r.persistence),
     };
 }
-const L1_SELECT_COLS = 'record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family';
+/**
+ * L1 列清单(基础列 + 按库的实际形状裁剪的时间增强列)。
+ *
+ * 时间增强列由 MemoryDb 的增量迁移补齐,但 GraphStore 也可能被挂到一个尚未迁移的
+ * 库上(手建库/旧库/独立测试夹具)——此时写死列名会直接 `no such column` 让 claim 失败。
+ * 故按 `PRAGMA table_info` 现查现拼,缺列就退回基础列(时间轴回落到 metadata.activity_*)。
+ */
+function l1SelectCols(db) {
+    const base = 'record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family';
+    try {
+        const cols = new Set(db.prepare('PRAGMA table_info(l1_records)').all().map((r) => r.name));
+        const extra = ['valid_from', 'valid_to', 'persistence'].filter((c) => cols.has(c));
+        return extra.length > 0 ? `${base}, ${extra.join(', ')}` : base;
+    }
+    catch {
+        return base;
+    }
+}
 function rowToNode(r) {
     return {
         id: String(r.node_id),
@@ -267,10 +289,11 @@ export class GraphStore {
     loadRecordsInTx(ids) {
         const db = this.db;
         const records = [];
+        const cols = l1SelectCols(db);
         for (const chunk of chunkOf(ids)) {
             const ph = chunk.map(() => '?').join(',');
             for (const r of db
-                .prepare(`SELECT ${L1_SELECT_COLS} FROM l1_records WHERE record_id IN (${ph})`)
+                .prepare(`SELECT ${cols} FROM l1_records WHERE record_id IN (${ph})`)
                 .all(...chunk)) {
                 records.push(rowToRecord(r));
             }

@@ -22,7 +22,49 @@ import type {
   MemoryLogger,
   MemoryRecord,
 } from '../types.js';
-import { familyForType, resolveRecordFamily } from '../types.js';
+import { familyForType, normPersistence, resolveRecordFamily } from '../types.js';
+
+/** 时间轴三元组(抽取产出 → 记录字段)。 */
+type Temporal = Pick<MemoryRecord, 'validFrom' | 'validTo' | 'persistence'>;
+
+/** 解析 ISO/epoch 时间证据,非法或非正值一律 undefined——不猜测。 */
+function parseTimeEvidence(raw: unknown): number | undefined {
+  const t = typeof raw === 'string' ? Date.parse(raw) : typeof raw === 'number' ? raw : Number.NaN;
+  return Number.isFinite(t) && t > 0 ? t : undefined;
+}
+
+/**
+ * 抽取产出的 metadata → 记录的时间轴。
+ *
+ * `activity_start_time`/`activity_end_time` 是这两列的前身(prompt 已在产出),
+ * 这里把它们提升为结构化字段;`persistence` 由 prompt 产出,缺省即未判定。
+ */
+function temporalOf(meta: Record<string, unknown> | undefined): Temporal {
+  return {
+    validFrom: parseTimeEvidence(meta?.activity_start_time),
+    validTo: parseTimeEvidence(meta?.activity_end_time),
+    persistence: normPersistence(meta?.persistence),
+  };
+}
+
+/**
+ * 合并(merge/update)时的有效期并集:
+ * 起 = 两侧最早;止 = 任一侧未闭合则仍未闭合(undefined),否则取最晚。
+ * 持续性以新记忆为准(合并产物描述的是当前认知),新记忆未判定时继承旧记录。
+ */
+function mergeTemporal(self: Temporal, targets: readonly MemoryRecord[]): Temporal {
+  const froms = [self.validFrom, ...targets.map((r) => r.validFrom)].filter(
+    (t): t is number => t !== undefined,
+  );
+  const tos = [self.validTo, ...targets.map((r) => r.validTo)];
+  const anyOpen = tos.some((t) => t === undefined);
+  const closed = tos.filter((t): t is number => t !== undefined);
+  return {
+    validFrom: froms.length > 0 ? Math.min(...froms) : undefined,
+    validTo: anyOpen || closed.length === 0 ? undefined : Math.max(...closed),
+    persistence: self.persistence ?? targets.find((r) => r.persistence)?.persistence,
+  };
+}
 
 export interface ExtractionResult {
   stored: number;
@@ -220,6 +262,7 @@ export async function runExtraction(
         source_message_ids: m.source_message_ids ?? [],
         metadata: m.metadata ?? {},
         family: m.family,
+        ...temporalOf(m.metadata),
       });
       continue;
     }
@@ -249,6 +292,11 @@ export async function runExtraction(
       source_message_ids: m.source_message_ids ?? [],
       metadata: m.metadata ?? {},
       family: m.family,
+      // 合并的有效期取并集:起 = 两侧最早;止 = 任一侧未闭合则仍未闭合(undefined)。
+      ...mergeTemporal(
+        temporalOf(m.metadata),
+        targets.map((id) => byId.get(id)).filter((r): r is MemoryRecord => r !== undefined),
+      ),
     });
   }
 
