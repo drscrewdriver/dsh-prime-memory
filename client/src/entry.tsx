@@ -31,25 +31,7 @@ export function apply(ctx: MemoryClientCtx) {
   const rpc = makeRpc(ctx);
   console.info('[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位');
 
-  // 设置 → 插件 → 记忆（0.1.2+ keyed 卡片契约;卡片无 label 字段,标签随插件 Tab 渲染）
-  try {
-    ctx.slots.inject('settings.plugin.item', () => {
-      return ctx.slots.register(
-        {
-          name: 'settings.plugin.item',
-          id: 'dsh-memory',
-          key: 'dsh-memory',
-          inject: () => ({ rpc }),
-        },
-        MemoryPanel,
-      );
-    });
-  } catch (err) {
-    console.warn('[dsh-prime-memory] settings.plugin.item 注册失败(旧宿主无此槽):', err);
-  }
-
-  // 设置 → 记忆 直挂分节(0.1.1 契约;0.1.2+ 该槽仍是 list 且官方 general 分节也注册
-  // 在此,插件卡片同样可挂——挂两处时用户看到两个入口,属预期冗余,不冲突)
+  // 设置 → 记忆 直挂分节
   try {
     ctx.slots.inject('settings.section', () => {
       return ctx.slots.register(

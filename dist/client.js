@@ -4273,21 +4273,6 @@ var __defProp = Object.defineProperty;
 		  const rpc = makeRpc(ctx);
 		  console.info("[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位");
 		  try {
-		    ctx.slots.inject("settings.plugin.item", () => {
-		      return ctx.slots.register(
-		        {
-		          name: "settings.plugin.item",
-		          id: "dsh-memory",
-		          key: "dsh-memory",
-		          inject: () => ({ rpc })
-		        },
-		        MemoryPanel
-		      );
-		    });
-		  } catch (err) {
-		    console.warn("[dsh-prime-memory] settings.plugin.item 注册失败(旧宿主无此槽):", err);
-		  }
-		  try {
 		    ctx.slots.inject("settings.section", () => {
 		      return ctx.slots.register(
 		        {
