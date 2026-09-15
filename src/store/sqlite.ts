@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SQLite 主检索引擎(单机裁剪版)。
  *
  * 双写架构:JSONL 追加文件是备份/恢复的事实源,本库承担全部检索——L0/L1 的
@@ -50,6 +50,7 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
+import type { L1Receipt } from './receipts.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
@@ -989,6 +990,27 @@ export class MemoryDb {
       rows.push(...(this.inStatement('l1_records', 'select', chunk.length).all(...chunk) as unknown as L1MetaRow[]));
     }
     return rows.map(rowToRecord);
+  }
+
+  /**
+   * §B 决策凭证批量落盘。`INSERT OR IGNORE` + 确定性 `receipt_id`
+   * (见 `receipts.ts` 的 `receiptIdFor`)→ 同一次 run 重放不产生重复行。
+   * 返回实际新增条数(被忽略的重复不计)。
+   *
+   * 刻意**不开事务**:凭证是旁路观测数据,单条独立、重放幂等,部分写入无害;
+   * 为它引入事务只会把失败面扩大。调用方另有 `persistReceiptsSafely` 兜底不抛。
+   */
+  recordReceipts(rows: readonly L1Receipt[]): number {
+    if (this.degraded || rows.length === 0) return 0;
+    const stmt = this.db.prepare(
+      `INSERT OR IGNORE INTO l1_receipts (receipt_id, run_id, record_id, kind, input_digest, decided_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    let n = 0;
+    for (const r of rows) {
+      n += Number(stmt.run(r.receiptId, r.runId, r.recordId, r.kind, r.inputDigest, r.decidedAt).changes);
+    }
+    return n;
   }
 
   /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */

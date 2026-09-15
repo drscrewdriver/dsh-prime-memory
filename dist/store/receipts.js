@@ -8,7 +8,7 @@
  *
  * 本文件承载契约中最纯的那一半:`input_digest`。
  */
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 /** 摘要格式版本。进入 canonical 串,使算法演进时**不会静默**让新旧凭证看起来可比。 */
 export const DIGEST_FORMAT = 'l1-receipts/v1';
 /**
@@ -37,4 +37,60 @@ export function inputDigest(candidateIds) {
         hash.update('\n');
     }
     return hash.digest('hex');
+}
+const KNOWN_ACTIONS = ['store', 'update', 'merge', 'skip'];
+/**
+ * 一次蒸馏执行的 run 标识。
+ *
+ * **为什么不是"由输入切片推导出的确定性值"**——v1 曾这么设计，实测后被推翻：
+ * `pipeline/l1.ts` 对每条抽取结果执行 `record_id: newId('mem')`，
+ * **模型给的 record_id 被丢弃，记录 id 是运行时生成的**。因此"同一批消息重跑"
+ * 必然产生**不同的 record_id**，也就必然产生不同的凭证。把 run_id 做成切片的函数
+ * 换不来任何跨次幂等，只会让两次**互不相干的执行**挤在同一个 run_id 下，
+ * 反而破坏「一个 run = 一次执行」的归因。
+ *
+ * 于是幂等的真正边界是：**同一次 run 内，同一条记录只留一条凭证**
+ * （`receipt_id = f(run, record)` + `INSERT OR IGNORE`）。
+ * 这才是"同一决策不重复落盘"在本代码库里能成立的那个含义。
+ *
+ * 命名沿用仓库既有惯例（`newId('mem')` / `newJobId()` → `前缀_时间戳_随机`）。
+ */
+export function newRunId() {
+    return `run_${Date.now()}_${randomBytes(3).toString('hex')}`;
+}
+/** receipt_id = f(run, record) —— 幂等的落点(同 run 同记录只留一条)。 */
+export function receiptIdFor(runId, recordId) {
+    return inputDigest([runId, recordId]);
+}
+/** 动作归一:只认四个合法动作,其余一律记 `skip_missing`(不采信模型的非法输出)。 */
+export function normalizeKind(action) {
+    return KNOWN_ACTIONS.includes(action) ? action : 'skip_missing';
+}
+/** 纯映射:决策集 → 凭证行。无 I/O,便于单测与复算。 */
+export function buildReceipts(runId, decidedAt, items) {
+    return items.map((it) => ({
+        receiptId: receiptIdFor(runId, it.recordId),
+        runId,
+        recordId: it.recordId,
+        kind: normalizeKind(it.action),
+        inputDigest: inputDigest(it.candidateIds),
+        decidedAt,
+    }));
+}
+/**
+ * **失败隔离**:凭证是旁路观测设施,绝不是主链路的单点。
+ *
+ * L1 蒸馏已经把新记忆写进事实源了;此时若凭证写失败还向上抛,等于让一个
+ * 「记录决策」的附属动作把「产生记忆」的主流程打死——代价与收益完全不成比例。
+ * 故此处只记 warn,永不抛出。
+ */
+export function persistReceiptsSafely(write, rows, logger) {
+    if (rows.length === 0)
+        return;
+    try {
+        write(rows);
+    }
+    catch (err) {
+        logger?.warn(`[memory] L1 决策凭证落盘失败(${rows.length} 条),本次判定不留痕但**不影响蒸馏结果**: ${err instanceof Error ? err.message : String(err)}`);
+    }
 }

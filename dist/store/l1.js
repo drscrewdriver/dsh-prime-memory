@@ -90,6 +90,15 @@ export class L1Store {
     getByIds(ids) {
         return this.db.getL1ByIds(ids);
     }
+    /**
+     * §B 决策凭证落盘(L1Store 的薄缝)。
+     * 刻意放在 store 上:`runExtraction` 已经持有 L1Store,凭证写入因此无需新增
+     * 构造参数或改动签名;同时它也是「写入失败不中断蒸馏」**可注入的测试缝**——
+     * 测试只需替换这一个方法就能模拟落盘故障,不必伪造整个 store。
+     */
+    recordReceipts(rows) {
+        return this.db.recordReceipts(rows);
+    }
     /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */
     async appendNew(records) {
         if (records.length === 0)

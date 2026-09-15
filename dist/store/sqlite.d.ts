@@ -14,6 +14,7 @@ import type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
+import type { L1Receipt } from './receipts.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
     id: string;
@@ -148,6 +149,15 @@ export declare class MemoryDb {
     /** 全量读取(调试/迁移/重嵌入用;检索请走 FTS/向量)。 */
     getAllL1(): MemoryRecord[];
     getL1ByIds(ids: string[]): MemoryRecord[];
+    /**
+     * §B 决策凭证批量落盘。`INSERT OR IGNORE` + 确定性 `receipt_id`
+     * (见 `receipts.ts` 的 `receiptIdFor`)→ 同一次 run 重放不产生重复行。
+     * 返回实际新增条数(被忽略的重复不计)。
+     *
+     * 刻意**不开事务**:凭证是旁路观测数据,单条独立、重放幂等,部分写入无害;
+     * 为它引入事务只会把失败面扩大。调用方另有 `persistReceiptsSafely` 兜底不抛。
+     */
+    recordReceipts(rows: readonly L1Receipt[]): number;
     /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */
     listL1(opts: {
         type?: string;

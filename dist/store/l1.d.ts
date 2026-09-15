@@ -1,5 +1,6 @@
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
+import type { L1Receipt } from './receipts.js';
 import { type EmbeddingService } from './embedding.js';
 import { type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
@@ -45,6 +46,13 @@ export declare class L1Store {
     all(): MemoryRecord[];
     /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
     getByIds(ids: string[]): MemoryRecord[];
+    /**
+     * §B 决策凭证落盘(L1Store 的薄缝)。
+     * 刻意放在 store 上:`runExtraction` 已经持有 L1Store,凭证写入因此无需新增
+     * 构造参数或改动签名;同时它也是「写入失败不中断蒸馏」**可注入的测试缝**——
+     * 测试只需替换这一个方法就能模拟落盘故障,不必伪造整个 store。
+     */
+    recordReceipts(rows: readonly L1Receipt[]): number;
     /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */
     appendNew(records: MemoryRecord[]): Promise<void>;
     /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。 */

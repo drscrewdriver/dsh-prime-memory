@@ -8,6 +8,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { callLLM, parseJsonLogged, resolveLayerTokens } from '../llm.js';
+import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipts.js';
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
 import { familyForType, normPersistence, resolveRecordFamily } from '../types.js';
@@ -161,6 +162,22 @@ export async function runExtraction(ctx, cfg, store, states, pending, background
     logger.info(`[memory] L1 去重判定:${extracted.length} 条候选记忆召回 ${candidateTotal} 条已有记录,决策 ${Object.entries(actionCount)
         .map(([k, v]) => `${k}=${v}`)
         .join(' ')}`);
+    // ── §B 决策凭证:在应用决策前留痕(旁路设施,写失败绝不中断蒸馏) ──
+    // 覆盖**全部** extracted:包括 skip 与"模型没返回决策"——回溯"这条为什么没进记忆"
+    // 与"为什么进了"同等重要,而 skip 恰好是现有代码里唯一完全不留痕的分支
+    // (下方应用循环 `if (!decision || action === 'skip') continue` 直接跳过)。
+    // matches 与 extracted 同长同序(Promise.all 按数组序),故按下标取候选池。
+    // 注:本轮不开配置开关——新增开关要连带改 config schema / contract / 设置页,
+    // 属范围蔓延;凭证本身是纯旁路且幂等,先落地,需要时再加 kill-switch。
+    {
+        const runId = newRunId();
+        const items = extracted.map((m, i) => ({
+            recordId: m.record_id,
+            candidateIds: (matches[i]?.candidates ?? []).map((c) => c.id),
+            action: byRecord.get(m.record_id)?.action,
+        }));
+        persistReceiptsSafely((rows) => store.recordReceipts(rows), buildReceipts(runId, new Date().toISOString(), items), logger);
+    }
     // ── Step 3: 应用决策(官方语义:新记录追加进事实源,被替换目标只从检索库删除) ──
     // 只按需取决策涉及的记录(候选 + 目标 id 并集),避免每轮全表扫描
     const relatedIds = new Set();
