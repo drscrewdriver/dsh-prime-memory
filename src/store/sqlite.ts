@@ -23,7 +23,8 @@ import * as path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { EmbeddingProviderInfo } from './embedding.js';
 import type { L0MessageRecord, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
-import { familyForType, normPersistence } from '../types.js';
+import { familyForType, isScopeVisible, normPersistence, normScope } from '../types.js';
+import { normalizeWorkspacePath } from '../workspace.js';
 import { bm25RankToScore, buildFtsQuery, tokenizeForFts } from './search-utils.js';
 import { describeTokenizer, ensureTokenizer, tokenizerStamp } from '../util/tokenizer.js';
 
@@ -343,13 +344,23 @@ export class MemoryDb {
         created_time TEXT DEFAULT '',
         updated_time TEXT DEFAULT '',
         metadata_json TEXT DEFAULT '{}',
-        family TEXT NOT NULL DEFAULT 'chat'
+        family TEXT NOT NULL DEFAULT 'chat',
+        scope TEXT NOT NULL DEFAULT 'global',
+        workspace_id TEXT NOT NULL DEFAULT ''
       )
     `);
     // 旧库缺 family 列 → ALTER 补列,并按 type 前缀回填(幂等:已正确的行不再命中)
     if (!this.hasColumn('l1_records', 'family')) {
       this.db.exec("ALTER TABLE l1_records ADD COLUMN family TEXT NOT NULL DEFAULT 'chat'");
       this.logger?.info(`${TAG} l1_records 补 family 列(旧数据按 type 前缀回填)`);
+    }
+    // §E 可见范围(ADR-0008 条 3:向后兼容是硬要求)。**既有数据零搬运**——
+    // 补列的 DEFAULT 本身就把存量行标成 `global`,不需要 UPDATE 扫描,
+    // 也不删除任何行:"标注归属"而非"搬运/重建",免得拿事实源冒险换配置项的美观。
+    if (!this.hasColumn('l1_records', 'scope')) {
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN scope TEXT NOT NULL DEFAULT 'global'");
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''");
+      this.logger?.info(`${TAG} l1_records 补 scope/workspace_id 列(存量数据默认归 global)`);
     }
     const backfilled = this.db
       .prepare("UPDATE l1_records SET family = 'work' WHERE type LIKE 'work\\_%' ESCAPE '\\' AND family != 'work'")
@@ -362,6 +373,8 @@ export class MemoryDb {
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_updated ON l1_records(updated_time)');
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_family ON l1_records(family)');
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_valid_from ON l1_records(valid_from)');
+    // §E:workspace 过滤的唯一命中路径就是本列(scope='global' 的行走 OR 短路,不依赖索引)
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_workspace ON l1_records(workspace_id)');
 
     // ── §B L1 决策凭证(DDL 同为磁盘契约) ──
     // 每条 L1 记录的 store/update/merge/skip 决策留一条凭证:决策当时看到的候选池
@@ -409,8 +422,8 @@ export class MemoryDb {
       INSERT INTO l1_records (
         record_id, content, type, priority, scene_name, session_id, version,
         timestamp_str, timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family,
-        valid_from, valid_to, persistence
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        valid_from, valid_to, persistence, scope, workspace_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         content=excluded.content,
         type=excluded.type,
@@ -425,12 +438,14 @@ export class MemoryDb {
         family=excluded.family,
         valid_from=excluded.valid_from,
         valid_to=excluded.valid_to,
-        persistence=excluded.persistence
+        persistence=excluded.persistence,
+        scope=excluded.scope,
+        workspace_id=excluded.workspace_id
     `);
     this.stmtGetL1 = this.db.prepare(`
       SELECT record_id, content, type, priority, scene_name, version, timestamp_str,
              timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family,
-             valid_from, valid_to, persistence
+             valid_from, valid_to, persistence, scope, workspace_id
       FROM l1_records WHERE record_id = ?
     `);
     this.stmtL1Exists = this.db.prepare('SELECT 1 FROM l1_records WHERE record_id = ?');
@@ -481,10 +496,10 @@ export class MemoryDb {
       const savedStamp = this.readMetaString('fts_tokenizer') ?? 'bigram-v1';
       const tokenizerChanged = savedStamp !== wantStamp;
       let ftsRebuilt = false;
-      if (this.tableExists('l1_fts') && (!this.hasColumn('l1_fts', 'family') || tokenizerChanged)) {
+      if (this.tableExists('l1_fts') && (!this.hasColumn('l1_fts', 'family') || !this.hasColumn('l1_fts', 'scope') || tokenizerChanged)) {
         this.db.exec('DROP TABLE l1_fts');
         ftsRebuilt = true;
-        this.logger?.info(`${TAG} l1_fts 缺 family 列或分词器已变更(${savedStamp} → ${wantStamp}),重建全文索引`);
+        this.logger?.info(`${TAG} l1_fts 缺 family/scope 列或分词器已变更(${savedStamp} → ${wantStamp}),重建全文索引`);
       }
       let l0FtsRebuilt = false;
       if (this.tableExists('l0_fts') && tokenizerChanged) {
@@ -506,7 +521,9 @@ export class MemoryDb {
           timestamp_start UNINDEXED,
           timestamp_end UNINDEXED,
           metadata_json UNINDEXED,
-          family UNINDEXED
+          family UNINDEXED,
+          scope UNINDEXED,
+          workspace_id UNINDEXED
         )
       `);
       this.db.exec(`
@@ -523,26 +540,33 @@ export class MemoryDb {
 
       this.stmtL1FtsInsert = this.db.prepare(`
         INSERT INTO l1_fts (content, content_original, record_id, type, priority, scene_name,
-          session_id, version, timestamp_str, timestamp_start, timestamp_end, metadata_json, family)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          session_id, version, timestamp_str, timestamp_start, timestamp_end, metadata_json, family,
+          scope, workspace_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       this.stmtL1FtsDelete = this.db.prepare('DELETE FROM l1_fts WHERE record_id = ?');
+      // §E 可见范围过滤的**唯一缝**。设计要点:
+      // ① `? = ''` 是"不过滤"的哨兵——检索侧不传工作区标识(即 cfg.scope='global')时
+      //    整个条件短路为真,行为与改动前逐字一致(**零漂移不是比对出来的,是构造出来的**);
+      // ② 过滤表达式与 family 落在**同一条语句**里(ADR-0008 组合关系:scope 过滤必须与
+      //    族隔离同层),否则会产出"看不见但已影响决策"的记忆——去重候选召回也走这里;
+      // ③ `scope = 'global'` 分支让跨工作区可见的记忆在任何工作区都能被召回。
       this.stmtL1FtsSearch = this.db.prepare(`
         SELECT record_id, content_original AS content, type, priority, scene_name, version,
-               timestamp_str, timestamp_start, timestamp_end, metadata_json, family,
+               timestamp_str, timestamp_start, timestamp_end, metadata_json, family, scope, workspace_id,
                bm25(l1_fts) AS rank
         FROM l1_fts
-        WHERE l1_fts MATCH ?
+        WHERE l1_fts MATCH ? AND (? = '' OR scope = 'global' OR workspace_id = ?)
         ORDER BY rank ASC
         LIMIT ?
       `);
       // 族过滤版(FTS5 UNINDEXED 列可作行级过滤条件)
       this.stmtL1FtsSearchFamily = this.db.prepare(`
         SELECT record_id, content_original AS content, type, priority, scene_name, version,
-               timestamp_str, timestamp_start, timestamp_end, metadata_json, family,
+               timestamp_str, timestamp_start, timestamp_end, metadata_json, family, scope, workspace_id,
                bm25(l1_fts) AS rank
         FROM l1_fts
-        WHERE l1_fts MATCH ? AND family = ?
+        WHERE l1_fts MATCH ? AND family = ? AND (? = '' OR scope = 'global' OR workspace_id = ?)
         ORDER BY rank ASC
         LIMIT ?
       `);
@@ -679,13 +703,21 @@ export class MemoryDb {
     }
   }
 
-  /** 重建后的 l1_fts 从 l1_records 全量回灌(仅在 drop 重建时调用;iterate 流式防大库内存峰值)。 */
+  /**
+   * 重建后的 l1_fts 从 l1_records 全量回灌(仅在 drop 重建时调用;iterate 流式防大库内存峰值)。
+   *
+   * ⚠️ 本函数的参数列表**必须与 `stmtL1FtsInsert` 逐位对齐**。不对齐时 node:sqlite 会在这里抛错,
+   * 而下面的 `catch` 是**逐行吞掉**的——症状是 `count` 停在 0、索引静默变空,
+   * 全库记录从此全文检索不可见却没有任何错误日志。§E 加列时正是这个位置最容易漏
+   * (三处列清单:DDL / insert 语句 / 本函数),故在此留下警示。
+   */
   private backfillL1Fts(): void {
     let count = 0;
     const stmt = this.db
       .prepare(
         `SELECT record_id, content, type, priority, scene_name, session_id, version,
-                timestamp_str, timestamp_start, timestamp_end, metadata_json, family FROM l1_records`,
+                timestamp_str, timestamp_start, timestamp_end, metadata_json, family,
+                scope, workspace_id FROM l1_records`,
       );
     for (const r of stmt.iterate() as Iterable<Record<string, unknown>>) {
       try {
@@ -703,6 +735,10 @@ export class MemoryDb {
           String(r.timestamp_end ?? ''),
           String(r.metadata_json ?? '{}'),
           String(r.family ?? 'chat'),
+          // §E:回灌必须带上可见范围——漏掉这两列等于**每次 FTS 重建都把隔离抹平**
+          // (所有行回落 'global',跨工作区记忆瞬间互相可见),且没有任何报错。
+          normScope(r.scope),
+          String(r.workspace_id ?? ''),
         );
         count++;
       } catch {
@@ -857,6 +893,20 @@ export class MemoryDb {
     const priority = record.priority ?? 50;
     const sceneName = record.scene_name ?? '';
     const family = record.family ?? familyForType(type);
+    // §E 写入侧兜底归一,并维持一条**不变量**:`scope='global'` 的记录 `workspace_id` 恒为空串。
+    // 不维持它就会出现"标着 global 却带着工作区归属"的行——语义含糊,且日后改判定时
+    // 无法区分"全局可见但顺带记了个 id"与"其实属于某工作区"。写入侧算好归属
+    // (pipeline 用 `resolveRecordScope`),这里只保证不变量,不重新决策。
+    //
+    // ⚠️ **形态归一必须在这里做**（不是"顺便"）：检索侧传入的标识经 `workspaceIdOf`
+    // 归一（Windows 转小写、resolve 掉 `..`），而写入侧若原样存调用方给的字符串，
+    // 同一个工作区会以两种拼写落库 → `isScopeVisible` 的字符串相等判定必然落空
+    // → **记忆写进去却再也查不出来**。这一条曾被端到端测试抓出
+    // （`tests/scope-tool-wiring.test.ts` 的 `expected 1 to be 2`），
+    // 当时的实现只做了"清空"归一而漏了"形态"归一。收在存储层是因为调用方不止一个
+    // （pipeline / memory_add / 外部导入），逐个记得归一迟早漏一个。
+    const scope = normScope(record.scope);
+    const workspaceId = scope === 'workspace' ? (normalizeWorkspacePath(record.workspaceId) ?? '') : '';
     // 防御性 FTS 删除的前置点查(主键索引,微秒级):record_id 在 FTS 表是 UNINDEXED,
     // 按 id DELETE 是 O(N) 全表扫描——导入/重建/重嵌等"全新增"路径曾为每条记录白付一次
     // 全扫(批量写整体 O(N²))。只有主表已有该行(覆盖/合并)才可能有旧 FTS 行需要删。
@@ -880,6 +930,8 @@ export class MemoryDb {
       toIso(record.validFrom),
       toIso(record.validTo),
       normPersistence(record.persistence) ?? '',
+      scope,
+      workspaceId,
     );
     // vec0 不支持 ON CONFLICT → 先删后插;零向量跳过(cosine 未定义)
     if (this.stmtDeleteL1Vec && this.stmtInsertL1Vec) {
@@ -906,6 +958,8 @@ export class MemoryDb {
         ts.end,
         JSON.stringify(record.metadata ?? {}),
         family,
+        scope,
+        workspaceId,
       );
     }
   }
@@ -943,9 +997,13 @@ export class MemoryDb {
         table === 'l1_records' && this.hasColumn('l1_records', 'valid_from')
           ? ', valid_from, valid_to, persistence'
           : '';
+      // §E:同款按形状探测——未迁移的旧库(补列前)不应因缺列让"按 id 取记录"整条路径失败。
+      const scopeCols =
+        table === 'l1_records' && this.hasColumn('l1_records', 'scope') ? ', scope, workspace_id' : '';
       const metaCols =
         'record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family' +
-        temporal;
+        temporal +
+        scopeCols;
       stmt =
         action === 'delete'
           ? this.db.prepare(`DELETE FROM ${table} WHERE record_id IN (${ph})`)
@@ -1003,7 +1061,7 @@ export class MemoryDb {
     if (this.degraded) return [];
     const rows = this.db
       .prepare(
-        'SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence FROM l1_records',
+        'SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id FROM l1_records',
       )
       .all() as unknown as L1MetaRow[];
     return rows.map(rowToRecord);
@@ -1228,8 +1286,8 @@ export class MemoryDb {
     return Number(row.n);
   }
 
-  /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */
-  listL1(opts: { type?: string; scene?: string; family?: string; hall?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
+  /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall/可见范围过滤与分页。失败返回空。 */
+  listL1(opts: { type?: string; scene?: string; family?: string; hall?: string; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
     if (this.degraded) return { items: [], total: 0 };
     try {
       const where: string[] = [];
@@ -1246,6 +1304,11 @@ export class MemoryDb {
         where.push('family = ?');
         params.push(opts.family);
       }
+      // §E 可见范围(缺省不过滤):global 记录 + 本工作区记录。与检索路径同一条判据。
+      if (opts.workspaceId) {
+        where.push("(scope = 'global' OR workspace_id = ?)");
+        params.push(opts.workspaceId);
+      }
       if (opts.hall) {
         // Hall 存于 metadata_json,用 json_extract 过滤(表小,逐行代价可接受)
         where.push(`json_extract(metadata_json, '$.hall') = ?`);
@@ -1255,7 +1318,7 @@ export class MemoryDb {
       const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params) as { n: number };
       const rows = this.db
         .prepare(
-          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence FROM l1_records${whereSql} ORDER BY updated_time DESC LIMIT ? OFFSET ?`,
+          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id FROM l1_records${whereSql} ORDER BY updated_time DESC LIMIT ? OFFSET ?`,
         )
         .all(...params, opts.limit, opts.offset) as unknown as L1MetaRow[];
       return { items: rows.map(rowToRecord), total: totalRow?.n ?? 0 };
@@ -1282,16 +1345,18 @@ export class MemoryDb {
   // L1 检索
   // ============================
 
-  /** FTS5 BM25 检索(family 缺省不过滤)。失败返回空数组(调用方降级)。 */
-  searchL1Fts(query: string, limit: number, family?: string): L1SearchHit[] {
+  /** FTS5 BM25 检索(family / workspaceId 缺省不过滤)。失败返回空数组(调用方降级)。 */
+  searchL1Fts(query: string, limit: number, family?: string, workspaceId?: string): L1SearchHit[] {
     if (this.degraded || !this.ftsAvailable || limit <= 0) return [];
     const ftsQuery = buildFtsQuery(query);
     if (!ftsQuery) return [];
+    // 哨兵:'' = 不做可见范围过滤(与 SQL 里的 `? = ''` 分支对应)
+    const ws = workspaceId ?? '';
     try {
       const rows = (
         family
-          ? this.stmtL1FtsSearchFamily.all(ftsQuery, family, limit)
-          : this.stmtL1FtsSearch.all(ftsQuery, limit)
+          ? this.stmtL1FtsSearchFamily.all(ftsQuery, family, ws, ws, limit)
+          : this.stmtL1FtsSearch.all(ftsQuery, ws, ws, limit)
       ) as Array<{
         record_id: string;
         content: string;
@@ -1316,12 +1381,16 @@ export class MemoryDb {
     }
   }
 
-  /** vec0 余弦 KNN 检索(score = 1 - cosine distance;family 过滤走过度召回 + 回查过滤,vec0 无法 WHERE)。失败返回空数组。 */
-  searchL1Vector(embedding: Float32Array, topK: number, family?: string): L1SearchHit[] {
+  /**
+   * vec0 余弦 KNN 检索(score = 1 - cosine distance)。失败返回空数组。
+   * family / workspaceId 过滤走**过度召回 + 回查过滤**(vec0 无法 WHERE)。
+   * 放大倍数对两条轴**相乘**:两轴各自丢弃行,单独放大任一条都不够。
+   */
+  searchL1Vector(embedding: Float32Array, topK: number, family?: string, workspaceId?: string): L1SearchHit[] {
     if (this.degraded || !this.stmtSearchL1Vec || topK <= 0) return [];
     try {
-      // 过度召回补偿遗留零向量;带族过滤时再放大(不命中本族的行会被丢弃)
-      const retrieveCount = (topK + ZERO_VEC_BUFFER) * (family ? 3 : 1);
+      // 过度召回补偿遗留零向量;带过滤时再放大(不命中过滤条件的行会被丢弃)
+      const retrieveCount = (topK + ZERO_VEC_BUFFER) * (family ? 3 : 1) * (workspaceId ? 3 : 1);
       const rows = this.stmtSearchL1Vec.all(vecToBuffer(embedding), retrieveCount) as Array<{
         record_id: string;
         distance: number | null;
@@ -1332,6 +1401,7 @@ export class MemoryDb {
         const meta = this.stmtGetL1.get(record_id) as L1MetaRow | undefined;
         if (!meta) continue;
         if (family && normFamily(meta.family, meta.type) !== family) continue;
+        if (workspaceId && !isScopeVisible(meta.scope, meta.workspace_id, workspaceId)) continue;
         hits.push({
           id: record_id,
           content: meta.content,
@@ -1823,6 +1893,9 @@ interface L1MetaRow {
   updated_time: string;
   metadata_json: string;
   family?: string;
+  /** §E 可见范围列(旧库经 ALTER 补列后存在;补列前建的 FTS 表读取路径上为 undefined)。 */
+  scope?: string;
+  workspace_id?: string;
   /** 时间增强列(旧库经 ALTER 补列后存在;<0.11 的库与 l1_fts 读取路径上为 undefined)。 */
   valid_from?: string;
   valid_to?: string;
@@ -1848,6 +1921,10 @@ function rowToRecord(row: L1MetaRow): MemoryRecord {
     version: row.version ?? 0,
     metadata,
     family: normFamily(row.family, row.type),
+    // §E:读回时归一(缺列/缺值一律 global)——"读不到归属"等价于"跨工作区可见",
+    // 与写入侧 fail-open 同向:宁可退化成全局可见,也不让记忆凭空消失。
+    scope: normScope(row.scope),
+    workspaceId: row.workspace_id ?? '',
     // 时间轴回读:空串 → undefined(空串表示"未填",不是"时间 0")
     validFrom: row.valid_from ? Date.parse(row.valid_from) || undefined : undefined,
     validTo: row.valid_to ? Date.parse(row.valid_to) || undefined : undefined,

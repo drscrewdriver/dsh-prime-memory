@@ -16,6 +16,12 @@ export interface L1SearchOptions {
     type?: string;
     /** 按族过滤(undefined = 不过滤,即 auto 档与浏览路径;检索唯一缝的族语义)。 */
     family?: MemoryFamily;
+    /**
+     * §E 当前工作区标识(undefined = **不做可见范围过滤**,与改动前逐字一致)。
+     * 与 `family` 落在**同一条 SQL / 同一层回查**里(ADR-0008 组合关系):
+     * 若只在检索出口过滤而放任去重候选跨工作区相互污染,会产出「看不见但已影响决策」的记忆。
+     */
+    workspaceId?: string;
     /** 分数阈值(仅召回路径传;keyword/embedding 策略生效,FTS 含小语料例外;
      *  hybrid 按官方语义在 RRF 融合前不过滤)。 */
     scoreThreshold?: number;
@@ -135,12 +141,13 @@ export declare class L1Store {
      * 回填(FTS 表无该列;候选池 ≤ limit×3 条主键查询,微秒级)。关闭时零开销。
      */
     private applyDecay;
-    /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall 过滤。 */
+    /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall / 可见范围过滤。 */
     list(opts: {
         type?: string;
         scene?: string;
         family?: string;
         hall?: string;
+        workspaceId?: string;
         limit: number;
         offset: number;
     }): {
@@ -151,9 +158,14 @@ export declare class L1Store {
     distinctScenes(): string[];
     /**
      * 去重候选召回(官方 3 级):空库跳过 → 向量优先 → FTS 兜底。
-     * 传入 family 时只在同族记录里召回(去重永不跨族)。
+     * 传入 family 时只在同族记录里召回(去重永不跨族);传入 workspaceId 时
+     * 只在**本工作区可见**的记录里召回(§E)——**去重也不跨工作区**。
+     *
+     * 这一层是 ADR-0008 特意点名的接缝:"scope 过滤必须落在与族隔离同一层"。
+     * 理由:候选池决定**新的去重决策**,若此处跨工作区,产出的是「项目 B 里看不见、
+     * 但已经决定了项目 A 记忆去向」的记录——比不隔离更糟。
      */
-    searchCandidates(query: string, limit: number, family?: MemoryFamily): Promise<MemoryRecord[]>;
+    searchCandidates(query: string, limit: number, family?: MemoryFamily, workspaceId?: string): Promise<MemoryRecord[]>;
     /**
      * 增量重嵌入(embedding 配置变化 / 周期性补齐用):只处理缺失向量的记录,
      * 排除已判定"当前 provider 不可嵌入"的 skip 集。返回写入/失败/跳过数——

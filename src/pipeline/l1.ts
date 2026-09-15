@@ -24,8 +24,9 @@ import type {
   MemoryFamily,
   MemoryLogger,
   MemoryRecord,
+  MemoryScope,
 } from '../types.js';
-import { familyForType, normPersistence, resolveRecordFamily } from '../types.js';
+import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope } from '../types.js';
 
 /** 时间轴三元组(抽取产出 → 记录字段)。 */
 type Temporal = Pick<MemoryRecord, 'validFrom' | 'validTo' | 'persistence'>;
@@ -98,8 +99,15 @@ interface DedupDecision {
   loser?: unknown;
 }
 
-/** 抽取产出 + 管线补上的三个字段(与 Step 1 的 `extracted` 元素同形)。 */
-type PendingMemory = ExtractedMemory & { record_id: string; scene_name: string; family: MemoryFamily };
+/** 抽取产出 + 管线补上的五个字段(与 Step 1 的 `extracted` 元素同形)。 */
+type PendingMemory = ExtractedMemory & {
+  record_id: string;
+  scene_name: string;
+  family: MemoryFamily;
+  /** §E 归属:write 侧已按 `resolveRecordScope` 算好,`toStoreRecord` 原样带出 */
+  scope: MemoryScope;
+  workspaceId: string;
+};
 
 /**
  * 构造一条**全新**L1 记录(store 语义)。§C 冻结复用同一构造:
@@ -120,6 +128,8 @@ function toStoreRecord(m: PendingMemory, now: number, ts: number): MemoryRecord 
     source_message_ids: m.source_message_ids ?? [],
     metadata: m.metadata ?? {},
     family: m.family,
+    scope: m.scope,
+    workspaceId: m.workspaceId,
     ...temporalOf(m.metadata),
   };
 }
@@ -163,6 +173,12 @@ export async function runExtraction(
   background: ConversationMessage[],
   logger: MemoryLogger,
   mode: ExtractMode,
+  /**
+   * §E 当前工作区标识(由调用方经 `sessionWorkspaceIdOf` 解析;拿不到传 undefined)。
+   * 传 undefined 时行为与改动前**逐字一致**——`cfg.scope='global'` 的既有部署
+   * 永远走这条分支,这是零漂移的构造性保证。
+   */
+  workspaceId?: string,
 ): Promise<ExtractionResult> {
   if (!cfg.extract.enabled) return { stored: 0, skipped: true, sceneName: chainHead(states, mode), newRecords: [] };
   // 触发阈值(渐进爬坡 + 按会话切片计数)由 runner 判定(trigger.ts);
@@ -170,6 +186,11 @@ export async function runExtraction(
 
   // 纯档强制族 = 档位族;auto 档抽取后的记录族按 type 前缀判定
   const forcedFamily: MemoryFamily | undefined = mode === 'auto' ? undefined : mode;
+  // §E 归属模式(归一:非法/缺省值 → global,ADR-0008 条 4)
+  const scopeMode = normScope(cfg.scope);
+  // 候选池过滤值**只在 workspace 模式生效**——判断收在这一处,调用方无需自己判。
+  // 若让它漏出去(比如调用方无条件传),`scope='global'` 的部署会被误过滤而破坏零漂移。
+  const wsFilter = scopeMode === 'workspace' ? workspaceId : undefined;
   // 情境链锚点桶:纯档用本族;auto 用最近活跃的族(chainHead 同源)
   const chainState = mode === 'auto' ? activeState(states) : states[mode];
 
@@ -239,11 +260,15 @@ export async function runExtraction(
       sceneCount++;
       for (const m of scene.memories ?? []) {
         if (!m || typeof m.content !== 'string' || !m.content.trim()) continue;
+        const family = resolveRecordFamily(forcedFamily, m.family, m.type ?? '');
         extracted.push({
           ...m,
           record_id: newId('mem'),
           scene_name: scene.scene_name,
-          family: resolveRecordFamily(forcedFamily, m.family, m.type ?? ''),
+          family,
+          // §E 归属在**进管线时**一次算定,下游(store / conflict / update / merge 各分支)
+          // 一律复用它——四个分支各算一次是漏判的温床。
+          ...resolveRecordScope(scopeMode, family, workspaceId),
         });
       }
     }
@@ -260,7 +285,7 @@ export async function runExtraction(
   const matches = await Promise.all(
     extracted.map(async (m) => ({
       newMemory: m,
-      candidates: await store.searchCandidates(m.content, cfg.extract.candidatePool, m.family),
+      candidates: await store.searchCandidates(m.content, cfg.extract.candidatePool, m.family, wsFilter),
     })),
   );
   const dedupPrompt = formatBatchConflictPrompt(matches);

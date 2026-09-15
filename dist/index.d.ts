@@ -18,6 +18,7 @@ export declare const inject: string[];
 export declare const Config: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
     dataDir: import("@deepseek-ai/schemastery").default<string, string>;
     family: import("@deepseek-ai/schemastery").default<"chat" | "work" | "auto", "chat" | "work" | "auto">;
+    scope: import("@deepseek-ai/schemastery").default<string, string>;
     capture: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
@@ -288,6 +289,7 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
 }>, Schemastery.ObjectT<{
     dataDir: import("@deepseek-ai/schemastery").default<string, string>;
     family: import("@deepseek-ai/schemastery").default<"chat" | "work" | "auto", "chat" | "work" | "auto">;
+    scope: import("@deepseek-ai/schemastery").default<string, string>;
     capture: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;

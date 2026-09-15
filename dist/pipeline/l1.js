@@ -12,7 +12,7 @@ import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipt
 import { buildConflictPair, validateConflictPair } from '../store/conflicts.js';
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
-import { familyForType, normPersistence, resolveRecordFamily } from '../types.js';
+import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope } from '../types.js';
 /** 解析 ISO/epoch 时间证据,非法或非正值一律 undefined——不猜测。 */
 function parseTimeEvidence(raw) {
     const t = typeof raw === 'string' ? Date.parse(raw) : typeof raw === 'number' ? raw : Number.NaN;
@@ -66,6 +66,8 @@ function toStoreRecord(m, now, ts) {
         source_message_ids: m.source_message_ids ?? [],
         metadata: m.metadata ?? {},
         family: m.family,
+        scope: m.scope,
+        workspaceId: m.workspaceId,
         ...temporalOf(m.metadata),
     };
 }
@@ -96,13 +98,24 @@ export function chunkByCharBudget(messages, budgetChars) {
         chunks.push(cur);
     return chunks;
 }
-export async function runExtraction(ctx, cfg, store, states, pending, background, logger, mode) {
+export async function runExtraction(ctx, cfg, store, states, pending, background, logger, mode, 
+/**
+ * §E 当前工作区标识(由调用方经 `sessionWorkspaceIdOf` 解析;拿不到传 undefined)。
+ * 传 undefined 时行为与改动前**逐字一致**——`cfg.scope='global'` 的既有部署
+ * 永远走这条分支,这是零漂移的构造性保证。
+ */
+workspaceId) {
     if (!cfg.extract.enabled)
         return { stored: 0, skipped: true, sceneName: chainHead(states, mode), newRecords: [] };
     // 触发阈值(渐进爬坡 + 按会话切片计数)由 runner 判定(trigger.ts);
     // 此处不再重复 gate——重建轮 force 与 warmup 早期轮次都会传入小于稳态值的切片。
     // 纯档强制族 = 档位族;auto 档抽取后的记录族按 type 前缀判定
     const forcedFamily = mode === 'auto' ? undefined : mode;
+    // §E 归属模式(归一:非法/缺省值 → global,ADR-0008 条 4)
+    const scopeMode = normScope(cfg.scope);
+    // 候选池过滤值**只在 workspace 模式生效**——判断收在这一处,调用方无需自己判。
+    // 若让它漏出去(比如调用方无条件传),`scope='global'` 的部署会被误过滤而破坏零漂移。
+    const wsFilter = scopeMode === 'workspace' ? workspaceId : undefined;
     // 情境链锚点桶:纯档用本族;auto 用最近活跃的族(chainHead 同源)
     const chainState = mode === 'auto' ? activeState(states) : states[mode];
     // ── §C 安全阀(task_24):队列上限 + 超时降级 ──
@@ -169,11 +182,15 @@ export async function runExtraction(ctx, cfg, store, states, pending, background
             for (const m of scene.memories ?? []) {
                 if (!m || typeof m.content !== 'string' || !m.content.trim())
                     continue;
+                const family = resolveRecordFamily(forcedFamily, m.family, m.type ?? '');
                 extracted.push({
                     ...m,
                     record_id: newId('mem'),
                     scene_name: scene.scene_name,
-                    family: resolveRecordFamily(forcedFamily, m.family, m.type ?? ''),
+                    family,
+                    // §E 归属在**进管线时**一次算定,下游(store / conflict / update / merge 各分支)
+                    // 一律复用它——四个分支各算一次是漏判的温床。
+                    ...resolveRecordScope(scopeMode, family, workspaceId),
                 });
             }
         }
@@ -187,7 +204,7 @@ export async function runExtraction(ctx, cfg, store, states, pending, background
     // ── Step 2: 去重(batch 冲突检测;候选只在本族内召回,去重永不跨族) ──
     const matches = await Promise.all(extracted.map(async (m) => ({
         newMemory: m,
-        candidates: await store.searchCandidates(m.content, cfg.extract.candidatePool, m.family),
+        candidates: await store.searchCandidates(m.content, cfg.extract.candidatePool, m.family, wsFilter),
     })));
     const dedupPrompt = formatBatchConflictPrompt(matches);
     const dedupRaw = await callLLM(ctx, cfg, {
