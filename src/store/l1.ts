@@ -1,4 +1,4 @@
-/**
+﻿/**
  * L1 原子记忆存储(双写架构):
  * - records/YYYY-MM-DD.jsonl:追加式事实源(只增不改,备份/恢复用);
  * - MemoryDb(SQLite):主检索引擎,upsert/delete 只动这里;
@@ -220,12 +220,38 @@ export class L1Store {
     // 仍走 2 路、得分与改动前逐位一致(见 findings.md §12.1 的路数语义)
     const lanes: L1Hit[][] = [ftsList, vecList];
     if (this.graphLaneProvider) lanes.push(this.graphLane(query, candidateK, opts?.family));
+    // 第 4 路(时效)在衰减开启时**结构性存在**;关掉衰减 = 该路不存在
+    if (this.decayHalfLifeDays > 0) lanes.push(this.recencyLane([...ftsList, ...vecList]));
     const merged = rrfMerge(lanes, (h) => h.id);
     return this.postProcess(
       this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore, lanes.length) }))),
       opts?.type,
       limit,
     );
+  }
+
+  /**
+   * §D 第 4 路(时效路,hybrid 专用):把候选池按 `applyDecayWeight` 加权后的
+   * 顺序作为第 4 条**已排序**列表,复用与后处理同源的加权函数(不新增独立逻辑)。
+   *
+   * **时效是排序信号,不是召回信号**:本路只重排 `ftsList ∪ vecList` 里的既有
+   * 候选,**不引入任何新记录**。若让"无关但很新"的记忆靠时效进结果,会直接损害
+   * 检索精度——这条性质由 `tests/recency-lane.test.ts` 的 id 集合不变量钉住。
+   *
+   * **严禁进入 `searchCandidates`**(`search-utils.ts:26-27` 约定):写路径找同语义
+   * 旧记录必须**无视新旧**——一旦被时效加权,老的同义记录会被漏检,导致同事实双记录
+   * 累积。故本方法只被 `search()` 调用,去重候选路径不得引用。
+   */
+  private recencyLane(candidates: L1Hit[]): L1Hit[] {
+    if (!(this.decayHalfLifeDays > 0) || candidates.length === 0) return [];
+    const seen = new Set<string>();
+    const deduped: L1Hit[] = [];
+    for (const h of candidates) {
+      if (seen.has(h.id)) continue;
+      seen.add(h.id);
+      deduped.push(h);
+    }
+    return this.applyDecay(deduped);
   }
 
   /**

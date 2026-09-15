@@ -60,6 +60,19 @@ export declare class L1Store {
      */
     search(query: string, limit: number, opts?: L1SearchOptions): Promise<L1Hit[]>;
     /**
+     * §D 第 4 路(时效路,hybrid 专用):把候选池按 `applyDecayWeight` 加权后的
+     * 顺序作为第 4 条**已排序**列表,复用与后处理同源的加权函数(不新增独立逻辑)。
+     *
+     * **时效是排序信号,不是召回信号**:本路只重排 `ftsList ∪ vecList` 里的既有
+     * 候选,**不引入任何新记录**。若让"无关但很新"的记忆靠时效进结果,会直接损害
+     * 检索精度——这条性质由 `tests/recency-lane.test.ts` 的 id 集合不变量钉住。
+     *
+     * **严禁进入 `searchCandidates`**(`search-utils.ts:26-27` 约定):写路径找同语义
+     * 旧记录必须**无视新旧**——一旦被时效加权,老的同义记录会被漏检,导致同事实双记录
+     * 累积。故本方法只被 `search()` 调用,去重候选路径不得引用。
+     */
+    private recencyLane;
+    /**
      * §D 第 3 路(图谱路径,hybrid 专用):图谱命中 → `sourceRecordIds` 回链 →
      * L1 记录,作为第 3 条**已排序**列表参与 RRF。
      *
