@@ -19,6 +19,8 @@ import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import { projectDistillChain, validateDistillChain } from './settings.js';
+import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
+import { resolveConflictPair } from './conflict-service.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
@@ -40,6 +42,8 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/settings-set',
     'dsh-memory/list-records',
     'dsh-memory/records-delete',
+    'dsh-memory/receipts',
+    'dsh-memory/conflict-resolve',
     'dsh-memory/graph-search',
     'dsh-memory/graph-node-get',
     'dsh-memory/scenes',
@@ -686,6 +690,40 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
             };
             return resp;
+        }
+        // ── §B 决策凭证回溯(task_19):与 memory_receipts 工具共用同一形状 ──
+        // 端点层**不给"提示文案"这个出口**:工具是给模型用的,拒答必须变成可读的一句话;
+        // 端点是给程序/面板用的,缺参就是调用错误,静默返回空会让调用方以为"确实没有"。
+        case 'dsh-memory/receipts': {
+            const p = (payload ?? {});
+            const query = {
+                recordId: typeof p.recordId === 'string' && p.recordId.trim() ? p.recordId.trim() : undefined,
+                runId: typeof p.runId === 'string' && p.runId.trim() ? p.runId.trim() : undefined,
+            };
+            const dimension = dimensionOf(query);
+            if (dimension === 'none')
+                throw new Error('需要 recordId 或 runId 至少一个(不支持查全部凭证)');
+            const limit = Math.min(Math.max(Math.floor(Number(p.limit)) || 20, 1), RECEIPTS_QUERY_LIMIT_MAX);
+            const rows = stores.l1.listReceipts({ ...query, limit });
+            const resp = {
+                dimension,
+                items: rows.map(toReceiptView),
+                total: stores.l1.countReceipts(query),
+            };
+            return resp;
+        }
+        // ── §C 矛盾冻结裁决(task_25):与 memory_resolve_conflict 工具共用同一形状 ──
+        // 端点层同样不给"提示文案"出口的例外只有一条:**队列未开启**不是调用错误而是
+        // 部署状态,故它走返回体(带 notice)而非抛错;pair_id/outcome 缺参才抛。
+        case 'dsh-memory/conflict-resolve': {
+            const p = (payload ?? {});
+            const pairId = typeof p.pairId === 'string' ? p.pairId.trim() : '';
+            const outcome = typeof p.outcome === 'string' ? p.outcome.trim() : '';
+            if (!pairId)
+                throw new Error('需要 pairId(待裁决对的 pair_id)');
+            if (!outcome)
+                throw new Error('需要 outcome(winner | loser | both)');
+            return await resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, pairId, outcome);
         }
         case 'dsh-memory/records-delete': {
             // 面板高权限删除指定记忆;写入删权限门(memoryMutate)防御

@@ -1,5 +1,7 @@
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
+import type { L1Receipt, ReceiptQuery } from './receipts.js';
+import type { ConflictPair, ConflictResolution } from './conflicts.js';
 import { type EmbeddingService } from './embedding.js';
 import { type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
@@ -45,6 +47,45 @@ export declare class L1Store {
     all(): MemoryRecord[];
     /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
     getByIds(ids: string[]): MemoryRecord[];
+    /**
+     * §B 决策凭证落盘(L1Store 的薄缝)。
+     * 刻意放在 store 上:`runExtraction` 已经持有 L1Store,凭证写入因此无需新增
+     * 构造参数或改动签名;同时它也是「写入失败不中断蒸馏」**可注入的测试缝**——
+     * 测试只需替换这一个方法就能模拟落盘故障,不必伪造整个 store。
+     */
+    recordReceipts(rows: readonly L1Receipt[]): number;
+    /**
+     * §B 双维回溯的读缝(task_19)。与 `recordReceipts` 同理由:
+     * 工具层与 RPC 层只认 L1Store,不直连 `db`——保持"检索库的入口只有一处"
+     * 这一既有不变量,也让未来的读缓存/裁剪如需介入仍只有一个落点。
+     */
+    listReceipts(opts: ReceiptQuery & {
+        limit: number;
+    }): L1Receipt[];
+    countReceipts(opts: ReceiptQuery): number;
+    /**
+     * §C 矛盾冻结落盘(thick 缝)。与 `recordReceipts` 同理由:管线已持有 L1Store,
+     * 无需新增构造参数;同时它是「冻结写失败不得中断蒸馏」可注入的测试缝。
+     */
+    recordConflictPending(rows: readonly ConflictPair[]): number;
+    /**
+     * §C 冻结的图谱侧同步:把 `disputed` 状态重算到给定冲突集(命中标记 / 不再命中复原)。
+     * 经 store 而非直取 `db.graphStore`,与图谱路 provider 的注入式设计同一理由
+     * (见本文件头部注释):图谱是**可选**的派生投影,开关关闭时必须是 no-op。
+     */
+    syncGraphDisputed(disputedRecordIds: readonly string[]): {
+        marked: number;
+        cleared: number;
+    };
+    /** §C 待裁决队列的未裁决条数(task_24 队列上限判据)。 */
+    countConflictPendingUnresolved(): number;
+    /** §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。 */
+    listConflictPending(opts?: {
+        createdBefore?: string;
+        limit?: number;
+    }): ConflictPair[];
+    /** §C 打上裁决结论(已裁决的不覆盖)。 */
+    resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;
     /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */
     appendNew(records: MemoryRecord[]): Promise<void>;
     /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。 */

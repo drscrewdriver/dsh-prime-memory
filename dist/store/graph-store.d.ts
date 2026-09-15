@@ -89,6 +89,26 @@ export declare class GraphStore {
      * 之后;按 L1 存活集判定(而非本次删除集合),跨多次删除与历史孤儿一并收敛。
      */
     markSourcesDeleted(deletedIds: readonly string[]): void;
+    /**
+     * §C 矛盾冻结:把图谱的 `disputed` 状态**同步**到给定冲突集。
+     *
+     * 为什么是"同步"而不是"标记":裁决会**撤销**争议。只做单向标记的话,
+     * 一对已被人工裁决的对,其节点会永远停在 `disputed`——那是**派生投影在说谎**。
+     * 图谱是本仓库反复确认的 L1 **派生投影**,派生字段就必须**由当前事实重算**,
+     * 而不是靠一串增量事件累积(后者一旦漏一次就永久跑偏)。
+     *
+     * 判据(与 {@link markSourcesDeleted} 方向相反:那边问"来源是否**全部**消失",
+     * 这边问"来源是否**命中**冲突集",命中一条即存疑):
+     * - `active` 且来源命中冲突集 → `disputed`
+     * - `disputed` 且来源**不**命中冲突集 → 复原为 `active`
+     * - `archived` 墓碑两边都不动(墓碑是删除传播的产物,与争议无关)
+     *
+     * @returns 本次标记 / 复原的节点数。
+     */
+    syncDisputed(disputedRecordIds: readonly string[]): {
+        marked: number;
+        cleared: number;
+    };
     /** 清空全部图谱数据(L1 重建时调用——图谱是 L1 的投影,记录清空即图谱作废)。 */
     resetAll(): void;
 }

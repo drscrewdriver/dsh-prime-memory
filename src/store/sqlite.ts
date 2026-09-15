@@ -50,6 +50,9 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
+import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
+import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
+import type { ConflictPair, ConflictResolution } from './conflicts.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
@@ -359,6 +362,48 @@ export class MemoryDb {
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_updated ON l1_records(updated_time)');
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_family ON l1_records(family)');
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_valid_from ON l1_records(valid_from)');
+
+    // ── §B L1 决策凭证(DDL 同为磁盘契约) ──
+    // 每条 L1 记录的 store/update/merge/skip 决策留一条凭证:决策当时看到的候选池
+    // 摘要(input_digest)+ 结论(kind)。凭证必须在事件**之前**存在——输入快照
+    // 无法事后补录,故本表先于任何消费方落地(findings.md §9)。
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS l1_receipts (
+        receipt_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL DEFAULT '',
+        record_id TEXT NOT NULL DEFAULT '',
+        kind TEXT NOT NULL DEFAULT '',
+        input_digest TEXT NOT NULL DEFAULT '',
+        decided_at TEXT NOT NULL DEFAULT ''
+      )
+    `);
+    // 双维回溯(task_19):按批(run_id)看一轮蒸馏的全部决策;按记录(record_id 看单条记忆的完整判定史
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_receipts_run ON l1_receipts(run_id)');
+    this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_receipts_record ON l1_receipts(record_id)');
+
+    // ── §C 矛盾冻结:(DDL 同为磁盘契约) ──
+    // 冻结**不是"拦住写入"**:新记忆照常入 l1_records,与冲突的旧记忆作为**一对**
+    // 停放在本表,双方内容都不被改写,直到人工裁决。LLM 给的 winner_id 只表示
+    // "进入待裁决对时的排序位",**不代表最终结论**——最终结论落在 resolution。
+    // resolved_at 用 '' 而非 NULL 表示未裁决,与 l1_receipts 的约定一致,
+    // 避免 `= ''` 与 `IS NULL` 两套判据并存。
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS conflict_pending (
+        pair_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL DEFAULT '',
+        winner_id TEXT NOT NULL DEFAULT '',
+        loser_id TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT '',
+        resolved_at TEXT NOT NULL DEFAULT '',
+        resolution TEXT NOT NULL DEFAULT ''
+      )
+    `);
+    // 未裁决索引:队列上限(task_24,取最旧的未裁决行)与裁决工具(task_25,取单条未裁决对)
+    // 都只关心未裁决行——"查未裁决"须走索引。偏索引同时覆盖 created_at 排序。
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_conflict_pending_unresolved
+         ON conflict_pending(created_at) WHERE resolved_at = ''`,
+    );
 
     this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
@@ -971,6 +1016,216 @@ export class MemoryDb {
       rows.push(...(this.inStatement('l1_records', 'select', chunk.length).all(...chunk) as unknown as L1MetaRow[]));
     }
     return rows.map(rowToRecord);
+  }
+
+  /**
+   * §B 决策凭证批量落盘。`INSERT OR IGNORE` + 确定性 `receipt_id`
+   * (见 `receipts.ts` 的 `receiptIdFor`)→ 同一次 run 重放不产生重复行。
+   * 返回实际新增条数(被忽略的重复不计)。
+   *
+   * 刻意**不开事务**:凭证是旁路观测数据,单条独立、重放幂等,部分写入无害;
+   * 为它引入事务只会把失败面扩大。调用方另有 `persistReceiptsSafely` 兜底不抛。
+   *
+   * 写入后**顺带执行保留策略**(task_18)。把裁剪挂在这里而不是交给调用方,
+   * 是为了让"有界"成为**结构性保证**:任何写路径都不可能忘记裁剪,
+   * 因而表容量不可能随使用时间无界增长。裁剪自身失败只 warn——
+   * 它是省空间的动作,失败了最坏是这次没省下来,绝不能因此弄丢刚落盘的凭证
+   * (故裁剪在写入**之后**,且包在 try 里)。
+   */
+  recordReceipts(rows: readonly L1Receipt[], opts?: ReceiptRetentionOptions): number {
+    if (this.degraded || rows.length === 0) return 0;
+    const stmt = this.db.prepare(
+      `INSERT OR IGNORE INTO l1_receipts (receipt_id, run_id, record_id, kind, input_digest, decided_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    let n = 0;
+    for (const r of rows) {
+      n += Number(stmt.run(r.receiptId, r.runId, r.recordId, r.kind, r.inputDigest, r.decidedAt).changes);
+    }
+    try {
+      this.trimReceipts(opts?.maxRuns ?? RECEIPTS_MAX_RUNS);
+    } catch (err) {
+      this.logger?.warn(
+        `${TAG} L1 决策凭证裁剪失败,本次不回收空间(**凭证已正常落盘,记忆与回溯不受影响**): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+    return n;
+  }
+
+  /**
+   * §C 矛盾冻结(task_22):落盘待裁决冲突对。
+   *
+   * `INSERT OR IGNORE`——幂等来自 **pair_id 主键**而非调用方自觉:
+   * `conflictPairId(runId, winner, loser)` 对同一三元组恒等,故一轮蒸馏重复落盘
+   * 只会得到一行。与 §B 凭证同一手法(那边是 `receipt_id` 主键)。
+   *
+   * 与凭证不同,这里**不做保留裁剪**:待裁决对是**欠人的债**,不是观测数据。
+   * 裁剪它等于把用户还没看的裁决请求悄悄删掉,那是丢工作而不是省空间。
+   * 有界性交给 task_24 的队列上限(超限不再停放、回落自动裁决),语义是
+   * 「**不收新的**」而非「**偷偷删旧的**」。
+   *
+   * @returns 实际新插入的行数。
+   */
+  recordConflictPending(rows: readonly ConflictPair[]): number {
+    if (this.degraded || rows.length === 0) return 0;
+    const stmt = this.db.prepare(
+      `INSERT OR IGNORE INTO conflict_pending
+         (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    let n = 0;
+    for (const r of rows) {
+      n += Number(
+        stmt.run(r.pairId, r.runId, r.winnerId, r.loserId, r.createdAt, r.resolvedAt, r.resolution).changes,
+      );
+    }
+    return n;
+  }
+
+  /** §C 冻结:把图谱 `disputed` 状态同步到给定冲突集(薄缝,便于单测替换)。 */
+  syncGraphDisputed(disputedRecordIds: readonly string[]): { marked: number; cleared: number } {
+    if (this.degraded) return { marked: 0, cleared: 0 };
+    return this.graphStore.syncDisputed(disputedRecordIds);
+  }
+
+  /**
+   * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
+   * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+   */
+  countConflictPendingUnresolved(): number {
+    if (this.degraded) return 0;
+    const row = this.db.prepare(`SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = ''`).get() as
+      | { n: number }
+      | undefined;
+    return Number(row?.n ?? 0);
+  }
+
+  /**
+   * §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。
+   *
+   * `createdBefore` 为**排他上界**(ISO 串):只取该时刻之前创建的,用于超时判定。
+   * 定序 `created_at ASC, pair_id ASC`——先来先服务,且同一毫秒内仍**确定可复现**。
+   */
+  listConflictPending(opts: { createdBefore?: string; limit?: number } = {}): ConflictPair[] {
+    if (this.degraded) return [];
+    const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.floor(opts.limit as number) : 500;
+    const params: unknown[] = [];
+    let where = `resolved_at = ''`;
+    if (opts.createdBefore) {
+      where += ` AND created_at < ?`;
+      params.push(opts.createdBefore);
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution
+           FROM conflict_pending WHERE ${where}
+          ORDER BY created_at ASC, pair_id ASC LIMIT ?`,
+      )
+      .all(...(params as never[]), limit) as Array<Record<string, unknown>>;
+    return rows.map(toConflictPair);
+  }
+
+  /**
+   * §C 打上裁决结论。
+   *
+   * `WHERE resolved_at = ''` 使**已裁决的不会被覆盖**:裁决是一次性的判定行为,
+   * 重复调用不该把第一次的结论改写掉(人工裁决与自动了结的次序因此不可逆)。
+   *
+   * @returns 受影响行数(0 = 该对被裁决过或不存在)。
+   */
+  resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number {
+    if (this.degraded) return 0;
+    const stmt = this.db.prepare(
+      `UPDATE conflict_pending SET resolved_at = ?, resolution = ?
+        WHERE pair_id = ? AND resolved_at = ''`,
+    );
+    return Number(stmt.run(resolvedAt, resolution, pairId).changes);
+  }
+
+  /**
+   * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
+   * 返回被删除的行数。
+   *
+   * 两条刻意的约束:
+   * - **粒度是 run,不是行**。按行裁剪会切出"半截批次",而 task_19 的按 run 回溯
+   *   正是要回答"这一轮蒸馏都判了什么"——一个少了尾巴的批次会给出**看似完整、
+   *   实则遗漏**的结论,比查不到更糟。整批留、整批删,回溯的原子性才有保证。
+   * - **只碰 `l1_receipts`,绝不碰 `l1_records`**。前者是可再生/可丢弃的观测数据,
+   *   后者是用户的事实源。为省几 MB 而波及记忆本体,是把容量优化做成了数据丢失。
+   *
+   * `maxRuns <= 0` 或非有限值一律**不裁剪**——"传 0 即清空"是个太容易被误触的
+   * 语义,宁可把它定义为无效输入。
+   *
+   * 定序取每 run 的 `MAX(decided_at)`(凭证的 decided_at 在一批内恒定)并以
+   * `run_id` 兜底,使同一时刻产生的多个 run 也有**确定**的相对序,裁剪结果可复现。
+   */
+  trimReceipts(maxRuns: number): number {
+    if (this.degraded) return 0;
+    if (!Number.isFinite(maxRuns) || maxRuns <= 0) return 0;
+    const stmt = this.db.prepare(
+      `DELETE FROM l1_receipts WHERE run_id NOT IN (
+         SELECT run_id FROM l1_receipts
+          GROUP BY run_id
+          ORDER BY MAX(decided_at) DESC, run_id DESC
+          LIMIT ?
+       )`,
+    );
+    return Number(stmt.run(Math.floor(maxRuns)).changes);
+  }
+
+  /**
+   * §B 双维回溯(task_19):按 `record_id` / `run_id` 查判定史,两维同给为 **AND**。
+   *
+   * 两条刻意的行为:
+   * - **两维都不给返回空,而不是全表**。「查全部凭证」不是本能力的目标;把缺参
+   *   兜成全表,会让一次误调用变成全库判定史导出。调用方本就该先拒绝这种用法
+   *   (工具层给提示、端点层直接报错),这里是第二道,方向一致。
+   * - **定序确定**:`decided_at DESC, run_id DESC`。回溯的价值在于可复现——
+   *   同一问题两次问出不同顺序,核对时就会怀疑是不是数据变了。`run_id` 兜底
+   *   同一毫秒内的多批(L1 蒸馏是 LLM 调用,同刻两批罕见但非不可能)。
+   *   新的在前,与 `listL1` 的倒序口径一致。
+   */
+  listReceipts(opts: ReceiptQuery & { limit: number }): L1Receipt[] {
+    if (this.degraded) return [];
+    const where = receiptWhere(opts);
+    if (where === null) return [];
+    const limit = Math.min(Math.max(Math.floor(opts.limit) || 1, 1), RECEIPTS_QUERY_LIMIT_MAX);
+    const rows = this.db
+      .prepare(
+        `SELECT receipt_id, run_id, record_id, kind, input_digest, decided_at
+           FROM l1_receipts WHERE ${where.sql}
+          ORDER BY decided_at DESC, run_id DESC
+          LIMIT ?`,
+      )
+      .all(...where.params, limit) as Array<{
+      receipt_id: string;
+      run_id: string;
+      record_id: string;
+      kind: string;
+      input_digest: string;
+      decided_at: string;
+    }>;
+    return rows.map((r) => ({
+      receiptId: r.receipt_id,
+      runId: r.run_id,
+      recordId: r.record_id,
+      kind: r.kind as L1Receipt['kind'],
+      inputDigest: r.input_digest,
+      decidedAt: r.decided_at,
+    }));
+  }
+
+  /** 同维度命中的**总条数**(不受 limit 影响,供"还有多少条没显示"提示)。 */
+  countReceipts(opts: ReceiptQuery): number {
+    if (this.degraded) return 0;
+    const where = receiptWhere(opts);
+    if (where === null) return 0;
+    const row = this.db
+      .prepare(`SELECT COUNT(*) AS n FROM l1_receipts WHERE ${where.sql}`)
+      .get(...where.params) as { n: number | bigint };
+    return Number(row.n);
   }
 
   /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */
@@ -1600,8 +1855,39 @@ function rowToRecord(row: L1MetaRow): MemoryRecord {
   };
 }
 
-/** epoch 数组 → {逗号连接 ISO, 首尾 ISO}(磁盘格式契约:逗号连接、升序、ISO)。 */
-function timestampsToDb(ts: number[] | undefined): { str: string; start: string; end: string } {
+/**
+ * 双维回溯的 WHERE 构造。返回 `null` 表示**二维皆缺**——调用方据此返回空,
+ * 而不是拼出无 WHERE 的全表扫描(那会把误用变成全库导出)。
+ * 两维同给时按 `AND` 组合:问的是"这条记录在那一轮里被判成了什么"。
+ */
+function receiptWhere(q: ReceiptQuery): { sql: string; params: string[] } | null {
+  const sql: string[] = [];
+  const params: string[] = [];
+  if (q.recordId) {
+    sql.push('record_id = ?');
+    params.push(q.recordId);
+  }
+  if (q.runId) {
+    sql.push('run_id = ?');
+    params.push(q.runId);
+  }
+  return sql.length === 0 ? null : { sql: sql.join(' AND '), params };
+}
+
+/** `conflict_pending` 行 → {@link ConflictPair}(snake_case 只活在这一层)。 */
+function toConflictPair(r: Record<string, unknown>): ConflictPair {
+  return {
+    pairId: String(r.pair_id ?? ''),
+    runId: String(r.run_id ?? ''),
+    winnerId: String(r.winner_id ?? ''),
+    loserId: String(r.loser_id ?? ''),
+    createdAt: String(r.created_at ?? ''),
+    resolvedAt: String(r.resolved_at ?? ''),
+    resolution: String(r.resolution ?? ''),
+  };
+}
+
+/** epoch 数组 → {逗号连接 ISO, 首尾 ISO}(磁盘格式契约:逗号连接、升序、ISO)。 */function timestampsToDb(ts: number[] | undefined): { str: string; start: string; end: string } {
   if (!ts || ts.length === 0) return { str: '', start: '', end: '' };
   const sorted = [...ts].filter((t) => Number.isFinite(t)).sort((a, b) => a - b);
   if (sorted.length === 0) return { str: '', start: '', end: '' };

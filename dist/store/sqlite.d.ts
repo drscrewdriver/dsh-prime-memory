@@ -14,6 +14,8 @@ import type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
+import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
+import type { ConflictPair, ConflictResolution } from './conflicts.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
     id: string;
@@ -148,6 +150,100 @@ export declare class MemoryDb {
     /** 全量读取(调试/迁移/重嵌入用;检索请走 FTS/向量)。 */
     getAllL1(): MemoryRecord[];
     getL1ByIds(ids: string[]): MemoryRecord[];
+    /**
+     * §B 决策凭证批量落盘。`INSERT OR IGNORE` + 确定性 `receipt_id`
+     * (见 `receipts.ts` 的 `receiptIdFor`)→ 同一次 run 重放不产生重复行。
+     * 返回实际新增条数(被忽略的重复不计)。
+     *
+     * 刻意**不开事务**:凭证是旁路观测数据,单条独立、重放幂等,部分写入无害;
+     * 为它引入事务只会把失败面扩大。调用方另有 `persistReceiptsSafely` 兜底不抛。
+     *
+     * 写入后**顺带执行保留策略**(task_18)。把裁剪挂在这里而不是交给调用方,
+     * 是为了让"有界"成为**结构性保证**:任何写路径都不可能忘记裁剪,
+     * 因而表容量不可能随使用时间无界增长。裁剪自身失败只 warn——
+     * 它是省空间的动作,失败了最坏是这次没省下来,绝不能因此弄丢刚落盘的凭证
+     * (故裁剪在写入**之后**,且包在 try 里)。
+     */
+    recordReceipts(rows: readonly L1Receipt[], opts?: ReceiptRetentionOptions): number;
+    /**
+     * §C 矛盾冻结(task_22):落盘待裁决冲突对。
+     *
+     * `INSERT OR IGNORE`——幂等来自 **pair_id 主键**而非调用方自觉:
+     * `conflictPairId(runId, winner, loser)` 对同一三元组恒等,故一轮蒸馏重复落盘
+     * 只会得到一行。与 §B 凭证同一手法(那边是 `receipt_id` 主键)。
+     *
+     * 与凭证不同,这里**不做保留裁剪**:待裁决对是**欠人的债**,不是观测数据。
+     * 裁剪它等于把用户还没看的裁决请求悄悄删掉,那是丢工作而不是省空间。
+     * 有界性交给 task_24 的队列上限(超限不再停放、回落自动裁决),语义是
+     * 「**不收新的**」而非「**偷偷删旧的**」。
+     *
+     * @returns 实际新插入的行数。
+     */
+    recordConflictPending(rows: readonly ConflictPair[]): number;
+    /** §C 冻结:把图谱 `disputed` 状态同步到给定冲突集(薄缝,便于单测替换)。 */
+    syncGraphDisputed(disputedRecordIds: readonly string[]): {
+        marked: number;
+        cleared: number;
+    };
+    /**
+     * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
+     * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+     */
+    countConflictPendingUnresolved(): number;
+    /**
+     * §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。
+     *
+     * `createdBefore` 为**排他上界**(ISO 串):只取该时刻之前创建的,用于超时判定。
+     * 定序 `created_at ASC, pair_id ASC`——先来先服务,且同一毫秒内仍**确定可复现**。
+     */
+    listConflictPending(opts?: {
+        createdBefore?: string;
+        limit?: number;
+    }): ConflictPair[];
+    /**
+     * §C 打上裁决结论。
+     *
+     * `WHERE resolved_at = ''` 使**已裁决的不会被覆盖**:裁决是一次性的判定行为,
+     * 重复调用不该把第一次的结论改写掉(人工裁决与自动了结的次序因此不可逆)。
+     *
+     * @returns 受影响行数(0 = 该对被裁决过或不存在)。
+     */
+    resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;
+    /**
+     * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
+     * 返回被删除的行数。
+     *
+     * 两条刻意的约束:
+     * - **粒度是 run,不是行**。按行裁剪会切出"半截批次",而 task_19 的按 run 回溯
+     *   正是要回答"这一轮蒸馏都判了什么"——一个少了尾巴的批次会给出**看似完整、
+     *   实则遗漏**的结论,比查不到更糟。整批留、整批删,回溯的原子性才有保证。
+     * - **只碰 `l1_receipts`,绝不碰 `l1_records`**。前者是可再生/可丢弃的观测数据,
+     *   后者是用户的事实源。为省几 MB 而波及记忆本体,是把容量优化做成了数据丢失。
+     *
+     * `maxRuns <= 0` 或非有限值一律**不裁剪**——"传 0 即清空"是个太容易被误触的
+     * 语义,宁可把它定义为无效输入。
+     *
+     * 定序取每 run 的 `MAX(decided_at)`(凭证的 decided_at 在一批内恒定)并以
+     * `run_id` 兜底,使同一时刻产生的多个 run 也有**确定**的相对序,裁剪结果可复现。
+     */
+    trimReceipts(maxRuns: number): number;
+    /**
+     * §B 双维回溯(task_19):按 `record_id` / `run_id` 查判定史,两维同给为 **AND**。
+     *
+     * 两条刻意的行为:
+     * - **两维都不给返回空,而不是全表**。「查全部凭证」不是本能力的目标;把缺参
+     *   兜成全表,会让一次误调用变成全库判定史导出。调用方本就该先拒绝这种用法
+     *   (工具层给提示、端点层直接报错),这里是第二道,方向一致。
+     * - **定序确定**:`decided_at DESC, run_id DESC`。回溯的价值在于可复现——
+     *   同一问题两次问出不同顺序,核对时就会怀疑是不是数据变了。`run_id` 兜底
+     *   同一毫秒内的多批(L1 蒸馏是 LLM 调用,同刻两批罕见但非不可能)。
+     *   新的在前,与 `listL1` 的倒序口径一致。
+     */
+    listReceipts(opts: ReceiptQuery & {
+        limit: number;
+    }): L1Receipt[];
+    /** 同维度命中的**总条数**(不受 limit 影响,供"还有多少条没显示"提示)。 */
+    countReceipts(opts: ReceiptQuery): number;
     /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */
     listL1(opts: {
         type?: string;

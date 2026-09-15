@@ -1,4 +1,6 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
+import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from '../store/receipts.js';
+import { renderConflictResolution, resolveConflictPair } from '../conflict-service.js';
 import { normPersistence } from '../types.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
@@ -735,7 +737,121 @@ ruminate) {
             };
         },
     }));
-    logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
+    // ── memory_receipts: §B 决策凭证回溯(读;受与 memory_search 同款档位门) ──
+    // 为什么给它一个模型可见的工具:凭证链的价值全在"事后能问"。若只有 RPC 端点,
+    // 用户得自己去浏览器/curl 才能回溯,而真正会问「这条记忆怎么来的」的场合
+    // 恰恰是在对话里。工具是这条链唯一的**用户可见出口**。
+    ctx.tools.register(defineTool({
+        name: 'memory_receipts',
+        description: '回溯 L1 记忆的**去重决策出处**(决策凭证链)。按 record_id 问"这条记忆出自哪一轮蒸馏、当时看到什么候选池、被判定成了什么";按 run_id 问"那一轮蒸馏都判了什么"(跨多条记录)。两者同给即问"这条记录在那一轮里被判成了什么"。返回决策当时的结论与输入指纹,**不含记忆正文**。注意:由于记录 id 每轮新铸,按 record_id 查询目前通常只返回一条——它回答的是"出自哪",不是"历次变更"。',
+        parameters: {
+            record_id: { type: 'string', description: '按记忆记录 id 回溯(与 run_id 至少给一个)' },
+            run_id: { type: 'string', description: '按某轮蒸馏的 run id 回溯(与 record_id 至少给一个)' },
+            limit: { type: 'number', description: `最大返回条数(默认 20,上限 ${RECEIPTS_QUERY_LIMIT_MAX})` },
+        },
+        output: {
+            schema: {
+                type: 'object',
+                properties: {
+                    dimension: { type: 'string', description: '命中的维度:record / run / both / none' },
+                    items: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                receipt_id: { type: 'string' },
+                                run_id: { type: 'string' },
+                                record_id: { type: 'string' },
+                                kind: { type: 'string', description: 'store / update / merge / skip / conflict / skip_missing' },
+                                input_digest: { type: 'string' },
+                                decided_at: { type: 'string' },
+                            },
+                            additionalProperties: false,
+                        },
+                    },
+                    total: { type: 'number' },
+                    notice: { type: 'string', description: '非结果的状态提示(如本会话记忆已关闭)' },
+                },
+                additionalProperties: false,
+            },
+            render: (_args, value) => [
+                { type: 'text', text: value.notice ?? renderReceipts(value.dimension, value.items ?? [], value.total ?? 0) },
+            ],
+        },
+        execute: async (args, exec) => {
+            // 档位拒读门与 memory_search 同款:off 会话对记忆系统完全隐身,不该反过来
+            // 能内省记忆系统的判定史(凭证虽不含正文,但泄漏"存在哪些记录/判了什么")。
+            const family = familyOfCaller(exec);
+            if (family === null)
+                return { dimension: 'none', items: [], total: 0, notice: blockNoticeOf(exec) };
+            const query = {
+                recordId: typeof args.record_id === 'string' && args.record_id.trim() ? args.record_id.trim() : undefined,
+                runId: typeof args.run_id === 'string' && args.run_id.trim() ? args.run_id.trim() : undefined,
+            };
+            const dimension = dimensionOf(query);
+            if (dimension === 'none') {
+                return {
+                    dimension,
+                    items: [],
+                    total: 0,
+                    notice: '需要至少一个维度:record_id(这条记忆出自哪一轮、当时候选池是什么)或 run_id(某一轮蒸馏的全部决策)。' +
+                        '不提供"查全部凭证"——那等于把整库判定史一次性导出。',
+                };
+            }
+            const limit = Math.min(Math.max(args.limit ?? 20, 1), RECEIPTS_QUERY_LIMIT_MAX);
+            const rows = stores.l1.listReceipts({ ...query, limit });
+            return { dimension, items: rows.map(toReceiptView), total: stores.l1.countReceipts(query) };
+        },
+    }));
+    // ── memory_resolve_conflict: §C 矛盾冻结的人工裁决出口 ──
+    // 冻结把裁决权交还给人,那么**必须**有一个"人能把结论说回去"的出口——
+    // 否则待裁决队列是个只进不出的黑洞,安全阀(task_24)会成为唯一出路,
+    // 那等于把 opt-in 的冻结悄悄退回成"超时后机器自己判"。
+    ctx.tools.register(defineTool({
+        name: 'memory_resolve_conflict',
+        description: '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
+        parameters: {
+            pair_id: { type: 'string', description: '待裁决对的 pair_id(来自待裁决队列)' },
+            outcome: { type: 'string', description: '裁决结论:winner | loser | both' },
+        },
+        output: {
+            schema: {
+                type: 'object',
+                properties: {
+                    pair_id: { type: 'string' },
+                    outcome: { type: 'string' },
+                    resolved_at: { type: 'string', description: '裁决时刻(ISO);空串表示未生效' },
+                    removed_record_id: { type: 'string', description: '因裁决从检索中退场的记录 id(无则空串)' },
+                    notice: { type: 'string', description: '非结果的状态提示(如未开启冻结 / 该对不存在或已裁决)' },
+                },
+                additionalProperties: false,
+            },
+            render: (_args, value) => [{ type: 'text', text: renderConflictResolution(value) }],
+        },
+        execute: async (args, exec) => {
+            const family = familyOfCaller(exec);
+            if (family === null) {
+                return { pair_id: '', outcome: '', resolved_at: '', removed_record_id: '', notice: blockNoticeOf(exec) };
+            }
+            const empty = { pair_id: '', outcome: '', resolved_at: '', removed_record_id: '' };
+            const pairId = typeof args.pair_id === 'string' ? args.pair_id.trim() : '';
+            const outcome = typeof args.outcome === 'string' ? args.outcome.trim() : '';
+            if (!pairId)
+                return { ...empty, notice: '需要 pair_id:待裁决对没有"全部裁决"这种用法。' };
+            return resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, pairId, outcome);
+        },
+    }));
+    logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_receipts / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_resolve_conflict / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
+}
+/** 凭证回溯的人类可读渲染(含"还有多少条没显示")。 */
+function renderReceipts(dimension, items, total) {
+    const what = dimension === 'record' ? '该记录出自哪一轮' : dimension === 'run' ? '该批次的全部决策' : '该记录在该批次中的决策';
+    if (items.length === 0)
+        return `(${what}:没有查到凭证——该 id 可能从未走过 L1 去重,或凭证已超出保留窗口)`;
+    const lines = items.map((it, i) => `${i + 1}. [${it.kind ?? ''}] run=${it.run_id ?? ''} record=${it.record_id ?? ''}` +
+        `\n   时刻: ${it.decided_at ?? ''}\n   输入指纹: ${(it.input_digest ?? '').slice(0, 16)}…`);
+    const more = total > items.length ? `\n…共 ${total} 条,已显示 ${items.length} 条` : '';
+    return `${what}(${items.length} 条):\n${lines.join('\n')}${more}`;
 }
 function renderGraphCards(items) {
     if (!items || items.length === 0)

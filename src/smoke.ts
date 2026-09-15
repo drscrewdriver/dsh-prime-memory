@@ -69,7 +69,7 @@ async function main(): Promise<void> {
   );
   // Config 是 schemastery schema 对象(可调用产出默认值):调用一次验证形状
   const defaults = (entry.Config as unknown as (v: unknown) => Record<string, unknown>)({});
-  check('Config 产出部署默认键', ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl'].every((k) => k in defaults));
+  check('Config 产出部署默认键', ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl', 'conflictFreeze'].every((k) => k in defaults));
   check('Config 默认 family=auto', (defaults.family as string) === 'auto');
 
   // ── 类型契约与端点面 ──

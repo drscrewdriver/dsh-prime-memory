@@ -10,6 +10,9 @@ import { randomBytes } from 'node:crypto';
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
 import { callLLM, parseJsonLogged, resolveLayerTokens } from '../llm.js';
+import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipts.js';
+import { buildConflictPair, validateConflictPair } from '../store/conflicts.js';
+import type { ConflictPair } from '../store/conflicts.js';
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
 import type { L1Store } from '../store/l1.js';
@@ -84,12 +87,41 @@ interface SceneExtraction {
 
 interface DedupDecision {
   record_id: string;
-  action: 'store' | 'update' | 'skip' | 'merge';
+  action: 'store' | 'update' | 'skip' | 'merge' | 'conflict';
   target_ids?: string[];
   merged_content?: string;
   merged_type?: string;
   merged_priority?: number;
   merged_timestamps?: string[];
+  /** §C 冻结:LLM 建议的胜方/败方 record_id(二者必须不同,且恰有一方是本条新记忆)。 */
+  winner?: unknown;
+  loser?: unknown;
+}
+
+/** 抽取产出 + 管线补上的三个字段(与 Step 1 的 `extracted` 元素同形)。 */
+type PendingMemory = ExtractedMemory & { record_id: string; scene_name: string; family: MemoryFamily };
+
+/**
+ * 构造一条**全新**L1 记录(store 语义)。§C 冻结复用同一构造:
+ * "新记忆照常入 L1"必须与既有 store 路径**逐字段一致**,否则冻结会引入
+ * 一种只在开启开关时才出现的新记录形状。
+ */
+function toStoreRecord(m: PendingMemory, now: number, ts: number): MemoryRecord {
+  return {
+    id: m.record_id,
+    content: m.content,
+    type: m.type,
+    priority: Number(m.priority) || 60,
+    scene_name: m.scene_name,
+    timestamps: [Number.isNaN(ts) ? now : ts],
+    createdAt: now,
+    updatedAt: now,
+    version: 0,
+    source_message_ids: m.source_message_ids ?? [],
+    metadata: m.metadata ?? {},
+    family: m.family,
+    ...temporalOf(m.metadata),
+  };
 }
 
 function newId(prefix: string): string {
@@ -141,6 +173,36 @@ export async function runExtraction(
   // 情境链锚点桶:纯档用本族;auto 用最近活跃的族(chainHead 同源)
   const chainState = mode === 'auto' ? activeState(states) : states[mode];
 
+  // ── §C 安全阀(task_24):队列上限 + 超时降级 ──
+  // 冻结的代价是消耗人的注意力。没有安全阀,队列会无界增长,且"新记忆与旧记忆
+  // 长期并列召回"的状态会**永久**留在库里——比它想解决的问题更糟。
+  // 语义是**回落自动裁决**(按 LLM 给出的 winner/loser 了结),而**不是**丢掉
+  // 待裁决对:被自动了结的对仍写进 conflict_pending,只是 resolved_at 非空、
+  // resolution='auto'。痕迹必须留下,否则"机器替人裁决"会以"悄悄发生"的形式回来。
+  const freezeEnabled = cfg.conflictFreeze?.enabled === true;
+  const maxPending = cfg.conflictFreeze?.maxPending ?? 0;
+  const timeoutDays = cfg.conflictFreeze?.timeoutDays ?? 0;
+  /** LLM 的 loser,将在新增记录写完后从检索库退场(自动裁决的执行面)。 */
+  const autoLosers = new Set<string>();
+  if (freezeEnabled && timeoutDays > 0) {
+    const cutoff = new Date(Date.now() - timeoutDays * 86_400_000).toISOString();
+    try {
+      const stale = store.listConflictPending({ createdBefore: cutoff });
+      for (const p of stale) {
+        if (store.resolveConflictPending(p.pairId, 'auto', new Date().toISOString()) > 0) {
+          autoLosers.add(p.loserId);
+        }
+      }
+      if (stale.length > 0) {
+        logger.info(`[memory] 矛盾冻结:${stale.length} 对待裁决对超时 ${timeoutDays} 天,已自动了结`);
+      }
+    } catch (err) {
+      logger.warn(
+        `[memory] 矛盾冻结:超时扫描失败(忽略): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   // ── Step 1: 抽取(输入按 llm.maxInputChars 预算分块,情境链式衔接,不丢消息) ──
   const backgroundMsgs = background.slice(-cfg.extract.backgroundMessages);
   // 预留:背景消息(≤10 条 ×4000 字)+ prompt 脚手架
@@ -152,7 +214,7 @@ export async function runExtraction(
     );
   }
 
-  const extracted: Array<ExtractedMemory & { record_id: string; scene_name: string; family: MemoryFamily }> = [];
+  const extracted: Array<PendingMemory> = [];
   let lastScene = chainState.lastSceneName;
   let sceneCount = 0;
   for (const chunk of chunks) {
@@ -203,7 +265,7 @@ export async function runExtraction(
   );
   const dedupPrompt = formatBatchConflictPrompt(matches);
   const dedupRaw = await callLLM(ctx, cfg, {
-    system: getConflictDetectionSystemPrompt(mode),
+    system: getConflictDetectionSystemPrompt(mode, { conflictFreeze: cfg.conflictFreeze.enabled }),
     user: dedupPrompt,
     maxTokens: resolveLayerTokens(cfg, 'dedup'),
     layer: 'l1-dedup',
@@ -228,6 +290,29 @@ export async function runExtraction(
       .join(' ')}`,
   );
 
+  // ── §B 决策凭证:在应用决策前留痕(旁路设施,写失败绝不中断蒸馏) ──
+  // 覆盖**全部** extracted:包括 skip 与"模型没返回决策"——回溯"这条为什么没进记忆"
+  // 与"为什么进了"同等重要,而 skip 恰好是现有代码里唯一完全不留痕的分支
+  // (下方应用循环 `if (!decision || action === 'skip') continue` 直接跳过)。
+  // matches 与 extracted 同长同序(Promise.all 按数组序),故按下标取候选池。
+  // 注:本轮不开配置开关——新增开关要连带改 config schema / contract / 设置页,
+  // 属范围蔓延;凭证本身是纯旁路且幂等,先落地,需要时再加 kill-switch。
+  // runId 提到块外:§C 冻结对要沿用同一批次 id,使「这一轮判了什么」与
+  // 「这一轮冻结了哪一对」在记忆库侧可交叉审计(findings.md §3 / §9)。
+  const runId = newRunId();
+  {
+    const items = extracted.map((m, i) => ({
+      recordId: m.record_id,
+      candidateIds: (matches[i]?.candidates ?? []).map((c) => c.id),
+      action: byRecord.get(m.record_id)?.action,
+    }));
+    persistReceiptsSafely(
+      (rows) => store.recordReceipts(rows),
+      buildReceipts(runId, new Date().toISOString(), items),
+      logger,
+    );
+  }
+
   // ── Step 3: 应用决策(官方语义:新记录追加进事实源,被替换目标只从检索库删除) ──
   // 只按需取决策涉及的记录(候选 + 目标 id 并集),避免每轮全表扫描
   const relatedIds = new Set<string>();
@@ -240,6 +325,8 @@ export async function runExtraction(
   const byId = new Map(store.getByIds([...relatedIds]).map((r) => [r.id, r]));
   const deletedIds = new Set<string>();
   const added: MemoryRecord[] = [];
+  /** §C 本轮新冻结的冲突对(应用完新增记录后统一落盘)。 */
+  const frozen: ConflictPair[] = [];
   const now = Date.now();
 
   for (const m of extracted) {
@@ -249,21 +336,49 @@ export async function runExtraction(
     const ts = m.metadata?.activity_start_time ? Date.parse(String(m.metadata.activity_start_time)) : now;
 
     if (action === 'store') {
-      added.push({
-        id: m.record_id,
-        content: m.content,
-        type: m.type,
-        priority: Number(m.priority) || 60,
-        scene_name: m.scene_name,
-        timestamps: [Number.isNaN(ts) ? now : ts],
-        createdAt: now,
-        updatedAt: now,
-        version: 0,
-        source_message_ids: m.source_message_ids ?? [],
-        metadata: m.metadata ?? {},
-        family: m.family,
-        ...temporalOf(m.metadata),
-      });
+      added.push(toStoreRecord(m, now, ts));
+      continue;
+    }
+
+    // ── §C 矛盾冻结:不自动裁决 ──
+    // 走这里意味着**不覆盖、不合并、不删除**——新记忆按 store 语义照常入 L1,
+    // 旧记忆原样留下,两者作为**一对**停放待人工裁决。
+    // 开关关闭时 prompt 里根本没有 conflict 动作(零漂移见 task_23),但模型仍可能
+    // 凭惯性输出它。此时**回落 store 而非落到下面的 update/merge 分支**:
+    // 一个显式声明了"拿不准"的决策,绝不能被静默当成"新记忆更优"去覆盖旧记忆。
+    if (action === 'conflict') {
+      const pair =
+        freezeEnabled
+          ? validateConflictPair(m.record_id, decision.winner, decision.loser, new Set(byId.keys()))
+          : null;
+      if (pair) {
+        added.push(toStoreRecord(m, now, ts));
+        const built = buildConflictPair({
+          runId,
+          winnerId: pair.winnerId,
+          loserId: pair.loserId,
+          createdAt: new Date(now).toISOString(),
+        });
+        // 队列上限:达上限即**不再停放**,改为当场按 LLM 的 winner/loser 了结。
+        // 判据含 frozen 中本轮已停放的未裁决数,否则同一轮内多条冲突会一起越界。
+        const pendingNow =
+          store.countConflictPendingUnresolved() + frozen.filter((p) => p.resolvedAt === '').length;
+        if (pendingNow >= maxPending) {
+          built.resolvedAt = new Date(now).toISOString();
+          built.resolution = 'auto';
+          autoLosers.add(pair.loserId);
+          logger.warn(
+            `[memory] 矛盾冻结:待裁决队列已满(${pendingNow}/${maxPending}),第 ${m.record_id} 条改为自动了结`,
+          );
+        }
+        frozen.push(built);
+      } else {
+        logger.warn(
+          `[memory] 矛盾冻结:第 ${m.record_id} 条的 conflict 决策无法构成冻结对` +
+            `(winner=${String(decision.winner)} loser=${String(decision.loser)}),已回落 store`,
+        );
+        added.push(toStoreRecord(m, now, ts));
+      }
       continue;
     }
 
@@ -302,6 +417,42 @@ export async function runExtraction(
 
   await store.appendNew(added);
   if (deletedIds.size > 0) await store.deleteBatch([...deletedIds]);
+  // §C 自动裁决的执行面:LLM 的 loser 从检索库退场(winner 存活)。
+  // 排在 appendNew 之后——若 loser 恰是**本轮新记忆**(LLM 判定新记忆更差),
+  // 也必须先让它进库再退场,以保证"本轮新增"与"本轮删除"的账面一致。
+  if (autoLosers.size > 0) await store.deleteBatch([...autoLosers]);
+
+  // ── §C 冻结对落盘(排在 appendNew 之后) ──
+  // 顺序有讲究:先让新记忆真正进 L1,再登记"它和谁构成待裁决对"。反过来的话,
+  // 落盘失败会留下一条指向**不存在记录**的裁决请求,人工打开队列只会看到悬空 id。
+  // 写失败与 §B 凭证同策略:记 warn、不中断蒸馏——冻结是旁路设施,
+  // 让它有权打断一轮蒸馏是本末倒置。
+  if (frozen.length > 0) {
+    try {
+      store.recordConflictPending(frozen);
+    } catch (err) {
+      logger.warn(
+        `[memory] 矛盾冻结:${frozen.length} 对落盘失败(忽略): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    // 图谱侧:`disputed` 是"照常召回、但状态可见"的中间态(graph/search.ts 仍在候选内)。
+    // **重算**而非增量标记:队列里现在还剩哪些未裁决对,就是此刻的争议集;
+    // 本轮之前已被裁决的节点因此会**自动复原 active**(派生字段由当前事实重算)。
+    // 图谱是可选派生投影,未启用时 syncGraphDisputed 内部即 no-op。
+    try {
+      const ids = new Set<string>();
+      for (const p of store.listConflictPending()) {
+        ids.add(p.winnerId);
+        ids.add(p.loserId);
+      }
+      store.syncGraphDisputed([...ids]);
+    } catch (err) {
+      logger.warn(
+        `[memory] 矛盾冻结:图谱 disputed 同步失败(忽略): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    logger.info(`[memory] 矛盾冻结:本轮停放 ${frozen.length} 对待人工裁决(run_id=${runId})`);
+  }
 
   // 状态按记录族分桶推进(阈值计数各自独立)
   const addedByFamily: Record<MemoryFamily, number> = { chat: 0, work: 0 };
