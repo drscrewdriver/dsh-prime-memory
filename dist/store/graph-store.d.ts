@@ -90,19 +90,25 @@ export declare class GraphStore {
      */
     markSourcesDeleted(deletedIds: readonly string[]): void;
     /**
-     * §C 矛盾冻结:把**来源含冲突记录**的 active 节点/边标 `disputed`。
+     * §C 矛盾冻结:把图谱的 `disputed` 状态**同步**到给定冲突集。
      *
-     * 与 {@link markSourcesDeleted} 的区别在判据方向:删除传播问"来源是否**全部**消失"
-     * (全消失才墓碑);冻结问"来源是否**命中**冲突集"(命中一条即存疑)。
-     * 节点是多条 L1 记录聚合出的实体,只要有一条来源处在待裁决对里,
-     * 这个实体就**不可全信**——`disputed` 在 `graph/search.ts:87` 仍进检索候选,
-     * 是"照常召回、但状态可见"的中间态,正合冻结语义。
+     * 为什么是"同步"而不是"标记":裁决会**撤销**争议。只做单向标记的话,
+     * 一对已被人工裁决的对,其节点会永远停在 `disputed`——那是**派生投影在说谎**。
+     * 图谱是本仓库反复确认的 L1 **派生投影**,派生字段就必须**由当前事实重算**,
+     * 而不是靠一串增量事件累积(后者一旦漏一次就永久跑偏)。
      *
-     * 已是 `disputed` 的不重复计数(幂等);`archived` 墓碑**不复活**。
+     * 判据(与 {@link markSourcesDeleted} 方向相反:那边问"来源是否**全部**消失",
+     * 这边问"来源是否**命中**冲突集",命中一条即存疑):
+     * - `active` 且来源命中冲突集 → `disputed`
+     * - `disputed` 且来源**不**命中冲突集 → 复原为 `active`
+     * - `archived` 墓碑两边都不动(墓碑是删除传播的产物,与争议无关)
      *
-     * @returns 本次实际改动的节点数。
+     * @returns 本次标记 / 复原的节点数。
      */
-    markSourcesDisputed(recordIds: readonly string[]): number;
+    syncDisputed(disputedRecordIds: readonly string[]): {
+        marked: number;
+        cleared: number;
+    };
     /** 清空全部图谱数据(L1 重建时调用——图谱是 L1 的投影,记录清空即图谱作废)。 */
     resetAll(): void;
 }

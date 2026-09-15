@@ -21,6 +21,7 @@ import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from '../store/receipts.js';
 import type { ReceiptQuery } from '../store/receipts.js';
+import { renderConflictResolution, resolveConflictPair } from '../conflict-service.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
@@ -857,7 +858,7 @@ export function registerMemoryTools(
                   receipt_id: { type: 'string' },
                   run_id: { type: 'string' },
                   record_id: { type: 'string' },
-                  kind: { type: 'string', description: 'store / update / merge / skip / skip_missing' },
+                  kind: { type: 'string', description: 'store / update / merge / skip / conflict / skip_missing' },
                   input_digest: { type: 'string' },
                   decided_at: { type: 'string' },
                 },
@@ -901,7 +902,52 @@ export function registerMemoryTools(
     }),
   );
 
-  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_receipts / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
+  // ── memory_resolve_conflict: §C 矛盾冻结的人工裁决出口 ──
+  // 冻结把裁决权交还给人,那么**必须**有一个"人能把结论说回去"的出口——
+  // 否则待裁决队列是个只进不出的黑洞,安全阀(task_24)会成为唯一出路,
+  // 那等于把 opt-in 的冻结悄悄退回成"超时后机器自己判"。
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_resolve_conflict',
+      description:
+        '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
+      parameters: {
+        pair_id: { type: 'string', description: '待裁决对的 pair_id(来自待裁决队列)' },
+        outcome: { type: 'string', description: '裁决结论:winner | loser | both' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            pair_id: { type: 'string' },
+            outcome: { type: 'string' },
+            resolved_at: { type: 'string', description: '裁决时刻(ISO);空串表示未生效' },
+            removed_record_id: { type: 'string', description: '因裁决从检索中退场的记录 id(无则空串)' },
+            notice: { type: 'string', description: '非结果的状态提示(如未开启冻结 / 该对不存在或已裁决)' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: renderConflictResolution(value) }],
+      },
+      execute: async (args, exec) => {
+        const family = familyOfCaller(exec);
+        if (family === null) {
+          return { pair_id: '', outcome: '', resolved_at: '', removed_record_id: '', notice: blockNoticeOf(exec) };
+        }
+        const empty = { pair_id: '', outcome: '', resolved_at: '', removed_record_id: '' };
+        const pairId = typeof args.pair_id === 'string' ? args.pair_id.trim() : '';
+        const outcome = typeof args.outcome === 'string' ? args.outcome.trim() : '';
+        if (!pairId) return { ...empty, notice: '需要 pair_id:待裁决对没有"全部裁决"这种用法。' };
+        return resolveConflictPair(
+          { l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true },
+          pairId,
+          outcome,
+        );
+      },
+    }),
+  );
+
+  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_receipts / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_resolve_conflict / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
 }
 
 /** 凭证回溯的人类可读渲染(含"还有多少条没显示")。 */

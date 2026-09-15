@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { EFFORT_CHOICES, memorySchema, resolveDataDir } from '../src/config.js';
+import { MEMORY_ENDPOINTS } from '../src/stats.js';
 import { HALL_CATALOG, HALL_DEFAULT_ENABLED, familyForType, resolveRecordFamily } from '../src/types.js';
 import {
   CHARS_PER_TOKEN,
@@ -52,7 +53,7 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'memoryMutate',
 ] as const;
 
-/** 端点全集(26 个;含 records-delete 与图谱两端点)。 */
+/** 端点全集(28 个;含 records-delete / 图谱两端点 / receipts / conflict-resolve)。 */
 const ENDPOINTS = [
   'dsh-memory/stats',
   'dsh-memory/token-cost',
@@ -63,6 +64,8 @@ const ENDPOINTS = [
   'dsh-memory/settings-set',
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
+  'dsh-memory/receipts',
+  'dsh-memory/conflict-resolve',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
@@ -97,9 +100,16 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 26 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(26);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(26);
+  it('exposes exactly the 28 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(28);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(28);
+  });
+
+  it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
+    // 这条才是真门禁。上面那条只在本文件内部自洽——它是一份**手抄副本**,
+    // 与真实注册表脱钩。执行期实测:本副本自 task_19(新增 receipts)起就已过期
+    // 却仍然全绿,因为它比对的从来不是 src。判据必须指向**唯一事实源**。
+    expect([...ENDPOINTS].sort()).toEqual([...MEMORY_ENDPOINTS].sort());
   });
 });
 

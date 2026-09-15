@@ -101,14 +101,14 @@ describe('memory tools', () => {
     return { db, l1, l0, scenes, persona };
   }
 
-  it('registers the eight retrieval/mutation tools plus the three ruminate tools', async () => {
+  it('registers the nine retrieval/mutation tools plus the three ruminate tools', async () => {
     const stores = await setupStores();
     const h = harness();
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
     // 这份清单是**有意**穷举的:新增工具必须在此显式登记,避免"悄悄多了一个模型可见
     // 的能力"(§B 的 memory_receipts 即在此处被拦下一次,确认后才加入)。
     expect(h.registered.map((t) => t.name).sort()).toEqual([
-      'conversation_search', 'memory_add', 'memory_delete', 'memory_expand_graph_node', 'memory_import', 'memory_read_scene', 'memory_receipts', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
+      'conversation_search', 'memory_add', 'memory_delete', 'memory_expand_graph_node', 'memory_import', 'memory_read_scene', 'memory_receipts', 'memory_resolve_conflict', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
     ]);
     stores.db.close();
   });

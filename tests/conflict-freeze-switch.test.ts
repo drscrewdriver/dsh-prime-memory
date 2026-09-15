@@ -82,22 +82,18 @@ describe('task_23 关闭态零漂移（静态）', () => {
 });
 
 describe('task_23 开关确实接进了管线（端到端）', () => {
+  // 夹具基线取自真 schema 的部署默认值,只在用例关心处覆盖(手写整份 config
+  // 会在 schema 新增键时静默漂移——本波已被咬过两次)。
+  const DEFAULTS = (memorySchema as unknown as (v: unknown) => Record<string, unknown>)({});
   function cfg(dataDir: string, enabled: boolean): MemoryConfig {
     return {
+      ...DEFAULTS,
       dataDir, family: 'auto',
-      capture: { enabled: true, stripCodeBlocks: true, maxMessageChars: 4000 },
-      extract: { enabled: true, minMessages: 1, idleSeconds: 300, backgroundMessages: 10, candidatePool: 5 },
-      l2: { enabled: true, minNewMemories: 5, maxScenes: 12, sceneContextLimit: 3 },
-      l3: { enabled: true, interval: 20 },
       graph: { enabled: false },
-      conflictFreeze: { enabled },
+      conflictFreeze: { enabled, maxPending: 1000, timeoutDays: 0 },
       recall: { enabled: true, maxResults: 5, maxCharsPerMemory: 500, maxTotalRecallChars: 2000, timeoutMs: 5000, includePersona: true, includeSceneNav: true, strategy: 'keyword', scoreThreshold: 0.3, decayHalfLifeDays: 30 },
-      embedding: { enabled: false, baseUrl: '', apiKey: '', model: '', dimensions: 0, maxInputChars: 5000, timeoutMs: 10000, allowLocalModels: true, mirror: 'https://hf-mirror.com', proxy: '' },
-      llm: { provider: '', model: '', mode: 'host', baseURL: '', apiKey: '', maxTokens: 65536, reasoningEffort: 'medium', maxInputChars: 700000, timeoutMs: 120000 },
+      extract: { enabled: true, minMessages: 1, idleSeconds: 300, backgroundMessages: 10, candidatePool: 5 },
       hall: { enabled: ['work'] },
-      tokenCost: { retentionDays: 365 },
-      tools: true,
-      benchControl: false,
     } as MemoryConfig;
   }
 

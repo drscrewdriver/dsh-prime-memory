@@ -52,7 +52,7 @@ import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
-import type { ConflictPair } from './conflicts.js';
+import type { ConflictPair, ConflictResolution } from './conflicts.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
@@ -1084,10 +1084,64 @@ export class MemoryDb {
     return n;
   }
 
-  /** §C 冻结:把来源命中冲突集的图谱节点标 `disputed`(薄缝,便于单测替换)。 */
-  markSourcesDisputed(recordIds: readonly string[]): number {
+  /** §C 冻结:把图谱 `disputed` 状态同步到给定冲突集(薄缝,便于单测替换)。 */
+  syncGraphDisputed(disputedRecordIds: readonly string[]): { marked: number; cleared: number } {
+    if (this.degraded) return { marked: 0, cleared: 0 };
+    return this.graphStore.syncDisputed(disputedRecordIds);
+  }
+
+  /**
+   * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
+   * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+   */
+  countConflictPendingUnresolved(): number {
     if (this.degraded) return 0;
-    return this.graphStore.markSourcesDisputed(recordIds);
+    const row = this.db.prepare(`SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = ''`).get() as
+      | { n: number }
+      | undefined;
+    return Number(row?.n ?? 0);
+  }
+
+  /**
+   * §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。
+   *
+   * `createdBefore` 为**排他上界**(ISO 串):只取该时刻之前创建的,用于超时判定。
+   * 定序 `created_at ASC, pair_id ASC`——先来先服务,且同一毫秒内仍**确定可复现**。
+   */
+  listConflictPending(opts: { createdBefore?: string; limit?: number } = {}): ConflictPair[] {
+    if (this.degraded) return [];
+    const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.floor(opts.limit as number) : 500;
+    const params: unknown[] = [];
+    let where = `resolved_at = ''`;
+    if (opts.createdBefore) {
+      where += ` AND created_at < ?`;
+      params.push(opts.createdBefore);
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution
+           FROM conflict_pending WHERE ${where}
+          ORDER BY created_at ASC, pair_id ASC LIMIT ?`,
+      )
+      .all(...(params as never[]), limit) as Array<Record<string, unknown>>;
+    return rows.map(toConflictPair);
+  }
+
+  /**
+   * §C 打上裁决结论。
+   *
+   * `WHERE resolved_at = ''` 使**已裁决的不会被覆盖**:裁决是一次性的判定行为,
+   * 重复调用不该把第一次的结论改写掉(人工裁决与自动了结的次序因此不可逆)。
+   *
+   * @returns 受影响行数(0 = 该对被裁决过或不存在)。
+   */
+  resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number {
+    if (this.degraded) return 0;
+    const stmt = this.db.prepare(
+      `UPDATE conflict_pending SET resolved_at = ?, resolution = ?
+        WHERE pair_id = ? AND resolved_at = ''`,
+    );
+    return Number(stmt.run(resolvedAt, resolution, pairId).changes);
   }
 
   /**
@@ -1818,6 +1872,19 @@ function receiptWhere(q: ReceiptQuery): { sql: string; params: string[] } | null
     params.push(q.runId);
   }
   return sql.length === 0 ? null : { sql: sql.join(' AND '), params };
+}
+
+/** `conflict_pending` 行 → {@link ConflictPair}(snake_case 只活在这一层)。 */
+function toConflictPair(r: Record<string, unknown>): ConflictPair {
+  return {
+    pairId: String(r.pair_id ?? ''),
+    runId: String(r.run_id ?? ''),
+    winnerId: String(r.winner_id ?? ''),
+    loserId: String(r.loser_id ?? ''),
+    createdAt: String(r.created_at ?? ''),
+    resolvedAt: String(r.resolved_at ?? ''),
+    resolution: String(r.resolution ?? ''),
+  };
 }
 
 /** epoch 数组 → {逗号连接 ISO, 首尾 ISO}(磁盘格式契约:逗号连接、升序、ISO)。 */function timestampsToDb(ts: number[] | undefined): { str: string; start: string; end: string } {

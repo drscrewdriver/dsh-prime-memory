@@ -20,6 +20,7 @@ import { emptyRecallStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
+import { resolveConflictPair } from './conflict-service.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
@@ -42,6 +43,7 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/list-records',
     'dsh-memory/records-delete',
     'dsh-memory/receipts',
+    'dsh-memory/conflict-resolve',
     'dsh-memory/graph-search',
     'dsh-memory/graph-node-get',
     'dsh-memory/scenes',
@@ -709,6 +711,19 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 total: stores.l1.countReceipts(query),
             };
             return resp;
+        }
+        // ── §C 矛盾冻结裁决(task_25):与 memory_resolve_conflict 工具共用同一形状 ──
+        // 端点层同样不给"提示文案"出口的例外只有一条:**队列未开启**不是调用错误而是
+        // 部署状态,故它走返回体(带 notice)而非抛错;pair_id/outcome 缺参才抛。
+        case 'dsh-memory/conflict-resolve': {
+            const p = (payload ?? {});
+            const pairId = typeof p.pairId === 'string' ? p.pairId.trim() : '';
+            const outcome = typeof p.outcome === 'string' ? p.outcome.trim() : '';
+            if (!pairId)
+                throw new Error('需要 pairId(待裁决对的 pair_id)');
+            if (!outcome)
+                throw new Error('需要 outcome(winner | loser | both)');
+            return await resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, pairId, outcome);
         }
         case 'dsh-memory/records-delete': {
             // 面板高权限删除指定记忆;写入删权限门(memoryMutate)防御

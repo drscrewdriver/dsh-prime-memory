@@ -29,12 +29,15 @@ export function conflictPairId(runId: string, winnerId: string, loserId: string)
 }
 
 /**
- * 人工裁决的结论。
- * - `winner` / `loser`:判定哪一方为真(另一方从检索库退场);
+ * 裁决结论。
+ * - `winner` / `loser`:人工判定哪一方为真(另一方从检索库退场);
  * - `both`:两条都保留——人工判定它们其实是**各自独立的事实**,不是矛盾
- *   (LLM 判错的情形,必须有出口,否则只能被迫删掉一条正确记忆)。
+ *   (LLM 判错的情形,必须有出口,否则只能被迫删掉一条正确记忆);
+ * - `auto`:**机器**按 LLM 给出的 winner/loser 自行了结(task_24 安全阀:
+ *   队列满或超时)。刻意与人工取值分开——§C 存在的理由就是"机器不该替人裁决",
+ *   若自动了结在人眼里与人工结论无从区分,那个行为会以"悄悄发生"的形式回来。
  */
-export type ConflictResolution = 'winner' | 'loser' | 'both';
+export type ConflictResolution = 'winner' | 'loser' | 'both' | 'auto';
 
 /** 未裁决时 `resolved_at` / `resolution` 的取值(空串,不用 NULL)。 */
 export const CONFLICT_UNRESOLVED = '';

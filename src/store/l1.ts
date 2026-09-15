@@ -13,7 +13,7 @@ import { familyForType } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import { graphHitRecordIds } from '../graph/search.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
-import type { ConflictPair } from './conflicts.js';
+import type { ConflictPair, ConflictResolution } from './conflicts.js';
 import { EmbedHelper, NoopEmbeddingService, type EmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
 import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
@@ -162,12 +162,27 @@ export class L1Store {
   }
 
   /**
-   * §C 冻结的图谱侧标记:把来源命中冲突集的节点标 `disputed`。
+   * §C 冻结的图谱侧同步:把 `disputed` 状态重算到给定冲突集(命中标记 / 不再命中复原)。
    * 经 store 而非直取 `db.graphStore`,与图谱路 provider 的注入式设计同一理由
    * (见本文件头部注释):图谱是**可选**的派生投影,开关关闭时必须是 no-op。
    */
-  markGraphDisputed(recordIds: readonly string[]): number {
-    return this.db.markSourcesDisputed(recordIds);
+  syncGraphDisputed(disputedRecordIds: readonly string[]): { marked: number; cleared: number } {
+    return this.db.syncGraphDisputed(disputedRecordIds);
+  }
+
+  /** §C 待裁决队列的未裁决条数(task_24 队列上限判据)。 */
+  countConflictPendingUnresolved(): number {
+    return this.db.countConflictPendingUnresolved();
+  }
+
+  /** §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。 */
+  listConflictPending(opts: { createdBefore?: string; limit?: number } = {}): ConflictPair[] {
+    return this.db.listConflictPending(opts);
+  }
+
+  /** §C 打上裁决结论(已裁决的不覆盖)。 */
+  resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number {
+    return this.db.resolveConflictPending(pairId, resolution, resolvedAt);
   }
 
   /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */

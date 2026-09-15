@@ -66,6 +66,13 @@ export interface MemoryConfig {
   conflictFreeze: {
     /** 总开关。关闭时去重 prompt 与改动前**逐字一致**,冲突分支结构性不可达。 */
     enabled: boolean;
+    /** 待裁决队列上限(条)。未裁决数达上限时**不再停放**,直接按 LLM 的
+     *  winner/loser 自动了结(仍写 conflict_pending,`resolution='auto'`)。
+     *  语义是「不收新的」而非「偷偷删旧的」——有界性由此结构性成立。 */
+    maxPending: number;
+    /** 超时降级(天):停放超过该天数的待裁决对在下一轮蒸馏开头被自动了结。
+     *  **0 = 不做超时降级**(显式关闭,而非"立刻全部超时")。 */
+    timeoutDays: number;
   };
   recall: {
     enabled: boolean;
@@ -196,6 +203,11 @@ export const memorySchema = Schema.object({
   // 冲突对停放待人工裁决,不再由 LLM 直接 update/merge 覆盖。
   conflictFreeze: Schema.object({
     enabled: Schema.boolean().default(false),
+    // 上限给"人会看"留出余量:100 条待裁决 ≈ 连续 5~20 轮蒸馏全在冲突,
+    // 远超正常使用强度;真达到说明该调 prompt 而不是加容量。
+    maxPending: Schema.number().min(0).max(10_000).default(100),
+    // 30 天:足够跨过假期与项目间歇,又不至于让互相矛盾的两条记忆长期并列召回。
+    timeoutDays: Schema.number().min(0).max(3650).default(30),
   }),
   recall: Schema.object({
     enabled: Schema.boolean().default(true),

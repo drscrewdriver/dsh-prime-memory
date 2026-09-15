@@ -62,6 +62,13 @@ export interface MemoryConfig {
     conflictFreeze: {
         /** 总开关。关闭时去重 prompt 与改动前**逐字一致**,冲突分支结构性不可达。 */
         enabled: boolean;
+        /** 待裁决队列上限(条)。未裁决数达上限时**不再停放**,直接按 LLM 的
+         *  winner/loser 自动了结(仍写 conflict_pending,`resolution='auto'`)。
+         *  语义是「不收新的」而非「偷偷删旧的」——有界性由此结构性成立。 */
+        maxPending: number;
+        /** 超时降级(天):停放超过该天数的待裁决对在下一轮蒸馏开头被自动了结。
+         *  **0 = 不做超时降级**(显式关闭,而非"立刻全部超时")。 */
+        timeoutDays: number;
     };
     recall: {
         enabled: boolean;
@@ -214,8 +221,12 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
     }>>;
     conflictFreeze: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
+        maxPending: Schema<number, number>;
+        timeoutDays: Schema<number, number>;
     }>, Schemastery.ObjectT<{
         enabled: Schema<boolean, boolean>;
+        maxPending: Schema<number, number>;
+        timeoutDays: Schema<number, number>;
     }>>;
     recall: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
@@ -480,8 +491,12 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
     }>>;
     conflictFreeze: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
+        maxPending: Schema<number, number>;
+        timeoutDays: Schema<number, number>;
     }>, Schemastery.ObjectT<{
         enabled: Schema<boolean, boolean>;
+        maxPending: Schema<number, number>;
+        timeoutDays: Schema<number, number>;
     }>>;
     recall: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;

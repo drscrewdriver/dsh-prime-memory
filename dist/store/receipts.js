@@ -81,7 +81,7 @@ export function toReceiptView(r) {
 }
 /** 回溯结果条数上限(与 `list-records` 同量级;超出窗口由 `total` 提示还有多少)。 */
 export const RECEIPTS_QUERY_LIMIT_MAX = 200;
-const KNOWN_ACTIONS = ['store', 'update', 'merge', 'skip'];
+const KNOWN_ACTIONS = ['store', 'update', 'merge', 'skip', 'conflict'];
 /**
  * 一次蒸馏执行的 run 标识。
  *
@@ -105,7 +105,7 @@ export function newRunId() {
 export function receiptIdFor(runId, recordId) {
     return inputDigest([runId, recordId]);
 }
-/** 动作归一:只认四个合法动作,其余一律记 `skip_missing`(不采信模型的非法输出)。 */
+/** 动作归一:只认词表内的合法动作,其余一律记 `skip_missing`(不采信模型的非法输出)。 */
 export function normalizeKind(action) {
     return KNOWN_ACTIONS.includes(action) ? action : 'skip_missing';
 }

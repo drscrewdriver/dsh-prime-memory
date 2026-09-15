@@ -74,8 +74,11 @@ export interface ReceiptRetentionOptions {
  * - `skip_missing` 表示**根本没拿到可用决策**(模型没返回 / 返回了非法动作)。
  *   刻意与 `skip` 分开:回溯"这条为什么没进记忆"时,「模型决定不存」与
  *   「模型没答」是完全不同的两件事,合并会让 §B 失去一半诊断力。
+ * - `conflict`(§C 矛盾冻结)同样是**明确决策**,只是结论为"我判不了,交给人"。
+ *   它必须与 `skip_missing` 分开:漏登记会把这轮记成"模型没答",
+ *   而审计链据此得出的结论(这轮没决策)与事实(模型明确说了判不了)**正好相反**。
  */
-export type L1ReceiptKind = 'store' | 'update' | 'merge' | 'skip' | 'skip_missing';
+export type L1ReceiptKind = 'store' | 'update' | 'merge' | 'skip' | 'conflict' | 'skip_missing';
 
 /** 一条凭证(与 `l1_receipts` 表一行同形)。 */
 export interface L1Receipt {
@@ -169,7 +172,7 @@ export function toReceiptView(r: L1Receipt): ReceiptView {
 /** 回溯结果条数上限(与 `list-records` 同量级;超出窗口由 `total` 提示还有多少)。 */
 export const RECEIPTS_QUERY_LIMIT_MAX = 200;
 
-const KNOWN_ACTIONS: readonly L1ReceiptKind[] = ['store', 'update', 'merge', 'skip'];
+const KNOWN_ACTIONS: readonly L1ReceiptKind[] = ['store', 'update', 'merge', 'skip', 'conflict'];
 
 /**
  * 一次蒸馏执行的 run 标识。
@@ -196,7 +199,7 @@ export function receiptIdFor(runId: string, recordId: string): string {
   return inputDigest([runId, recordId]);
 }
 
-/** 动作归一:只认四个合法动作,其余一律记 `skip_missing`(不采信模型的非法输出)。 */
+/** 动作归一:只认词表内的合法动作,其余一律记 `skip_missing`(不采信模型的非法输出)。 */
 export function normalizeKind(action: string | undefined): L1ReceiptKind {
   return KNOWN_ACTIONS.includes(action as L1ReceiptKind) ? (action as L1ReceiptKind) : 'skip_missing';
 }

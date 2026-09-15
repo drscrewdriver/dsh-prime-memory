@@ -61,7 +61,15 @@ vi.mock('../src/llm.js', async (importOriginal) => {
 const { runExtraction } = await import('../src/pipeline/l1.js');
 const { L1Store } = await import('../src/store/l1.js');
 const { MemoryDb } = await import('../src/store/sqlite.js');
+const { memorySchema } = await import('../src/config.js');
 type MemoryConfig = import('../src/contract.js').MemoryConfig;
+
+/**
+ * 夹具基线取自**真 schema 的部署默认值**,只在用例关心处覆盖。
+ * 手写整份 config 会在 schema 新增键时静默漂移(本波已被咬过两次:
+ * 漏 `conflictFreeze` 导致管线读到 undefined),故夹具不再逐键复述契约。
+ */
+const DEFAULTS = (memorySchema as unknown as (v: unknown) => Record<string, unknown>)({});
 
 let root: string;
 afterAll(async () => {
@@ -72,20 +80,14 @@ const noopLogger = { info: () => {}, warn: () => {}, error: () => {} } as never;
 
 function mkCfg(dataDir: string, freeze: boolean): MemoryConfig {
   return {
+    ...DEFAULTS,
     dataDir, family: 'auto',
-    capture: { enabled: true, stripCodeBlocks: true, maxMessageChars: 4000 },
-    extract: { enabled: true, minMessages: 1, idleSeconds: 300, backgroundMessages: 10, candidatePool: 5 },
-    l2: { enabled: true, minNewMemories: 5, maxScenes: 12, sceneContextLimit: 3 },
-    l3: { enabled: true, interval: 20 },
     graph: { enabled: false },
-    conflictFreeze: { enabled: freeze },
+    // 关闭队列上限与超时(task_24):本文件测的是**冻结落盘本身**
+    conflictFreeze: { enabled: freeze, maxPending: 1000, timeoutDays: 0 },
     recall: { enabled: true, maxResults: 5, maxCharsPerMemory: 500, maxTotalRecallChars: 2000, timeoutMs: 5000, includePersona: true, includeSceneNav: true, strategy: 'keyword', scoreThreshold: 0.3, decayHalfLifeDays: 30 },
-    embedding: { enabled: false, baseUrl: '', apiKey: '', model: '', dimensions: 0, maxInputChars: 5000, timeoutMs: 10000, allowLocalModels: true, mirror: 'https://hf-mirror.com', proxy: '' },
-    llm: { provider: '', model: '', mode: 'host', baseURL: '', apiKey: '', maxTokens: 65536, reasoningEffort: 'medium', maxInputChars: 700000, timeoutMs: 120000 },
+    extract: { enabled: true, minMessages: 1, idleSeconds: 300, backgroundMessages: 10, candidatePool: 5 },
     hall: { enabled: ['work'] },
-    tokenCost: { retentionDays: 365 },
-    tools: true,
-    benchControl: false,
   } as MemoryConfig;
 }
 
@@ -289,8 +291,8 @@ describe('task_22 图谱域 disputed 标记(存储级)', () => {
       seedNode(db, 'a', ['rec-a']);
       seedNode(db, 'b', ['rec-b']);
 
-      const marked = db.markSourcesDisputed(['rec-a']);
-      expect(marked).toBe(1);
+      const r = db.syncGraphDisputed(['rec-a']);
+      expect(r.marked).toBe(1);
 
       const byName = new Map(db.graphStore.loadGraph().nodes.map((n) => [n.name, n.status]));
       expect(byName.get('实体-a')).toBe('disputed');
@@ -300,7 +302,7 @@ describe('task_22 图谱域 disputed 标记(存储级)', () => {
     }
   });
 
-  it('已是 disputed 的节点不重复计数(幂等)', async () => {
+  it('是**派生同步**而非单向标记:冲突集清空后 disputed 节点复原为 active', async () => {
     root = root ?? (await mkdtemp(join(tmpdir(), 'dsh-conflict-graph2-')));
     const dataDir = join(root, `graph2-${Date.now()}`);
     const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
@@ -309,9 +311,14 @@ describe('task_22 图谱域 disputed 标记(存储级)', () => {
       db.upsertL1Batch([l1Row('rec-a')] as never);
       seedNode(db, 'a', ['rec-a']);
 
-      expect(db.markSourcesDisputed(['rec-a'])).toBe(1);
-      expect(db.markSourcesDisputed(['rec-a'])).toBe(0); // 幂等:已 disputed 不再计数
+      expect(db.syncGraphDisputed(['rec-a']).marked).toBe(1);
+      expect(db.syncGraphDisputed(['rec-a']).marked).toBe(0); // 幂等:已 disputed 不再重复计数
       expect(db.graphStore.loadGraph().nodes[0]?.status).toBe('disputed');
+
+      // 裁决后队列清空 → 复原。只做单向标记的话这里会永远停在 disputed,
+      // 那是**派生投影在说谎**(图谱是 L1 的派生投影,状态必须由当前事实重算)。
+      expect(db.syncGraphDisputed([]).cleared).toBe(1);
+      expect(db.graphStore.loadGraph().nodes[0]?.status).toBe('active');
     } finally {
       db.close();
     }

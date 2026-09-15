@@ -15,7 +15,7 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
-import type { ConflictPair } from './conflicts.js';
+import type { ConflictPair, ConflictResolution } from './conflicts.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
     id: string;
@@ -180,8 +180,35 @@ export declare class MemoryDb {
      * @returns 实际新插入的行数。
      */
     recordConflictPending(rows: readonly ConflictPair[]): number;
-    /** §C 冻结:把来源命中冲突集的图谱节点标 `disputed`(薄缝,便于单测替换)。 */
-    markSourcesDisputed(recordIds: readonly string[]): number;
+    /** §C 冻结:把图谱 `disputed` 状态同步到给定冲突集(薄缝,便于单测替换)。 */
+    syncGraphDisputed(disputedRecordIds: readonly string[]): {
+        marked: number;
+        cleared: number;
+    };
+    /**
+     * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
+     * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+     */
+    countConflictPendingUnresolved(): number;
+    /**
+     * §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。
+     *
+     * `createdBefore` 为**排他上界**(ISO 串):只取该时刻之前创建的,用于超时判定。
+     * 定序 `created_at ASC, pair_id ASC`——先来先服务,且同一毫秒内仍**确定可复现**。
+     */
+    listConflictPending(opts?: {
+        createdBefore?: string;
+        limit?: number;
+    }): ConflictPair[];
+    /**
+     * §C 打上裁决结论。
+     *
+     * `WHERE resolved_at = ''` 使**已裁决的不会被覆盖**:裁决是一次性的判定行为,
+     * 重复调用不该把第一次的结论改写掉(人工裁决与自动了结的次序因此不可逆)。
+     *
+     * @returns 受影响行数(0 = 该对被裁决过或不存在)。
+     */
+    resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;
     /**
      * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
      * 返回被删除的行数。

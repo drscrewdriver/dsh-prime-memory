@@ -31,6 +31,7 @@ import type { L0Store } from './store/l0.js';
 import type { L1Store } from './store/l1.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
 import type { ReceiptQuery, ReceiptsView } from './store/receipts.js';
+import { resolveConflictPair } from './conflict-service.js';
 import type { PersonaStore } from './store/persona.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
@@ -69,6 +70,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
   'dsh-memory/receipts',
+  'dsh-memory/conflict-resolve',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
@@ -863,6 +865,22 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         total: stores.l1.countReceipts(query),
       };
       return resp;
+    }
+
+    // ── §C 矛盾冻结裁决(task_25):与 memory_resolve_conflict 工具共用同一形状 ──
+    // 端点层同样不给"提示文案"出口的例外只有一条:**队列未开启**不是调用错误而是
+    // 部署状态,故它走返回体(带 notice)而非抛错;pair_id/outcome 缺参才抛。
+    case 'dsh-memory/conflict-resolve': {
+      const p = (payload ?? {}) as { pairId?: unknown; outcome?: unknown };
+      const pairId = typeof p.pairId === 'string' ? p.pairId.trim() : '';
+      const outcome = typeof p.outcome === 'string' ? p.outcome.trim() : '';
+      if (!pairId) throw new Error('需要 pairId(待裁决对的 pair_id)');
+      if (!outcome) throw new Error('需要 outcome(winner | loser | both)');
+      return await resolveConflictPair(
+        { l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true },
+        pairId,
+        outcome,
+      );
     }
 
     case 'dsh-memory/records-delete': {

@@ -173,6 +173,36 @@ export async function runExtraction(
   // 情境链锚点桶:纯档用本族;auto 用最近活跃的族(chainHead 同源)
   const chainState = mode === 'auto' ? activeState(states) : states[mode];
 
+  // ── §C 安全阀(task_24):队列上限 + 超时降级 ──
+  // 冻结的代价是消耗人的注意力。没有安全阀,队列会无界增长,且"新记忆与旧记忆
+  // 长期并列召回"的状态会**永久**留在库里——比它想解决的问题更糟。
+  // 语义是**回落自动裁决**(按 LLM 给出的 winner/loser 了结),而**不是**丢掉
+  // 待裁决对:被自动了结的对仍写进 conflict_pending,只是 resolved_at 非空、
+  // resolution='auto'。痕迹必须留下,否则"机器替人裁决"会以"悄悄发生"的形式回来。
+  const freezeEnabled = cfg.conflictFreeze?.enabled === true;
+  const maxPending = cfg.conflictFreeze?.maxPending ?? 0;
+  const timeoutDays = cfg.conflictFreeze?.timeoutDays ?? 0;
+  /** LLM 的 loser,将在新增记录写完后从检索库退场(自动裁决的执行面)。 */
+  const autoLosers = new Set<string>();
+  if (freezeEnabled && timeoutDays > 0) {
+    const cutoff = new Date(Date.now() - timeoutDays * 86_400_000).toISOString();
+    try {
+      const stale = store.listConflictPending({ createdBefore: cutoff });
+      for (const p of stale) {
+        if (store.resolveConflictPending(p.pairId, 'auto', new Date().toISOString()) > 0) {
+          autoLosers.add(p.loserId);
+        }
+      }
+      if (stale.length > 0) {
+        logger.info(`[memory] 矛盾冻结:${stale.length} 对待裁决对超时 ${timeoutDays} 天,已自动了结`);
+      }
+    } catch (err) {
+      logger.warn(
+        `[memory] 矛盾冻结:超时扫描失败(忽略): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   // ── Step 1: 抽取(输入按 llm.maxInputChars 预算分块,情境链式衔接,不丢消息) ──
   const backgroundMsgs = background.slice(-cfg.extract.backgroundMessages);
   // 预留:背景消息(≤10 条 ×4000 字)+ prompt 脚手架
@@ -318,19 +348,30 @@ export async function runExtraction(
     // 一个显式声明了"拿不准"的决策,绝不能被静默当成"新记忆更优"去覆盖旧记忆。
     if (action === 'conflict') {
       const pair =
-        cfg.conflictFreeze?.enabled === true
+        freezeEnabled
           ? validateConflictPair(m.record_id, decision.winner, decision.loser, new Set(byId.keys()))
           : null;
       if (pair) {
         added.push(toStoreRecord(m, now, ts));
-        frozen.push(
-          buildConflictPair({
-            runId,
-            winnerId: pair.winnerId,
-            loserId: pair.loserId,
-            createdAt: new Date(now).toISOString(),
-          }),
-        );
+        const built = buildConflictPair({
+          runId,
+          winnerId: pair.winnerId,
+          loserId: pair.loserId,
+          createdAt: new Date(now).toISOString(),
+        });
+        // 队列上限:达上限即**不再停放**,改为当场按 LLM 的 winner/loser 了结。
+        // 判据含 frozen 中本轮已停放的未裁决数,否则同一轮内多条冲突会一起越界。
+        const pendingNow =
+          store.countConflictPendingUnresolved() + frozen.filter((p) => p.resolvedAt === '').length;
+        if (pendingNow >= maxPending) {
+          built.resolvedAt = new Date(now).toISOString();
+          built.resolution = 'auto';
+          autoLosers.add(pair.loserId);
+          logger.warn(
+            `[memory] 矛盾冻结:待裁决队列已满(${pendingNow}/${maxPending}),第 ${m.record_id} 条改为自动了结`,
+          );
+        }
+        frozen.push(built);
       } else {
         logger.warn(
           `[memory] 矛盾冻结:第 ${m.record_id} 条的 conflict 决策无法构成冻结对` +
@@ -376,6 +417,10 @@ export async function runExtraction(
 
   await store.appendNew(added);
   if (deletedIds.size > 0) await store.deleteBatch([...deletedIds]);
+  // §C 自动裁决的执行面:LLM 的 loser 从检索库退场(winner 存活)。
+  // 排在 appendNew 之后——若 loser 恰是**本轮新记忆**(LLM 判定新记忆更差),
+  // 也必须先让它进库再退场,以保证"本轮新增"与"本轮删除"的账面一致。
+  if (autoLosers.size > 0) await store.deleteBatch([...autoLosers]);
 
   // ── §C 冻结对落盘(排在 appendNew 之后) ──
   // 顺序有讲究:先让新记忆真正进 L1,再登记"它和谁构成待裁决对"。反过来的话,
@@ -391,17 +436,19 @@ export async function runExtraction(
       );
     }
     // 图谱侧:`disputed` 是"照常召回、但状态可见"的中间态(graph/search.ts 仍在候选内)。
-    // 图谱是可选派生投影,未启用时 markGraphDisputed 内部即 no-op。
+    // **重算**而非增量标记:队列里现在还剩哪些未裁决对,就是此刻的争议集;
+    // 本轮之前已被裁决的节点因此会**自动复原 active**(派生字段由当前事实重算)。
+    // 图谱是可选派生投影,未启用时 syncGraphDisputed 内部即 no-op。
     try {
       const ids = new Set<string>();
-      for (const p of frozen) {
+      for (const p of store.listConflictPending()) {
         ids.add(p.winnerId);
         ids.add(p.loserId);
       }
-      store.markGraphDisputed([...ids]);
+      store.syncGraphDisputed([...ids]);
     } catch (err) {
       logger.warn(
-        `[memory] 矛盾冻结:图谱 disputed 标记失败(忽略): ${err instanceof Error ? err.message : String(err)}`,
+        `[memory] 矛盾冻结:图谱 disputed 同步失败(忽略): ${err instanceof Error ? err.message : String(err)}`,
       );
     }
     logger.info(`[memory] 矛盾冻结:本轮停放 ${frozen.length} 对待人工裁决(run_id=${runId})`);
