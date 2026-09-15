@@ -23,6 +23,21 @@ export declare function applyDecayWeight<T extends {
 export declare function rrfMerge<T>(lists: T[][], getId: (item: T) => string, k?: number): Array<T & {
     rrfScore: number;
 }>;
+/**
+ * RRF 原始分归一化到 0~1(hybrid 检索的展示/比较分)。
+ *
+ * n 条列表融合时,单项最高原始分为 n/(k+1)(各列表 rank1 全中),故按**实际路数**
+ * lanes 归一:`rrfScore × (k+1) / lanes`,满分恰好 1.0,天然不越界。
+ * 旧实现把分母硬编码为 2,只对「FTS + 向量」双路成立;扩至 3/4 路后满分分别
+ * 达到 1.5 / 2.0,越出契约。2 路时本式与旧式逐字等价(无行为漂移)。
+ *
+ * 按「传入的路数」而非「非空路数」归一是有意的:向量源不可用时调用方仍传两条
+ * 列表(其一为空),旧实现给 FTS rank1 的分数是 0.5;按非空路数会变成 1.0,
+ * 反而破坏 2 路无漂移判据。
+ *
+ * 守卫:lanes 非正或非有限 → 0(退化输入不产生 NaN/Infinity)。
+ */
+export declare function normalizeRrf(rrfScore: number, lanes: number): number;
 /** FTS5 bm25 rank(负值=更相关)转 0~1 分数。 */
 export declare function bm25RankToScore(rank: number): number;
 /**

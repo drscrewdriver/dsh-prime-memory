@@ -2037,11 +2037,24 @@ var __defProp = Object.defineProperty;
 		var import_react9 = require("react");
 		
 		// client/src/rpc.ts
-		function makeRpc(ctx) {
-		  return (endpoint, payload) => {
-		    if (!ctx.connection || !ctx.connection.rpc) return Promise.reject(new Error("connection 服务不可用"));
-		    return ctx.connection.rpc.call("/rpc", endpoint, payload ?? {});
-		  };
+		function shortMethod(endpoint) {
+		  return endpoint.startsWith("dsh-memory/") ? endpoint.slice("dsh-memory/".length) : endpoint;
+		}
+		function makeRpc(_ctx) {
+		  return (async (endpoint, payload) => {
+		    let response;
+		    try {
+		      response = await fetch(`/dsh-memory/rpc/${shortMethod(endpoint)}`, {
+		        method: "POST",
+		        headers: { "content-type": "application/json" },
+		        body: JSON.stringify(payload ?? {})
+		      });
+		    } catch (err) {
+		      throw new Error(`transport failure for ${endpoint}: ${err instanceof Error ? err.message : String(err)}`);
+		    }
+		    if (!response.ok) throw new Error(`transport failure for ${endpoint}: HTTP ${response.status}`);
+		    return await response.json();
+		  });
 		}
 		function asLoose(rpc) {
 		  return rpc;
@@ -4255,32 +4268,41 @@ var __defProp = Object.defineProperty;
 		}
 		
 		// client/src/entry.tsx
-		var inject = ["slots", "connection"];
+		var inject = ["slots"];
 		function apply(ctx) {
 		  const rpc = makeRpc(ctx);
-		  ctx.slots.inject("settings.section", () => {
-		    return ctx.slots.register(
-		      {
-		        name: "settings.section",
-		        id: "dsh-memory",
-		        order: 200,
-		        label: "记忆",
-		        inject: () => ({ rpc })
-		      },
-		      MemoryPanel
-		    );
-		  });
-		  ctx.slots.inject("conversation.input.left", () => {
-		    return ctx.slots.register(
-		      {
-		        name: "conversation.input.left",
-		        id: "dsh-memory-mode",
-		        order: 100,
-		        inject: (sessionId) => ({ sessionId, rpc })
-		      },
-		      MemoryModePill
-		    );
-		  });
+		  console.info("[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位");
+		  try {
+		    ctx.slots.inject("settings.section", () => {
+		      return ctx.slots.register(
+		        {
+		          name: "settings.section",
+		          id: "dsh-memory",
+		          order: 200,
+		          label: "记忆",
+		          inject: () => ({ rpc })
+		        },
+		        MemoryPanel
+		      );
+		    });
+		  } catch (err) {
+		    console.warn("[dsh-prime-memory] settings.section 注册失败(新宿主已收编):", err);
+		  }
+		  try {
+		    ctx.slots.inject("conversation.input.left", () => {
+		      return ctx.slots.register(
+		        {
+		          name: "conversation.input.left",
+		          id: "dsh-memory-mode",
+		          order: 100,
+		          inject: (sessionId) => ({ sessionId, rpc })
+		        },
+		        MemoryModePill
+		      );
+		    });
+		  } catch (err) {
+		    console.warn("[dsh-prime-memory] conversation.input.left 注册失败:", err);
+		  }
 		}
 		
 		// esbuild 对具名导出会整体替换 module.exports(__toCommonJS:getter + __esModule);

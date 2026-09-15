@@ -9,9 +9,10 @@
 import { existsSync, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { familyForType } from '../types.js';
+import { graphHitRecordIds } from '../graph/search.js';
 import { EmbedHelper, NoopEmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
-import { applyDecayWeight, RRF_K, rrfMerge } from './search-utils.js';
+import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
 import { isZeroVector } from './sqlite.js';
 /** 官方过度召回倍数:候选池 = limit × 3(官方 tool 路径同款)。 */
 const CANDIDATE_MULTIPLIER = 3;
@@ -25,9 +26,13 @@ export class L1Store {
     logger;
     /** 时效衰减半衰期(天;0=关)。 */
     decayHalfLifeDays;
+    /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
+    graphLaneProvider;
     constructor(dataDir, db, embed = new NoopEmbeddingService(), strategy = 'hybrid', logger, 
     /** 时效衰减半衰期(天;0=关)。缺省 30 与 config 默认一致。 */
-    decayHalfLifeDays) {
+    decayHalfLifeDays, 
+    /** 图谱路提供者(§D 第 3 路);不传则该路不存在,融合退回双路。 */
+    graphLane) {
         this.db = db;
         this.strategy = strategy;
         this.recordsDir = path.join(dataDir, 'records');
@@ -36,6 +41,7 @@ export class L1Store {
         this.helper = new EmbedHelper(embed, logger);
         this.logger = logger;
         this.decayHalfLifeDays = decayHalfLifeDays ?? 30;
+        this.graphLaneProvider = graphLane;
     }
     async init() {
         await ensureDir(this.recordsDir);
@@ -159,15 +165,99 @@ export class L1Store {
             const vecHits = this.db.searchL1Vector(vec, candidateK, opts?.family);
             return this.postProcess(this.applyDecay(filterScore(vecHits, threshold)), opts?.type, limit);
         }
-        // hybrid(官方语义):双路并行 → 完整列表 RRF 融合(融合前不过滤阈值)
-        // → 融合分归一化:rank1 双列表命中 = 1.0,单列表命中 ≤ 0.5,保持 0~1 语义
+        // hybrid(官方语义):多路并行 → 完整列表 RRF 融合(融合前不过滤阈值)
+        // → 融合分按**实际路数**归一化:全路 rank1 命中 = 1.0,双路单列表命中 ≤ 0.5
         const [ftsList, vecRaw] = await Promise.all([
             Promise.resolve(this.db.searchL1Fts(query, candidateK, opts?.family)),
             this.helper.query(query, opts?.embeddingTimeoutMs),
         ]);
         const vecList = vecRaw ? this.db.searchL1Vector(vecRaw, candidateK, opts?.family) : [];
-        const merged = rrfMerge([ftsList, vecList], (h) => h.id);
-        return this.postProcess(this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore) }))), opts?.type, limit);
+        // 第 3 路(图谱)仅在接线时**结构性存在**:未接线不占路数名额,故既有调用方
+        // 仍走 2 路、得分与改动前逐位一致(见 findings.md §12.1 的路数语义)
+        const lanes = [ftsList, vecList];
+        if (this.graphLaneProvider)
+            lanes.push(this.graphLane(query, candidateK, opts?.family));
+        // 第 4 路(时效)在衰减开启时**结构性存在**;关掉衰减 = 该路不存在
+        if (this.decayHalfLifeDays > 0)
+            lanes.push(this.recencyLane([...ftsList, ...vecList]));
+        const merged = rrfMerge(lanes, (h) => h.id);
+        return this.postProcess(this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore, lanes.length) }))), opts?.type, limit);
+    }
+    /**
+     * §D 第 4 路(时效路,hybrid 专用):把候选池按 `applyDecayWeight` 加权后的
+     * 顺序作为第 4 条**已排序**列表,复用与后处理同源的加权函数(不新增独立逻辑)。
+     *
+     * **时效是排序信号,不是召回信号**:本路只重排 `ftsList ∪ vecList` 里的既有
+     * 候选,**不引入任何新记录**。若让"无关但很新"的记忆靠时效进结果,会直接损害
+     * 检索精度——这条性质由 `tests/recency-lane.test.ts` 的 id 集合不变量钉住。
+     *
+     * **严禁进入 `searchCandidates`**(`search-utils.ts:26-27` 约定):写路径找同语义
+     * 旧记录必须**无视新旧**——一旦被时效加权,老的同义记录会被漏检,导致同事实双记录
+     * 累积。故本方法只被 `search()` 调用,去重候选路径不得引用。
+     */
+    recencyLane(candidates) {
+        if (!(this.decayHalfLifeDays > 0) || candidates.length === 0)
+            return [];
+        const seen = new Set();
+        const deduped = [];
+        for (const h of candidates) {
+            if (seen.has(h.id))
+                continue;
+            seen.add(h.id);
+            deduped.push(h);
+        }
+        return this.applyDecay(deduped);
+    }
+    /**
+     * §D 第 3 路(图谱路径,hybrid 专用):图谱命中 → `sourceRecordIds` 回链 →
+     * L1 记录,作为第 3 条**已排序**列表参与 RRF。
+     *
+     * 为什么值得:图谱是按实体/关系组织的**可重建派生投影**,能召回词法与向量
+     * 都命不中的记录(同义表述、关系可达)——这正是本路相对双路的增量。
+     *
+     * 三条边界:
+     * - **异常降级**:图谱是派生投影,不得因它失败而拖垮主检索 → 记 warn、返回空路,
+     *   融合退回双路(路数随之降为 2,分数回到既有量纲);
+     * - **族隔离**:图谱节点已按族过滤,但其来源记录可能跨族 → 这里再按 `family`
+     *   过滤一次。宁可漏不可串(与档位隔离同源,§A 的 P0 关注点);
+     * - **墓碑边界**:图谱行可能回链到已被删除的 L1 记录 → 取不到就跳过,
+     *   不补空占位(占位会在 RRF 里凭空加分)。
+     */
+    graphLane(query, limit, family) {
+        const provider = this.graphLaneProvider;
+        if (!provider)
+            return [];
+        let hits;
+        try {
+            hits = provider(query, limit, family);
+        }
+        catch (err) {
+            this.logger?.warn(`[memory] 图谱路检索失败,本轮退回双路: ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+        const ids = graphHitRecordIds(hits);
+        if (ids.length === 0)
+            return [];
+        const byId = new Map(this.db.getL1ByIds(ids).map((r) => [r.id, r]));
+        const out = [];
+        for (const id of ids) {
+            const r = byId.get(id);
+            if (!r)
+                continue;
+            if (family !== undefined && r.family !== family)
+                continue;
+            out.push({
+                id: r.id,
+                content: r.content,
+                type: r.type,
+                scene_name: r.scene_name,
+                priority: r.priority,
+                family: r.family,
+                // 占位分:RRF 只用 rank,此字段在融合时会被归一化分覆盖
+                score: 0,
+            });
+        }
+        return out;
     }
     /**
      * 时效衰减加权(#29):三路共用的读路径后处理——阈值过滤之后、截断之前
@@ -276,10 +366,6 @@ export class L1Store {
         const filtered = type ? hits.filter((h) => h.type === type) : hits;
         return filtered.slice(0, limit);
     }
-}
-/** RRF 原始分归一化到 0~1:双列表 rank1 命中 = 2/(k+1) → 1.0。 */
-function normalizeRrf(rrfScore) {
-    return (rrfScore * (RRF_K + 1)) / 2;
 }
 /** FTS 阈值过滤(含官方小语料例外:全部低于阈值但结果数 ≤ maxResults 时保留)。 */
 function applyFtsThreshold(hits, threshold, maxResults) {

@@ -97,15 +97,37 @@ describe('graph 预算键:settings-set 写入门', () => {
     const writes: Array<Partial<MemoryLiveSettings>> = [];
     const live = liveHandle();
     const wrapped: LiveSettingsHandle = { ...live, update: async (patch) => { writes.push(patch); await live.update(patch); } };
-    let handler: ((endpoint: string, payload: unknown) => Promise<unknown>) | undefined;
+    let handler: ((req: unknown, res: unknown) => Promise<void>) | undefined;
     const ctx = {
-      get: () => ({ rpc: { handle: (_e: string, h: typeof handler) => { handler = h; return async () => {}; } } }),
+      // 0.1.5 契约:webServer.register 捕获 HTTP handler;call() 以 PassThrough
+      // 模拟 loopback req + 捕获型 res 走完整 handler,返回解析后的信封。
+      get: () => ({
+        register: (route: { handler: (req: unknown, res: unknown) => Promise<void> }) => {
+          handler = route.handler;
+          return () => {};
+        },
+      }),
       on: () => () => {},
       effect: (fn: () => void) => fn(),
     } as unknown as Parameters<typeof import('../src/stats.js').registerMemoryRpc>[0];
     const { registerMemoryRpc } = await import('../src/stats.js');
     registerMemoryRpc(ctx, base, {} as never, { info: () => {}, warn: () => {}, error: () => {} }, undefined, wrapped);
-    const call = async (payload: unknown): Promise<unknown> => (await handler!('dsh-memory/settings-set', payload)) as unknown;
+    const call = async (payload: unknown): Promise<unknown> => {
+      const { PassThrough } = await import('node:stream');
+      const req = new PassThrough() as PassThrough & { headers: Record<string, string>; method: string; url: string };
+      req.headers = { host: 'localhost' };
+      req.method = 'POST';
+      req.url = '/dsh-memory/rpc/settings-set';
+      req.end(JSON.stringify(payload));
+      let body = '';
+      await handler!(req, {
+        // writeHead 只需存在(handler 会调),本用例不断言 HTTP 状态码——只断言 RPC 信封
+        writeHead: () => {},
+        end: (b?: string) => { body = b ?? ''; },
+      });
+      const parsed = JSON.parse(body) as { ok: boolean; value?: unknown; error?: { message: string } };
+      return parsed;
+    };
 
     await call({ distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 1234 } });
     expect(wrapped.get().distillBudgets.graph).toBe(1234);

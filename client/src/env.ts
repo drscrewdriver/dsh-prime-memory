@@ -16,7 +16,7 @@ export function hostRequire(id: string): unknown {
   return require(id);
 }
 
-/** apply(ctx) 收到的宿主上下文（对应 inject = ['slots', 'connection']）。 */
+/** apply(ctx) 收到的宿主上下文（对应 inject = ['slots']；其余服务懒解析）。 */
 export interface MemoryClientCtx {
   slots: {
     /** 向某个 slot 区域声明存在感；宿主挂载该区域时调用 factory 取注册句柄。 */
@@ -24,7 +24,12 @@ export interface MemoryClientCtx {
     /** 把组件连同选项（name/id/order/label/inject 等 slot 约定字段）登记进宿主。 */
     register(options: Record<string, unknown>, component: unknown): unknown;
   };
-  /** 连接是可选服务：插件先于宿主就绪时可能缺席（rpc.ts 负责守卫）。 */
+  /**
+   * 按名取客户端世界服务（cordis 语义）。不把 connection 放进声明式 inject：
+   * 它在部分宿主上缺席/晚到，声明式注入会让 apply 永久挂起（UI 全静默消失）。
+   */
+  get(name: string): unknown;
+  /** 兼容旧形态：apply 时快照的 connection（可能 undefined）。 */
   connection?: {
     rpc: { call(channel: string, endpoint: string, payload?: unknown): Promise<unknown> };
   };

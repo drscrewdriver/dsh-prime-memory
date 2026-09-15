@@ -1,10 +1,12 @@
 /**
- * 状态面板数据通道:Host 侧注册 /rpc 通道的 dsh-memory/* 端点,
- * Client 设置页通过 ctx.connection.rpc.call('/rpc', 'dsh-memory/xxx') 拉取。
+ * 状态面板数据通道(0.1.5 契约):Host 半直接向 webServer 注册 prefix 路由
+ * `POST /dsh-memory/rpc/<method>`,Client 设置页用浏览器原生 fetch 拉取,
+ * 信封即 RpcResult({ok,value} | {ok,error})——不经过 connection.rpc
+ * (handle 前缀通道 0.1.5 静默 405;/api interceptor 单槽会被他插件抢占)。
  *
- * connection 是可选服务且可能晚于本插件就绪:先探测一次,未就绪则监听
+ * webServer 是可选服务且可能晚于本插件就绪:先探测一次,未就绪则监听
  * internal/service(事件携带 (name, impl),impl=undefined 即下线),服务
- * 上线、下线、替换实例三种迁移都会正确释放/重挂 RPC 注册。
+ * 上线、下线、替换实例三种迁移都会正确释放/重挂路由注册。
  *
  * 机密纪律:directApiKey / embedRemoteApiKey 永不出现在任何 RPC 响应与日志
  * (settings-get/set 走 sanitizeSettings 脱敏)。
@@ -12,10 +14,8 @@
 import { createRequire } from 'node:module';
 import { closeSync, openSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Context } from '@deepseek-ai/cordis';
-// 纯类型导入:把 dsh-client-connection 的 Context.connection 声明合并拉进编译,
-// 使 ctx.get('connection') 拿到 HostConnectionHandle 类型(编译后无运行时依赖)。
-import type {} from '@deepseek-ai/dsh-client-connection';
 // 同款:llm 服务(ctx.llm)与默认模型选择(ctx.get('agentDefaultModel'))的声明合并
 import type {} from '@deepseek-ai/dsh-llm';
 import type {} from '@deepseek-ai/dsh-agent-default-model';
@@ -47,6 +47,114 @@ export interface MemoryStatusSource {
   degraded(): boolean;
   /** L1 抽取待重试的消息条数。 */
   pending(): number;
+}
+
+/**
+ * 端点全集运行时清单(26 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
+ * 用途:0.1.5 共享通道 /api 的 interceptor 是单槽(多插件会抛 already has an
+ * interceptor),精确 Fetch 路由按路径 key 可共存且分发优先于 interceptor——
+ * 因此逐端点注册 `POST /api/<endpoint>` 精确路由,彻底绕开槽位竞争。
+ */
+export const MEMORY_ENDPOINTS: readonly string[] = [
+  'dsh-memory/stats',
+  'dsh-memory/token-cost',
+  'dsh-memory/session-mode-get',
+  'dsh-memory/session-mode-set',
+  'dsh-memory/session-stats',
+  'dsh-memory/settings-get',
+  'dsh-memory/settings-set',
+  'dsh-memory/list-records',
+  'dsh-memory/records-delete',
+  'dsh-memory/graph-search',
+  'dsh-memory/graph-node-get',
+  'dsh-memory/scenes',
+  'dsh-memory/persona',
+  'dsh-memory/log-tail',
+  'dsh-memory/rebuild-status',
+  'dsh-memory/rebuild-start',
+  'dsh-memory/rebuild-cancel',
+  'dsh-memory/llm-providers',
+  'dsh-memory/llm-models',
+  'dsh-memory/embedding-state-get',
+  'dsh-memory/embedding-source-set',
+  'dsh-memory/embedding-download-start',
+  'dsh-memory/embedding-download-cancel',
+  'dsh-memory/embedding-model-delete',
+  'dsh-memory/embedding-runtime-cancel',
+  'dsh-memory/embedding-reindex-cancel',
+];
+
+/** HTTP 路由前缀(客户端 fetch `/dsh-memory/rpc/<短方法名>`)。 */
+const RPC_ROUTE_PREFIX = '/dsh-memory/rpc';
+/** 短方法名视图(MEMORY_ENDPOINTS 去掉 'dsh-memory/' 前缀,URL 段用)。 */
+const SHORT_ENDPOINTS = MEMORY_ENDPOINTS.map((e) => e.slice('dsh-memory/'.length));
+
+/** 本插件用到的 webServer 服务面(结构类型,不依赖宿主包类型导出)。 */
+interface WebServerFace {
+  register(route: {
+    kind: 'prefix' | 'exact';
+    path: string;
+    handler: (req: IncomingMessage, res: ServerResponse) => Promise<void> | void;
+  }): void | (() => void | Promise<void>);
+}
+
+/** Host 头是否为 loopback 主机名(localhost / [::1] / 127.x.x.x)。 */
+function isLoopbackHostname(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '[::1]') return true;
+  const parts = hostname.split('.');
+  return parts.length === 4 && parts[0] === '127' && parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255);
+}
+
+/**
+ * API 信任围栏:DNS-rebinding / 跨站防护(非用户鉴权),语义对齐 connection
+ * /api 网关的 fence——Host 头必须指向 loopback。面板数据非机密(密钥字段
+ * 宿主侧已脱敏),故 loopback 即放行;跨站浏览器标记随 Host 校验一并拒绝。
+ */
+function apiFence(req: IncomingMessage): boolean {
+  const host = req.headers.host;
+  if (typeof host !== 'string' || host.length === 0) return false;
+  // 不写初值:catch 分支直接 return,初值在任何路径下都不会被读取
+  // (原 `let hostname = host` 是死存储,eslint no-useless-assignment)。
+  let hostname: string;
+  try {
+    hostname = new URL(`http://${host}`).hostname;
+  } catch {
+    return false;
+  }
+  return isLoopbackHostname(hostname);
+}
+
+function writeJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(body));
+}
+
+/** 读取 JSON 请求体(上限 8MB:面板最大载荷为 list-records 分页与图谱检索)。 */
+function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > 8 * 1024 * 1024) {
+        reject(new Error('request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      if (raw.length === 0) return resolve({});
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        reject(new Error('body is not JSON'));
+      }
+    });
+    req.on('error', reject);
+  });
 }
 
 /**
@@ -176,14 +284,14 @@ export function registerMemoryRpc(
 
   const tryRegister = (): void => {
     if (holding) return;
-    const connection = ctx.get('connection');
-    if (!connection) return;
-    holding = true;
-    let active = true;
-    // handle() 同步注册并返回异步 disposer(() => Promise<void>)。
-    const dispose = connection.rpc.handle(
-      '/rpc',
-      async (endpoint, payload) => {
+    const webServer = ctx.get('webServer') as WebServerFace | undefined;
+    if (!webServer || typeof webServer.register !== 'function') return;
+    let dispose: () => Promise<void> | void = () => {};
+    try {
+      holding = true;
+      let active = true;
+      // 端点处理器:HTTP 层与旧 connection.rpc 的 handler 共用同一分发。
+      const rpcHandler = async (endpoint: string, payload: unknown) => {
         try {
           const value = await handleEndpoint(endpoint, payload, buildEndpointDeps(
             { ctx, cfg, stores, logger },
@@ -197,20 +305,59 @@ export function registerMemoryRpc(
             error: { code: 'internal', message: err instanceof Error ? err.message : String(err), details: {} },
           };
         }
-      },
-      { authority: 'loopback' },
-    );
-    registeredImpl = connection;
-    if (!active) {
-      void dispose();
-      return;
-    }
-    logger.debug?.('[memory] 状态 RPC 已注册(/rpc → dsh-memory/*)');
-    disposers.push(() => {
-      active = false;
+      };
+      // 0.1.5 契约(参考 better-sidebar main 分支的已验证实现):不再经过
+      // connection.rpc —— handle 前缀通道在 0.1.5 webServer 分发层静默 405
+      // (讨论区 #6337),/api 共享通道 interceptor 是单槽、会被其他 0.1.5 插件
+      // (如 dsh-live-token-stats)抢占。直接在插件自己的 fiber 上向 webServer
+      // 注册 prefix 路由(plain req/res + 自有 RpcResult 信封)。
+      // 鉴权面:同源浏览器的 DNS-rebinding 防护(Host 须 loopback),与
+      // connection /api 网关的 fence 语义一致;不做用户鉴权——面板数据非机密,
+      // 机密字段(directApiKey 等)在 settings-get 已由 sanitizeSettings 脱敏。
+      const registered = webServer.register({
+        kind: 'prefix',
+        path: RPC_ROUTE_PREFIX,
+        handler: async (req: IncomingMessage, res: ServerResponse) => {
+          if (!apiFence(req)) return writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } });
+          if (req.method !== 'POST') {
+            return writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } });
+          }
+          const pathname = new URL(req.url ?? '/', 'http://dsh.internal').pathname;
+          if (!pathname.startsWith(`${RPC_ROUTE_PREFIX}/`)) {
+            return writeJson(res, 404, { ok: false, error: { code: 'not-found', message: 'unknown api path' } });
+          }
+          const method = pathname.slice(RPC_ROUTE_PREFIX.length + 1);
+          if (method.includes('/') || !(SHORT_ENDPOINTS as readonly string[]).includes(method)) {
+            return writeJson(res, 404, { ok: false, error: { code: 'not-found', message: `unknown api method "${method}"` } });
+          }
+          try {
+            const payload = await readJsonBody(req);
+            const result = await rpcHandler(`dsh-memory/${method}`, payload);
+            writeJson(res, 200, result);
+          } catch (err) {
+            writeJson(res, 400, { ok: false, error: { code: 'bad-request', message: err instanceof Error ? err.message : String(err) } });
+          }
+        },
+      });
+      dispose = typeof registered === 'function' ? registered : () => {};
+      registeredImpl = webServer;
+      if (!active) {
+        void dispose();
+        holding = false;
+        return;
+      }
+      logger.info('[memory] 状态 API 已注册(POST /dsh-memory/rpc/<method>)');
+      disposers.push(() => {
+        active = false;
+        holding = false;
+        void dispose();
+      });
+    } catch (err) {
       holding = false;
-      void dispose();
-    });
+      logger.warn(
+        `[memory] 状态 API 注册失败(设置面板将不可用,其余功能不受影响): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   };
 
   /** 释放全部持有注册(handle 随旧服务实例失效,holding 复位以允许重挂)。 */
@@ -223,13 +370,13 @@ export function registerMemoryRpc(
   ctx.effect(() => {
     tryRegister();
     const off = ctx.on('internal/service', (name: string, impl: unknown) => {
-      if (name !== 'connection') return;
+      if (name !== 'webServer') return;
       if (!impl) {
-        // 服务下线:旧 handle 已随旧服务实例失效——主动释放并复位,
-        // 服务恢复时本事件再触发即可重挂(否则 holding 恒真 → RPC 永久失联)
+        // 服务下线:旧路由注册已随旧服务实例失效——主动释放并复位,
+        // 服务恢复时本事件再触发即可重挂(否则 holding 恒真 → API 永久失联)
         release();
         registeredImpl = undefined;
-        logger.debug?.('[memory] connection 服务下线,RPC 注册已释放(待恢复重挂)');
+        logger.debug?.('[memory] webServer 服务下线,状态 API 注册已释放(待恢复重挂)');
         return;
       }
       if (impl !== registeredImpl) {

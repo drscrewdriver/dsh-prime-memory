@@ -30,6 +30,18 @@ const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统
 const WRITE_ONLY_NOTICE = '本会话为只写模式:记忆照常沉淀,但不读取。';
 const GLOBAL_OFF_NOTICE = '记忆注入已全局停用:本会话不读取记忆(沉淀照常)。';
 
+/**
+ * 工具执行上下文中本模块关心的字段:调用方 agent 标识 + 会话 header 的父链接。
+ * 宿主 `ToolRunContext.agent` 是活的 `Agent` 运行时对象,结构上满足本形状
+ * (`id: SessionId`、`session.header.parentSession?: SessionId`)。
+ */
+interface ToolExecLike {
+  agent?: {
+    id?: string;
+    session?: { header?: { id?: string; parentSession?: string } };
+  };
+}
+
 export function registerMemoryTools(
   ctx: Context,
   cfg: MemoryConfig,
@@ -50,33 +62,75 @@ export function registerMemoryTools(
   if (!cfg.tools) return;
 
   /**
+   * 沿父链解析**有效档位归属会话**(§A 修复)。
+   *
+   * 子代理以新 session id 调用工具时,其自身通常不在档位表里——原实现直接回落
+   * 全局默认档(auto),于是父会话被用户显式设为 `off`/只写时,**子代理仍能读到
+   * 用户明确关闭的记忆**,构成"用户显式指令被绕过"(P0)。
+   *
+   * 现改为沿 `session.header.parentSession` 上溯至**首个有显式档位的祖先**。
+   * 同步通路由 task_4 spike 实测确认(`findings.md §8`):子代理会话的 header
+   * **无条件**携带父会话 id(`dsh-subagent/.../child-agent.js:111-125`)。
+   *
+   * 多级链(孙代理等)需要按 id 取某个会话的 header → 走 `ctx.get('agents')`
+   * 的**宽容路径**(cordis 属性访问对未 inject 的服务会抛 "without inject";
+   * 同款先例见 `src/hooks/recall.ts:402-407,461`)。
+   *
+   * 降级(全部不抛错、不新增拒绝路径):
+   * - `exec.agent` 缺失 → 返回 undefined(保持既有 fail-open);
+   * - 服务缺失 / 链断 → 停止上溯,用自身 id(= 默认档,与修复前一致);
+   * - 链上做环检测,自环或成环都能终止。
+   */
+  const resolveModeOwner = (exec: ToolExecLike): string | undefined => {
+    const agent = exec.agent;
+    const selfId = agent?.id;
+    if (selfId === undefined) return undefined;
+    // 自身有显式档位 → 自己说了算(子代理会话也可被单独设置)
+    if (modes.hasEntry(selfId)) return selfId;
+    const seen = new Set<string>([selfId]);
+    let cur: string | undefined = agent?.session?.header?.parentSession;
+    while (cur !== undefined && !seen.has(cur)) {
+      if (modes.hasEntry(cur)) return cur;
+      seen.add(cur);
+      // 继续上溯:取该会话的 header(服务缺失时返回 undefined → 循环自然结束)
+      const upstream = ctx.get?.('agents') as { get?: (id: string) => ToolExecLike['agent'] } | undefined;
+      cur = upstream?.get?.(cur)?.session?.header?.parentSession;
+    }
+    return selfId; // 无祖先设过 → 自身(= 默认档,行为与修复前一致)
+  };
+
+  /**
    * 调用会话的检索族(auto → undefined 不过滤;off/只写 → null 表示整体禁用)。
    * fail-open:exec.agent 缺失(宿主调用路径未带 agent 标识)按全族检索放行——
    * 档位隔离依赖宿主正确传递 exec.agent.id,缺失只告警一次不拒绝工具调用。
    */
   let warnedNoAgent = false;
-  const familyOfCaller = (agentId: string | undefined): MemoryFamily | undefined | null => {
-    if (agentId === undefined) {
+  const familyOfCaller = (exec: ToolExecLike): MemoryFamily | undefined | null => {
+    const owner = resolveModeOwner(exec);
+    if (owner === undefined) {
       if (!warnedNoAgent) {
         warnedNoAgent = true;
         logger.warn('[memory] 工具调用缺少 agent 标识(exec.agent 未传递),档位过滤退化为全族检索');
       }
       return undefined;
     }
-    const mode = modes.get(agentId);
+    const mode = modes.get(owner);
     if (mode === 'off') return null;
     // 只写会话拒读:与注入同属读维度,不拒则"不注入"从工具路径漏风
-    if (!modes.resolvedRecall(agentId, live.get().recall)) return null;
+    if (!modes.resolvedRecall(owner, live.get().recall)) return null;
     return mode === 'auto' ? undefined : mode;
   };
 
   /** 拒读时的归因文案(familyOfCaller 判 null 后重查内存 Map,成本可忽略):
-   *  off 完全隐身 / 会话只写覆盖 / 全局召回关——三种停用各说各话,不谎报只写。 */
-  const blockNoticeOf = (agentId: string | undefined): string => {
-    if (agentId !== undefined) {
-      if (modes.get(agentId) === 'off') return OFF_NOTICE;
-      if (modes.getRecall(agentId) === false) return WRITE_ONLY_NOTICE;
-      if (!modes.resolvedRecall(agentId, live.get().recall)) return GLOBAL_OFF_NOTICE;
+   *  off 完全隐身 / 会话只写覆盖 / 全局召回关——三种停用各说各话,不谎报只写。
+   *  **注意按"有效档位归属会话"归因**:子代理拒读时文案取的是其祖先的档位,
+   *  而非子代理自身(后者未设置,会谎报成 off)。 */
+  const blockNoticeOf = (exec: ToolExecLike): string => {
+    const owner = resolveModeOwner(exec);
+    if (owner !== undefined) {
+      if (modes.get(owner) === 'off') return OFF_NOTICE;
+      if (modes.getRecall(owner) === false) return WRITE_ONLY_NOTICE;
+      if (!modes.resolvedRecall(owner, live.get().recall)) return GLOBAL_OFF_NOTICE;
     }
     return OFF_NOTICE;
   };
@@ -118,8 +172,8 @@ export function registerMemoryTools(
         ],
       },
       execute: async (args, exec) => {
-        const family = familyOfCaller(exec.agent?.id);
-        if (family === null) return { items: [], notice: blockNoticeOf(exec.agent?.id) };
+        const family = familyOfCaller(exec);
+        if (family === null) return { items: [], notice: blockNoticeOf(exec) };
         const limit = Math.min(Math.max(args.limit ?? 5, 1), 20);
         const hits = await stores.l1.search(args.query, limit, { type: args.type || undefined, family: family ?? undefined });
         return {
@@ -170,7 +224,7 @@ export function registerMemoryTools(
         ],
       },
       execute: async (args, exec) => {
-        if (familyOfCaller(exec.agent?.id) === null) return { items: [], notice: blockNoticeOf(exec.agent?.id) };
+        if (familyOfCaller(exec) === null) return { items: [], notice: blockNoticeOf(exec) };
         const limit = Math.min(Math.max(args.limit ?? 5, 1), 20);
         const records = await stores.l0.search(args.query, limit);
         return {
@@ -207,7 +261,7 @@ export function registerMemoryTools(
         ],
       },
       execute: async (args, exec) => {
-        if (familyOfCaller(exec.agent?.id) === null) return { content: blockNoticeOf(exec.agent?.id) };
+        if (familyOfCaller(exec) === null) return { content: blockNoticeOf(exec) };
         const p = args.path.trim();
         let content: string | undefined;
         if (p === 'persona.md' || p === 'persona-chat.md' || p === 'persona' || p === 'persona-chat') {
@@ -216,7 +270,7 @@ export function registerMemoryTools(
           content = await stores.persona.work.read();
         } else {
           // 场景文件在两族目录里按名查找(先本族后另一族)
-          const primary = familyOfCaller(exec.agent?.id) ?? 'chat';
+          const primary = familyOfCaller(exec) ?? 'chat';
           const other: MemoryFamily = primary === 'chat' ? 'work' : 'chat';
           content =
             (await stores.scenes[primary].read(p)) ?? (await stores.scenes[other].read(p));
@@ -504,7 +558,7 @@ export function registerMemoryTools(
         if (!live.get().memoryMutate) return { deleted: 0, ids: [], notice: MUTATE_OFF_NOTICE };
         const query = String(args.query ?? '').trim();
         if (!query) return { deleted: 0, ids: [], notice: 'query 为空,未删除' };
-        const family = familyOfCaller(exec.agent?.id);
+        const family = familyOfCaller(exec);
         const limit = Math.min(Math.max(args.limit ?? 3, 1), 10);
         const hits = await stores.l1.search(query, limit, { family: family && family !== null ? family : undefined });
         const ids = hits.map((h) => h.id);
@@ -556,8 +610,8 @@ export function registerMemoryTools(
         render: (_args, value) => [{ type: 'text', text: value.notice ?? renderGraphCards(value.items ?? []) }],
       },
       execute: async (args, exec) => {
-        const family = familyOfCaller(exec.agent?.id);
-        if (family === null) return { items: [], notice: blockNoticeOf(exec.agent?.id) };
+        const family = familyOfCaller(exec);
+        if (family === null) return { items: [], notice: blockNoticeOf(exec) };
         const graph = stores.graph;
         if (!graph) return { items: [], notice: GRAPH_OFF_NOTICE };
         const query = String(args.query ?? '').trim();
@@ -601,8 +655,8 @@ export function registerMemoryTools(
         render: (_args, value) => [{ type: 'text', text: value.notice ?? (value.node || '(节点不存在)') }],
       },
       execute: async (args, exec) => {
-        const family = familyOfCaller(exec.agent?.id);
-        if (family === null) return { notice: blockNoticeOf(exec.agent?.id) };
+        const family = familyOfCaller(exec);
+        if (family === null) return { notice: blockNoticeOf(exec) };
         const graph = stores.graph;
         if (!graph) return { notice: GRAPH_OFF_NOTICE };
         const id = String(args.id ?? '').trim();
