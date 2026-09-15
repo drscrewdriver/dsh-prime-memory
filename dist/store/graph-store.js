@@ -623,6 +623,41 @@ export class GraphStore {
             this.logger?.warn(`${TAG} 删除传播失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
         }
     }
+    /**
+     * §C 矛盾冻结:把**来源含冲突记录**的 active 节点/边标 `disputed`。
+     *
+     * 与 {@link markSourcesDeleted} 的区别在判据方向:删除传播问"来源是否**全部**消失"
+     * (全消失才墓碑);冻结问"来源是否**命中**冲突集"(命中一条即存疑)。
+     * 节点是多条 L1 记录聚合出的实体,只要有一条来源处在待裁决对里,
+     * 这个实体就**不可全信**——`disputed` 在 `graph/search.ts:87` 仍进检索候选,
+     * 是"照常召回、但状态可见"的中间态,正合冻结语义。
+     *
+     * 已是 `disputed` 的不重复计数(幂等);`archived` 墓碑**不复活**。
+     *
+     * @returns 本次实际改动的节点数。
+     */
+    markSourcesDisputed(recordIds) {
+        if (!this.db || recordIds.length === 0)
+            return 0;
+        try {
+            const hit = new Set(recordIds);
+            const now = new Date().toISOString();
+            const nodes = this.loadGraph().nodes.filter((n) => n.status === 'active' && n.sourceRecordIds.some((id) => hit.has(id)));
+            if (nodes.length === 0)
+                return 0;
+            this.tx(() => {
+                for (const n of nodes) {
+                    this.db.prepare(`UPDATE graph_nodes SET status = 'disputed', updated_time = ? WHERE node_id = ?`).run(now, n.id);
+                }
+            });
+            this.logger?.info(`${TAG} 矛盾冻结:${nodes.length} 节点来源命中冲突集,标 disputed`);
+            return nodes.length;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} 冻结标记失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
+            return 0;
+        }
+    }
     /** 清空全部图谱数据(L1 重建时调用——图谱是 L1 的投影,记录清空即图谱作废)。 */
     resetAll() {
         if (!this.db)

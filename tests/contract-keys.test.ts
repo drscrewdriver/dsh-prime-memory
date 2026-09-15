@@ -114,7 +114,7 @@ describe('memory live settings key registry', () => {
   it('static config schema keeps every deploy key with defaults', () => {
     // schemastery 对象可调用:空输入产出完整默认对象——键集/默认值缩水在此暴露
     const defaults = (memorySchema as unknown as (v: unknown) => Record<string, unknown>)({});
-    for (const k of ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl']) {
+    for (const k of ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl', 'graph', 'conflictFreeze']) {
       expect(defaults[k], `config key ${k} missing`).toBeDefined();
     }
     // 部署默认值抽查(与 0.9.0 契约逐项一致)
@@ -137,6 +137,8 @@ describe('memory live settings key registry', () => {
     expect((defaults.tokenCost as Record<string, unknown>).retentionDays).toBe(365);
     expect(defaults.tools).toBe(true);
     expect(defaults.benchControl).toBe(false);
+    // §C 矛盾冻结:新功能默认关(冻结消耗人的注意力,不可默认全开)
+    expect((defaults.conflictFreeze as Record<string, unknown>).enabled).toBe(false);
   });
 
   it('resolveDataDir falls back to dshHomePath("memory") shape', () => {

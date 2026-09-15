@@ -60,6 +60,13 @@ export interface MemoryConfig {
      *  同时为真才执行;图谱是 L1 的可重建投影,关闭不影响记忆主链路。 */
     enabled: boolean;
   };
+  /** §C 矛盾冻结:去重判定"两边都像是对的、机器判不了"时不自动裁决,
+   *  把冲突对停放到待人工裁决区(conflict_pending)。**默认关**——
+   *  冻结消耗人的注意力,不可默认全开。 */
+  conflictFreeze: {
+    /** 总开关。关闭时去重 prompt 与改动前**逐字一致**,冲突分支结构性不可达。 */
+    enabled: boolean;
+  };
   recall: {
     enabled: boolean;
     /** 每步自动召回注入的 L1 条数。 */
@@ -183,6 +190,11 @@ export const memorySchema = Schema.object({
   }),
   // 知识图谱投影:默认关(新功能默认关,用户显式开启;开启后受运行时蒸馏门约束)
   graph: Schema.object({
+    enabled: Schema.boolean().default(false),
+  }),
+  // §C 矛盾冻结:默认关(新功能默认关)。开启后去重决策词表多出 conflict 动作,
+  // 冲突对停放待人工裁决,不再由 LLM 直接 update/merge 覆盖。
+  conflictFreeze: Schema.object({
     enabled: Schema.boolean().default(false),
   }),
   recall: Schema.object({

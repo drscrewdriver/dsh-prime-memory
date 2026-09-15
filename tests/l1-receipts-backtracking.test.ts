@@ -66,6 +66,7 @@ function cfg(dataDir: string): MemoryConfig {
     tokenCost: { retentionDays: 365 },
     tools: true,
     benchControl: false,
+    conflictFreeze: { enabled: false },
   } as MemoryConfig;
 }
 

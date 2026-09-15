@@ -89,6 +89,20 @@ export declare class GraphStore {
      * 之后;按 L1 存活集判定(而非本次删除集合),跨多次删除与历史孤儿一并收敛。
      */
     markSourcesDeleted(deletedIds: readonly string[]): void;
+    /**
+     * §C 矛盾冻结:把**来源含冲突记录**的 active 节点/边标 `disputed`。
+     *
+     * 与 {@link markSourcesDeleted} 的区别在判据方向:删除传播问"来源是否**全部**消失"
+     * (全消失才墓碑);冻结问"来源是否**命中**冲突集"(命中一条即存疑)。
+     * 节点是多条 L1 记录聚合出的实体,只要有一条来源处在待裁决对里,
+     * 这个实体就**不可全信**——`disputed` 在 `graph/search.ts:87` 仍进检索候选,
+     * 是"照常召回、但状态可见"的中间态,正合冻结语义。
+     *
+     * 已是 `disputed` 的不重复计数(幂等);`archived` 墓碑**不复活**。
+     *
+     * @returns 本次实际改动的节点数。
+     */
+    markSourcesDisputed(recordIds: readonly string[]): number;
     /** 清空全部图谱数据(L1 重建时调用——图谱是 L1 的投影,记录清空即图谱作废)。 */
     resetAll(): void;
 }

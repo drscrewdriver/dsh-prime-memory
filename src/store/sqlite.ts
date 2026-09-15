@@ -52,6 +52,7 @@ import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
+import type { ConflictPair } from './conflicts.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
@@ -379,6 +380,30 @@ export class MemoryDb {
     // 双维回溯(task_19):按批(run_id)看一轮蒸馏的全部决策;按记录(record_id 看单条记忆的完整判定史
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_receipts_run ON l1_receipts(run_id)');
     this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_receipts_record ON l1_receipts(record_id)');
+
+    // ── §C 矛盾冻结:(DDL 同为磁盘契约) ──
+    // 冻结**不是"拦住写入"**:新记忆照常入 l1_records,与冲突的旧记忆作为**一对**
+    // 停放在本表,双方内容都不被改写,直到人工裁决。LLM 给的 winner_id 只表示
+    // "进入待裁决对时的排序位",**不代表最终结论**——最终结论落在 resolution。
+    // resolved_at 用 '' 而非 NULL 表示未裁决,与 l1_receipts 的约定一致,
+    // 避免 `= ''` 与 `IS NULL` 两套判据并存。
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS conflict_pending (
+        pair_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL DEFAULT '',
+        winner_id TEXT NOT NULL DEFAULT '',
+        loser_id TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT '',
+        resolved_at TEXT NOT NULL DEFAULT '',
+        resolution TEXT NOT NULL DEFAULT ''
+      )
+    `);
+    // 未裁决索引:队列上限(task_24,取最旧的未裁决行)与裁决工具(task_25,取单条未裁决对)
+    // 都只关心未裁决行——"查未裁决"须走索引。偏索引同时覆盖 created_at 排序。
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_conflict_pending_unresolved
+         ON conflict_pending(created_at) WHERE resolved_at = ''`,
+    );
 
     this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
@@ -1027,6 +1052,42 @@ export class MemoryDb {
       );
     }
     return n;
+  }
+
+  /**
+   * §C 矛盾冻结(task_22):落盘待裁决冲突对。
+   *
+   * `INSERT OR IGNORE`——幂等来自 **pair_id 主键**而非调用方自觉:
+   * `conflictPairId(runId, winner, loser)` 对同一三元组恒等,故一轮蒸馏重复落盘
+   * 只会得到一行。与 §B 凭证同一手法(那边是 `receipt_id` 主键)。
+   *
+   * 与凭证不同,这里**不做保留裁剪**:待裁决对是**欠人的债**,不是观测数据。
+   * 裁剪它等于把用户还没看的裁决请求悄悄删掉,那是丢工作而不是省空间。
+   * 有界性交给 task_24 的队列上限(超限不再停放、回落自动裁决),语义是
+   * 「**不收新的**」而非「**偷偷删旧的**」。
+   *
+   * @returns 实际新插入的行数。
+   */
+  recordConflictPending(rows: readonly ConflictPair[]): number {
+    if (this.degraded || rows.length === 0) return 0;
+    const stmt = this.db.prepare(
+      `INSERT OR IGNORE INTO conflict_pending
+         (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    let n = 0;
+    for (const r of rows) {
+      n += Number(
+        stmt.run(r.pairId, r.runId, r.winnerId, r.loserId, r.createdAt, r.resolvedAt, r.resolution).changes,
+      );
+    }
+    return n;
+  }
+
+  /** §C 冻结:把来源命中冲突集的图谱节点标 `disputed`(薄缝,便于单测替换)。 */
+  markSourcesDisputed(recordIds: readonly string[]): number {
+    if (this.degraded) return 0;
+    return this.graphStore.markSourcesDisputed(recordIds);
   }
 
   /**

@@ -15,6 +15,7 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
+import type { ConflictPair } from './conflicts.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
     id: string;
@@ -164,6 +165,23 @@ export declare class MemoryDb {
      * (故裁剪在写入**之后**,且包在 try 里)。
      */
     recordReceipts(rows: readonly L1Receipt[], opts?: ReceiptRetentionOptions): number;
+    /**
+     * §C 矛盾冻结(task_22):落盘待裁决冲突对。
+     *
+     * `INSERT OR IGNORE`——幂等来自 **pair_id 主键**而非调用方自觉:
+     * `conflictPairId(runId, winner, loser)` 对同一三元组恒等,故一轮蒸馏重复落盘
+     * 只会得到一行。与 §B 凭证同一手法(那边是 `receipt_id` 主键)。
+     *
+     * 与凭证不同,这里**不做保留裁剪**:待裁决对是**欠人的债**,不是观测数据。
+     * 裁剪它等于把用户还没看的裁决请求悄悄删掉,那是丢工作而不是省空间。
+     * 有界性交给 task_24 的队列上限(超限不再停放、回落自动裁决),语义是
+     * 「**不收新的**」而非「**偷偷删旧的**」。
+     *
+     * @returns 实际新插入的行数。
+     */
+    recordConflictPending(rows: readonly ConflictPair[]): number;
+    /** §C 冻结:把来源命中冲突集的图谱节点标 `disputed`(薄缝,便于单测替换)。 */
+    markSourcesDisputed(recordIds: readonly string[]): number;
     /**
      * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
      * 返回被删除的行数。

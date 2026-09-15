@@ -1,6 +1,7 @@
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
+import type { ConflictPair } from './conflicts.js';
 import { type EmbeddingService } from './embedding.js';
 import { type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
@@ -62,6 +63,17 @@ export declare class L1Store {
         limit: number;
     }): L1Receipt[];
     countReceipts(opts: ReceiptQuery): number;
+    /**
+     * §C 矛盾冻结落盘(thick 缝)。与 `recordReceipts` 同理由:管线已持有 L1Store,
+     * 无需新增构造参数;同时它是「冻结写失败不得中断蒸馏」可注入的测试缝。
+     */
+    recordConflictPending(rows: readonly ConflictPair[]): number;
+    /**
+     * §C 冻结的图谱侧标记:把来源命中冲突集的节点标 `disputed`。
+     * 经 store 而非直取 `db.graphStore`,与图谱路 provider 的注入式设计同一理由
+     * (见本文件头部注释):图谱是**可选**的派生投影,开关关闭时必须是 no-op。
+     */
+    markGraphDisputed(recordIds: readonly string[]): number;
     /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */
     appendNew(records: MemoryRecord[]): Promise<void>;
     /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。 */

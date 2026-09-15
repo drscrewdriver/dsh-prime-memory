@@ -56,6 +56,13 @@ export interface MemoryConfig {
          *  同时为真才执行;图谱是 L1 的可重建投影,关闭不影响记忆主链路。 */
         enabled: boolean;
     };
+    /** §C 矛盾冻结:去重判定"两边都像是对的、机器判不了"时不自动裁决,
+     *  把冲突对停放到待人工裁决区(conflict_pending)。**默认关**——
+     *  冻结消耗人的注意力,不可默认全开。 */
+    conflictFreeze: {
+        /** 总开关。关闭时去重 prompt 与改动前**逐字一致**,冲突分支结构性不可达。 */
+        enabled: boolean;
+    };
     recall: {
         enabled: boolean;
         /** 每步自动召回注入的 L1 条数。 */
@@ -201,6 +208,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
         interval: Schema<number, number>;
     }>>;
     graph: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
+    }>>;
+    conflictFreeze: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
     }>, Schemastery.ObjectT<{
         enabled: Schema<boolean, boolean>;
@@ -462,6 +474,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
         interval: Schema<number, number>;
     }>>;
     graph: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
+    }>>;
+    conflictFreeze: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
     }>, Schemastery.ObjectT<{
         enabled: Schema<boolean, boolean>;

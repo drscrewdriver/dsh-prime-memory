@@ -42,6 +42,11 @@ export const memorySchema = Schema.object({
     graph: Schema.object({
         enabled: Schema.boolean().default(false),
     }),
+    // §C 矛盾冻结:默认关(新功能默认关)。开启后去重决策词表多出 conflict 动作,
+    // 冲突对停放待人工裁决,不再由 LLM 直接 update/merge 覆盖。
+    conflictFreeze: Schema.object({
+        enabled: Schema.boolean().default(false),
+    }),
     recall: Schema.object({
         enabled: Schema.boolean().default(true),
         maxResults: Schema.number().min(1).max(20).default(5),
