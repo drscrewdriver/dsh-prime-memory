@@ -21,6 +21,7 @@ import { createRequire } from 'node:module';
 import { existsSync, mkdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { familyForType, isScopeVisible, normPersistence, normScope } from '../types.js';
+import { isZeroVector, vecToBuffer } from './vec-utils.js';
 import { normalizeWorkspacePath } from '../workspace.js';
 import { bm25RankToScore, buildFtsQuery, tokenizeForFts } from './search-utils.js';
 import { describeTokenizer, ensureTokenizer, tokenizerStamp } from '../util/tokenizer.js';
@@ -420,7 +421,10 @@ export class MemoryDb {
         // ── token_cost:蒸馏成本明细表(成本账本自治) ──
         this.costLedger.init(this.db, this.logger);
         // ── graph_*:知识图谱投影表族(GraphStore.init 自带 try/catch,失败仅图谱 no-op) ──
-        this.graphStore.init(this.db, this.logger);
+        // §F 节点向量列的维度**复用既有探测结果**（`vecLoaded` / `dimensions` 由
+        // `prepareL1VecStatements` 之前的探测决定），不新增一套能力探测。探测未通过 →
+        // 不传 → 图谱向量路结构性不存在（不建表、不告警、不抛）。
+        this.graphStore.init(this.db, this.logger, this.vecLoaded && this.dimensions > 0 ? { dimensions: this.dimensions } : undefined);
         // ── FTS5 全文索引(建表失败仅停用 FTS,不降级整个库) ──
         try {
             // 索引重建判据(FTS5 无法 ALTER,只能 drop 后从源表全量回灌):
@@ -1782,14 +1786,6 @@ function toIso(epochMs) {
         return '';
     return new Date(epochMs).toISOString();
 }
-/** 全零向量(cosine 未定义,不可入向量表)。reindex 侧用它区分"不可嵌入"与"写入失败"。 */
-export function isZeroVector(vec) {
-    for (const v of vec) {
-        if (v !== 0)
-            return false;
-    }
-    return true;
-}
 /** NOT IN 片段(空集 → 空串;配合 notInParams 使用)。 */
 function notInClause(column, exclude) {
     if (!exclude || exclude.size === 0)
@@ -1810,6 +1806,6 @@ function normFamily(raw, type) {
         return raw;
     return familyForType(type);
 }
-function vecToBuffer(vec) {
-    return Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength);
-}
+// 向量编码工具的实现已抽到 `vec-utils.ts`（避免 sqlite ↔ graph-store 形成模块环），
+// 此处 re-export 保持既有外部导入点不变；文件内部使用走上方 import。
+export { isZeroVector, vecToBuffer };
