@@ -1,5 +1,6 @@
 import type { EmbeddingProviderInfo } from './embedding.js';
 import type { L0MessageRecord, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
+import { isZeroVector, vecToBuffer } from './vec-utils.js';
 export interface StoreInitResult {
     /** embedding 配置(provider/model/维度)变化,需要后台全量重嵌入。 */
     needsReindex: boolean;
@@ -350,5 +351,4 @@ export declare class MemoryDb {
     }>, recordedAt: string): number;
     close(): void;
 }
-/** 全零向量(cosine 未定义,不可入向量表)。reindex 侧用它区分"不可嵌入"与"写入失败"。 */
-export declare function isZeroVector(vec: Float32Array): boolean;
+export { isZeroVector, vecToBuffer };
