@@ -50,7 +50,8 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
-import type { L1Receipt } from './receipts.js';
+import { RECEIPTS_MAX_RUNS } from './receipts.js';
+import type { L1Receipt, ReceiptRetentionOptions } from './receipts.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
@@ -999,8 +1000,14 @@ export class MemoryDb {
    *
    * 刻意**不开事务**:凭证是旁路观测数据,单条独立、重放幂等,部分写入无害;
    * 为它引入事务只会把失败面扩大。调用方另有 `persistReceiptsSafely` 兜底不抛。
+   *
+   * 写入后**顺带执行保留策略**(task_18)。把裁剪挂在这里而不是交给调用方,
+   * 是为了让"有界"成为**结构性保证**:任何写路径都不可能忘记裁剪,
+   * 因而表容量不可能随使用时间无界增长。裁剪自身失败只 warn——
+   * 它是省空间的动作,失败了最坏是这次没省下来,绝不能因此弄丢刚落盘的凭证
+   * (故裁剪在写入**之后**,且包在 try 里)。
    */
-  recordReceipts(rows: readonly L1Receipt[]): number {
+  recordReceipts(rows: readonly L1Receipt[], opts?: ReceiptRetentionOptions): number {
     if (this.degraded || rows.length === 0) return 0;
     const stmt = this.db.prepare(
       `INSERT OR IGNORE INTO l1_receipts (receipt_id, run_id, record_id, kind, input_digest, decided_at)
@@ -1010,7 +1017,47 @@ export class MemoryDb {
     for (const r of rows) {
       n += Number(stmt.run(r.receiptId, r.runId, r.recordId, r.kind, r.inputDigest, r.decidedAt).changes);
     }
+    try {
+      this.trimReceipts(opts?.maxRuns ?? RECEIPTS_MAX_RUNS);
+    } catch (err) {
+      this.logger?.warn(
+        `${TAG} L1 决策凭证裁剪失败,本次不回收空间(**凭证已正常落盘,记忆与回溯不受影响**): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
     return n;
+  }
+
+  /**
+   * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
+   * 返回被删除的行数。
+   *
+   * 两条刻意的约束:
+   * - **粒度是 run,不是行**。按行裁剪会切出"半截批次",而 task_19 的按 run 回溯
+   *   正是要回答"这一轮蒸馏都判了什么"——一个少了尾巴的批次会给出**看似完整、
+   *   实则遗漏**的结论,比查不到更糟。整批留、整批删,回溯的原子性才有保证。
+   * - **只碰 `l1_receipts`,绝不碰 `l1_records`**。前者是可再生/可丢弃的观测数据,
+   *   后者是用户的事实源。为省几 MB 而波及记忆本体,是把容量优化做成了数据丢失。
+   *
+   * `maxRuns <= 0` 或非有限值一律**不裁剪**——"传 0 即清空"是个太容易被误触的
+   * 语义,宁可把它定义为无效输入。
+   *
+   * 定序取每 run 的 `MAX(decided_at)`(凭证的 decided_at 在一批内恒定)并以
+   * `run_id` 兜底,使同一时刻产生的多个 run 也有**确定**的相对序,裁剪结果可复现。
+   */
+  trimReceipts(maxRuns: number): number {
+    if (this.degraded) return 0;
+    if (!Number.isFinite(maxRuns) || maxRuns <= 0) return 0;
+    const stmt = this.db.prepare(
+      `DELETE FROM l1_receipts WHERE run_id NOT IN (
+         SELECT run_id FROM l1_receipts
+          GROUP BY run_id
+          ORDER BY MAX(decided_at) DESC, run_id DESC
+          LIMIT ?
+       )`,
+    );
+    return Number(stmt.run(Math.floor(maxRuns)).changes);
   }
 
   /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */

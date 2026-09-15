@@ -1,4 +1,4 @@
-﻿/**
+/**
  * §B L1 决策凭证链(可追溯性基础设施)。
  *
  * 为什么需要:`memory.db` 里每条 L1 记录都是**去重决策的结果**(store / update /
@@ -39,6 +39,33 @@ export function inputDigest(candidateIds: readonly string[]): string {
     hash.update('\n');
   }
   return hash.digest('hex');
+}
+
+/**
+ * 凭证保留上限:**最多保留多少个 run**。
+ *
+ * 为什么按 **run 数**而不是按天数(§B task_18):
+ * 本策略要防的是「`memory.db` 无限增长」。时间窗口**给不出这个保证**——
+ * 阈值(比如 90 天)与写入速率无关,一个高频用户 90 天能写进任意多行,
+ * 无界增长只是被推迟,不是被消除。run 数上限则**直接给出行的上界**
+ * (`maxRuns × 每 run 记录数`),这是"有界"与"看起来有界"的区别。
+ * 代价是:一个几乎不用的用户,历史可能只剩最近 1000 次蒸馏——
+ * 但凭证是**诊断设施**,诊断需要的是"最近发生了什么",不是考古。
+ *
+ * 1000 这个量级的依据:一轮 L1 蒸馏通常落 5~20 条凭证,故上限约 1~2 万行
+ * (数 MB 量级,在同为单文件的 `memory.db` 里不构成压力);而 L1 蒸馏本身要
+ * 调一次 LLM,现实中每小时至多几次——1000 轮 ≈ 活跃使用数月。
+ *
+ * **为什么是常量而不是配置项**:配置项要接 schema、契约与设置页,为一个
+ * 诊断表的容量引入用户可见面,收益与面积不成比例(YAGNI)。真需要调,
+ * 改这里即可,且 `recordReceipts(rows, { maxRuns })` 已留出显式注入口。
+ */
+export const RECEIPTS_MAX_RUNS = 1000;
+
+/** 裁剪策略的可选入参。省略时用 {@link RECEIPTS_MAX_RUNS}。 */
+export interface ReceiptRetentionOptions {
+  /** 最多保留的 run 数;<=0 或非有限值视为"不裁剪"。 */
+  maxRuns?: number;
 }
 
 /**
