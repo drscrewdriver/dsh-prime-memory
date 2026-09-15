@@ -119,10 +119,10 @@ describe('graph 预算键:settings-set 写入门', () => {
       req.method = 'POST';
       req.url = '/dsh-memory/rpc/settings-set';
       req.end(JSON.stringify(payload));
-      let status = 0;
       let body = '';
       await handler!(req, {
-        writeHead: (s: number) => { status = s; },
+        // writeHead 只需存在(handler 会调),本用例不断言 HTTP 状态码——只断言 RPC 信封
+        writeHead: () => {},
         end: (b?: string) => { body = b ?? ''; },
       });
       const parsed = JSON.parse(body) as { ok: boolean; value?: unknown; error?: { message: string } };

@@ -114,7 +114,9 @@ function isLoopbackHostname(hostname: string): boolean {
 function apiFence(req: IncomingMessage): boolean {
   const host = req.headers.host;
   if (typeof host !== 'string' || host.length === 0) return false;
-  let hostname = host;
+  // 不写初值:catch 分支直接 return,初值在任何路径下都不会被读取
+  // (原 `let hostname = host` 是死存储,eslint no-useless-assignment)。
+  let hostname: string;
   try {
     hostname = new URL(`http://${host}`).hostname;
   } catch {
