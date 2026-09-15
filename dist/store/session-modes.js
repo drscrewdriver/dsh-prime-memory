@@ -60,6 +60,15 @@ export class SessionModeStore {
     get(sessionId) {
         return this.entries.get(sessionId)?.mode ?? this.loaded;
     }
+    /**
+     * 该会话是否有**显式**档位条目(区别于 `get()` 的默认档回落)。
+     *
+     * 子代理档位继承(§A)靠它判断"这一层是否设过":未设过则继续沿父链上溯,
+     * 而不是立刻吃默认档——后者正是"用户显式 off 被绕过"的成因。
+     */
+    hasEntry(sessionId) {
+        return this.entries.has(sessionId);
+    }
     /** 会话级注入覆盖原始值:undefined = 未覆盖,跟随全局。 */
     getRecall(sessionId) {
         return this.entries.get(sessionId)?.recall;
