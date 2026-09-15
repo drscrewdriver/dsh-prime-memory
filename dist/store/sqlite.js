@@ -305,6 +305,23 @@ export class MemoryDb {
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_updated ON l1_records(updated_time)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_family ON l1_records(family)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_valid_from ON l1_records(valid_from)');
+        // ── §B L1 决策凭证(DDL 同为磁盘契约) ──
+        // 每条 L1 记录的 store/update/merge/skip 决策留一条凭证:决策当时看到的候选池
+        // 摘要(input_digest)+ 结论(kind)。凭证必须在事件**之前**存在——输入快照
+        // 无法事后补录,故本表先于任何消费方落地(findings.md §9)。
+        this.db.exec(`
+      CREATE TABLE IF NOT EXISTS l1_receipts (
+        receipt_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL DEFAULT '',
+        record_id TEXT NOT NULL DEFAULT '',
+        kind TEXT NOT NULL DEFAULT '',
+        input_digest TEXT NOT NULL DEFAULT '',
+        decided_at TEXT NOT NULL DEFAULT ''
+      )
+    `);
+        // 双维回溯(task_19):按批(run_id)看一轮蒸馏的全部决策;按记录(record_id 看单条记忆的完整判定史
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_receipts_run ON l1_receipts(run_id)');
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_l1_receipts_record ON l1_receipts(record_id)');
         this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
         record_id, content, type, priority, scene_name, session_id, version,
