@@ -269,6 +269,9 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `tokenCost.retentionDays` | `365` | 蒸留コスト明細保持日数。`0` = 永久 |
 | `tools` | `true` | モデル呼び出し可能な記憶ツールを登録するか |
 | `benchControl` | `false` | ベンチ制御サービス登録（既定オフ） |
+| `conflictFreeze.enabled` | `false` | **矛盾凍結**の総スイッチ。有効にすると重複排除の決定語彙に `conflict` が加わります——LLM が「どちらも正しそうで機械には判定できない」と判断したとき、**自動で `update` 上書きや `merge` 統合を行わず**、そのペアを**待機キューに停める**。新しい記憶は通常どおり保存され、**双方の内容は書き換えられません**。裁定は `memory_resolve_conflict` ツールで人間が行います。無効時、重複排除プロンプトは機能追加前と**バイト単位で同一**（ゼロドリフト）。既定オフ：凍結は人の注意力を消費するため既定で全開にはできません（[ADR-0010](./docs/adr/0010-conflict-freeze-default-off-and-timeout.md)） |
+| `conflictFreeze.maxPending` | `100` | 待機キューの上限。未裁定数が上限に達すると、新しい衝突は**もう停めず**、その場で LLM の winner/loser により自動決着します（そのペアも**キューの行として残ります**。`resolution` は `auto` となり人間の結論と区別されます）。意味は「**新しいものを受け取らない**」であり「古いものを黙って消す」ではありません——これにより上限が構造的な保証になります |
+| `conflictFreeze.timeoutDays` | `30` | タイムアウト降格（日）。これを超えて停まったままのペアは**次回の蒸留の冒頭**で自動決着します（同様に `resolution=auto`）。`0` = タイムアウト降格を**行わない**（明示的な無効化であり「即座に全部期限切れ」ではありません）。安全弁が無いと「互いに矛盾する 2 件が永久に並んで検索される」状態が庫内に残り続けます |
 
 ### 蒸留フォールバックチェーンと遅い TTFT モデル
 
@@ -303,10 +306,22 @@ dsh ホストはプラグインのログをコンソールへ出力します。�
 ——DSH 向けの階層的蒸留記憶プラグインです。原作者 **JunNanLYS** が公開してくださったことに感謝します。
 本リポジトリはその上で実装層を書き直しました（最初のコミット `0b506b8` は
 「净室重写清场 — 旧実装とビルド成果物の削除」）。ドキュメント・画像・モジュール構成は上流から引き継いでいます。
-上流と比べて本リポジトリが追加したのは、Agent 向けの 10 個の記憶ツール（高権限書き込み
+上流と比べて本リポジトリが追加したのは、Agent 向けの 12 個の記憶ツール（高権限書き込み
 `memory_add` / `memory_delete` / `memory_import`、反芻制御 `memory_ruminate` シリーズ、記憶グラフ
-`memory_search_graph` / `memory_expand_graph_node`）、`skills/memport` によるツール横断の記憶移行、
+`memory_search_graph` / `memory_expand_graph_node`、決定証跡の遡及 `memory_receipts`、矛盾の裁定
+`memory_resolve_conflict`）、`skills/memport` によるツール横断の記憶移行、
 およびストア用スクリーンショット宣言です。
+
+このうち 2 つは**追跡可能性**のためのツールです：
+
+- `memory_receipts` ——「この記憶が**どこから来たか**」を遡ります。L1 の重複排除判断ごとに
+  証跡（判断時に見ていた**候補プールのダイジェスト** + 結論）を残すので、記録単位で
+  「どのバッチ由来か、どんな候補を見ていたか」を、バッチ単位で「その回は何を判断したか」を問えます。
+  証跡はイベントの**前に**存在しなければなりません——入力スナップショットは後から補填できないためです
+  （[ADR-0006](./docs/adr/0006-l1-decision-receipts.md)）。
+- `memory_resolve_conflict` —— **矛盾凍結**が待機させた衝突ペアを裁定します（`conflictFreeze.*` 設定）。
+  結論は `winner` / `loser` / `both`：どちらかを真と判定すれば他方は検索から退場し、
+  `both` は両者が実は独立した事実であるとして両方残します。
 
 核心記憶能力（階層的蒸留パイプライン、プロンプト設計、二重書き込みストレージ）は [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory) の **MemoryCore** を参考にしています。
 

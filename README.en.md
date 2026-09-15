@@ -325,6 +325,9 @@ the bundle layer appends and causes `duplicate loader entry id` startup failure)
 | `tokenCost.retentionDays` | `365` | Retention (days) for distillation cost details (the `token_cost` table); rows older than this are rolled away on write. `0` = keep forever. Also the upper bound of the cost dashboard's "last N days" window |
 | `tools` | `true` | Whether to register model-callable memory tools |
 | `benchControl` | `false` | Register the in-process bench control service (rebuild trigger / session-mode setting / distillation usage snapshot — used by the benchmark's lifecycle track). Off by default — zero surface in production deployments; do not enable casually |
+| `conflictFreeze.enabled` | `false` | Master switch for **conflict freeze**. When on, the dedup action vocabulary gains `conflict`: if the model judges that "both sides look right and it cannot tell", it **no longer auto-`update`s or `merge`s** — the pair is **parked** in a pending queue instead. The new memory is still stored, and **neither side is rewritten**; a human adjudicates via the `memory_resolve_conflict` tool. While off, the dedup prompt is **byte-identical** to before the feature existed (zero drift). Off by default: freezing spends human attention, so it must not be on by default ([ADR-0010](./docs/adr/0010-conflict-freeze-default-off-and-timeout.md)) |
+| `conflictFreeze.maxPending` | `100` | Pending-queue cap. Once the number of unresolved pairs reaches it, new conflicts are **no longer parked** and are settled on the spot using the LLM's winner/loser (the pair is **still written to the queue** for the audit trail, with `resolution` = `auto` to distinguish it from a human verdict). The semantics are "**stop taking new ones**", not "quietly delete old ones" — that is what makes the bound structural rather than a promise |
+| `conflictFreeze.timeoutDays` | `30` | Timeout fallback (days): pairs left unresolved longer than this are settled automatically at the start of the **next distillation run** (again recorded as `resolution=auto`). `0` = **no** timeout fallback (explicitly off, not "everything expires immediately"). Without a safety valve, "two contradictory memories recalled side by side forever" stays in the database permanently |
 
 ### Distillation fallback chain & slow-TTFT models
 
@@ -446,10 +449,23 @@ distillation memory plugin for DSH. Thanks to **JunNanLYS** for open-sourcing it
 rewrites the implementation layer on top of it (the first commit `0b506b8` is
 "净室重写清场 — remove the old implementation and build artifacts"), while the documentation,
 images and module layout are carried over from upstream. Compared with upstream, this repository
-adds 10 agent-facing memory tools (high-privilege writes `memory_add` / `memory_delete` /
-`memory_import`, ruminate controls `memory_ruminate`, and the memory graph
-`memory_search_graph` / `memory_expand_graph_node`), the `skills/memport` cross-tool memory
-transfer, and storefront screenshot declarations.
+adds 12 agent-facing memory tools (high-privilege writes `memory_add` / `memory_delete` /
+`memory_import`, ruminate controls `memory_ruminate`, the memory graph
+`memory_search_graph` / `memory_expand_graph_node`, decision-receipt backtracking
+`memory_receipts`, and conflict adjudication `memory_resolve_conflict`), the `skills/memport`
+cross-tool memory transfer, and storefront screenshot declarations.
+
+Two of those tools exist for **traceability**:
+
+- `memory_receipts` — trace **where a memory came from**. Every L1 dedup decision leaves a
+  receipt (a digest of the candidate pool it saw + the verdict), so you can ask "which run did
+  this record come from, and what candidates did it see?" per record, or "what did that batch
+  decide?" per run. Receipts must exist *before* the event — input snapshots cannot be
+  backfilled ([ADR-0006](./docs/adr/0006-l1-decision-receipts.md)).
+- `memory_resolve_conflict` — adjudicate conflict pairs parked by **conflict freeze** (see the
+  `conflictFreeze.*` settings). The verdict is `winner` / `loser` / `both`: picking a side
+  retires the other from retrieval, while `both` means the two records are really independent
+  facts and both are kept.
 
 The core memory capabilities (layered distillation pipeline, prompt design, and the
 dual-write storage architecture) are modeled after **MemoryCore** from

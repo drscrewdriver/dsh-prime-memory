@@ -36,7 +36,38 @@
 > 沙箱 `spawn EPERM`（含 `ESBUILD_BINARY_PATH` 为何无效）、PowerShell 管道捕获让 `tsc` 错误数变 0、
 > 编码 BOM/乱码/行号漂移，以及 `git amend -m` 清空提交正文等 Git 陷阱。
 
+### 新增
+
+- **§B L1 决策凭证链（可追溯性基础设施）**。`memory.db` 里每条 L1 记录都是**去重决策的结果**（store / update / merge / skip），但决策本身不留痕——事后只能看到"结果长这样"，看不到"当时基于什么做的判断"。新增 `l1_receipts` 表：每次去重决策留一条凭证（`run_id` / `record_id` / `kind` / **候选池有序序列的 sha256 摘要** `input_digest` / `decided_at`），配套新工具 **`memory_receipts`** 与 RPC 端点 **`dsh-memory/receipts`**，按记录或按批次**双维回溯**（同给为 AND）。凭证必须在事件**之前**存在——输入快照**无法事后补录**，故本能力前置落地、不设症状触发条件（[`ADR-0006`](./docs/adr/0006-l1-decision-receipts.md)）。
+  - **`input_digest` 三项刻意设计**：**顺序敏感**（候选池是有序的，"当时看到哪些候选、按什么序"正是要复原的输入）、**重复不折叠**（候选池里的重复本身是事实）、**长度前缀编码**（否则 `['a|b']` 与 `['a','b']` 会碰撞——序列化不是单射，摘要就失去指纹意义）。
+  - **保留策略**：按 **run 数**裁剪（`RECEIPTS_MAX_RUNS = 1000`）——时间窗口**给不出行的上界**（阈值与写入速率无关，高频用户 90 天能写进任意多行，无界增长只是被**推迟**）；裁剪**粒度是 run 而非行**——按行裁剪会切出"半截批次"，让"这一轮都判了什么"给出**看似完整、实则遗漏**的结论，危害**高于查不到**。
+  - **红线**：裁剪**只碰 `l1_receipts`，绝不碰 `l1_records`**——前者是可丢弃的观测数据，后者是用户的事实源，为省几 MB 而波及记忆本体是把容量优化做成了数据丢失。
+  - **失败隔离**：凭证是旁路设施，写失败只记 `warn`、**绝不中断 L1 蒸馏**。
+
+- **§C 矛盾冻结（可选，默认关）**。此前去重**决策词表**只有 `store` / `update` / `merge` / `skip`——"冲突检测器"（`CONFLICT_DETECTION_SYSTEM_PROMPT`）检测到矛盾后**由 LLM 直接裁决落盘**（`update` 覆盖或 `merge` 合并），**没有"停下来等人裁决"这个选项**。开启 `conflictFreeze.enabled` 后词表新增 `conflict` 动作：LLM 判定"两边都像是对的、机器判不了"时，把冲突对**停放**到 `conflict_pending` 队列——**新记忆照常入库，双方内容都不被改写**，由新工具 **`memory_resolve_conflict`**（RPC：`dsh-memory/conflict-resolve`）交人裁决，结论 `winner` / `loser` / `both`。
+  - **冻结不是"拦住写入"，而是"不自动裁决"**——实现成前者会丢信息，比它想解决的问题更糟。
+  - **安全阀**：`maxPending`（队列上限）/ `timeoutDays`（超时降级）。语义是"**不收新的**"而非"偷偷删旧的"：被自动了结的对**仍写入队列留痕**，`resolution` 记为 `auto` 以区别于人工结论。没有安全阀的两个后果都是确定的：队列无界增长；"两条互相矛盾的记忆长期并列召回"永久留在库里。
+  - **图谱侧**：被冻结的记录，其**来源命中的图谱节点**标为 `disputed`（复用既有状态；该状态仍在检索候选内，是"照常召回、但状态可见"的中间态）。该标记是**派生同步**而非单向标记——裁决会**撤销**争议，单向标记会让已裁决的节点永远停在 `disputed`，那是**派生图谱在说谎**。
+  - **零漂移**：关闭时去重 prompt 与改动前**逐字节相同**——这是**构造性**保证（关闭态直接 `return base`），不是人工比对出来的（[`ADR-0010`](./docs/adr/0010-conflict-freeze-default-off-and-timeout.md)）。
+
+### 变更
+
+- **新增配置** `conflictFreeze.enabled`（默认关）/ `conflictFreeze.maxPending`（100）/ `conflictFreeze.timeoutDays`（30，`0` = 不做超时降级）；**新增端点** `dsh-memory/receipts` 与 `dsh-memory/conflict-resolve`（端点面 26 → 28）。
+- **`L1ReceiptKind` 新增 `conflict`**。扩词表时必须同步检查**所有消费该词表的地方**（凭证归一、统计日志、渲染文案、schema 描述）——执行期实测：漏登记会把"模型**明确**说判不了"记成 `skip_missing`（= "模型**没答**"），而 §C 的裁决可审计性**完全**依赖凭证链，审计结论与事实**正好相反**（比缺一条凭证更糟：缺了是"查不到"，错了是"查到了错的"）。
+- **`GraphStore.markSourcesDisputed`（单向标记）→ `syncDisputed`（派生同步）**：`active` 且来源命中 → `disputed`；`disputed` 且来源不再命中 → 复原 `active`；`archived` 墓碑不动。管线侧传的是**当前全部未裁决对的记录集**，而非本轮新增那一对。
+- **裁决顺序刻意为之**：先打 `resolved_at` 再退场败方——反过来的话，"记录已消失、队列里那条仍在待裁决"要等人再点一次才发现无据可依；打标用 `WHERE resolved_at = ''`，**二次裁决不覆盖第一次结论**。
+
+### 测试
+
+- **§B 新增 5 个测试文件**（凭证建表与摘要、写入点与失败隔离、保留策略、双维查询、端到端回溯），含**变异探针**：把裁剪表换成 `l1_records` 后红线用例确实失败。
+- **§C 新增 7 个测试文件**（词表 / 建表 / 开关 / 冻结语义 / 安全阀 / 裁决 / 闭环），均按 TDD 先观察 RED。三条**区分性**判据值得一提：`version===0`（区分 store 语义与 merge/update 语义）、端到端抓真管线实际送出的 prompt（静态函数全绿**证明不了**管线把开关传了下去）、`both` 分支变异后用例确实变红。
+- 全量 **34 文件 / 341 用例**；CI 七步链（`typecheck` / `test` / `lint` / `build` / `build:smoke` / `smoke` / `verify-catalog`）全绿。
+- 闭环实测留档：真 `runExtraction` × 2（仅 LLM 传输层打桩）→ 真裁决端点，原始 JSON 存档于计划域 `evidence/`。
+
 ### 修复
+
+- **未识别动作被兜底分支静默承接**。`pipeline/l1.ts` 的应用循环只对 `store` / `skip` 显式分支，**其余动作一律落到 update/merge 分支**。conflict 决策按设计不带 `target_ids`，于是 `targets=[]` → 记录被当成"替换了 0 条"的合并产物追加，`version` 被算成 `1`。**不报错、不丢数据，唯一痕迹是一个 version 数字**——即"conflict 被静默降级为 merge/update"，正是 §C 要消灭的行为。**修复**：显式 `conflict` 分支；校验不过或开关关闭时**回落 `store`**，绝不落到兜底分支。
+- **端点门禁是手抄副本**。`tests/contract-keys.test.ts` 的 `ENDPOINTS` 是真实注册表（`src/stats.ts` 的 `MEMORY_ENDPOINTS`）的**手抄副本**，两条断言只在该副本内部自洽（`ENDPOINTS.length === 26`）。§B 新增 `dsh-memory/receipts` 使真实注册表升到 27 时，副本**没有跟着更新**，而数量断言仍停在 26——于是"断言与副本一致、副本与事实不符"让它**一路绿灯**；本次新增 `conflict-resolve` 后**依然全绿**。**门禁测的是自己的影子**：被测系统换成什么都不会变红。**修复**：新增 `expect([...ENDPOINTS].sort()).toEqual([...MEMORY_ENDPOINTS].sort())`——本地清单必须与唯一事实源**逐项一致**，数量断言保留作为变更时的显式路标。
 
 - **插件树加载失败：工具输出 schema 使用了 DSL 不支持的 `nullable` 关键字**（回归修复，会导致 DSH 完全无法启动）。`memory_ruminate` 与 `memory_ruminate_status` 的输出 schema 在 `startedAt`/`finishedAt`/`error` 上声明了 `nullable: true`，而 DSH 的 value schema DSL 只接受一组白名单作者键（`description`/`title`/`default`/`examples`/`required`/`enum`/`const` 及各类型的 `type`/`properties`/`additionalProperties`/`items`/`oneOf`）。`defineTool()` 编译 schema 时抛 `JsonSchemaError: schema.properties.startedAt.nullable is not supported by the value schema DSL`，loader 随之判定 `dsh-memory (dsh-prime-memory)` 条目加载失败，整个插件树 apply 中止，进程以未捕获异常退出。
   **修复**：删除 4 处 `nullable: true`。语义不变——该 DSL 中属性默认即为可选，仅显式 `required: true` 才必填；且运行时校验对 `undefined` 做跳过处理，`execute` 返回的 `startedAt: undefined` 依旧合法。校验步骤：`tsc` 编译通过 + dist 产物已无该关键字 + 新增工具注册回归用例。

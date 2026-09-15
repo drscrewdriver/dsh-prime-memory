@@ -269,6 +269,9 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `tokenCost.retentionDays` | `365` | 증류 비용 명세 보존 일수. `0` = 영구 |
 | `tools` | `true` | 모델 호출 가능한 기억 도구 등록 여부 |
 | `benchControl` | `false` | 벤치 제어 서비스 등록（기본 꺼짐） |
+| `conflictFreeze.enabled` | `false` | **모순 동결** 총 스위치. 켜면 중복 제거 결정 어휘에 `conflict`가 추가됩니다——LLM이 "양쪽 다 맞아 보여 기계가 판단할 수 없다"고 판단하면 **자동으로 `update` 덮어쓰기나 `merge` 병합을 하지 않고** 그 쌍을 **대기 큐에 세워 둡니다**. 새 기억은 평소대로 저장되고 **양쪽 내용 모두 바뀌지 않습니다**. 재정은 `memory_resolve_conflict` 도구로 사람이 합니다. 꺼져 있을 때 중복 제거 프롬프트는 기능 추가 전과 **바이트 단위로 동일**합니다(제로 드리프트). 기본 꺼짐: 동결은 사람의 주의를 소모하므로 기본으로 전면 개방할 수 없습니다([ADR-0010](./docs/adr/0010-conflict-freeze-default-off-and-timeout.md)) |
+| `conflictFreeze.maxPending` | `100` | 대기 큐 상한. 미재정 수가 상한에 도달하면 새 충돌은 **더 이상 세워 두지 않고** 그 자리에서 LLM의 winner/loser로 자동 결착합니다(그 쌍도 **큐의 행으로 남습니다**. `resolution`은 `auto`가 되어 사람의 결론과 구분됩니다). 의미는 "**새것을 받지 않는다**"이지 "오래된 것을 조용히 지운다"가 아닙니다——이로써 상한이 구조적 보증이 됩니다 |
+| `conflictFreeze.timeoutDays` | `30` | 타임아웃 강등(일). 이보다 오래 미재정으로 남은 쌍은 **다음 증류 회차의 맨 앞**에서 자동 결착합니다(역시 `resolution=auto`). `0` = 타임아웃 강등을 **하지 않음**(명시적 비활성이며 "즉시 전부 만료"가 아닙니다). 안전밸브가 없으면 "서로 모순되는 두 기억이 영구히 나란히 검색되는" 상태가 저장소에 남습니다 |
 
 ### 증류 폴백 체인과 느린 TTFT 모델
 
@@ -303,10 +306,22 @@ dsh 호스트는 플러그인 로그를 콘솔로 출력합니다. 플러그인�
 ——DSH용 계층적 증류 기억 플러그인입니다. 원작자 **JunNanLYS**께 공개해 주신 데 감사드립니다.
 이 저장소는 그 위에서 구현 계층을 다시 작성했습니다（첫 커밋 `0b506b8`은
 「净室重写清场 — 기존 구현과 빌드 산출물 제거」）. 문서·이미지·모듈 구조는 업스트림에서 이어받았습니다.
-업스트림과 비교해 이 저장소가 추가한 것은 Agent용 기억 도구 10개（고권한 쓰기
+업스트림과 비교해 이 저장소가 추가한 것은 Agent용 기억 도구 12개（고권한 쓰기
 `memory_add` / `memory_delete` / `memory_import`, 반추 제어 `memory_ruminate` 시리즈, 기억 그래프
-`memory_search_graph` / `memory_expand_graph_node`）, `skills/memport` 도구 간 기억 이전,
+`memory_search_graph` / `memory_expand_graph_node`, 결정 증거 추적 `memory_receipts`, 모순 재정
+`memory_resolve_conflict`）, `skills/memport` 도구 간 기억 이전,
 그리고 스토어 스크린샷 선언입니다.
+
+이 중 두 도구는 **추적 가능성**을 위한 것입니다:
+
+- `memory_receipts` —— "이 기억이 **어디서 왔는지**"를 추적합니다. L1 중복 제거 판단마다
+  증거(판단 당시 본 **후보 풀 다이제스트** + 결론)를 남기므로, 레코드 단위로는
+  "어느 배치에서 나왔고 어떤 후보를 봤는지", 배치 단위로는 "그 회차가 무엇을 판단했는지"를 물을 수 있습니다.
+  증거는 이벤트 **이전**에 존재해야 합니다——입력 스냅샷은 사후에 채워 넣을 수 없기 때문입니다
+  ([ADR-0006](./docs/adr/0006-l1-decision-receipts.md)).
+- `memory_resolve_conflict` —— **모순 동결**이 대기시킨 충돌 쌍을 재정합니다(`conflictFreeze.*` 설정).
+  결론은 `winner` / `loser` / `both`: 한쪽을 참으로 판정하면 다른 쪽은 검색에서 퇴장하고,
+  `both`는 둘이 실은 독립된 사실임을 뜻해 둘 다 남깁니다.
 
 핵심 기억 능력（계층적 증류 파이프라인, 프롬프트 설계, 이중 기록 저장소）은 [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)의 **MemoryCore**를 참고했습니다.
 
