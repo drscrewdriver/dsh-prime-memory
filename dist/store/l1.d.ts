@@ -1,6 +1,6 @@
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
-import type { L1Receipt } from './receipts.js';
+import type { L1Receipt, ReceiptQuery } from './receipts.js';
 import { type EmbeddingService } from './embedding.js';
 import { type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
@@ -53,6 +53,15 @@ export declare class L1Store {
      * 测试只需替换这一个方法就能模拟落盘故障,不必伪造整个 store。
      */
     recordReceipts(rows: readonly L1Receipt[]): number;
+    /**
+     * §B 双维回溯的读缝(task_19)。与 `recordReceipts` 同理由:
+     * 工具层与 RPC 层只认 L1Store,不直连 `db`——保持"检索库的入口只有一处"
+     * 这一既有不变量,也让未来的读缓存/裁剪如需介入仍只有一个落点。
+     */
+    listReceipts(opts: ReceiptQuery & {
+        limit: number;
+    }): L1Receipt[];
+    countReceipts(opts: ReceiptQuery): number;
     /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */
     appendNew(records: MemoryRecord[]): Promise<void>;
     /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。 */

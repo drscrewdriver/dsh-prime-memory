@@ -96,6 +96,79 @@ export interface ReceiptInput {
   action: string | undefined;
 }
 
+/**
+ * §B 双维回溯的查询入参(task_19)。
+ *
+ * 两个维度对应两类**互不替代**的问题,故同为可选、同给时为 **AND**:
+ * - 只给 `recordId` →「这条记忆**出自哪一轮**,当时看到什么候选池、被判成了什么」
+ * - 只给 `runId`    →「上一轮蒸馏都判了什么」(那一批的全部决策,跨多条记录)
+ * - 两维同给        →「这条记录在那一轮里被判成了什么」(唯一一条)
+ *
+ * **`recordId` 维度的取值面必须如实说清**:`pipeline/l1.ts` 对每条抽取结果执行
+ * `record_id: newId('mem')`——**每轮新铸 id,从不复用**。故一个 `record_id`
+ * 在现实中只可能属于**一轮** run,该维度目前**恒返回 0 或 1 行**。
+ * 它回答的是「出自哪」,不是「历次变更」;查询层按可多行实现(一旦将来复用 id,
+ * 或模型给的 id 被沿用,无需改这里),但**不要拿"判定史"这种说法承诺现状**——
+ * 这是本任务执行期发现并修正的一处**说过头**。
+ *
+ * **两维都不给不是"查全部"**:那会让一次误调用变成全库判定史导出。调用方
+ * (工具层 / 端点层)必须先拒绝这种用法;数据层在此再兜一层,返回空而非全表。
+ */
+export interface ReceiptQuery {
+  recordId?: string;
+  runId?: string;
+}
+
+/** 二维回溯命中的是哪个维度(供调用方与用户确认"我查的是哪一类问题")。 */
+export type ReceiptDimension = 'record' | 'run' | 'both' | 'none';
+
+export function dimensionOf(q: ReceiptQuery): ReceiptDimension {
+  const hasRecord = typeof q.recordId === 'string' && q.recordId.length > 0;
+  const hasRun = typeof q.runId === 'string' && q.runId.length > 0;
+  if (hasRecord && hasRun) return 'both';
+  if (hasRecord) return 'record';
+  if (hasRun) return 'run';
+  return 'none';
+}
+
+/**
+ * 回放视图的一行。**snake_case 且与 DB 列同形**——凭证是给人核对的原始证据,
+ * 中间再套一层 camelCase 命名只会让"表里写的"与"工具吐的"对不上,
+ * 核对时多一次心算就是多一次出错机会。
+ */
+export interface ReceiptView {
+  receipt_id: string;
+  run_id: string;
+  record_id: string;
+  kind: L1ReceiptKind;
+  input_digest: string;
+  decided_at: string;
+}
+
+/** 工具层与 RPC 层**共用**的回溯结果形状(一个事实源,两处消费)。 */
+export interface ReceiptsView {
+  dimension: ReceiptDimension;
+  items: ReceiptView[];
+  /** 该维度命中的总条数(不受 `limit` 影响;`items` 才是分页窗口)。 */
+  total: number;
+  /** 非结果的状态提示(工具层拒答时用;端点层以报错代替)。 */
+  notice?: string;
+}
+
+export function toReceiptView(r: L1Receipt): ReceiptView {
+  return {
+    receipt_id: r.receiptId,
+    run_id: r.runId,
+    record_id: r.recordId,
+    kind: r.kind,
+    input_digest: r.inputDigest,
+    decided_at: r.decidedAt,
+  };
+}
+
+/** 回溯结果条数上限(与 `list-records` 同量级;超出窗口由 `total` 提示还有多少)。 */
+export const RECEIPTS_QUERY_LIMIT_MAX = 200;
+
 const KNOWN_ACTIONS: readonly L1ReceiptKind[] = ['store', 'update', 'merge', 'skip'];
 
 /**

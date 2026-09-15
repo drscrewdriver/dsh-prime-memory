@@ -30,7 +30,7 @@ const TAG = '[memory][sqlite]';
 import { CostLedger } from './cost-ledger.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
-import { RECEIPTS_MAX_RUNS } from './receipts.js';
+import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
 /** vec0 KNN 对遗留零向量的补偿缓冲。 */
 const ZERO_VEC_BUFFER = 10;
 /** IN 查询/删除的分块大小(保守避开 SQLite 变量数上限:现代构建 32766,老版 999)。 */
@@ -922,6 +922,52 @@ export class MemoryDb {
        )`);
         return Number(stmt.run(Math.floor(maxRuns)).changes);
     }
+    /**
+     * §B 双维回溯(task_19):按 `record_id` / `run_id` 查判定史,两维同给为 **AND**。
+     *
+     * 两条刻意的行为:
+     * - **两维都不给返回空,而不是全表**。「查全部凭证」不是本能力的目标;把缺参
+     *   兜成全表,会让一次误调用变成全库判定史导出。调用方本就该先拒绝这种用法
+     *   (工具层给提示、端点层直接报错),这里是第二道,方向一致。
+     * - **定序确定**:`decided_at DESC, run_id DESC`。回溯的价值在于可复现——
+     *   同一问题两次问出不同顺序,核对时就会怀疑是不是数据变了。`run_id` 兜底
+     *   同一毫秒内的多批(L1 蒸馏是 LLM 调用,同刻两批罕见但非不可能)。
+     *   新的在前,与 `listL1` 的倒序口径一致。
+     */
+    listReceipts(opts) {
+        if (this.degraded)
+            return [];
+        const where = receiptWhere(opts);
+        if (where === null)
+            return [];
+        const limit = Math.min(Math.max(Math.floor(opts.limit) || 1, 1), RECEIPTS_QUERY_LIMIT_MAX);
+        const rows = this.db
+            .prepare(`SELECT receipt_id, run_id, record_id, kind, input_digest, decided_at
+           FROM l1_receipts WHERE ${where.sql}
+          ORDER BY decided_at DESC, run_id DESC
+          LIMIT ?`)
+            .all(...where.params, limit);
+        return rows.map((r) => ({
+            receiptId: r.receipt_id,
+            runId: r.run_id,
+            recordId: r.record_id,
+            kind: r.kind,
+            inputDigest: r.input_digest,
+            decidedAt: r.decided_at,
+        }));
+    }
+    /** 同维度命中的**总条数**(不受 limit 影响,供"还有多少条没显示"提示)。 */
+    countReceipts(opts) {
+        if (this.degraded)
+            return 0;
+        const where = receiptWhere(opts);
+        if (where === null)
+            return 0;
+        const row = this.db
+            .prepare(`SELECT COUNT(*) AS n FROM l1_receipts WHERE ${where.sql}`)
+            .get(...where.params);
+        return Number(row.n);
+    }
     /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */
     listL1(opts) {
         if (this.degraded)
@@ -1514,8 +1560,25 @@ function rowToRecord(row) {
         persistence: normPersistence(row.persistence),
     };
 }
-/** epoch 数组 → {逗号连接 ISO, 首尾 ISO}(磁盘格式契约:逗号连接、升序、ISO)。 */
-function timestampsToDb(ts) {
+/**
+ * 双维回溯的 WHERE 构造。返回 `null` 表示**二维皆缺**——调用方据此返回空,
+ * 而不是拼出无 WHERE 的全表扫描(那会把误用变成全库导出)。
+ * 两维同给时按 `AND` 组合:问的是"这条记录在那一轮里被判成了什么"。
+ */
+function receiptWhere(q) {
+    const sql = [];
+    const params = [];
+    if (q.recordId) {
+        sql.push('record_id = ?');
+        params.push(q.recordId);
+    }
+    if (q.runId) {
+        sql.push('run_id = ?');
+        params.push(q.runId);
+    }
+    return sql.length === 0 ? null : { sql: sql.join(' AND '), params };
+}
+/** epoch 数组 → {逗号连接 ISO, 首尾 ISO}(磁盘格式契约:逗号连接、升序、ISO)。 */ function timestampsToDb(ts) {
     if (!ts || ts.length === 0)
         return { str: '', start: '', end: '' };
     const sorted = [...ts].filter((t) => Number.isFinite(t)).sort((a, b) => a - b);

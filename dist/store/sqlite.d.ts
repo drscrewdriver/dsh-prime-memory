@@ -14,7 +14,7 @@ import type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
-import type { L1Receipt, ReceiptRetentionOptions } from './receipts.js';
+import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
     id: string;
@@ -182,6 +182,23 @@ export declare class MemoryDb {
      * `run_id` 兜底,使同一时刻产生的多个 run 也有**确定**的相对序,裁剪结果可复现。
      */
     trimReceipts(maxRuns: number): number;
+    /**
+     * §B 双维回溯(task_19):按 `record_id` / `run_id` 查判定史,两维同给为 **AND**。
+     *
+     * 两条刻意的行为:
+     * - **两维都不给返回空,而不是全表**。「查全部凭证」不是本能力的目标;把缺参
+     *   兜成全表,会让一次误调用变成全库判定史导出。调用方本就该先拒绝这种用法
+     *   (工具层给提示、端点层直接报错),这里是第二道,方向一致。
+     * - **定序确定**:`decided_at DESC, run_id DESC`。回溯的价值在于可复现——
+     *   同一问题两次问出不同顺序,核对时就会怀疑是不是数据变了。`run_id` 兜底
+     *   同一毫秒内的多批(L1 蒸馏是 LLM 调用,同刻两批罕见但非不可能)。
+     *   新的在前,与 `listL1` 的倒序口径一致。
+     */
+    listReceipts(opts: ReceiptQuery & {
+        limit: number;
+    }): L1Receipt[];
+    /** 同维度命中的**总条数**(不受 limit 影响,供"还有多少条没显示"提示)。 */
+    countReceipts(opts: ReceiptQuery): number;
     /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */
     listL1(opts: {
         type?: string;

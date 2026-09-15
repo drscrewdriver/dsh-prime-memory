@@ -12,7 +12,7 @@ import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.j
 import { familyForType } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import { graphHitRecordIds } from '../graph/search.js';
-import type { L1Receipt } from './receipts.js';
+import type { L1Receipt, ReceiptQuery } from './receipts.js';
 import { EmbedHelper, NoopEmbeddingService, type EmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
 import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
@@ -137,6 +137,19 @@ export class L1Store {
    */
   recordReceipts(rows: readonly L1Receipt[]): number {
     return this.db.recordReceipts(rows);
+  }
+
+  /**
+   * §B 双维回溯的读缝(task_19)。与 `recordReceipts` 同理由:
+   * 工具层与 RPC 层只认 L1Store,不直连 `db`——保持"检索库的入口只有一处"
+   * 这一既有不变量,也让未来的读缓存/裁剪如需介入仍只有一个落点。
+   */
+  listReceipts(opts: ReceiptQuery & { limit: number }): L1Receipt[] {
+    return this.db.listReceipts(opts);
+  }
+
+  countReceipts(opts: ReceiptQuery): number {
+    return this.db.countReceipts(opts);
   }
 
   /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */

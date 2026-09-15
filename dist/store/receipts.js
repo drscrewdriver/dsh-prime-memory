@@ -58,6 +58,29 @@ export function inputDigest(candidateIds) {
  * 改这里即可,且 `recordReceipts(rows, { maxRuns })` 已留出显式注入口。
  */
 export const RECEIPTS_MAX_RUNS = 1000;
+export function dimensionOf(q) {
+    const hasRecord = typeof q.recordId === 'string' && q.recordId.length > 0;
+    const hasRun = typeof q.runId === 'string' && q.runId.length > 0;
+    if (hasRecord && hasRun)
+        return 'both';
+    if (hasRecord)
+        return 'record';
+    if (hasRun)
+        return 'run';
+    return 'none';
+}
+export function toReceiptView(r) {
+    return {
+        receipt_id: r.receiptId,
+        run_id: r.runId,
+        record_id: r.recordId,
+        kind: r.kind,
+        input_digest: r.inputDigest,
+        decided_at: r.decidedAt,
+    };
+}
+/** 回溯结果条数上限(与 `list-records` 同量级;超出窗口由 `total` 提示还有多少)。 */
+export const RECEIPTS_QUERY_LIMIT_MAX = 200;
 const KNOWN_ACTIONS = ['store', 'update', 'merge', 'skip'];
 /**
  * 一次蒸馏执行的 run 标识。

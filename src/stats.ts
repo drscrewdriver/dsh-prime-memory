@@ -29,6 +29,8 @@ import { projectDistillChain, validateDistillChain, type DistillChainEntry, type
 import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
 import type { L1Store } from './store/l1.js';
+import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
+import type { ReceiptQuery, ReceiptsView } from './store/receipts.js';
 import type { PersonaStore } from './store/persona.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
@@ -66,6 +68,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/settings-set',
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
+  'dsh-memory/receipts',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
@@ -837,6 +840,27 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         total,
         truncated: false,
         scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
+      };
+      return resp;
+    }
+
+    // ── §B 决策凭证回溯(task_19):与 memory_receipts 工具共用同一形状 ──
+    // 端点层**不给"提示文案"这个出口**:工具是给模型用的,拒答必须变成可读的一句话;
+    // 端点是给程序/面板用的,缺参就是调用错误,静默返回空会让调用方以为"确实没有"。
+    case 'dsh-memory/receipts': {
+      const p = (payload ?? {}) as { recordId?: unknown; runId?: unknown; limit?: unknown };
+      const query: ReceiptQuery = {
+        recordId: typeof p.recordId === 'string' && p.recordId.trim() ? p.recordId.trim() : undefined,
+        runId: typeof p.runId === 'string' && p.runId.trim() ? p.runId.trim() : undefined,
+      };
+      const dimension = dimensionOf(query);
+      if (dimension === 'none') throw new Error('需要 recordId 或 runId 至少一个(不支持查全部凭证)');
+      const limit = Math.min(Math.max(Math.floor(Number(p.limit)) || 20, 1), RECEIPTS_QUERY_LIMIT_MAX);
+      const rows = stores.l1.listReceipts({ ...query, limit });
+      const resp: ReceiptsView = {
+        dimension,
+        items: rows.map(toReceiptView),
+        total: stores.l1.countReceipts(query),
       };
       return resp;
     }
