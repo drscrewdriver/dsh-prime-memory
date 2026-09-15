@@ -299,6 +299,15 @@ dsh 호스트는 플러그인 로그를 콘솔로 출력합니다. 플러그인�
 
 ## 감사
 
+이 저장소의 직접적인 업스트림은 [JunNanLYS/dsh-layered-memory](https://github.com/JunNanLYS/dsh-layered-memory)
+——DSH용 계층적 증류 기억 플러그인입니다. 원작자 **JunNanLYS**께 공개해 주신 데 감사드립니다.
+이 저장소는 그 위에서 구현 계층을 다시 작성했습니다（첫 커밋 `0b506b8`은
+「净室重写清场 — 기존 구현과 빌드 산출물 제거」）. 문서·이미지·모듈 구조는 업스트림에서 이어받았습니다.
+업스트림과 비교해 이 저장소가 추가한 것은 Agent용 기억 도구 10개（고권한 쓰기
+`memory_add` / `memory_delete` / `memory_import`, 반추 제어 `memory_ruminate` 시리즈, 기억 그래프
+`memory_search_graph` / `memory_expand_graph_node`）, `skills/memport` 도구 간 기억 이전,
+그리고 스토어 스크린샷 선언입니다.
+
 핵심 기억 능력（계층적 증류 파이프라인, 프롬프트 설계, 이중 기록 저장소）은 [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)의 **MemoryCore**를 참고했습니다.
 
 ## License

@@ -1,12 +1,7 @@
 {
   "screenshots": [
-    "assets/img/Hero.png",
-    "assets/img/ui-light.jpg",
-    "assets/img/ui-dark.jpg",
-    "assets/img/Layers.png",
-    "assets/img/MemoryTools.png",
     "assets/img/Modes.png",
-    "assets/img/EmbeddingSource.png",
-    "assets/img/ToolTrajectory.png"
+    "assets/img/ui-light.jpg",
+    "assets/img/ui-dark.jpg"
   ]
 }

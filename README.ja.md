@@ -299,6 +299,15 @@ dsh ホストはプラグインのログをコンソールへ出力します。�
 
 ## 謝辞
 
+本リポジトリの直接の上流は [JunNanLYS/dsh-layered-memory](https://github.com/JunNanLYS/dsh-layered-memory)
+——DSH 向けの階層的蒸留記憶プラグインです。原作者 **JunNanLYS** が公開してくださったことに感謝します。
+本リポジトリはその上で実装層を書き直しました（最初のコミット `0b506b8` は
+「净室重写清场 — 旧実装とビルド成果物の削除」）。ドキュメント・画像・モジュール構成は上流から引き継いでいます。
+上流と比べて本リポジトリが追加したのは、Agent 向けの 10 個の記憶ツール（高権限書き込み
+`memory_add` / `memory_delete` / `memory_import`、反芻制御 `memory_ruminate` シリーズ、記憶グラフ
+`memory_search_graph` / `memory_expand_graph_node`）、`skills/memport` によるツール横断の記憶移行、
+およびストア用スクリーンショット宣言です。
+
 核心記憶能力（階層的蒸留パイプライン、プロンプト設計、二重書き込みストレージ）は [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory) の **MemoryCore** を参考にしています。
 
 ## License

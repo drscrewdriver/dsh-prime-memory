@@ -416,6 +416,13 @@ fsync），断电等极端崩溃最多丢最后一小段尾部，检索库可用
 
 ## 致谢
 
+本仓库的直接上游是 [JunNanLYS/dsh-layered-memory](https://github.com/JunNanLYS/dsh-layered-memory)
+——DSH 侧的分层蒸馏记忆插件。感谢原作者 **JunNanLYS** 开放该项目：本仓库在其基础上重写了实现层
+（首个提交 `0b506b8` 即「净室重写清场——移除旧实现与构建产物」），文档、图片与模块架构沿用上游。
+相对上游，本仓库新增了面向 Agent 的 10 个记忆工具（含高权限写入 `memory_add` / `memory_delete` /
+`memory_import`、反刍控制 `memory_ruminate` 系列、记忆图谱 `memory_search_graph` /
+`memory_expand_graph_node`）、`skills/memport` 跨工具记忆搬运，以及商店截图声明。
+
 记忆核心能力（分层蒸馏管线、Prompt 设计、双写存储架构）参考自
 [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
 项目中的 **MemoryCore**，感谢原项目开放的设计与实现。

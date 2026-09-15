@@ -440,6 +440,17 @@ fully re-derived from the fact source via "Rebuild memories".
 
 ## Credits
 
+The direct upstream of this repository is
+[JunNanLYS/dsh-layered-memory](https://github.com/JunNanLYS/dsh-layered-memory) — the layered
+distillation memory plugin for DSH. Thanks to **JunNanLYS** for open-sourcing it: this repository
+rewrites the implementation layer on top of it (the first commit `0b506b8` is
+"净室重写清场 — remove the old implementation and build artifacts"), while the documentation,
+images and module layout are carried over from upstream. Compared with upstream, this repository
+adds 10 agent-facing memory tools (high-privilege writes `memory_add` / `memory_delete` /
+`memory_import`, ruminate controls `memory_ruminate`, and the memory graph
+`memory_search_graph` / `memory_expand_graph_node`), the `skills/memport` cross-tool memory
+transfer, and storefront screenshot declarations.
+
 The core memory capabilities (layered distillation pipeline, prompt design, and the
 dual-write storage architecture) are modeled after **MemoryCore** from
 [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory).
