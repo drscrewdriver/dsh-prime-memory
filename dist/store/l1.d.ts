@@ -1,7 +1,14 @@
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
+import type { GraphNodeSearchResult } from '../graph/types.js';
 import { type EmbeddingService } from './embedding.js';
 import { type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
+/**
+ * 图谱路提供者(§D 第 3 路):按查询返回图谱命中(已按 score 降序)。
+ * 抽成注入式而非直接读 `db.graphStore`,是为了给 hybrid 融合留一个可替换的测试缝,
+ * 并让「未接线 = 恰为 2 路」成为默认行为(既有调用方零行为变化)。
+ */
+export type GraphLaneProvider = (query: string, limit: number, family?: MemoryFamily) => readonly GraphNodeSearchResult[];
 export interface L1SearchOptions {
     /** 按记忆类型精确过滤(后置过滤,官方做法)。 */
     type?: string;
@@ -23,9 +30,13 @@ export declare class L1Store {
     private readonly logger?;
     /** 时效衰减半衰期(天;0=关)。 */
     private readonly decayHalfLifeDays;
+    /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
+    private readonly graphLaneProvider?;
     constructor(dataDir: string, db: MemoryDb, embed?: EmbeddingService, strategy?: RecallStrategy, logger?: MemoryLogger, 
     /** 时效衰减半衰期(天;0=关)。缺省 30 与 config 默认一致。 */
-    decayHalfLifeDays?: number);
+    decayHalfLifeDays?: number, 
+    /** 图谱路提供者(§D 第 3 路);不传则该路不存在,融合退回双路。 */
+    graphLane?: GraphLaneProvider);
     init(): Promise<void>;
     /** 旧版单文件 records.jsonl 一次性导入检索库,成功后改名 .imported。 */
     private importLegacy;
@@ -48,6 +59,22 @@ export declare class L1Store {
      * 融合完整列表(融合分已归一化 0~1,可直接用于展示/过滤)。
      */
     search(query: string, limit: number, opts?: L1SearchOptions): Promise<L1Hit[]>;
+    /**
+     * §D 第 3 路(图谱路径,hybrid 专用):图谱命中 → `sourceRecordIds` 回链 →
+     * L1 记录,作为第 3 条**已排序**列表参与 RRF。
+     *
+     * 为什么值得:图谱是按实体/关系组织的**可重建派生投影**,能召回词法与向量
+     * 都命不中的记录(同义表述、关系可达)——这正是本路相对双路的增量。
+     *
+     * 三条边界:
+     * - **异常降级**:图谱是派生投影,不得因它失败而拖垮主检索 → 记 warn、返回空路,
+     *   融合退回双路(路数随之降为 2,分数回到既有量纲);
+     * - **族隔离**:图谱节点已按族过滤,但其来源记录可能跨族 → 这里再按 `family`
+     *   过滤一次。宁可漏不可串(与档位隔离同源,§A 的 P0 关注点);
+     * - **墓碑边界**:图谱行可能回链到已被删除的 L1 记录 → 取不到就跳过,
+     *   不补空占位(占位会在 RRF 里凭空加分)。
+     */
+    private graphLane;
     /**
      * 时效衰减加权(#29):三路共用的读路径后处理——阈值过滤之后、截断之前
      * (才能轮转名额,而不只是重排已截断的集合)。updated_at 经主表批量点查

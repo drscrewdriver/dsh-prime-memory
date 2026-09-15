@@ -9,6 +9,7 @@
 import { existsSync, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { familyForType } from '../types.js';
+import { graphHitRecordIds } from '../graph/search.js';
 import { EmbedHelper, NoopEmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
 import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
@@ -25,9 +26,13 @@ export class L1Store {
     logger;
     /** 时效衰减半衰期(天;0=关)。 */
     decayHalfLifeDays;
+    /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
+    graphLaneProvider;
     constructor(dataDir, db, embed = new NoopEmbeddingService(), strategy = 'hybrid', logger, 
     /** 时效衰减半衰期(天;0=关)。缺省 30 与 config 默认一致。 */
-    decayHalfLifeDays) {
+    decayHalfLifeDays, 
+    /** 图谱路提供者(§D 第 3 路);不传则该路不存在,融合退回双路。 */
+    graphLane) {
         this.db = db;
         this.strategy = strategy;
         this.recordsDir = path.join(dataDir, 'records');
@@ -36,6 +41,7 @@ export class L1Store {
         this.helper = new EmbedHelper(embed, logger);
         this.logger = logger;
         this.decayHalfLifeDays = decayHalfLifeDays ?? 30;
+        this.graphLaneProvider = graphLane;
     }
     async init() {
         await ensureDir(this.recordsDir);
@@ -166,9 +172,64 @@ export class L1Store {
             this.helper.query(query, opts?.embeddingTimeoutMs),
         ]);
         const vecList = vecRaw ? this.db.searchL1Vector(vecRaw, candidateK, opts?.family) : [];
+        // 第 3 路(图谱)仅在接线时**结构性存在**:未接线不占路数名额,故既有调用方
+        // 仍走 2 路、得分与改动前逐位一致(见 findings.md §12.1 的路数语义)
         const lanes = [ftsList, vecList];
+        if (this.graphLaneProvider)
+            lanes.push(this.graphLane(query, candidateK, opts?.family));
         const merged = rrfMerge(lanes, (h) => h.id);
         return this.postProcess(this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore, lanes.length) }))), opts?.type, limit);
+    }
+    /**
+     * §D 第 3 路(图谱路径,hybrid 专用):图谱命中 → `sourceRecordIds` 回链 →
+     * L1 记录,作为第 3 条**已排序**列表参与 RRF。
+     *
+     * 为什么值得:图谱是按实体/关系组织的**可重建派生投影**,能召回词法与向量
+     * 都命不中的记录(同义表述、关系可达)——这正是本路相对双路的增量。
+     *
+     * 三条边界:
+     * - **异常降级**:图谱是派生投影,不得因它失败而拖垮主检索 → 记 warn、返回空路,
+     *   融合退回双路(路数随之降为 2,分数回到既有量纲);
+     * - **族隔离**:图谱节点已按族过滤,但其来源记录可能跨族 → 这里再按 `family`
+     *   过滤一次。宁可漏不可串(与档位隔离同源,§A 的 P0 关注点);
+     * - **墓碑边界**:图谱行可能回链到已被删除的 L1 记录 → 取不到就跳过,
+     *   不补空占位(占位会在 RRF 里凭空加分)。
+     */
+    graphLane(query, limit, family) {
+        const provider = this.graphLaneProvider;
+        if (!provider)
+            return [];
+        let hits;
+        try {
+            hits = provider(query, limit, family);
+        }
+        catch (err) {
+            this.logger?.warn(`[memory] 图谱路检索失败,本轮退回双路: ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+        const ids = graphHitRecordIds(hits);
+        if (ids.length === 0)
+            return [];
+        const byId = new Map(this.db.getL1ByIds(ids).map((r) => [r.id, r]));
+        const out = [];
+        for (const id of ids) {
+            const r = byId.get(id);
+            if (!r)
+                continue;
+            if (family !== undefined && r.family !== family)
+                continue;
+            out.push({
+                id: r.id,
+                content: r.content,
+                type: r.type,
+                scene_name: r.scene_name,
+                priority: r.priority,
+                family: r.family,
+                // 占位分:RRF 只用 rank,此字段在融合时会被归一化分覆盖
+                score: 0,
+            });
+        }
+        return out;
     }
     /**
      * 时效衰减加权(#29):三路共用的读路径后处理——阈值过滤之后、截断之前
