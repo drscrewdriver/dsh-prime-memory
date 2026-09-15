@@ -12,7 +12,7 @@ import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.j
 import { familyForType } from '../types.js';
 import { EmbedHelper, NoopEmbeddingService, type EmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
-import { applyDecayWeight, RRF_K, rrfMerge } from './search-utils.js';
+import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
 import { isZeroVector, type MemoryDb } from './sqlite.js';
 
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
@@ -191,16 +191,17 @@ export class L1Store {
       return this.postProcess(this.applyDecay(filterScore(vecHits, threshold)), opts?.type, limit);
     }
 
-    // hybrid(官方语义):双路并行 → 完整列表 RRF 融合(融合前不过滤阈值)
-    // → 融合分归一化:rank1 双列表命中 = 1.0,单列表命中 ≤ 0.5,保持 0~1 语义
+    // hybrid(官方语义):多路并行 → 完整列表 RRF 融合(融合前不过滤阈值)
+    // → 融合分按**实际路数**归一化:全路 rank1 命中 = 1.0,双路单列表命中 ≤ 0.5
     const [ftsList, vecRaw] = await Promise.all([
       Promise.resolve(this.db.searchL1Fts(query, candidateK, opts?.family)),
       this.helper.query(query, opts?.embeddingTimeoutMs),
     ]);
     const vecList = vecRaw ? this.db.searchL1Vector(vecRaw, candidateK, opts?.family) : [];
-    const merged = rrfMerge([ftsList, vecList], (h) => h.id);
+    const lanes = [ftsList, vecList];
+    const merged = rrfMerge(lanes, (h) => h.id);
     return this.postProcess(
-      this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore) }))),
+      this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore, lanes.length) }))),
       opts?.type,
       limit,
     );
@@ -313,11 +314,6 @@ export class L1Store {
     const filtered = type ? hits.filter((h) => h.type === type) : hits;
     return filtered.slice(0, limit);
   }
-}
-
-/** RRF 原始分归一化到 0~1:双列表 rank1 命中 = 2/(k+1) → 1.0。 */
-function normalizeRrf(rrfScore: number): number {
-  return (rrfScore * (RRF_K + 1)) / 2;
 }
 
 /** FTS 阈值过滤(含官方小语料例外:全部低于阈值但结果数 ≤ maxResults 时保留)。 */

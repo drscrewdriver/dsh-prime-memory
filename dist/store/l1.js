@@ -11,7 +11,7 @@ import * as path from 'node:path';
 import { familyForType } from '../types.js';
 import { EmbedHelper, NoopEmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
-import { applyDecayWeight, RRF_K, rrfMerge } from './search-utils.js';
+import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
 import { isZeroVector } from './sqlite.js';
 /** 官方过度召回倍数:候选池 = limit × 3(官方 tool 路径同款)。 */
 const CANDIDATE_MULTIPLIER = 3;
@@ -159,15 +159,16 @@ export class L1Store {
             const vecHits = this.db.searchL1Vector(vec, candidateK, opts?.family);
             return this.postProcess(this.applyDecay(filterScore(vecHits, threshold)), opts?.type, limit);
         }
-        // hybrid(官方语义):双路并行 → 完整列表 RRF 融合(融合前不过滤阈值)
-        // → 融合分归一化:rank1 双列表命中 = 1.0,单列表命中 ≤ 0.5,保持 0~1 语义
+        // hybrid(官方语义):多路并行 → 完整列表 RRF 融合(融合前不过滤阈值)
+        // → 融合分按**实际路数**归一化:全路 rank1 命中 = 1.0,双路单列表命中 ≤ 0.5
         const [ftsList, vecRaw] = await Promise.all([
             Promise.resolve(this.db.searchL1Fts(query, candidateK, opts?.family)),
             this.helper.query(query, opts?.embeddingTimeoutMs),
         ]);
         const vecList = vecRaw ? this.db.searchL1Vector(vecRaw, candidateK, opts?.family) : [];
-        const merged = rrfMerge([ftsList, vecList], (h) => h.id);
-        return this.postProcess(this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore) }))), opts?.type, limit);
+        const lanes = [ftsList, vecList];
+        const merged = rrfMerge(lanes, (h) => h.id);
+        return this.postProcess(this.applyDecay(merged.map(({ rrfScore, ...h }) => ({ ...h, score: normalizeRrf(rrfScore, lanes.length) }))), opts?.type, limit);
     }
     /**
      * 时效衰减加权(#29):三路共用的读路径后处理——阈值过滤之后、截断之前
@@ -276,10 +277,6 @@ export class L1Store {
         const filtered = type ? hits.filter((h) => h.type === type) : hits;
         return filtered.slice(0, limit);
     }
-}
-/** RRF 原始分归一化到 0~1:双列表 rank1 命中 = 2/(k+1) → 1.0。 */
-function normalizeRrf(rrfScore) {
-    return (rrfScore * (RRF_K + 1)) / 2;
 }
 /** FTS 阈值过滤(含官方小语料例外:全部低于阈值但结果数 ≤ maxResults 时保留)。 */
 function applyFtsThreshold(hits, threshold, maxResults) {
