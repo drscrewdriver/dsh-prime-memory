@@ -1,7 +1,8 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from '../store/receipts.js';
 import { renderConflictResolution, resolveConflictPair } from '../conflict-service.js';
-import { normPersistence } from '../types.js';
+import { normPersistence, normScope, resolveRecordScope } from '../types.js';
+import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
 const WRITE_ONLY_NOTICE = '本会话为只写模式:记忆照常沉淀,但不读取。';
@@ -129,7 +130,13 @@ ruminate) {
             if (family === null)
                 return { items: [], notice: blockNoticeOf(exec) };
             const limit = Math.min(Math.max(args.limit ?? 5, 1), 20);
-            const hits = await stores.l1.search(args.query, limit, { type: args.type || undefined, family: family ?? undefined });
+            const hits = await stores.l1.search(args.query, limit, {
+                type: args.type || undefined,
+                family: family ?? undefined,
+                // §E 可见范围:`cfg.scope` 非 workspace 时恒为 undefined(= 不过滤)，
+                // 零漂移由 `scopeFilterOf` 一处收口保证，不靠各调用点各自判断。
+                workspaceId: scopeFilterOf(cfg.scope, exec),
+            });
             return {
                 items: hits.map((h) => ({
                     content: h.content,
@@ -254,7 +261,7 @@ ruminate) {
      * 时间轴同时写顶层字段(时间增强列)与 metadata(列迁移前的兼容层,
      * 也是面板与图谱时间锚的读取点);`cf`/`rw` 落在 metadata.conflict/rewritten。
      */
-    function buildRecord(item, sceneName, now) {
+    function buildRecord(item, sceneName, now, workspaceId) {
         const content = String(item.content ?? '').trim();
         const type = ADD_TYPES.includes(String(item.type ?? '')) ? String(item.type) : 'episodic';
         const family = type.startsWith('work') ? 'work' : 'chat';
@@ -293,6 +300,9 @@ ruminate) {
             version: 0,
             metadata,
             family,
+            // §E 归属：与抽取管线**同一判据**（`resolveRecordScope`）。写入路径不止一条
+            // （pipeline / 本工具 / 批量导入），共用同一函数才不会有"某条路径忘了标归属"。
+            ...resolveRecordScope(normScope(cfg.scope), family, workspaceId),
             ...(validFrom !== undefined ? { validFrom } : {}),
             ...(validTo !== undefined ? { validTo } : {}),
             ...(persistence !== undefined ? { persistence } : {}),
@@ -341,14 +351,14 @@ ruminate) {
             },
             render: (_args, value) => [{ type: 'text', text: value.notice ?? ('已记录记忆 ' + (value.id ?? '')) }],
         },
-        execute: async (args) => {
+        execute: async (args, exec) => {
             if (!live.get().memoryMutate)
                 return { notice: MUTATE_OFF_NOTICE };
             const content = String(args.content ?? '').trim();
             if (!content)
                 return { notice: 'content 为空,未写入' };
             const scene = typeof args.scene === 'string' && args.scene.trim() ? args.scene.trim().slice(0, 120) : '__manual__';
-            const record = buildRecord(args, scene, Date.now());
+            const record = buildRecord(args, scene, Date.now(), workspaceIdOf(exec));
             await stores.l1.appendNew([record]);
             logger.info(`[memory] 高权限写入记忆(${record.type}${record.metadata?.hall ? '/' + String(record.metadata.hall) : ''},时间轴 ${record.persistence ?? '?'}):${record.content.slice(0, 120)}`);
             return { id: record.id };
@@ -407,7 +417,7 @@ ruminate) {
                 { type: 'text', text: value.notice ?? `已导入 ${value.written ?? 0} 条记忆` },
             ],
         },
-        execute: async (args) => {
+        execute: async (args, exec) => {
             if (!live.get().memoryMutate) {
                 return { written: 0, ids: [], skipped: [], notice: MUTATE_OFF_NOTICE };
             }
@@ -442,7 +452,7 @@ ruminate) {
                     return;
                 }
                 seen.add(key);
-                records.push(buildRecord(item, scene, now));
+                records.push(buildRecord(item, scene, now, workspaceIdOf(exec)));
             });
             if (records.length > 0)
                 await stores.l1.appendNew(records);
@@ -480,7 +490,10 @@ ruminate) {
                 return { deleted: 0, ids: [], notice: 'query 为空,未删除' };
             const family = familyOfCaller(exec);
             const limit = Math.min(Math.max(args.limit ?? 3, 1), 10);
-            const hits = await stores.l1.search(query, limit, { family: family && family !== null ? family : undefined });
+            const hits = await stores.l1.search(query, limit, {
+                family: family && family !== null ? family : undefined,
+                workspaceId: scopeFilterOf(cfg.scope, exec),
+            });
             const ids = hits.map((h) => h.id);
             if (ids.length === 0)
                 return { deleted: 0, ids: [], notice: '未找到匹配的记忆,未删除' };

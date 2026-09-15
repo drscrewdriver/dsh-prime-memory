@@ -1,6 +1,7 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import { RecallDedupeStore } from '../store/recall-dedupe.js';
 import { OccupancyStore } from '../store/occupancy.js';
+import { scopeFilterOf } from '../workspace.js';
 import { applyRecallBudget, raceRecallTimeout, RECALL_EMBED_CAP_MS } from '../util/recall-budget.js';
 import { clearProfileShare, emptyOccupancyLedger, estimateInjectedMessageTokens, estimateStableSectionTokens, recordProfileShare, recordRecallInjection, resetForCompaction, } from '../util/context-occupancy.js';
 import { errDetail } from '../util/filelog.js';
@@ -164,6 +165,9 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                 const hits = await raceRecallTimeout(stores.l1.search(query, cfg.recall.maxResults, {
                     scoreThreshold: cfg.recall.scoreThreshold,
                     family: mode === 'auto' ? undefined : mode,
+                    // §E 可见范围:自动召回是"最没人在看"的一条路径——它静默地往模型上下文里
+                    // 注入记忆。若这里漏了隔离,跨工作区泄漏会发生在每一次对话里而不留痕迹。
+                    workspaceId: scopeFilterOf(cfg.scope, { agent: payload.agent }),
                     // 嵌入内层钳制:给 FTS 降级留出总预算内的时间(远程限 HTTP fetch;本地经 worker 代理 race 放弃)
                     embeddingTimeoutMs: RECALL_EMBED_CAP_MS,
                 }), cfg.recall.timeoutMs);

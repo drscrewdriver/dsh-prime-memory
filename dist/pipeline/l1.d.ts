@@ -16,4 +16,10 @@ export type FamilyStates = Record<MemoryFamily, MemoryState>;
  * 每条消息按 content 长度 + 64 字符脚手架开销(id/时间戳行)计。
  */
 export declare function chunkByCharBudget(messages: ConversationMessage[], budgetChars: number): ConversationMessage[][];
-export declare function runExtraction(ctx: Context, cfg: MemoryConfig, store: L1Store, states: FamilyStates, pending: ConversationMessage[], background: ConversationMessage[], logger: MemoryLogger, mode: ExtractMode): Promise<ExtractionResult>;
+export declare function runExtraction(ctx: Context, cfg: MemoryConfig, store: L1Store, states: FamilyStates, pending: ConversationMessage[], background: ConversationMessage[], logger: MemoryLogger, mode: ExtractMode, 
+/**
+ * §E 当前工作区标识(由调用方经 `sessionWorkspaceIdOf` 解析;拿不到传 undefined)。
+ * 传 undefined 时行为与改动前**逐字一致**——`cfg.scope='global'` 的既有部署
+ * 永远走这条分支,这是零漂移的构造性保证。
+ */
+workspaceId?: string): Promise<ExtractionResult>;

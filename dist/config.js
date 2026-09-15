@@ -16,6 +16,12 @@ export const EFFORT_CHOICES = ['', 'off', 'none', 'minimal', 'low', 'medium', 'h
 export const memorySchema = Schema.object({
     dataDir: Schema.string().default(''),
     family: Schema.union(['auto', 'chat', 'work']).default('auto'),
+    // §E 可见范围:默认 global(既有部署不传该键 = 行为与改动前逐字一致)。
+    // **实测**(schemastery):`Schema.union` 对非法值**抛错**——`$.x expected "a" | "b" but got "bogus"`;
+    // `Schema.string()` 则原样透传。ADR-0008 条 4 要求「解析失败不阻断启动」
+    // (历史上 `nullable` 崩溃整棵插件树的教训在案),故此处用 string + 消费侧 `normScope` 归一。
+    // ⚠️ 既有 `family` 仍是 union,存在同款风险(传 'bogus' 会抛)——已登记 findings §17,不在本波修。
+    scope: Schema.string().default('global'),
     capture: Schema.object({
         enabled: Schema.boolean().default(true),
         stripCodeBlocks: Schema.boolean().default(true),

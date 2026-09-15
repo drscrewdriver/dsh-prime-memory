@@ -108,7 +108,14 @@ export declare class MemoryDb {
      * 图谱时间锚仍读 metadata,列由新写入路径填充。
      */
     private ensureTemporalColumns;
-    /** 重建后的 l1_fts 从 l1_records 全量回灌(仅在 drop 重建时调用;iterate 流式防大库内存峰值)。 */
+    /**
+     * 重建后的 l1_fts 从 l1_records 全量回灌(仅在 drop 重建时调用;iterate 流式防大库内存峰值)。
+     *
+     * ⚠️ 本函数的参数列表**必须与 `stmtL1FtsInsert` 逐位对齐**。不对齐时 node:sqlite 会在这里抛错,
+     * 而下面的 `catch` 是**逐行吞掉**的——症状是 `count` 停在 0、索引静默变空,
+     * 全库记录从此全文检索不可见却没有任何错误日志。§E 加列时正是这个位置最容易漏
+     * (三处列清单:DDL / insert 语句 / 本函数),故在此留下警示。
+     */
     private backfillL1Fts;
     /** 重建后的 l0_fts 从 l0_conversations 全量回灌(仅 drop 重建时调用;iterate 流式)。 */
     private backfillL0Fts;
@@ -244,12 +251,13 @@ export declare class MemoryDb {
     }): L1Receipt[];
     /** 同维度命中的**总条数**(不受 limit 影响,供"还有多少条没显示"提示)。 */
     countReceipts(opts: ReceiptQuery): number;
-    /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall 过滤与分页。失败返回空。 */
+    /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall/可见范围过滤与分页。失败返回空。 */
     listL1(opts: {
         type?: string;
         scene?: string;
         family?: string;
         hall?: string;
+        workspaceId?: string;
         limit: number;
         offset: number;
     }): {
@@ -258,10 +266,14 @@ export declare class MemoryDb {
     };
     /** 场景名去重列表(UI 筛选器数据源)。失败返回空。 */
     distinctL1Scenes(): string[];
-    /** FTS5 BM25 检索(family 缺省不过滤)。失败返回空数组(调用方降级)。 */
-    searchL1Fts(query: string, limit: number, family?: string): L1SearchHit[];
-    /** vec0 余弦 KNN 检索(score = 1 - cosine distance;family 过滤走过度召回 + 回查过滤,vec0 无法 WHERE)。失败返回空数组。 */
-    searchL1Vector(embedding: Float32Array, topK: number, family?: string): L1SearchHit[];
+    /** FTS5 BM25 检索(family / workspaceId 缺省不过滤)。失败返回空数组(调用方降级)。 */
+    searchL1Fts(query: string, limit: number, family?: string, workspaceId?: string): L1SearchHit[];
+    /**
+     * vec0 余弦 KNN 检索(score = 1 - cosine distance)。失败返回空数组。
+     * family / workspaceId 过滤走**过度召回 + 回查过滤**(vec0 无法 WHERE)。
+     * 放大倍数对两条轴**相乘**:两轴各自丢弃行,单独放大任一条都不够。
+     */
+    searchL1Vector(embedding: Float32Array, topK: number, family?: string, workspaceId?: string): L1SearchHit[];
     /** 批量 upsert L0 消息(元数据 + FTS;embeddings 与 records 等长,可省略)。 */
     upsertL0Batch(records: L0MessageRecord[], embeddings?: Array<Float32Array | undefined>): boolean;
     /** 记录一次蒸馏调用成本(委托 cost-ledger;语义见 CostLedger.insertCostCall)。 */

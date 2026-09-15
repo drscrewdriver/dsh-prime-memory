@@ -9,7 +9,7 @@
 import { existsSync, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
-import { familyForType } from '../types.js';
+import { familyForType, isScopeVisible } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import { graphHitRecordIds } from '../graph/search.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
@@ -37,6 +37,12 @@ export interface L1SearchOptions {
   type?: string;
   /** 按族过滤(undefined = 不过滤,即 auto 档与浏览路径;检索唯一缝的族语义)。 */
   family?: MemoryFamily;
+  /**
+   * §E 当前工作区标识(undefined = **不做可见范围过滤**,与改动前逐字一致)。
+   * 与 `family` 落在**同一条 SQL / 同一层回查**里(ADR-0008 组合关系):
+   * 若只在检索出口过滤而放任去重候选跨工作区相互污染,会产出「看不见但已影响决策」的记忆。
+   */
+  workspaceId?: string;
   /** 分数阈值(仅召回路径传;keyword/embedding 策略生效,FTS 含小语料例外;
    *  hybrid 按官方语义在 RRF 融合前不过滤)。 */
   scoreThreshold?: number;
@@ -252,31 +258,31 @@ export class L1Store {
 
     if (strategy === 'none') return [];
     if (strategy === 'keyword') {
-      const fts = this.db.searchL1Fts(query, candidateK, opts?.family);
+      const fts = this.db.searchL1Fts(query, candidateK, opts?.family, opts?.workspaceId);
       return this.postProcess(this.applyDecay(applyFtsThreshold(fts, threshold, limit)), opts?.type, limit);
     }
     if (strategy === 'embedding') {
       const vec = await this.helper.query(query, opts?.embeddingTimeoutMs);
       if (!vec) {
         // embedding 调用失败:降级 FTS,不阻断
-        const fts = this.db.searchL1Fts(query, candidateK, opts?.family);
+        const fts = this.db.searchL1Fts(query, candidateK, opts?.family, opts?.workspaceId);
         return this.postProcess(this.applyDecay(applyFtsThreshold(fts, threshold, limit)), opts?.type, limit);
       }
-      const vecHits = this.db.searchL1Vector(vec, candidateK, opts?.family);
+      const vecHits = this.db.searchL1Vector(vec, candidateK, opts?.family, opts?.workspaceId);
       return this.postProcess(this.applyDecay(filterScore(vecHits, threshold)), opts?.type, limit);
     }
 
     // hybrid(官方语义):多路并行 → 完整列表 RRF 融合(融合前不过滤阈值)
     // → 融合分按**实际路数**归一化:全路 rank1 命中 = 1.0,双路单列表命中 ≤ 0.5
     const [ftsList, vecRaw] = await Promise.all([
-      Promise.resolve(this.db.searchL1Fts(query, candidateK, opts?.family)),
+      Promise.resolve(this.db.searchL1Fts(query, candidateK, opts?.family, opts?.workspaceId)),
       this.helper.query(query, opts?.embeddingTimeoutMs),
     ]);
-    const vecList = vecRaw ? this.db.searchL1Vector(vecRaw, candidateK, opts?.family) : [];
+    const vecList = vecRaw ? this.db.searchL1Vector(vecRaw, candidateK, opts?.family, opts?.workspaceId) : [];
     // 第 3 路(图谱)仅在接线时**结构性存在**:未接线不占路数名额,故既有调用方
     // 仍走 2 路、得分与改动前逐位一致(见 findings.md §12.1 的路数语义)
     const lanes: L1Hit[][] = [ftsList, vecList];
-    if (this.graphLaneProvider) lanes.push(this.graphLane(query, candidateK, opts?.family));
+    if (this.graphLaneProvider) lanes.push(this.graphLane(query, candidateK, opts?.family, opts?.workspaceId));
     // 第 4 路(时效)在衰减开启时**结构性存在**;关掉衰减 = 该路不存在
     if (this.decayHalfLifeDays > 0) lanes.push(this.recencyLane([...ftsList, ...vecList]));
     const merged = rrfMerge(lanes, (h) => h.id);
@@ -326,7 +332,7 @@ export class L1Store {
    * - **墓碑边界**:图谱行可能回链到已被删除的 L1 记录 → 取不到就跳过,
    *   不补空占位(占位会在 RRF 里凭空加分)。
    */
-  private graphLane(query: string, limit: number, family?: MemoryFamily): L1Hit[] {
+  private graphLane(query: string, limit: number, family?: MemoryFamily, workspaceId?: string): L1Hit[] {
     const provider = this.graphLaneProvider;
     if (!provider) return [];
     let hits: readonly GraphNodeSearchResult[];
@@ -346,6 +352,9 @@ export class L1Store {
       const r = byId.get(id);
       if (!r) continue;
       if (family !== undefined && r.family !== family) continue;
+      // §E:与族隔离**同一层**再过滤一次。图谱节点自身没有 scope——归属由**来源记录**
+      // 决定(节点是 L1 的派生投影,它不该有独立于来源的可见范围)。
+      if (workspaceId !== undefined && !isScopeVisible(r.scope, r.workspaceId, workspaceId)) continue;
       out.push({
         id: r.id,
         content: r.content,
@@ -374,8 +383,8 @@ export class L1Store {
     return applyDecayWeight(hits, this.decayHalfLifeDays, (h) => updatedAtById.get(h.id));
   }
 
-  /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall 过滤。 */
-  list(opts: { type?: string; scene?: string; family?: string; hall?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
+  /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall / 可见范围过滤。 */
+  list(opts: { type?: string; scene?: string; family?: string; hall?: string; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
     return this.db.listL1(opts);
   }
 
@@ -386,23 +395,28 @@ export class L1Store {
 
   /**
    * 去重候选召回(官方 3 级):空库跳过 → 向量优先 → FTS 兜底。
-   * 传入 family 时只在同族记录里召回(去重永不跨族)。
+   * 传入 family 时只在同族记录里召回(去重永不跨族);传入 workspaceId 时
+   * 只在**本工作区可见**的记录里召回(§E)——**去重也不跨工作区**。
+   *
+   * 这一层是 ADR-0008 特意点名的接缝:"scope 过滤必须落在与族隔离同一层"。
+   * 理由:候选池决定**新的去重决策**,若此处跨工作区,产出的是「项目 B 里看不见、
+   * 但已经决定了项目 A 记忆去向」的记录——比不隔离更糟。
    */
-  async searchCandidates(query: string, limit: number, family?: MemoryFamily): Promise<MemoryRecord[]> {
+  async searchCandidates(query: string, limit: number, family?: MemoryFamily, workspaceId?: string): Promise<MemoryRecord[]> {
     if (this.db.countL1() === 0) return [];
     const caps = this.db.getCapabilities();
     if (caps.vectorSearch && this.helper.vectorReady()) {
       try {
         const vec = await this.helper.query(query);
         if (vec) {
-          const hits = this.db.searchL1Vector(vec, limit, family);
+          const hits = this.db.searchL1Vector(vec, limit, family, workspaceId);
           if (hits.length > 0) return this.db.getL1ByIds(hits.map((h) => h.id));
         }
       } catch (err) {
         this.logger?.warn(`[memory] 向量候选召回失败,降级 FTS: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    const fts = this.db.searchL1Fts(query, limit * 2, family);
+    const fts = this.db.searchL1Fts(query, limit * 2, family, workspaceId);
     return this.db.getL1ByIds(fts.map((h) => h.id));
   }
 

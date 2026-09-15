@@ -29,6 +29,7 @@ import { OccupancyStore } from '../store/occupancy.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryLogger } from '../types.js';
+import { scopeFilterOf } from '../workspace.js';
 import { applyRecallBudget, raceRecallTimeout, RECALL_EMBED_CAP_MS } from '../util/recall-budget.js';
 import {
   clearProfileShare,
@@ -267,6 +268,9 @@ export function registerRecall(
             stores.l1.search(query, cfg.recall.maxResults, {
               scoreThreshold: cfg.recall.scoreThreshold,
               family: mode === 'auto' ? undefined : mode,
+              // §E 可见范围:自动召回是"最没人在看"的一条路径——它静默地往模型上下文里
+              // 注入记忆。若这里漏了隔离,跨工作区泄漏会发生在每一次对话里而不留痕迹。
+              workspaceId: scopeFilterOf(cfg.scope, { agent: payload.agent }),
               // 嵌入内层钳制:给 FTS 降级留出总预算内的时间(远程限 HTTP fetch;本地经 worker 代理 race 放弃)
               embeddingTimeoutMs: RECALL_EMBED_CAP_MS,
             }),
