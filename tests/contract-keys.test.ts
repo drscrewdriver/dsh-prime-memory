@@ -11,6 +11,7 @@
  *   是占用数字的唯一算术来源)。
  */
 import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { EFFORT_CHOICES, memorySchema, resolveDataDir } from '../src/config.js';
 import { MEMORY_ENDPOINTS } from '../src/stats.js';
 import { HALL_CATALOG, HALL_DEFAULT_ENABLED, familyForType, resolveRecordFamily } from '../src/types.js';
@@ -53,7 +54,7 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'memoryMutate',
 ] as const;
 
-/** 端点全集(28 个;含 records-delete / 图谱两端点 / receipts / conflict-resolve)。 */
+/** 端点全集(31 个;含 records-delete / 图谱两端点 / receipts / conflict-resolve / ruminate 三端点)。 */
 const ENDPOINTS = [
   'dsh-memory/stats',
   'dsh-memory/token-cost',
@@ -74,6 +75,9 @@ const ENDPOINTS = [
   'dsh-memory/rebuild-status',
   'dsh-memory/rebuild-start',
   'dsh-memory/rebuild-cancel',
+  'dsh-memory/ruminate-status',
+  'dsh-memory/ruminate-start',
+  'dsh-memory/ruminate-cancel',
   'dsh-memory/llm-providers',
   'dsh-memory/llm-models',
   'dsh-memory/embedding-state-get',
@@ -100,16 +104,40 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 28 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(28);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(28);
+  it('exposes exactly the 31 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(31);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(31);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
-    // 这条才是真门禁。上面那条只在本文件内部自洽——它是一份**手抄副本**,
-    // 与真实注册表脱钩。执行期实测:本副本自 task_19(新增 receipts)起就已过期
-    // 却仍然全绿,因为它比对的从来不是 src。判据必须指向**唯一事实源**。
+    // 注意:本副本与 MEMORY_ENDPOINTS 都是**手工维护**的清单,两者会一起漂移
+    // ——2026-09-16 实测:ruminate 三端点早已由 contract.ts 与分发器实现,却同时
+    // 缺席本副本与 MEMORY_ENDPOINTS,本断言照样全绿,而线上 /dsh-memory/rpc/
+    // ruminate-status 恒返 404、设置面板「反刍整理」整块静默消失。
+    // 因此本断言不是唯一门禁,必须配合下方对 contract.ts 源码的守卫。
     expect([...ENDPOINTS].sort()).toEqual([...MEMORY_ENDPOINTS].sort());
+  });
+
+  it('唯一事实源守卫:与 src/stats.ts 分发器的 case 集逐项一致', async () => {
+    // MEMORY_ENDPOINTS 同时是 HTTP 前缀路由 /dsh-memory/rpc/<短名> 的**放行白名单**
+    // (见 stats.ts 的 SHORT_ENDPOINTS)。有 case 无白名单 = 该端点恒返 404,
+    // 而客户端 rpc 的 catch 会静默吞掉异常、面板整块消失(2026-09-16 ruminate 事故)。
+    const src = await readFile(new URL('../src/stats.ts', import.meta.url), 'utf8');
+    const cases = [...src.matchAll(/case '(dsh-memory\/[^']+)':/g)].map((m) => m[1]);
+    expect(cases.length).toBeGreaterThan(0);
+    expect([...MEMORY_ENDPOINTS].sort()).toEqual([...cases].sort());
+  });
+
+  it('契约守卫:contract.ts 声明的端点必须全部在白名单内', async () => {
+    // 单向包含即可捕获本类漂移:contract.ts 有、白名单没有 → 端点不可达。
+    // (反向差额是 contract.ts 自身的滞后,单独跟踪,不在此断言。)
+    const src = await readFile(new URL('../src/contract.ts', import.meta.url), 'utf8');
+    const body = /\bexport interface DshMemoryRequestMap\s*\{([\s\S]*?)\n\}/.exec(src);
+    expect(body, 'contract.ts 里找不到 DshMemoryRequestMap').not.toBeNull();
+    const contractKeys = [...body![1].matchAll(/'(dsh-memory\/[^']+)'\s*:/g)].map((m) => m[1]);
+    expect(contractKeys.length).toBeGreaterThan(0);
+    const missing = contractKeys.filter((k) => !MEMORY_ENDPOINTS.includes(k));
+    expect(missing, `contract.ts 声明但白名单缺失: ${missing.join(', ')}`).toEqual([]);
   });
 });
 
