@@ -3,9 +3,16 @@
  *
  * 语义(CONTEXT.md「重建」):
  * - L0 永不改动;旧派生层归档保留(records/ scenes/ persona-*.md → *.bak.<ts>,不硬删);
- * - 检索库 L1 三表清空、checkpoint 原地重置;
+ * - 检索库 L1 清空、checkpoint 原地重置;
  * - 统一按 auto 档、按会话分块重蒸馏;分块经 runner 的低优先级队列让位于正常轮次;
  * - 收尾强制一轮 L2(各族残余记录)+ L3(重建后 hasPersona=false → 冷启动触发)。
+ *
+ * **保留式清空(task_8c)**:"清空 + 重蒸馏"对**由 L0 派生**的记忆自洽,对
+ * **不由 L0 派生**的记忆则是破坏性的:`memory_add` / `memory_import` 写进来的
+ * 外部记忆在会话日志里没有对应位置,清掉就再也造不出来。故 `prepare()` 的固定顺序为
+ * **读事实源 → 判保留集 → 过闸门 → 快照 → 归档 → 清空 → 放回保留集**;
+ * 判据与实测依据见 `rebuild-preserve.ts` 文件头。事实源读不到时**拒绝清空** ——
+ * 判不出该保留什么,放行等于静默退化成破坏性重建。
  *
  * 失败语义:准备/归档任一步失败 → phase=failed,绝不拖垮宿主;
  * 单块蒸馏失败继续下一块(消息留在未蒸馏缓冲,下轮对话/重启补跑自愈)。
@@ -13,9 +20,11 @@
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { resolveDataDir } from '../config.js';
+import { snapshotBeforeClear } from '../store/l1-snapshot.js';
 import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
+import { describePlan, gateClear, planPreserve, readFactSource, restorePreserved } from './rebuild-preserve.js';
 import { effectiveCfg } from './runner.js';
 export function groupL0Sessions(records) {
     const bySession = new Map();
@@ -62,6 +71,7 @@ function idleStatus() {
         finishedAt: null,
         error: null,
         archiveNote: null,
+        preserveNote: null,
     };
 }
 /** 时间戳后缀(归档命名,秒级防撞)。 */
@@ -149,12 +159,35 @@ export class RebuildController {
                 return;
             }
             this.status.total = this.chunks.length;
-            // 归档旧派生层(改名不硬删;任一失败即终止——半清半留会破坏"全量重导"语义)
+            const dataDir = resolveDataDir(this.cfg);
+            // ── ① 读事实源 + 判定保留集(必须在 archiveDerived 之前:归档会把 records/ 搬走)──
+            const factRead = await readFactSource(path.join(dataDir, 'records'));
+            const plan = planPreserve(factRead.records, this.stores.l1.all());
+            // ── ② 过闸门:判不出该保留什么时**拒绝清空**(见 rebuild-preserve.ts 文件头)──
+            const gate = gateClear(factRead, plan);
+            if (!gate.allowed) {
+                this.logger.error(`[memory] 重建已中止:${gate.note}`);
+                this.finish('failed', gate.note);
+                return;
+            }
+            // ── ③ 先快照后清空:快照失败即终止(此刻还没清任何东西,中止是零代价的)──
+            const snap = await snapshotBeforeClear(this.db, dataDir, 'pre-rebuild');
+            this.logger.info(`[memory] 重建前快照已建:${path.basename(snap.dir)}(${snap.manifest.sections.records.count} 条,哈希 ${snap.manifest.sections.records.hash.slice(0, 8)})`);
+            // ── ④ 归档旧派生层(改名不硬删;任一失败即终止——半清半留会破坏"全量重导"语义)──
             const archiveNote = await this.archiveDerived();
             this.status.archiveNote = archiveNote ?? null;
-            // 清检索库 + 重置 checkpoint;归档后重建空目录(records/ 由 appendNew 自动重建)
+            // ── ⑤ 清检索库 + 重置 checkpoint;归档后重建空目录(records/ 由 appendNew 自动重建)──
             if (!this.db.clearL1())
                 throw new Error('L1 检索库清空失败');
+            // ── ⑥ 把无来源记忆放回:清空后立刻、且在首块蒸馏之前 ——
+            //     放回后它们在检索库里,后续 L1 去重候选就能看见它们,不会重复造出新副本。
+            const restored = await restorePreserved(this.stores.l1, plan);
+            if (restored.missing.length > 0) {
+                // 不静默:保留集里没回来的 id 必须点名(它们在快照里,可手工找回)
+                this.logger.error(`[memory] 保留集恢复不完整:${restored.restored}/${restored.attempted} 条,缺失 ${restored.missing.join(', ')}` +
+                    `(缺失项仍在本轮快照 ${path.basename(snap.dir)} 中)`);
+            }
+            this.status.preserveNote = describePlan(plan);
             this.stores.state.reset();
             await this.stores.state.save();
             await Promise.all([
@@ -164,7 +197,7 @@ export class RebuildController {
                 this.stores.persona.work.init(),
             ]);
             this.status.phase = 'distilling';
-            this.logger.info(`[memory] 重建准备完成(归档:${archiveNote ?? '无旧产物'},${this.chunks.length} 个会话块)`);
+            this.logger.info(`[memory] 重建准备完成(归档:${archiveNote ?? '无旧产物'},保留:${this.status.preserveNote},${this.chunks.length} 个会话块)`);
             this.scheduleChunk(0);
         }
         catch (err) {

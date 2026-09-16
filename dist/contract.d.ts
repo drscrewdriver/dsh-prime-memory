@@ -143,6 +143,14 @@ export interface RebuildStatus {
     error: string | null;
     /** 归档产物名(提示用户可手工找回)。 */
     archiveNote: string | null;
+    /**
+     * 保留集说明(无 L0 来源、清空前被保全的记忆;task_8c)。
+     *
+     * 与 `archiveNote` 并列暴露,是因为"重建后导入记忆还在不在"必须**可观测** ——
+     * 只写日志的话,用户看到"重建完成"根本无从得知那些外部记忆是被保住了还是被清掉了。
+     * null 表示尚未进入准备阶段。
+     */
+    preserveNote: string | null;
 }
 /** 反刍阶段。 */
 export type RuminatePhase = 'idle' | 'refreshing' | 'distilling' | 'consolidating' | 'updating' | 'done' | 'cancelled' | 'failed';
