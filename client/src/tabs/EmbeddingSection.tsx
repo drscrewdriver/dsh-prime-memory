@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EmbeddingStateView, SettingsSetRequest } from '../../../src/contract.js';
+import { commitDimensions } from '../dimensions.js';
 import { fmtMB } from '../format.js';
 import { asLoose, type RpcFn, type RpcLoose } from '../rpc.js';
 import { S } from '../styles.js';
@@ -137,21 +138,17 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
     }, 600);
   };
   /** 维度：Enter/失焦一次性提交（正整数或清空=0 跟随部署）。 */
-  const commitRemoteDims = () => {
-    const raw = rDims.trim();
-    if (raw === '') {
-      remoteDirty.current.dims = false;
-      commitRemote({ embedRemoteDimensions: 0 });
-      return;
-    }
-    const n = Number(raw);
-    if (!Number.isInteger(n) || n <= 0 || n > 100000) {
-      setErr('嵌入维度须为 1~100000 的整数（留空 = 跟随部署配置）');
-      return;
-    }
-    remoteDirty.current.dims = false;
-    commitRemote({ embedRemoteDimensions: n });
-  };
+  const commitRemoteDims = () =>
+    commitDimensions(rDims, {
+      // 复位脏标记由 commitDimensions 无条件执行（含失败路径）——**不要**在这里
+      // 再加判断，那正是修复前的缺陷：失败时标记留在 true，轮询回填被永久门控，
+      // 输入框卡死在非法值上。
+      clearDirty: () => {
+        remoteDirty.current.dims = false;
+      },
+      submit: (n) => commitRemote({ embedRemoteDimensions: n }),
+      reject: (message) => setErr(message),
+    });
   /** 密钥：Enter/失焦一次性提交后清空输入框（明文不回显；空值不提交）。 */
   const commitRemoteKey = () => {
     const v = rKey.trim();

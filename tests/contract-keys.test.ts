@@ -4,7 +4,7 @@
  * 目的:防止重写过程中 settings/端点/词汇表键集缩水——dsh-settings 按命名空间
  * 持久化用户已有值,schema 缺一个键 = 用户配置被静默丢弃。
  * - EFFORT_CHOICES / Hall 目录:运行时词汇表,逐值比对;
- * - 端点全集:24 个(含面板高权限删除 records-delete);
+ * - 端点全集:32 个(含面板高权限删除 records-delete、§C 冲突队列读写两端点);
  * - MemoryLiveSettings 键注册表:完整 20 键清单在此固化,slice 12 落地
  *   liveSettingsSchema 后由键集 diff 测试对 schema 运行时复核;
  * - 占用账本算术:stock = recall + profile 恒等式与迁移函数语义(context-occupancy
@@ -54,7 +54,7 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'memoryMutate',
 ] as const;
 
-/** 端点全集(31 个;含 records-delete / 图谱两端点 / receipts / conflict-resolve / ruminate 三端点)。 */
+/** 端点全集(32 个;含 records-delete / 图谱两端点 / receipts / §C 冲突队列读写两端点 / ruminate 三端点)。 */
 const ENDPOINTS = [
   'dsh-memory/stats',
   'dsh-memory/token-cost',
@@ -66,6 +66,7 @@ const ENDPOINTS = [
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
   'dsh-memory/receipts',
+  'dsh-memory/conflicts',
   'dsh-memory/conflict-resolve',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
@@ -104,9 +105,9 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 31 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(31);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(31);
+  it('exposes exactly the 32 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(32);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(32);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
