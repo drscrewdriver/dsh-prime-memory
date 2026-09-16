@@ -25,6 +25,7 @@ var __defProp = Object.defineProperty;
 		// client/src/entry.tsx
 		var entry_exports = {};
 		__export(entry_exports, {
+		  SETTINGS_SEAT: () => SETTINGS_SEAT,
 		  apply: () => apply,
 		  inject: () => inject
 		});
@@ -4430,36 +4431,36 @@ var __defProp = Object.defineProperty;
 		
 		// client/src/entry.tsx
 		var inject = ["slots"];
+		var SETTINGS_SEAT = "settings.section";
+		var SEAT_PROBE_MS = 3e3;
 		function apply(ctx) {
 		  const rpc = makeRpc(ctx);
 		  console.info("[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位");
-		  const SETTINGS_SEATS = ["settings.plugins.tab", "settings.plugin.item", "settings.section"];
-		  for (const seat of SETTINGS_SEATS) {
-		    const isTab = seat === "settings.plugins.tab";
-		    try {
-		      ctx.slots.inject(seat, () => {
-		        try {
-		          return ctx.slots.register(
-		            {
-		              name: seat,
-		              id: "dsh-memory",
-		              key: "dsh-memory",
-		              order: isTab ? 100 : 200,
-		              label: "记忆",
-		              inject: () => ({ rpc })
-		            },
-		            MemoryPanel
-		          );
-		        } catch (err) {
-		          console.warn(`[dsh-prime-memory] ${seat} 注册失败:`, err);
-		          return () => {
-		          };
-		        }
-		      });
-		    } catch (err) {
-		      console.warn(`[dsh-prime-memory] ${seat} 槽位未声明:`, err);
-		    }
+		  const SETTINGS_SEAT2 = "settings.section";
+		  let cardSeatLive = false;
+		  try {
+		    ctx.slots.inject(SETTINGS_SEAT2, () => {
+		      cardSeatLive = true;
+		      try {
+		        return ctx.slots.register(
+		          { name: SETTINGS_SEAT2, id: "dsh-memory", order: 200, label: "记忆", inject: () => ({ rpc }) },
+		          MemoryPanel
+		        );
+		      } catch (err) {
+		        console.warn(`[dsh-prime-memory] ${SETTINGS_SEAT2} 注册失败:`, err);
+		        return () => {
+		        };
+		      }
+		    });
+		  } catch (err) {
+		    console.warn(`[dsh-prime-memory] ${SETTINGS_SEAT2} 槽位未声明:`, err);
 		  }
+		  setTimeout(() => {
+		    if (cardSeatLive) return;
+		    console.warn(
+		      `[dsh-prime-memory] 宿主未声明 ${SETTINGS_SEAT2}：设置里的「记忆」面板不会出现。（0.1.5 的座位集合本机未验证，请在真机上确认。）`
+		    );
+		  }, SEAT_PROBE_MS);
 		  try {
 		    ctx.slots.inject("conversation.input.left", () => {
 		      return ctx.slots.register(
