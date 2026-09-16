@@ -54,7 +54,8 @@
     "test": "vitest run"
   },
   "engines": {
-    "node": ">=22.16.0"
+    "node": ">=22.16.0",
+    "dsh": ">=0.1.1-rc.2 <0.2.0-0"
   },
   "keywords": [
     "dsh",
