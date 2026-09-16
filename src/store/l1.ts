@@ -237,6 +237,13 @@ export class L1Store {
     this.helper.setService(svc);
   }
 
+  /** 向量写入能力是否就绪。`reindex` 在未就绪时**静默短路**成 0/0/0
+   *  (见本文件 `reindex` 首行),调用方必须自己问这里——否则"根本没跑"
+   *  会长得和"跑完了、零条待补"一模一样。 */
+  vectorsReady(): boolean {
+    return this.helper.vectorReady();
+  }
+
   async deleteBatch(ids: string[]): Promise<void> {
     this.db.deleteL1Batch(ids);
   }

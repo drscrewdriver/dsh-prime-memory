@@ -5,7 +5,26 @@
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
 
-This file covers the **0.11.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
+This file covers the **0.12.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
+
+## [0.12.0] — 2026-09-17
+
+### Added
+
+- **Manual vector-index rebuild (`dsh-memory/embedding-reindex` + the "Vector index" block in settings).** A rebuild previously had exactly two triggers: the `db.init` change-detection chain at startup, and the periodic backfill that fills in missing vectors — **there was no manual entry point**. The settings page showed only "Cancel" (and only while a rebuild was already running): no "Start", no count of what was embedded versus outstanding.
+  - **Endpoint surface 31 → 32.** New `EmbeddingReindexStartResponse` (`{accepted:true}`). **Accepting returns immediately and does not carry progress** — the client keeps polling `reindex` on `embedding-state-get`. Two progress vocabularies eventually disagree, so there is deliberately only one. All four places were updated together (`contract.ts` maps / the `MEMORY_ENDPOINTS` allowlist / the dispatcher `case` / the endpoint-count assertion) — **missing any one pins the endpoint at a permanent 404**, and since the client `rpc` catch swallows that silently, the whole panel just vanishes.
+  - **`EmbeddingStateView` gained `vectors`**: `embedded` / `total` / `missing` / `skipped` for L1 and L0, which is where "X of Y embedded" comes from. The db layer's **`-1` sentinel passes through verbatim** — "vector capability unavailable" and "nothing embedded yet" must stay two different sentences; collapsing them into one number sends the user to click a button that can never respond.
+
+### Fixed
+
+- **Rebuild requests that would be accepted but never actually run are now rejected.** The first line of `L1Store.reindex` / `L0Store.reindex` **silently short-circuits** to `0/0/0` when vector capability is not ready. Ungated, the UI would report "rebuild complete, nothing outstanding" while the rebuild **never started**. That trap was already documented at `src/index.ts:240`, but only for the startup chain; the manual entry point was a new hole. `startReindex()` hoists all five gates, each with an **actionable** message: unloaded / already running / source switch holds the lock / **embedding source off** (`currentInfo` empty) / **service not ready**. ("Turn it on first" and "wait a bit" are different instructions and must not be merged.) This required a `vectorsReady()` accessor on both stores — `helper` is private, so nothing outside could ask.
+- **Incomplete `db` test double in `embedding-subsystem.test.ts`.** It carried only `swapProvider` / `markEmbeddingSynced` and bypassed type checking via `as never`, so the gap never surfaced; once `snapshot()` began including vector counts it crashed (`getVecSkipSet is not a function`). **The double was completed rather than making `vectorCounts` defensive**: the signature declares a full `MemoryDb`, and swallowing missing methods swallows real wiring errors with them.
+
+### Tests
+
+- 5 new cases: rejected when off / rejected when not ready / accepted and drives L1+L0 with an immediate concurrent rejection / rejected after unload / `snapshot` count semantics. **Every rejection path asserts both "throws" and "downstream never called"** — asserting only the throw would let an implementation that calls downstream *and then* throws pass.
+- **Falsified**: temporarily removing the readiness guard turns `向量能力未就绪 → 拒绝` red (`expected [Function] to throw an error`); restored and green again.
+- Full suite **39 files / 403 cases**; `typecheck` (three tsconfigs), `build` and `smoke` all green.
 
 ## [Unreleased]
 

@@ -2342,6 +2342,12 @@ var __defProp = Object.defineProperty;
 		      m.id
 		    );
 		  });
+		  const vec = st.vectors;
+		  const vecOk = !!vec && vec.l1.embedded >= 0 && vec.l0.embedded >= 0;
+		  const vecNote = !vec ? "向量索引：宿主版本较旧，未上报计数" : !vecOk ? "向量索引不可用（sqlite-vec 扩展缺失或检索库降级），重建无从谈起" : "已嵌入 L1 " + vec.l1.embedded + "/" + vec.l1.total + " · L0 " + vec.l0.embedded + "/" + vec.l0.total + (vec.l1.missing + vec.l0.missing > 0 ? "（待补 " + (vec.l1.missing + vec.l0.missing) + " 条）" : "") + (vec.l1.skipped + vec.l0.skipped > 0 ? "（" + (vec.l1.skipped + vec.l0.skipped) + " 条内容不可嵌入，已跳过）" : "");
+		  const reindexRunning = !!(st.reindex && st.reindex.running);
+		  const canRebuild = vecOk && st.source !== "off" && !reindexRunning && !st.apply.busy;
+		  const rebuildHint = !vecOk ? "向量能力不可用" : st.source === "off" ? "嵌入源已关闭，请先启用" : reindexRunning ? "重建已在进行中" : st.apply.busy ? "嵌入源切换进行中" : "只补缺失向量；已有向量不动。零向量内容会被跳过（重试无意义）";
 		  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "dsh-mem-rb-card", children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: S.flexRow, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: "语义检索（嵌入源）" }),
@@ -2455,7 +2461,20 @@ var __defProp = Object.defineProperty;
 		      ] })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: S.panelLabel, children: "本地模型目录（下载后离线可用，不随插件分发）" }),
-		    modelCards
+		    modelCards,
+		    /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: RSTY.block, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: RSTY.title, children: "向量索引" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: RSTY.note, children: vecNote }),
+		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: RSTY.row, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+		        NButton,
+		        {
+		          disabled: !canRebuild,
+		          title: rebuildHint,
+		          onClick: () => call("dsh-memory/embedding-reindex", {}),
+		          children: "重建索引"
+		        }
+		      ) })
+		    ] })
 		  ] });
 		}
 		

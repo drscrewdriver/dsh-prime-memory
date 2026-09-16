@@ -94,6 +94,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/embedding-download-cancel',
   'dsh-memory/embedding-model-delete',
   'dsh-memory/embedding-runtime-cancel',
+  'dsh-memory/embedding-reindex',
   'dsh-memory/embedding-reindex-cancel',
 ];
 
@@ -1191,6 +1192,13 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     case 'dsh-memory/embedding-runtime-cancel': {
       if (!embedManager) throw new Error('嵌入管理器未初始化');
       return { cancelled: embedManager.cancelRuntimeInstall() };
+    }
+
+    case 'dsh-memory/embedding-reindex': {
+      if (!embedManager) throw new Error('嵌入管理器未初始化');
+      // 全部门槛判定收在 startReindex 里（含"未就绪时 reindex 会静默 0/0/0"这条），
+      // 此处不重复实现一遍——两处判定必然漂移，而这里漂移的后果是谎报成功。
+      return embedManager.startReindex();
     }
 
     case 'dsh-memory/embedding-reindex-cancel': {

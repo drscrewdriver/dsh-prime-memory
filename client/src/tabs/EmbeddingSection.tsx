@@ -377,6 +377,31 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
     );
   });
 
+  // ── 向量索引概况（手动重建的入口）──
+  // embedded < 0 是宿主 db 层的"能力不可用"哨兵（sqlite-vec 缺失/库降级），
+  // 不是"零条"。这两个说法在界面上必须分开，否则用户会去点一个永远没反应的按钮。
+  const vec = st.vectors;
+  const vecOk = !!vec && vec.l1.embedded >= 0 && vec.l0.embedded >= 0;
+  const vecNote = !vec
+    ? '向量索引：宿主版本较旧，未上报计数'
+    : !vecOk
+      ? '向量索引不可用（sqlite-vec 扩展缺失或检索库降级），重建无从谈起'
+      : '已嵌入 L1 ' + vec.l1.embedded + '/' + vec.l1.total +
+        ' · L0 ' + vec.l0.embedded + '/' + vec.l0.total +
+        (vec.l1.missing + vec.l0.missing > 0 ? '（待补 ' + (vec.l1.missing + vec.l0.missing) + ' 条）' : '') +
+        (vec.l1.skipped + vec.l0.skipped > 0 ? '（' + (vec.l1.skipped + vec.l0.skipped) + ' 条内容不可嵌入，已跳过）' : '');
+  const reindexRunning = !!(st.reindex && st.reindex.running);
+  const canRebuild = vecOk && st.source !== 'off' && !reindexRunning && !st.apply.busy;
+  const rebuildHint = !vecOk
+    ? '向量能力不可用'
+    : st.source === 'off'
+      ? '嵌入源已关闭，请先启用'
+      : reindexRunning
+        ? '重建已在进行中'
+        : st.apply.busy
+          ? '嵌入源切换进行中'
+          : '只补缺失向量；已有向量不动。零向量内容会被跳过（重试无意义）';
+
   return (
     <div className="dsh-mem-rb-card">
       <div style={S.flexRow}>
@@ -492,6 +517,19 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
       </div>
       <div style={S.panelLabel}>本地模型目录（下载后离线可用，不随插件分发）</div>
       {modelCards}
+      <div style={RSTY.block}>
+        <div style={RSTY.title}>向量索引</div>
+        <div style={RSTY.note}>{vecNote}</div>
+        <div style={RSTY.row}>
+          <NButton
+            disabled={!canRebuild}
+            title={rebuildHint}
+            onClick={() => call('dsh-memory/embedding-reindex', {})}
+          >
+            重建索引
+          </NButton>
+        </div>
+      </div>
     </div>
   );
 }
