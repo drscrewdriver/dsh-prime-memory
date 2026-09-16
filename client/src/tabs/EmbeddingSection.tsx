@@ -449,7 +449,9 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
           />
           <span style={RSTY.label}>维度</span>
           <NInput
-            style={{ width: 90, flexShrink: 0 }}
+            // 定宽 90 但在 flex 行里可收缩：minWidth:0 解除 flex item 的 min-content 下限，
+            // 否则窄容器下 90px 固定的输入框会把整行顶出卡片
+            style={{ width: 90, minWidth: 0, flex: '0 1 90px' }}
             type="number"
             min={0}
             placeholder="跟随部署"
