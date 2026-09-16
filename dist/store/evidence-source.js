@@ -81,12 +81,19 @@ export function anchorMatches(anchor, point) {
  * 只投影**形状已核实**的类型;其余类型一律给空串——**不猜形状**。空串的条目由
  * 上层 `EVIDENCE_TYPES` 与"非空文本"两道筛选挡在证据之外(见 `projectEvent`)。
  *
- * ⚠️ `tool/result` 的负载形状**尚未真机核实**,故按"取得到就取"的宽容读法处理。
- * 真机实调(task_7 验证项)必须确认后把这里改成确切读法。
+ * 只投影**形状已核实**的类型;其余类型一律给空串——**不猜形状**。空串的条目由
+ * 上层 `EVIDENCE_TYPES` 与"非空文本"两道筛选挡在证据之外(见 `projectEvent`)。
  */
 export function projectEventText(event) {
     if (event.type === 'user/message') {
         const data = event.data;
+        /**
+         * 只认 `source.kind === 'user'`。**这不是洁癖,是必须**(2026-09-17 真机实测):
+         * 真实日志里 `user/message` 的 kind 分布为 `plugin` **745** / `user` **387** /
+         * `skill-catalog` 58 / `agent-instructions` 22 / 其余 42 —— **只有 31% 是真人
+         * 发言**。少了这道过滤,证据里近七成是系统注入的样板(召回记忆块、技能目录、
+         * agent 指令),核对报告会被自己的注入内容污染。
+         */
         if (data.source?.kind !== 'user')
             return '';
         return blocksToText(data.content);
@@ -95,21 +102,57 @@ export function projectEventText(event) {
         const data = event.data;
         return blocksToText(data.message?.content);
     }
-    if (event.type === 'tool/result') {
-        const data = event.data;
-        const blocks = data.content ?? data.result?.content;
-        if (blocks === undefined)
-            return '';
-        return blocksToText(blocks);
-    }
+    if (event.type === 'tool/result')
+        return toolResultText(event.data);
+    if (event.type === 'tool/call')
+        return toolCallText(event.data);
     return '';
+}
+/**
+ * `tool/result` 的**确切**读取路径(2026-09-17 真机核实,非推断):
+ *
+ * ```
+ * data.message.content[]  →  { type: 'tool-result', toolCallId, content: [{ type: 'text', text }], isError? }
+ * ```
+ *
+ * ⚠️ 初版写的是 `data.content ?? data.result?.content`——**这两处都不存在**。
+ * 而 `blocksToText` 只认 `text`/`reasoning` 块,直接喂外层块(类型为 `tool-result`)
+ * 也只会得到空串。必须下钻一层到 `block.content`。
+ */
+function toolResultText(data) {
+    const content = data?.message?.content;
+    if (!Array.isArray(content))
+        return '';
+    const parts = [];
+    for (const block of content) {
+        if (block?.type !== 'tool-result')
+            continue;
+        const text = blocksToText(block.content);
+        if (text.trim() === '')
+            continue;
+        parts.push(block.isError === true ? `[工具报错] ${text}` : text);
+    }
+    return parts.join('\n');
+}
+/** `tool/call` 的确切形状:`data.{name, arguments}`,`arguments` 是 JSON 字符串。 */
+function toolCallText(data) {
+    const payload = data;
+    const callName = typeof payload?.name === 'string' ? payload.name : '';
+    const args = typeof payload?.arguments === 'string' ? payload.arguments : '';
+    if (callName === '' && args === '')
+        return '';
+    return args === '' ? callName : `${callName} ${args}`;
 }
 /**
  * 产出证据文本的事件类型。**边界事件(`turn/start`、`step/start`、`turn/end`)
  * 不在此列**——它们参与坐标 fold,但不作为证据条目导出:零文本条目会占满配额
  * 却不出内容(初版实测:3 条配额被两个边界事件吃掉)。
+ *
+ * `tool/call` **在列**:助手消息里的 `tool-call` 块被 `blocksToText` 丢掉(它只认
+ * `text`/`reasoning`),所以"当时到底做了什么"只能靠 `tool/call` 补齐。缺了它,
+ * 报告里会看到工具**结果**却不知道对应的调用是什么。
  */
-const EVIDENCE_TYPES = new Set(['user/message', 'assistant/message', 'tool/result']);
+const EVIDENCE_TYPES = new Set(['user/message', 'assistant/message', 'tool/call', 'tool/result']);
 /** 投影一条事件(含坐标);无坐标或非文本事件返回 undefined。 */
 function projectEvent(event, index, point) {
     if (point === undefined)
@@ -154,6 +197,39 @@ async function withTimeout(work, timeoutMs) {
     finally {
         if (timer !== undefined)
             clearTimeout(timer);
+    }
+}
+/**
+ * 从宿主 `ctx` 安全取内核 `sessionQuery`(取不到就 `undefined`,**绝不抛**)。
+ *
+ * 为什么不用 `ctx.sessionQuery`:宿主 `ctx` 是 Proxy,它的 `get` 陷阱在属性既不在
+ * 原型链上、服务又没挂载时**直接抛** `cannot get property "sessionQuery" without
+ * inject`(`@deepseek-ai/cordis/lib/index.js:672-698`)。也就是说 `ctx.sessionQuery?.x`
+ * 里的 `?.` **拦不住**这种失败——守卫还没轮到就已经抛了。
+ *
+ * `ctx.get(name)` 才是安全面:`ReflectService.get` 走 `_getImpl`,**取不到返回
+ * `undefined`**(`cordis/lib/index.js:762-771`)。`dsh-search-index` 在生产里用的正是
+ * 这个取法(`src/index.ts:625`),此处与它对齐。
+ *
+ * 另:`inject` 里**不能**声明 `sessionQuery`——它缺失时要降级(见 `src/index.ts` 的
+ * "降级铁律"),写成硬依赖会让插件在缺该服务的环境里直接挂载失败。
+ *
+ * @param ctx - 宿主上下文(结构类型,便于单测注入假 ctx)。
+ * @returns 内核会话查询服务面,或 undefined。
+ */
+export function resolveSessionQuery(ctx) {
+    const getter = ctx?.get;
+    if (typeof getter !== 'function')
+        return undefined;
+    try {
+        const value = getter.call(ctx, 'sessionQuery');
+        if (value === null || typeof value !== 'object')
+            return undefined;
+        return value;
+    }
+    catch {
+        // 非标准 ctx(或服务解析期异常):一律降级为"没有这个能力"
+        return undefined;
     }
 }
 /**

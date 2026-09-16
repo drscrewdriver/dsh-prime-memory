@@ -126,10 +126,29 @@ export declare function anchorMatches(anchor: ConversationAnchor, point: Convers
  * 只投影**形状已核实**的类型;其余类型一律给空串——**不猜形状**。空串的条目由
  * 上层 `EVIDENCE_TYPES` 与"非空文本"两道筛选挡在证据之外(见 `projectEvent`)。
  *
- * ⚠️ `tool/result` 的负载形状**尚未真机核实**,故按"取得到就取"的宽容读法处理。
- * 真机实调(task_7 验证项)必须确认后把这里改成确切读法。
+ * 只投影**形状已核实**的类型;其余类型一律给空串——**不猜形状**。空串的条目由
+ * 上层 `EVIDENCE_TYPES` 与"非空文本"两道筛选挡在证据之外(见 `projectEvent`)。
  */
 export declare function projectEventText(event: SessionEvent): string;
+/**
+ * 从宿主 `ctx` 安全取内核 `sessionQuery`(取不到就 `undefined`,**绝不抛**)。
+ *
+ * 为什么不用 `ctx.sessionQuery`:宿主 `ctx` 是 Proxy,它的 `get` 陷阱在属性既不在
+ * 原型链上、服务又没挂载时**直接抛** `cannot get property "sessionQuery" without
+ * inject`(`@deepseek-ai/cordis/lib/index.js:672-698`)。也就是说 `ctx.sessionQuery?.x`
+ * 里的 `?.` **拦不住**这种失败——守卫还没轮到就已经抛了。
+ *
+ * `ctx.get(name)` 才是安全面:`ReflectService.get` 走 `_getImpl`,**取不到返回
+ * `undefined`**(`cordis/lib/index.js:762-771`)。`dsh-search-index` 在生产里用的正是
+ * 这个取法(`src/index.ts:625`),此处与它对齐。
+ *
+ * 另:`inject` 里**不能**声明 `sessionQuery`——它缺失时要降级(见 `src/index.ts` 的
+ * "降级铁律"),写成硬依赖会让插件在缺该服务的环境里直接挂载失败。
+ *
+ * @param ctx - 宿主上下文(结构类型,便于单测注入假 ctx)。
+ * @returns 内核会话查询服务面,或 undefined。
+ */
+export declare function resolveSessionQuery(ctx: unknown): SessionQueryLike | undefined;
 /**
  * 建一个证据读取器。
  *

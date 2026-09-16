@@ -12,6 +12,7 @@ import {
   createEvidenceSource,
   foldEventAnchors,
   projectEventText,
+  resolveSessionQuery,
   sessionIdCandidates,
   type SessionQueryLike,
 } from '../src/store/evidence-source.js';
@@ -21,7 +22,12 @@ function ev(seq: number, type: string, data: unknown, time?: number): SessionEve
   return { seq, type, data, time } as unknown as SessionEvent;
 }
 
-/** 一个最小会话:turn 1 两个 step、turn 2 一个 step,含工具结果。 */
+/**
+ * 一个最小会话:turn 1 两个 step、turn 2 一个 step,含工具调用与结果。
+ *
+ * 事件形状**照真机实测**(`scripts/phase0-probe-evidence-shape.py`)写,不是想当然:
+ * `tool/result` 的文本在 `data.message.content[].content[]` 里,不在 `data.content`。
+ */
 function sampleEvents(): SessionEvent[] {
   return [
     ev(0, 'turn/start', { turn: 1 }, 1000),
@@ -29,12 +35,20 @@ function sampleEvents(): SessionEvent[] {
     ev(2, 'step/start', { turn: 1, step: 1 }),
     ev(3, 'assistant/message', { turn: 1, step: 1, message: { content: [{ type: 'text', text: '第一轮回答' }] } }, 1002),
     ev(4, 'step/start', { turn: 1, step: 2 }),
-    ev(5, 'tool/result', { turn: 1, step: 2, content: [{ type: 'text', text: '工具输出' }] }, 1003),
-    ev(6, 'turn/end', { turn: 1 }),
-    ev(7, 'turn/start', { turn: 2 }, 2000),
-    ev(8, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '第二轮的问题' }] }, 2001),
-    ev(9, 'step/start', { turn: 2, step: 1 }),
-    ev(10, 'assistant/message', { turn: 2, step: 1, message: { content: [{ type: 'text', text: '第二轮回答' }] } }, 2002),
+    ev(5, 'tool/call', { turn: 1, step: 2, callId: 'c1', name: 'pwsh', arguments: '{"command":"ls"}' }, 1003),
+    ev(6, 'tool/result', {
+      turn: 1,
+      step: 2,
+      message: {
+        source: { kind: 'tool', callId: 'c1' },
+        content: [{ type: 'tool-result', toolCallId: 'c1', content: [{ type: 'text', text: '工具输出' }] }],
+      },
+    }, 1004),
+    ev(7, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    ev(8, 'turn/start', { turn: 2 }, 2000),
+    ev(9, 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: '第二轮的问题' }] }, 2001),
+    ev(10, 'step/start', { turn: 2, step: 1 }),
+    ev(11, 'assistant/message', { turn: 2, step: 1, message: { content: [{ type: 'text', text: '第二轮回答' }] } }, 2002),
   ];
 }
 
@@ -118,9 +132,37 @@ describe('projectEventText —— 忠实投影,但注入上下文不算证据', 
     expect(projectEventText(ev(0, 'assistant/message', { message: { content: [{ type: 'text', text: 'yo' }] } }))).toBe('yo');
   });
 
-  it('工具结果宽容读取:形状不符时给空串而不是抛错', () => {
-    expect(projectEventText(ev(0, 'tool/result', { content: [{ type: 'text', text: 'out' }] }))).toBe('out');
-    expect(projectEventText(ev(0, 'tool/result', {}))).toBe('');
+  it('工具结果按实测形状读取(data.message.content[].content[])', () => {
+    expect(
+      projectEventText(
+        ev(0, 'tool/result', {
+          message: { content: [{ type: 'tool-result', content: [{ type: 'text', text: 'out' }] }] },
+        }),
+      ),
+    ).toBe('out');
+  });
+
+  it('回归:被推翻的猜测路径(data.content)不得再产出文本', () => {
+    // 初版写的是 data.content ?? data.result?.content —— 真机核实两处都不存在。
+    // 这条用例锁死它:若有人"简化"回去,立刻变红。
+    expect(projectEventText(ev(0, 'tool/result', { content: [{ type: 'text', text: 'out' }] }))).toBe('');
+    expect(projectEventText(ev(0, 'tool/result', { result: { content: [{ type: 'text', text: 'out' }] } }))).toBe('');
+  });
+
+  it('工具报错结果带上显式标记', () => {
+    expect(
+      projectEventText(
+        ev(0, 'tool/result', {
+          message: { content: [{ type: 'tool-result', isError: true, content: [{ type: 'text', text: 'boom' }] }] },
+        }),
+      ),
+    ).toBe('[工具报错] boom');
+  });
+
+  it('工具调用产出「名字 + 参数」', () => {
+    expect(projectEventText(ev(0, 'tool/call', { name: 'pwsh', arguments: '{"command":"ls"}' }))).toBe('pwsh {"command":"ls"}');
+    expect(projectEventText(ev(0, 'tool/call', { name: 'pwsh' }))).toBe('pwsh');
+    expect(projectEventText(ev(0, 'tool/call', {}))).toBe('');
   });
 
   it('未知事件类型投影为空串(不猜形状)', () => {
@@ -160,7 +202,7 @@ describe('createEvidenceSource —— 成功路径', () => {
     expect(types).not.toContain('turn/start');
     expect(types).not.toContain('step/start');
     expect(types).not.toContain('turn/end');
-    expect(types.every((t) => t === 'user/message' || t === 'assistant/message' || t === 'tool/result')).toBe(true);
+    expect(types.every((t) => t === 'user/message' || t === 'assistant/message' || t === 'tool/call' || t === 'tool/result')).toBe(true);
   });
 
   it('插件注入的上下文不进证据(只认 source.kind === user)', async () => {
@@ -202,6 +244,47 @@ describe('createEvidenceSource —— 成功路径', () => {
     if (!result.ok) return;
     expect(result.slice.events).toHaveLength(1);
     expect(result.slice.truncated).toBe(true);
+  });
+});
+
+describe('resolveSessionQuery —— 服务解析绝不能抛(降级铁律)', () => {
+  it('正常 ctx:取到服务', () => {
+    const service: SessionQueryLike = { listEvents: async () => [] };
+    expect(resolveSessionQuery({ get: (name: string) => (name === 'sessionQuery' ? service : undefined) })).toBe(service);
+  });
+
+  it('服务未挂载(ctx.get 返回 undefined):给 undefined,不抛', () => {
+    expect(resolveSessionQuery({ get: () => undefined })).toBeUndefined();
+  });
+
+  it('ctx.get 直接抛(Proxy 陷阱形态):吞掉并降级', () => {
+    // 真机里 ctx.sessionQuery 正是这个失败形态(cannot get property ... without inject);
+    // ctx.get 是安全面,但万一宿主换了实现,这里也必须不炸
+    const throwing = {
+      get: () => {
+        throw new Error('cannot get property "sessionQuery" without inject');
+      },
+    };
+    expect(resolveSessionQuery(throwing)).toBeUndefined();
+  });
+
+  it('没有 get 的 ctx / 非对象:给 undefined', () => {
+    expect(resolveSessionQuery({})).toBeUndefined();
+    expect(resolveSessionQuery(undefined)).toBeUndefined();
+    expect(resolveSessionQuery(null)).toBeUndefined();
+    expect(resolveSessionQuery('nope')).toBeUndefined();
+  });
+
+  it('取到的非对象值不算服务(不喂半截实现进去)', () => {
+    expect(resolveSessionQuery({ get: () => 42 })).toBeUndefined();
+  });
+
+  it('resolve 之后接上读取器:无服务时是 no-service 而非崩溃', async () => {
+    const source = createEvidenceSource(resolveSessionQuery({ get: () => undefined }));
+    await expect(source.byAnchors({ sessionId: 'x', anchors: [anchor(1)] })).resolves.toMatchObject({
+      ok: false,
+      reason: 'no-service',
+    });
   });
 });
 
