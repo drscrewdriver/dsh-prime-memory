@@ -22,8 +22,12 @@ export interface MemoryStatusSource {
     pending(): number;
 }
 /**
- * 端点全集运行时清单(26 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(31 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
+ * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
+ * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
+ * rpc 的 catch 吞掉,无任何报错),故必须与 contract.ts 的 DshMemoryRequestMap
+ * 严格逐项一致。
  * 用途:0.1.5 共享通道 /api 的 interceptor 是单槽(多插件会抛 already has an
  * interceptor),精确 Fetch 路由按路径 key 可共存且分发优先于 interceptor——
  * 因此逐端点注册 `POST /api/<endpoint>` 精确路由,彻底绕开槽位竞争。
