@@ -4274,21 +4274,32 @@ var __defProp = Object.defineProperty;
 		function apply(ctx) {
 		  const rpc = makeRpc(ctx);
 		  console.info("[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位");
-		  try {
-		    ctx.slots.inject("settings.section", () => {
-		      return ctx.slots.register(
-		        {
-		          name: "settings.section",
-		          id: "dsh-memory",
-		          order: 200,
-		          label: "记忆",
-		          inject: () => ({ rpc })
-		        },
-		        MemoryPanel
-		      );
-		    });
-		  } catch (err) {
-		    console.warn("[dsh-prime-memory] settings.section 注册失败(新宿主已收编):", err);
+		  const SETTINGS_SEATS = ["settings.plugins.tab", "settings.plugin.item", "settings.section"];
+		  for (const seat of SETTINGS_SEATS) {
+		    const isTab = seat === "settings.plugins.tab";
+		    try {
+		      ctx.slots.inject(seat, () => {
+		        try {
+		          return ctx.slots.register(
+		            {
+		              name: seat,
+		              id: "dsh-memory",
+		              key: "dsh-memory",
+		              order: isTab ? 100 : 200,
+		              label: "记忆",
+		              inject: () => ({ rpc })
+		            },
+		            MemoryPanel
+		          );
+		        } catch (err) {
+		          console.warn(`[dsh-prime-memory] ${seat} 注册失败:`, err);
+		          return () => {
+		          };
+		        }
+		      });
+		    } catch (err) {
+		      console.warn(`[dsh-prime-memory] ${seat} 槽位未声明:`, err);
+		    }
 		  }
 		  try {
 		    ctx.slots.inject("conversation.input.left", () => {
