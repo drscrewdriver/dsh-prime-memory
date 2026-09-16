@@ -7,6 +7,21 @@
 
 This file covers the **0.12.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 
+## [Unreleased]
+
+### Added
+
+- **Source anchors (R7) — a memory can now be traced back to a real position in the session.** Until now the traceability chain was broken: L1 carried `source_message_ids`, but those are **L0 message ids** (`msg_<epoch_ms>_<hex>`) while the L0 table had no `turn`/`step` columns, and the id list was never written to the retrieval DB at all (the store kept only `metadata`, silently dropping the field). Result: **no memory could be located in the original conversation**.
+  - `l0_conversations` gains `turn`/`step` columns (idempotent `ALTER TABLE`; old rows stay NULL = "no anchor", never back-filled with a guess) plus an `(session_id, turn)` index.
+  - The capture hook now folds `step/start`, so `user/message` events — which do not carry `step` in the kernel payload — still get their **same-turn** coordinate. `assistant/message` uses the `{turn, step}` it already carries. Messages before the first `step/start` keep `step` empty on purpose: **a missing coordinate is never invented.**
+  - Anchors live under the reserved `metadata_json` key `dsh_source_anchors` (rendered as `t12 s3` in the UI). No new column, no disk-contract change. Both the fresh-store path and the **merge/update** path carry anchors — otherwise a single merge would lose the coordinate.
+  - New host API `MemoryDb.l0ByAnchor(sessionId, turn, step?)` fetches L0 messages **by coordinate** instead of by recency; this is the single read entry point for the upcoming evidence reader.
+- **The records panel now shows the source anchor** where it previously always showed a dash.
+
+### Fixed
+
+- **`UiRecord.sourceMessageIds` was a dead field.** It read a column `l1_records` never had, so it always resolved to `[]` and the panel's source row **never rendered**. Replaced by `sourceAnchors`, which reads real data.
+
 ## [0.12.0] — 2026-09-17
 
 ### Added

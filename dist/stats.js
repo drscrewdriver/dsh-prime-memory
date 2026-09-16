@@ -21,6 +21,8 @@ import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChai
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
 import { resolveConflictPair } from './conflict-service.js';
+// R7:读回锚点走 anchors.ts 的**唯一入口**(形状校验从严),不在 UI 层自行解析 metadata。
+import { readSourceAnchors } from './pipeline/anchors.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
@@ -1076,9 +1078,18 @@ function hitToUiRecord(r) {
         createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
         updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : null,
         version: r.version ?? 0,
-        sourceMessageIds: r.source_message_ids ?? [],
+        sourceAnchors: (readSourceAnchors(r.metadata) ?? []).map(formatAnchor),
         score: r.score ?? null,
     };
+}
+/**
+ * 锚点的展示形态:`t12 s3` / 无 step 时 `t12`。
+ *
+ * 只做**可读化**,不携带 sessionId——单条记录的来源会话由记录自身语义决定,
+ * 把 sessionId 塞进这一行会把 12 个字符的坐标变成 40 个字符。
+ */
+function formatAnchor(a) {
+    return typeof a.step === 'number' ? `t${a.turn} s${a.step}` : `t${a.turn}`;
 }
 /**
  * 从文件尾反向分块读取最后 N 行:不整读全文件(轮转上限 2MB,整读会

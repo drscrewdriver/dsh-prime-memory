@@ -6,6 +6,21 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [Unreleased]
+
+### 新增
+
+- **来源锚点（R7）——记忆现在能追回会话里的**真实位置**。** 在此之前溯源链是断的：L1 带着 `source_message_ids`，但那些是 **L0 消息 id**（`msg_<epoch_ms>_<hex>`），而 L0 表没有 `turn`/`step` 列；且该 id 列表**根本没写进检索库**（写入侧只取 `metadata`，字段被静默丢弃）。结果是**任何一条记忆都无法定位到原文**。
+  - `l0_conversations` 补 `turn`/`step` 两列（幂等 `ALTER TABLE`；旧行保持 NULL = 无锚点，**绝不猜测回填**），并新增 `(session_id, turn)` 索引。
+  - 捕获侧新增 `step/start` fold：`user/message` 在内核负载里**不带** `step`，靠同轮 `step/start` 推出；`assistant/message` 用事件自带的 `{turn, step}`。**首个 `step/start` 之前的消息 step 留空**——缺坐标时不编坐标，这是红线。
+  - 锚点存在 `metadata_json` 的保留键 `dsh_source_anchors`（UI 显示为 `t12 s3`）。不加列、不动磁盘契约。**新建与「合并/更新」两条写入路径都带锚点**——否则合并一次就丢坐标，而合并是长会话里最常发生的动作。
+  - 新增宿主取数接口 `MemoryDb.l0ByAnchor(sessionId, turn, step?)`：**按坐标**（而非按时间）取 L0 消息，是后续「证据读取器」的唯一入口。
+- **记录面板显示来源锚点**（此前该行永远是「-」）。
+
+### 修复
+
+- **`UiRecord.sourceMessageIds` 是死字段。** 它读的是 `l1_records` **从不存在的列**，永远回退 `[]`，于是记录面板的来源行**从未渲染过**。已替换为读真实数据的 `sourceAnchors`。
+
 ## [0.12.0] — 2026-09-17
 
 ### 新增

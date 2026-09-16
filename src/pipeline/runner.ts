@@ -47,6 +47,7 @@ import {
 } from './trigger.js';
 import { runExtraction } from './l1.js';
 import type { FamilyStates } from './l1.js';
+import { buildAnchorMap } from './anchors.js';
 import { runGraphProjection } from './graph.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
@@ -696,6 +697,9 @@ export class MemoryRunner {
           )
         : [];
       const t = Date.now();
+      // R7:锚点映射同时收切片与背景——模型偶尔会引用背景消息的 id,收了它
+      // 就能追溯到正确坐标;不收则那条被静默丢弃(丢弃是可接受降级,比编坐标好)。
+      const anchorMap = buildAnchorMap([...slice, ...background]);
       const result = await runExtraction(
         this.ctx,
         cfg,
@@ -709,6 +713,7 @@ export class MemoryRunner {
         // `ctx.get('agents')` 宽容解析——与 §A 的多级父链解析同一招。
         // 拿不到 → undefined → 归属回落 global(pipeline 侧 `resolveRecordScope` 兜底)。
         sessionWorkspaceIdOf(this.ctx, sessionId),
+        anchorMap,
       );
       if (!result.skipped) {
         this.pending[mode] = rest;

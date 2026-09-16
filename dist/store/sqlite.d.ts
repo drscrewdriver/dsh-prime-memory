@@ -296,6 +296,20 @@ export declare class MemoryDb {
     /** 按会话取最近消息(时间升序返回;走 idx_l0_session_id 索引)。
      *  蒸馏背景参考专用——按会话现查替代全局内存数组(ADR-0003)。 */
     recentL0BySession(sessionId: string, limit: number): L0MessageRecord[];
+    /**
+     * 锚点定向取消息(R7):按 `(session_id, turn[, step])` 取该回合的 L0 消息。
+     *
+     * 与 `recentL0BySession` 的区别是**按坐标而非按时间**:证据读取器(R2)手上
+     * 只有锚点,没有"最近"的概念。`step` 缺省即整轮(不过滤 step)。
+     *
+     * 返回按 `timestamp, rowid` 升序——同一轮内的原始顺序,供下游拼回回合文本。
+     */
+    l0ByAnchor(sessionId: string, turn: number, step?: number): L0MessageRecord[];
+    /**
+     * L0 行 → 记录的统一映射。turn/step 为 NULL(旧行 / 无坐标)时**不写键**,
+     * 使"无锚点"与"锚点为空"在类型层就是两件事。
+     */
+    private toL0Record;
     /** L0 全量列举(重建快照用;按时间升序,事务一致性避开 JSONL 追加竞态)。 */
     listL0All(): L0MessageRecord[];
     /** 重建成本预估(一次全表聚合:会话数 / 消息数 / 字符量)。 */

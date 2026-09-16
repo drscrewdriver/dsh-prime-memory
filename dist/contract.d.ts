@@ -575,7 +575,15 @@ export interface UiRecord {
     createdAt: string | null;
     updatedAt: string | null;
     version: number;
-    sourceMessageIds: string[];
+    /**
+     * 来源锚点(R7):形如 `t12 s3`(无 step 时为 `t12`),来自
+     * `metadata.dsh_source_anchors`。**空数组 = 该记忆无锚点**(老数据 / 捕获侧
+     * 未打戳 / 解析不到坐标),不是"没有来源"。
+     *
+     * 2026-09-17 替换原 `sourceMessageIds`:`l1_records` 从不存该列,原字段
+     * 永远是 `[]`(死字段,UI 因此从未显示过来源行)。锚点是同一意图的**活实现**。
+     */
+    sourceAnchors: string[];
     /** 检索相关度(列表路径无 score → null)。 */
     score: number | null;
 }

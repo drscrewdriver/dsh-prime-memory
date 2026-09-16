@@ -5,6 +5,7 @@ import { errDetail } from '../util/filelog.js';
 import { sessionWorkspaceIdOf } from '../workspace.js';
 import { advanceWarmupThreshold, effectiveExtractThreshold, extractionBackoffMs, idleSessionsToFlush, modeSwitchAction, pickSessionBackground, } from './trigger.js';
 import { runExtraction } from './l1.js';
+import { buildAnchorMap } from './anchors.js';
 import { runGraphProjection } from './graph.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
@@ -600,11 +601,14 @@ export class MemoryRunner {
                 ? pickSessionBackground(await this.stores.l0.recentBySession(sessionId, cfg.extract.backgroundMessages + slice.length), new Set(slice.map((m) => m.id)), cfg.extract.backgroundMessages)
                 : [];
             const t = Date.now();
+            // R7:锚点映射同时收切片与背景——模型偶尔会引用背景消息的 id,收了它
+            // 就能追溯到正确坐标;不收则那条被静默丢弃(丢弃是可接受降级,比编坐标好)。
+            const anchorMap = buildAnchorMap([...slice, ...background]);
             const result = await runExtraction(this.ctx, cfg, this.stores.l1, this.states, slice, background, this.logger, mode, 
             // §E 写入侧工作区:后台蒸馏手上只有 sessionId(没有 exec),经
             // `ctx.get('agents')` 宽容解析——与 §A 的多级父链解析同一招。
             // 拿不到 → undefined → 归属回落 global(pipeline 侧 `resolveRecordScope` 兜底)。
-            sessionWorkspaceIdOf(this.ctx, sessionId));
+            sessionWorkspaceIdOf(this.ctx, sessionId), anchorMap);
             if (!result.skipped) {
                 this.pending[mode] = rest;
                 // 重建轮(force)不是有机对话,不推进爬坡

@@ -77,14 +77,24 @@ export class L0Store {
     async append(sessionId, messages) {
         if (messages.length === 0)
             return;
-        const records = messages.map((m) => ({
-            sessionId,
-            recordedAt: nowIso(),
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            timestamp: m.timestamp,
-        }));
+        const records = messages.map((m) => {
+            const rec = {
+                sessionId,
+                recordedAt: nowIso(),
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                timestamp: m.timestamp,
+            };
+            // R7:锚点摊平到事实源与 DB 两处(事实源可跨进程重建,DB 供按坐标查询)。
+            // 无锚点时**不写键**——旧行与新增的无坐标消息保持同形。
+            if (m.anchor !== undefined) {
+                rec.turn = m.anchor.turn;
+                if (m.anchor.step !== undefined)
+                    rec.step = m.anchor.step;
+            }
+            return rec;
+        });
         // 事实源:按天追加
         const byDay = new Map();
         for (const r of records) {

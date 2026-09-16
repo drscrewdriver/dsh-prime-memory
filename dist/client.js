@@ -3228,7 +3228,7 @@ var __defProp = Object.defineProperty;
 		              ) : null
 		            ] }),
 		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.content, children: m.content }),
-		            open ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.detail, children: "id: " + m.id + "\n情境: " + (m.scene || "-") + "\n版本: v" + m.version + "（去重合并次数 " + m.version + "）\n创建: " + fmtTime(m.createdAt) + "\n活跃时间: " + (m.timestamps && m.timestamps.length > 0 ? m.timestamps.map(fmtTime).join(" → ") : "-") + "\n" + (m.sourceMessageIds && m.sourceMessageIds.length > 0 ? "来源消息: " + m.sourceMessageIds.join(", ") : "来源消息: -") }) : null
+		            open ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.detail, children: "id: " + m.id + "\n情境: " + (m.scene || "-") + "\n版本: v" + m.version + "（去重合并次数 " + m.version + "）\n创建: " + fmtTime(m.createdAt) + "\n活跃时间: " + (m.timestamps && m.timestamps.length > 0 ? m.timestamps.map(fmtTime).join(" → ") : "-") + "\n" + (m.sourceAnchors && m.sourceAnchors.length > 0 ? "来源锚点: " + m.sourceAnchors.join(", ") : "来源锚点: -") }) : null
 		          ]
 		        },
 		        m.id

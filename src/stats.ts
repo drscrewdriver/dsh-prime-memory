@@ -37,7 +37,9 @@ import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
-import type { MemoryFamily, MemoryLogger, MemoryMode } from './types.js';
+// R7:读回锚点走 anchors.ts 的**唯一入口**(形状校验从严),不在 UI 层自行解析 metadata。
+import { readSourceAnchors } from './pipeline/anchors.js';
+import type { ConversationAnchor, MemoryFamily, MemoryLogger, MemoryMode } from './types.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 
@@ -1222,7 +1224,6 @@ function hitToUiRecord(r: {
   createdAt?: number;
   updatedAt?: number;
   version?: number;
-  source_message_ids?: string[];
   metadata?: Record<string, unknown>;
   score?: number;
   family?: string;
@@ -1239,9 +1240,19 @@ function hitToUiRecord(r: {
     createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
     updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : null,
     version: r.version ?? 0,
-    sourceMessageIds: r.source_message_ids ?? [],
+    sourceAnchors: (readSourceAnchors(r.metadata) ?? []).map(formatAnchor),
     score: r.score ?? null,
   };
+}
+
+/**
+ * 锚点的展示形态:`t12 s3` / 无 step 时 `t12`。
+ *
+ * 只做**可读化**,不携带 sessionId——单条记录的来源会话由记录自身语义决定,
+ * 把 sessionId 塞进这一行会把 12 个字符的坐标变成 40 个字符。
+ */
+function formatAnchor(a: ConversationAnchor): string {
+  return typeof a.step === 'number' ? `t${a.turn} s${a.step}` : `t${a.turn}`;
 }
 
 /**

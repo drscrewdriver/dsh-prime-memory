@@ -358,9 +358,9 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                     '活跃时间: ' +
                     (m.timestamps && m.timestamps.length > 0 ? m.timestamps.map(fmtTime).join(' → ') : '-') +
                     '\n' +
-                    (m.sourceMessageIds && m.sourceMessageIds.length > 0
-                      ? '来源消息: ' + m.sourceMessageIds.join(', ')
-                      : '来源消息: -')}
+                    (m.sourceAnchors && m.sourceAnchors.length > 0
+                      ? '来源锚点: ' + m.sourceAnchors.join(', ')
+                      : '来源锚点: -')}
                 </div>
               ) : null}
             </div>

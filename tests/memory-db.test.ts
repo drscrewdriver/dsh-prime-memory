@@ -147,8 +147,7 @@ describe('MemoryDb', () => {
     db.close();
   });
 
-  it('L0 batch upsert + session queries', async () => {
-    const db = new MemoryDb(join(await tmpDirSafe(), 't5.db'), 0);
+  it('L0 batch upsert + session queries', async () => {    const db = new MemoryDb(join(await tmpDirSafe(), 't5.db'), 0);
     db.init();
     const now = Date.now();
     const ok = db.upsertL0Batch([
@@ -167,6 +166,84 @@ describe('MemoryDb', () => {
     db.close();
   });
 
+  // ── R7(task_30):L0 锚点两列 ──
+  it('R7: l0_conversations 补 turn/step 列,落库并按锚点定向取回', async () => {
+    const file = join(await tmpDirSafe(), 'r7-a.db');
+    const db = new MemoryDb(file, 0);
+    db.init();
+    const now = Date.now();
+    const ok = db.upsertL0Batch([
+      { sessionId: 's1', recordedAt: new Date(now).toISOString(), id: 'a1', role: 'user', content: '第一问', timestamp: now, turn: 7, step: 3 },
+      { sessionId: 's1', recordedAt: new Date(now).toISOString(), id: 'a2', role: 'assistant', content: '第一答', timestamp: now + 1, turn: 7, step: 3 },
+      { sessionId: 's1', recordedAt: new Date(now).toISOString(), id: 'a3', role: 'user', content: '第二轮无 step', timestamp: now + 2, turn: 8 },
+      { sessionId: 's1', recordedAt: new Date(now).toISOString(), id: 'a4', role: 'user', content: '无坐标老消息', timestamp: now + 3 },
+    ]);
+    expect(ok).toBe(true);
+
+    // 全轮取回(step 缺省 = 不过滤)
+    expect(db.l0ByAnchor('s1', 7).map((m) => m.id)).toEqual(['a1', 'a2']);
+    // 精确到 step
+    expect(db.l0ByAnchor('s1', 7, 3).map((m) => m.id)).toEqual(['a1', 'a2']);
+    // step 不匹配 → 空
+    expect(db.l0ByAnchor('s1', 7, 9)).toEqual([]);
+    // 无 step 的轮次:整轮取回,且记录上**没有** step 键(不是 undefined 值)
+    const t8 = db.l0ByAnchor('s1', 8);
+    expect(t8.map((m) => m.id)).toEqual(['a3']);
+    expect(t8[0].turn).toBe(8);
+    expect('step' in t8[0]).toBe(false);
+    // 无坐标的老消息:任何坐标都取不到它,且自身不带 turn/step 键
+    expect(db.l0ByAnchor('s1', 7).some((m) => m.id === 'a4')).toBe(false);
+    const all = db.listL0All();
+    expect(all.find((m) => m.id === 'a4')?.turn).toBeUndefined();
+    expect('turn' in (all.find((m) => m.id === 'a4') ?? {})).toBe(false);
+
+    // COALESCE 保留:不带锚点的重写不得抹掉已落库的坐标
+    db.upsertL0Batch([
+      { sessionId: 's1', recordedAt: new Date(now + 10).toISOString(), id: 'a1', role: 'user', content: '第一问(重写)', timestamp: now + 10 },
+    ]);
+    const rewritten = db.l0ByAnchor('s1', 7);
+    // 重写把 timestamp 推到最晚 → 顺序变为 a2 在前;坐标必须**跟记录走**,
+    // 所以按 id 取而不是按位置取(位置断言会掩盖"坐标错挂到另一条"这类 bug)
+    expect(rewritten.map((m) => m.id).sort()).toEqual(['a1', 'a2']);
+    const a1 = rewritten.find((m) => m.id === 'a1');
+    expect(a1?.content).toBe('第一问(重写)');
+    expect(a1?.turn).toBe(7);
+    expect(a1?.step).toBe(3);
+    db.close();
+  });
+
+  it('R7: 旧库(无 turn/step 列)init 后幂等补列,旧行留空', async () => {
+    const file = join(await tmpDirSafe(), 'r7-legacy.db');
+    // 先用 v1 形状建库并插一行(模拟升级前的存量库)
+    const { DatabaseSync } = await import('node:sqlite');
+    const legacy = new DatabaseSync(file);
+    legacy.exec(`CREATE TABLE l0_conversations (
+      record_id TEXT PRIMARY KEY, session_id TEXT DEFAULT 'default', role TEXT NOT NULL DEFAULT '',
+      message_text TEXT NOT NULL, recorded_at TEXT DEFAULT '', timestamp INTEGER DEFAULT 0)`);
+    legacy
+      .prepare('INSERT INTO l0_conversations VALUES (?, ?, ?, ?, ?, ?)')
+      .run('old-1', 's9', 'user', '存量消息', new Date(0).toISOString(), 1);
+    legacy.close();
+
+    const db = new MemoryDb(file, 0);
+    db.init();
+    const all = db.listL0All();
+    expect(all.map((m) => m.id)).toEqual(['old-1']);
+    // 旧行 NULL → 无锚点键;不伪造 0
+    expect('turn' in all[0]).toBe(false);
+    expect('step' in all[0]).toBe(false);
+    // 新写入照常带坐标(证明补列生效)
+    db.upsertL0Batch([
+      { sessionId: 's9', recordedAt: new Date(2).toISOString(), id: 'new-1', role: 'user', content: '新消息', timestamp: 2, turn: 1, step: 1 },
+    ]);
+    expect(db.l0ByAnchor('s9', 1).map((m) => m.id)).toEqual(['new-1']);
+    // 二次 init 幂等(不重复 ALTER)
+    db.close();
+    const db2 = new MemoryDb(file, 0);
+    db2.init();
+    expect(db2.l0ByAnchor('s9', 1).map((m) => m.id)).toEqual(['new-1']);
+    db2.close();
+  });
   it('degraded db turns every write/read into safe no-op', async () => {
     // 目录路径当库文件 → 开库必失败 → 降级
     const db = new MemoryDb(await tmpDirSafe(), 0);
