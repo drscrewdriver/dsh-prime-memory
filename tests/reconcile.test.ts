@@ -23,7 +23,32 @@ import {
   type MemoryVerdict,
 } from '../src/pipeline/reconcile.js';
 import type { EvidenceEvent, EvidenceSource } from '../src/store/evidence-source.js';
-import type { ConversationAnchor } from '../src/types.js';
+import type { ConversationAnchor, MemoryRecord } from '../src/types.js';
+
+/**
+ * 构造一条 L1 记录(真库只读断言与反证共用,保证两边比的是同一种对象)。
+ *
+ * `overrides` 允许**只改一个字段而其余全部固定**——反证用例靠它做"单变量变化",
+ * 否则时间戳等无关字段会把指纹改掉,用例就变成"因为错误的原因通过"。
+ */
+function l1Record(id: string, content: string, overrides: Partial<MemoryRecord> = {}): MemoryRecord {
+  const now = 1_700_000_000_000;
+  return {
+    id,
+    content,
+    type: 'episodic',
+    priority: 50,
+    scene_name: '日常',
+    timestamps: [now],
+    createdAt: now,
+    updatedAt: now,
+    version: 0,
+    metadata: {},
+    sessionId: 'default',
+    family: 'chat',
+    ...overrides,
+  };
+}
 
 function anchor(turn: number, step?: number): ConversationAnchor {
   const a: ConversationAnchor = { sessionId: 'session-x', turn };
@@ -282,53 +307,43 @@ describe('makeModelJudge —— 生产装配', () => {
 });
 
 describe('只读断言(真库):核对跑完后库内容逐字节不变', () => {
+  /**
+   * L1 内容指纹。
+   *
+   * **反证用例与只读断言必须用同一个函数**——否则反证证明的是另一个探针,
+   * 对"这个探针有没有用"这个问题毫无回答。
+   */
+  const fingerprint = (db: { listL1: (o: { limit: number; offset: number }) => { items: readonly MemoryRecord[] } }): string =>
+    JSON.stringify(
+      db
+        .listL1({ limit: 500, offset: 0 })
+        .items.map((r) => ({
+          id: r.id,
+          content: r.content,
+          priority: r.priority,
+          type: r.type,
+          timestamps: r.timestamps,
+          updatedAt: r.updatedAt,
+          version: r.version,
+          metadata: r.metadata,
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id)),
+    );
+
   it('runReconcile 一轮后,l1_records / l1_receipts / conflict_pending 全部原样', async () => {
     const { mkdtemp, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
     const { MemoryDb } = await import('../src/store/sqlite.js');
-    type MemoryRecord = import('../src/types.js').MemoryRecord;
 
     const dir = await mkdtemp(join(tmpdir(), 'dsh-reconcile-'));
     try {
       const db = new MemoryDb(join(dir, 'readonly.db'), 0);
       db.init();
-      const now = Date.now();
-      const record: MemoryRecord = {
-        id: 'mem_ro_1',
-        content: 'zstd 单帧解码只解出第一帧。',
-        type: 'episodic',
-        priority: 50,
-        scene_name: '日常',
-        timestamps: [now],
-        createdAt: now,
-        updatedAt: now,
-        version: 0,
-        metadata: {},
-        sessionId: 'default',
-        family: 'chat',
-      };
+      const record = l1Record('mem_ro_1', 'zstd 单帧解码只解出第一帧。');
       expect(db.upsertL1(record)).toBe(true);
 
-      // 快照:把三张表按**内容**转成一个稳定指纹(不是比行数——行数看不出内容被改)
-      const snapshot = (): string => {
-        const rows = db.listL1({ limit: 500, offset: 0 }).items;
-        return JSON.stringify(
-          rows
-            .map((r) => ({
-              id: r.id,
-              content: r.content,
-              priority: r.priority,
-              type: r.type,
-              timestamps: r.timestamps,
-              updatedAt: r.updatedAt,
-              version: r.version,
-              metadata: r.metadata,
-            }))
-            .sort((a, b) => a.id.localeCompare(b.id)),
-        );
-      };
-      const before = snapshot();
+      const before = fingerprint(db);
       const countBefore = db.countL1();
 
       const result = await runReconcile(deps(), [{ id: record.id, text: record.content, sourceAnchors: [anchor(1)] }], {
@@ -336,9 +351,58 @@ describe('只读断言(真库):核对跑完后库内容逐字节不变', () => {
       });
       expect(result.counts.supported).toBe(1);
 
-      const after = snapshot();
+      const after = fingerprint(db);
       expect(after).toBe(before); // 内容逐字段不变
       expect(db.countL1()).toBe(countBefore);
+      db.close();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * **反证**:证明上面那条"只读断言"**不是恒真**。
+   *
+   * 一条从未失败过的 `expect(after).toBe(before)`,无法自证它检测得到写入——
+   * 万一指纹函数写错了(比如比的是行数、或者取错了字段),它会永远通过,而
+   * 我们却以为自己有一道只读防线。
+   *
+   * 这里真的写一次 L1,断言指纹**必须变化**。它证明的是**探针有效性**,
+   * 不冒充"核对器一定不写库"——后者由 `ReconcileDeps` 的类型面保证。
+   * **两层各管一段。**
+   */
+  it('反证:真的写一次 L1 时,同一个指纹必须变红(否则只读断言是恒真的)', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const { MemoryDb } = await import('../src/store/sqlite.js');
+
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-reconcile-proof-'));
+    try {
+      const db = new MemoryDb(join(dir, 'proof.db'), 0);
+      db.init();
+      expect(db.upsertL1(l1Record('mem_p1', '原始正文'))).toBe(true);
+      const before = fingerprint(db);
+
+      // 三种"违规写入"形态,指纹都必须能检出
+      // ① 内容被改
+      expect(db.upsertL1(l1Record('mem_p1', '被改过的正文'))).toBe(true);
+      expect(fingerprint(db)).not.toBe(before);
+
+      // ② 新增一条(行数也变了,但这里断言的是指纹不是行数)
+      const afterEdit = fingerprint(db);
+      const memP2 = l1Record('mem_p2', '凭空多出来的记忆');
+      expect(db.upsertL1(memP2)).toBe(true);
+      const beforeMetaUpdatedAt = memP2.updatedAt;
+      expect(fingerprint(db)).not.toBe(afterEdit);
+
+      // ③ 内容不变、时间戳不变、只有**元数据**被改(最容易漏检:行数与 content 都没变)
+      //    单变量变化 —— 其余字段固定,所以指纹若变化,原因只能是 metadata
+      const beforeMeta = fingerprint(db);
+      const r = l1Record('mem_p2', '凭空多出来的记忆', { metadata: { silently_rewritten: true } });
+      expect(r.updatedAt).toBe(beforeMetaUpdatedAt); // 证明确实只动了 metadata
+      expect(db.upsertL1(r)).toBe(true);
+      expect(fingerprint(db)).not.toBe(beforeMeta);
       db.close();
     } finally {
       await rm(dir, { recursive: true, force: true });
