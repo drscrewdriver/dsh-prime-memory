@@ -1,9 +1,10 @@
-/** 记忆设置分节的主面板：Tab 框架（概览 / 记忆 / 场景 / 画像 / 成本 / 日志）。 */
+/** 记忆设置分节的主面板：Tab 框架（概览 / 记忆 / 冲突 / 场景 / 画像 / 成本 / 日志）。 */
 import { useEffect, useState } from 'react';
 import type { RpcFn } from './rpc.js';
 import { watchSidebarIcon } from './sidebar-icon.js';
 import { S } from './styles.js';
 import { ensureThemeStyle } from './theme.js';
+import { ConflictsTab } from './tabs/ConflictsTab.js';
 import { CostTab } from './tabs/CostTab.js';
 import { LogTab } from './tabs/LogTab.js';
 import { OverviewTab } from './tabs/OverviewTab.js';
@@ -11,10 +12,17 @@ import { PersonaTab } from './tabs/PersonaTab.js';
 import { RecordsTab } from './tabs/RecordsTab.js';
 import { ScenesTab } from './tabs/ScenesTab.js';
 
-/** Tab 注册表：[key, 名称]；首项为默认页。 */
+/**
+ * Tab 注册表：[key, 名称]；首项为默认页。
+ *
+ * 「冲突」排在「记忆」之后：它是**待办**性质的面板 —— 冻结开启后队列里停着的是
+ * 等你裁决的东西，藏太深等于没有（这正是它此前长期缺失的表现：
+ * 裁决端点一直在，但没有任何地方列得出 `pair_id`）。
+ */
 const TABS: Array<[string, string]> = [
   ['overview', '概览'],
   ['records', '记忆'],
+  ['conflicts', '冲突'],
   ['scenes', '场景'],
   ['persona', '画像'],
   ['cost', '成本'],
@@ -34,6 +42,7 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
   let body;
   if (tab === 'overview') body = <OverviewTab rpc={rpc} />;
   else if (tab === 'records') body = <RecordsTab rpc={rpc} />;
+  else if (tab === 'conflicts') body = <ConflictsTab rpc={rpc} />;
   else if (tab === 'scenes') body = <ScenesTab rpc={rpc} />;
   else if (tab === 'persona') body = <PersonaTab rpc={rpc} />;
   else if (tab === 'cost') body = <CostTab rpc={rpc} />;

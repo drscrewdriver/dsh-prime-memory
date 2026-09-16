@@ -788,6 +788,93 @@ export interface EmbeddingModelDeleteResponse {
   error?: string;
 }
 
+// ── §C 矛盾冻结:待裁决队列(读)与裁决(写) ──
+//
+// 形状定义在 contract 这一侧而不是 `conflict-service.ts`,是为了让
+// **契约保持单一事实源**:contract.ts 不 import 任何东西(客户端类型检查会以
+// `types: []` 拉它),而宿主模块反向 import 这里的类型。反过来做的话,
+// contract 就得去拉 `conflict-service` → `store/*` → node 内置模块,
+// 客户端那一档类型检查会被 node 类型污染。
+
+/** 一条待裁决冲突对(与 `ConflictPair` 同源,但只暴露人要看的那几个字段)。 */
+export interface ConflictPairView {
+  pair_id: string;
+  /** 产生该冻结的 L1 蒸馏批次 id(接 §B 凭证链)。 */
+  run_id: string;
+  /** LLM 建议的胜方 id。**只是进入队列时的排序位,不代表结论**。 */
+  winner_id: string;
+  /** 胜方正文;**空串 = 该记录已不在检索库**(被合并/删掉了),不是"内容为空"。 */
+  winner_content: string;
+  loser_id: string;
+  loser_content: string;
+  created_at: string;
+}
+
+/** `dsh-memory/conflicts` 请求(读待裁决队列)。 */
+export interface ConflictsRequest {
+  /** 最多返回多少对(默认 50,上限 200)。 */
+  limit?: number;
+}
+
+/** `dsh-memory/conflicts` 响应。 */
+export interface ConflictsResponse {
+  /**
+   * `conflictFreeze.enabled`。**必须与 `items: []` 分开呈现** ——
+   * "开关没开"与"开了但没有待裁决"在面板上是两件不同的事。
+   */
+  enabled: boolean;
+  /** 未裁决总数(可能大于 `items.length`)。 */
+  total: number;
+  items: ConflictPairView[];
+  notice?: string;
+}
+
+/** `dsh-memory/conflict-resolve` 请求。 */
+export interface ConflictResolveRequest {
+  pairId: string;
+  /** `winner` | `loser` | `both`。 */
+  outcome: string;
+}
+
+/** `dsh-memory/conflict-resolve` 响应(与 `memory_resolve_conflict` 工具同形状)。 */
+export interface ConflictResolveResponse {
+  pair_id: string;
+  outcome: string;
+  /** 裁决时刻(ISO);空串 = 未生效。 */
+  resolved_at: string;
+  /** 因裁决从检索中退场的记录 id(无则空串)。 */
+  removed_record_id: string;
+  notice?: string;
+}
+
+// ── §B 决策凭证回溯 ──
+
+/** `dsh-memory/receipts` 请求(两维回溯,至少给一个)。 */
+export interface ReceiptsRequest {
+  recordId?: string;
+  runId?: string;
+  limit?: number;
+}
+
+/** 一条决策凭证(与 `memory_receipts` 工具同形状)。 */
+export interface ReceiptItemView {
+  receipt_id: string;
+  run_id: string;
+  record_id: string;
+  /** `store` / `update` / `merge` / `skip` / `conflict` / `skip_missing`。 */
+  kind: string;
+  input_digest: string;
+  decided_at: string;
+}
+
+/** `dsh-memory/receipts` 响应。 */
+export interface ReceiptsResponse {
+  /** `record` / `run` / `both` / `none`。 */
+  dimension: string;
+  items: ReceiptItemView[];
+  total: number;
+}
+
 // ── 端点 → 请求/响应映射(client rpc.ts 泛型 call 的查表依据) ──
 
 export interface DshMemoryRequestMap {
@@ -800,6 +887,9 @@ export interface DshMemoryRequestMap {
   'dsh-memory/settings-set': SettingsSetRequest;
   'dsh-memory/list-records': ListRecordsRequest;
   'dsh-memory/records-delete': RecordsDeleteRequest;
+  'dsh-memory/receipts': ReceiptsRequest;
+  'dsh-memory/conflicts': ConflictsRequest;
+  'dsh-memory/conflict-resolve': ConflictResolveRequest;
   'dsh-memory/graph-search': GraphSearchRequest;
   'dsh-memory/graph-node-get': GraphNodeGetRequest;
   'dsh-memory/scenes': Record<string, never>;
@@ -833,6 +923,9 @@ export interface DshMemoryResponseMap {
   'dsh-memory/settings-set': SettingsSetResponse;
   'dsh-memory/list-records': ListRecordsResponse;
   'dsh-memory/records-delete': RecordsDeleteResponse;
+  'dsh-memory/receipts': ReceiptsResponse;
+  'dsh-memory/conflicts': ConflictsResponse;
+  'dsh-memory/conflict-resolve': ConflictResolveResponse;
   'dsh-memory/graph-search': GraphSearchResponse;
   'dsh-memory/graph-node-get': GraphNodeGetResponse;
   'dsh-memory/scenes': ScenesResponse;

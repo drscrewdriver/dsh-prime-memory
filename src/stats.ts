@@ -31,7 +31,7 @@ import type { L0Store } from './store/l0.js';
 import type { L1Store } from './store/l1.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
 import type { ReceiptQuery, ReceiptsView } from './store/receipts.js';
-import { resolveConflictPair } from './conflict-service.js';
+import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
 import type { PersonaStore } from './store/persona.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
@@ -55,7 +55,7 @@ export interface MemoryStatusSource {
 }
 
 /**
- * 端点全集运行时清单(31 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(33 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -76,6 +76,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
   'dsh-memory/receipts',
+  'dsh-memory/conflicts',
   'dsh-memory/conflict-resolve',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
@@ -875,6 +876,18 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         total: stores.l1.countReceipts(query),
       };
       return resp;
+    }
+
+    // ── §C 矛盾冻结的**读**方向:与 memory_conflicts 工具共用同一形状 ──
+    // 裁决端点(conflict-resolve)早就在,但只有"写"没有"读" —— 于是 pair_id
+    // 无处可得:模型被指到不存在的 memory_conflicts 工具,人也没有面板。
+    // 未开启冻结时同样走返回体(enabled:false + notice)而非抛错,理由同上。
+    case 'dsh-memory/conflicts': {
+      const p = (payload ?? {}) as { limit?: unknown };
+      return listConflictPairs(
+        { l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true },
+        { limit: Number(p.limit) || undefined },
+      );
     }
 
     // ── §C 矛盾冻结裁决(task_25):与 memory_resolve_conflict 工具共用同一形状 ──

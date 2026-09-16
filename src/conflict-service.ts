@@ -10,17 +10,16 @@
  */
 import type { L1Store } from './store/l1.js';
 import type { ConflictResolution } from './store/conflicts.js';
+// 对外形状的唯一事实源在 contract.ts(它没有任何 import,客户端那档类型检查以
+// `types: []` 拉它)。这里**只引用、不重声明** —— 重声明就会与端点/面板用的形状
+// 悄悄分叉,而"工具、端点、面板看同一份形状"正是本模块存在的理由。
+import type {
+  ConflictPairView,
+  ConflictsResponse as ConflictsView,
+  ConflictResolveResponse as ConflictResolutionView,
+} from './contract.js';
 
-/** 裁决结果的对外形状(snake_case,工具与端点共用)。 */
-export interface ConflictResolutionView {
-  pair_id: string;
-  outcome: string;
-  /** 裁决时刻(ISO)。空串 = 未生效。 */
-  resolved_at: string;
-  /** 因裁决从检索中退场的记录 id(无则空串)。 */
-  removed_record_id: string;
-  notice?: string;
-}
+export type { ConflictPairView, ConflictsView, ConflictResolutionView };
 
 const OUTCOMES: readonly ConflictResolution[] = ['winner', 'loser', 'both'];
 
@@ -108,3 +107,88 @@ export function renderConflictResolution(v: Partial<ConflictResolutionView>): st
     : '\n未移除任何记录。';
   return `已裁决待裁决对 ${v.pair_id ?? ''}\n结论:${outcome}(${label})\n裁决时刻:${v.resolved_at ?? ''}${removed}`;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 读方向:列出待裁决对
+//
+// 与 `resolveConflictPair` 同理由共用本模块:工具(`memory_conflicts`)与
+// RPC 端点(`dsh-memory/conflicts`)必须是**同一份形状** —— 面板与模型看同一队列,
+// 否则"人看到的那条"和"模型能裁决的那条"会对不上。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 一条待裁决对的对外形状见 `contract.ts` 的 `ConflictPairView`(此处只引用)。 */
+
+/** 队列读取的上限(与 `records-delete` 同量级:够人看,不把页面拖死)。 */
+export const CONFLICT_LIST_LIMIT_MAX = 200;
+/** 默认取多少条。 */
+export const CONFLICT_LIST_LIMIT_DEFAULT = 50;
+
+export interface ConflictListDeps {
+  l1: Pick<L1Store, 'listConflictPending' | 'countConflictPendingUnresolved' | 'getByIds'>;
+  /** `conflictFreeze.enabled`。 */
+  conflictFreezeEnabled: boolean;
+}
+
+/**
+ * 列出待裁决对。
+ *
+ * **正文必须带上**:人工裁决的对象就是"这两条到底说了什么",只给 id 等于让人盲判。
+ * 取不到正文时留空串 —— 面板据此区分"记录已不在检索库"与"内容为空",
+ * 而不是拿一句"（无内容）"把两种情形糊在一起。
+ *
+ * 未开启冻结时返回 `enabled:false` + 空列表 + `notice`,**不抛错**:开关没开是
+ * 部署状态,不是调用错误(与 `resolveConflictPair` 对同一情形的处理一致)。
+ */
+export function listConflictPairs(deps: ConflictListDeps, opts: { limit?: number } = {}): ConflictsView {
+  const raw = Math.floor(Number(opts.limit));
+  const limit = Number.isFinite(raw) && raw > 0 ? Math.min(raw, CONFLICT_LIST_LIMIT_MAX) : CONFLICT_LIST_LIMIT_DEFAULT;
+
+  if (!deps.conflictFreezeEnabled) {
+    return {
+      enabled: false,
+      total: 0,
+      items: [],
+      notice: '矛盾冻结未开启(conflictFreeze.enabled=false):队列恒空,没有待裁决对。',
+    };
+  }
+
+  const pending = deps.l1.listConflictPending({ limit });
+  const ids = new Set<string>();
+  for (const p of pending) {
+    ids.add(p.winnerId);
+    ids.add(p.loserId);
+  }
+  const contentById = new Map<string, string>();
+  for (const r of deps.l1.getByIds([...ids])) contentById.set(r.id, r.content);
+
+  const items: ConflictPairView[] = pending.map((p) => ({
+    pair_id: p.pairId,
+    run_id: p.runId,
+    winner_id: p.winnerId,
+    winner_content: contentById.get(p.winnerId) ?? '',
+    loser_id: p.loserId,
+    loser_content: contentById.get(p.loserId) ?? '',
+    created_at: p.createdAt,
+  }));
+
+  return { enabled: true, total: deps.l1.countConflictPendingUnresolved(), items };
+}
+
+/** 列表结果的人类可读渲染(工具路径用)。 */
+export function renderConflicts(v: ConflictsView): string {
+  if (!v.enabled) return v.notice ?? '矛盾冻结未开启:没有待裁决对。';
+  if (v.items.length === 0) return '没有待裁决的冲突对(队列为空)。';
+  const more = v.total > v.items.length ? `\n(共 ${v.total} 对,此处显示前 ${v.items.length} 对)` : '';
+  const rows = v.items.map((p, i) => {
+    const w = p.winner_content || '(该记录已不在检索库)';
+    const l = p.loser_content || '(该记录已不在检索库)';
+    return (
+      `${i + 1}. pair_id ${p.pair_id}  (${p.created_at})\n` +
+      `   LLM 建议胜方 ${p.winner_id}:${w}\n` +
+      `   LLM 建议败方 ${p.loser_id}:${l}`
+    );
+  });
+  return `待裁决冲突对 ${v.items.length} 条${more}\n\n${rows.join('\n\n')}\n\n` +
+    '用 memory_resolve_conflict 给出结论:winner / loser / both。';
+}
+
