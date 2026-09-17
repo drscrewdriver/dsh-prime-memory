@@ -21,7 +21,8 @@ import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from '../store/receipts.js';
 import type { ReceiptQuery } from '../store/receipts.js';
-import { renderConflictResolution, resolveConflictPair } from '../conflict-service.js';
+import { listConflictPairs, renderConflictResolution, renderConflicts, resolveConflictPair } from '../conflict-service.js';
+import type { ConflictsView } from '../conflict-service.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
@@ -911,6 +912,64 @@ export function registerMemoryTools(
         const limit = Math.min(Math.max(args.limit ?? 20, 1), RECEIPTS_QUERY_LIMIT_MAX);
         const rows = stores.l1.listReceipts({ ...query, limit });
         return { dimension, items: rows.map(toReceiptView), total: stores.l1.countReceipts(query) };
+      },
+    }),
+  );
+
+  // ── memory_conflicts: §C 待裁决队列的**读**出口 ──
+  // `memory_resolve_conflict` 的描述里早就写着"待裁决对可用 memory_conflicts 查看",
+  // 但那个工具**一直不存在** —— 模型照着描述调用只会拿到"工具不存在"。
+  // 裁决端点在、读端点与读工具两端都缺,队列于是成了只进不出的黑洞
+  // (安全阀超时自动了结会成为唯一出路,那正是 §C 想避免的)。
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_conflicts',
+      description:
+        '列出**矛盾冻结**的待裁决对(§C)。冻结不自动裁决:新记忆照常入库,与它冲突的旧记忆作为**一对**停在队列里,双方内容都不被改写,直到人给出结论。返回每对的 pair_id、**双方正文**与 LLM 建议的胜负方(id 只是进入队列时的排序位,不代表结论)。看完用 memory_resolve_conflict 给出结论:winner / loser / both。',
+      parameters: {
+        limit: { type: 'number', description: '最多返回多少对(默认 50,上限 200)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            enabled: { type: 'boolean', description: '矛盾冻结是否开启;关闭时队列恒空,与"开启但没有待裁决"是两回事' },
+            total: { type: 'number', description: '未裁决总数(可能大于 items.length)' },
+            items: {
+              type: 'array',
+              description: '待裁决对(最多 limit 条)',
+              items: {
+                type: 'object',
+                properties: {
+                  pair_id: { type: 'string' },
+                  run_id: { type: 'string', description: '产生该冻结的蒸馏批次 id(可交给 memory_receipts 追该轮判了什么)' },
+                  winner_id: { type: 'string' },
+                  winner_content: { type: 'string', description: 'LLM 建议胜方的正文;空串 = 该记录已不在检索库' },
+                  loser_id: { type: 'string' },
+                  loser_content: { type: 'string', description: '同上' },
+                  created_at: { type: 'string' },
+                },
+                additionalProperties: false,
+              },
+            },
+            notice: { type: 'string', description: '非结果的状态提示(如冻结未开启 / 本会话记忆已关闭)' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) =>
+          [{ type: 'text', text: value.notice ?? renderConflicts(value as unknown as ConflictsView) }],
+      },
+      execute: async (args, exec) => {
+        // 档位拒读门与 memory_receipts 同款:off 会话对记忆系统完全隐身,
+        // 不该反过来能内省"库里有哪些自相矛盾的记忆"。
+        const family = familyOfCaller(exec);
+        if (family === null) {
+          return { enabled: false, total: 0, items: [], notice: blockNoticeOf(exec) };
+        }
+        return listConflictPairs(
+          { l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true },
+          { limit: typeof args.limit === 'number' ? args.limit : undefined },
+        );
       },
     }),
   );
