@@ -61,10 +61,15 @@ async function main(): Promise<void> {
     Config: { __type?: string } & ((v?: unknown) => unknown);
   };
   check('entry.name = dsh-memory-plugin', entry.name === 'dsh-memory-plugin');
-  check('entry.inject = [llm, tools, systemPrompt]', JSON.stringify(entry.inject) === JSON.stringify(['llm', 'tools', 'systemPrompt']));
+  // 0.1.5 起 rpc.handle 按调用方 fiber 校验 webServer 授权,故 inject 补声明 connection+webServer
+  // (见 src/index.ts:52-58)。此处断言须与声明同步,否则 smoke 会红。
+  check(
+    'entry.inject = [llm, tools, systemPrompt, connection, webServer]',
+    JSON.stringify(entry.inject) === JSON.stringify(['llm', 'tools', 'systemPrompt', 'connection', 'webServer']),
+  );
   // Config 是 schemastery schema 对象(可调用产出默认值):调用一次验证形状
   const defaults = (entry.Config as unknown as (v: unknown) => Record<string, unknown>)({});
-  check('Config 产出部署默认键', ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl'].every((k) => k in defaults));
+  check('Config 产出部署默认键', ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl', 'conflictFreeze'].every((k) => k in defaults));
   check('Config 默认 family=auto', (defaults.family as string) === 'auto');
 
   // ── 类型契约与端点面 ──

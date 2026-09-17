@@ -22,6 +22,7 @@ import { applyGraphProjection } from '../graph/apply.js';
 import { searchGraphNodes } from '../graph/search.js';
 import { GRAPH_JOB_BACKOFF_BASE_MS, GRAPH_JOB_BATCH, GRAPH_JOB_MAX_ATTEMPTS, GRAPH_PRIORITY_BACKFILL, GRAPH_PROJECTOR_VERSION, } from '../graph/types.js';
 import { normPersistence } from '../types.js';
+import { isZeroVector, vecToBuffer } from './vec-utils.js';
 const TAG = '[memory][graph]';
 /** 坏 JSON 容忍解析:图谱表列损坏只损失该行派生信息,不抛。 */
 function parseJsonSafe(raw, fallback) {
@@ -134,6 +135,13 @@ export class GraphStore {
     logger;
     stmtInsertNode;
     stmtInsertEdge;
+    /**
+     * §F 图谱节点向量列（vec0）。**结构性可选**：维度未定或 vec0 不可用时这三个
+     * 语句就是 `undefined`，该路整体 no-op——既不影响图谱的词法检索，也不向上抛。
+     */
+    stmtInsertNodeVec;
+    stmtDeleteNodeVec;
+    stmtSearchNodeVec;
     /** init 是否就绪(未就绪 = 图谱域整体 no-op,不抛错不传染)。 */
     get ready() {
         return this.db !== null;
@@ -141,8 +149,11 @@ export class GraphStore {
     /**
      * 建表 + 语句缓存(MemoryDb.initSchema 内调用)。任何一步失败都只告警并保持
      * 未就绪——图谱域整体降级 no-op,检索主链路(L0/L1/FTS/向量)不受影响。
+     *
+     * @param vec §F 节点向量列的维度(来自 MemoryDb 的**既有**能力探测结果;
+     *   缺省/0 = 部署未启用向量 → 该路结构性不存在,不建表也不报错)。
      */
-    init(db, logger) {
+    init(db, logger, vec) {
         this.logger = logger;
         try {
             db.exec(`
@@ -225,12 +236,121 @@ export class GraphStore {
           source_record_ids_json=excluded.source_record_ids_json, updated_time=excluded.updated_time
       `);
             this.db = db;
+            this.prepareNodeVec(db, logger, vec);
             logger?.info(`${TAG} 图谱表就绪(5 表,projectorVersion=${GRAPH_PROJECTOR_VERSION})`);
         }
         catch (err) {
             // 独立降级:图谱域 no-op,不向上抛(强于 costLedger 的冒泡语义——图谱无检索主链路关键)
             this.db = null;
             logger?.warn(`${TAG} 图谱表初始化失败,图谱功能停用(主存储不受影响): ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    /**
+     * §F 图谱节点向量列：与 `l1_vec` **同模式**的 vec0 虚拟表——同一个 `vec-utils`
+     * 编码、同一种 `float[N] distance_metric=cosine` 声明。
+     *
+     * **内层 try/catch 是刻意的**（task_34）：vec0 扩展缺失时 `CREATE VIRTUAL TABLE`
+     * 会抛。若让它冒到外层，图谱会从"向量路不可用"退化成"**整个图谱域不可用**"——
+     * 词法检索、投影、裁决全部陪葬。外层那层 catch 是给"图谱表建不起来"用的，
+     * 不该被一个**可选**的向量列触发。
+     */
+    prepareNodeVec(db, logger, vec) {
+        const dimensions = vec?.dimensions ?? 0;
+        this.stmtInsertNodeVec = undefined;
+        this.stmtDeleteNodeVec = undefined;
+        this.stmtSearchNodeVec = undefined;
+        // 部署未启用向量（或探测未通过）→ 该路**结构性不存在**：不建表、不告警、不抛。
+        // 这与"建了空表却永远查不到东西"是两回事——前者可断言，后者不可。
+        if (dimensions <= 0)
+            return;
+        try {
+            db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS graph_node_vec USING vec0(
+          node_id TEXT PRIMARY KEY,
+          embedding float[${dimensions}] distance_metric=cosine,
+          updated_time TEXT DEFAULT ''
+        )
+      `);
+            this.stmtInsertNodeVec = db.prepare('INSERT INTO graph_node_vec (node_id, embedding, updated_time) VALUES (?, ?, ?)');
+            this.stmtDeleteNodeVec = db.prepare('DELETE FROM graph_node_vec WHERE node_id = ?');
+            this.stmtSearchNodeVec = db.prepare(`
+        SELECT node_id, distance
+        FROM graph_node_vec
+        WHERE embedding MATCH ? AND k = ?
+        ORDER BY distance
+      `);
+            logger?.info(`${TAG} 图谱节点向量表就绪(dim=${dimensions})`);
+        }
+        catch (err) {
+            logger?.warn(`${TAG} 图谱节点向量表不可用,向量路停用(图谱词法检索不受影响): ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    /** 节点向量路是否可用。未就绪时下方两个方法的调用方**无需分支**——它们自身 no-op。 */
+    get nodeVecReady() {
+        return this.stmtSearchNodeVec !== undefined;
+    }
+    /**
+     * 写入/覆盖节点向量(先删后插:vec0 不支持 ON CONFLICT)。
+     * 未就绪 / 零向量 / 单条失败 → **静默跳过**,绝不抛。
+     * @returns 实际写入条数(供调用方记账,不用于控制流)。
+     */
+    upsertNodeVectors(rows) {
+        const stmtInsert = this.stmtInsertNodeVec;
+        const stmtDelete = this.stmtDeleteNodeVec;
+        if (!this.db || !stmtInsert || !stmtDelete)
+            return 0;
+        let written = 0;
+        for (const row of rows) {
+            if (isZeroVector(row.embedding))
+                continue; // cosine 未定义,不入表
+            try {
+                stmtDelete.run(row.nodeId);
+                stmtInsert.run(row.nodeId, vecToBuffer(row.embedding), row.updatedAt ?? '');
+                written++;
+            }
+            catch (err) {
+                this.logger?.warn(`${TAG} 节点向量写入失败(跳过该条): ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        return written;
+    }
+    /** 删除节点向量(节点删/合并时用)。未就绪 no-op。 */
+    deleteNodeVectors(nodeIds) {
+        const stmtDelete = this.stmtDeleteNodeVec;
+        if (!this.db || !stmtDelete)
+            return;
+        try {
+            for (const id of nodeIds)
+                stmtDelete.run(id);
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} 节点向量删除失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    /**
+     * 向量检索节点(按 cosine 距离升序,score = 1 - distance,与 L1 向量路同口径)。
+     * 未就绪返回**空数组**——调用方无需判断 `nodeVecReady`,降级是内建的。
+     */
+    searchNodesByVector(embedding, topK) {
+        const stmtSearch = this.stmtSearchNodeVec;
+        if (!this.db || !stmtSearch || topK <= 0)
+            return [];
+        try {
+            const rows = stmtSearch.all(vecToBuffer(embedding), topK);
+            const out = [];
+            for (const { node_id, distance } of rows) {
+                if (distance == null || Number.isNaN(distance))
+                    continue;
+                const node = this.getNode(node_id);
+                if (!node)
+                    continue;
+                out.push({ node, score: 1 - distance });
+            }
+            return out;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} 节点向量检索失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
+            return [];
         }
     }
     /** 插件停机时清空连接引用(dispose 序调用,防悬空引用)。 */
@@ -621,6 +741,50 @@ export class GraphStore {
         }
         catch (err) {
             this.logger?.warn(`${TAG} 删除传播失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    /**
+     * §C 矛盾冻结:把图谱的 `disputed` 状态**同步**到给定冲突集。
+     *
+     * 为什么是"同步"而不是"标记":裁决会**撤销**争议。只做单向标记的话,
+     * 一对已被人工裁决的对,其节点会永远停在 `disputed`——那是**派生投影在说谎**。
+     * 图谱是本仓库反复确认的 L1 **派生投影**,派生字段就必须**由当前事实重算**,
+     * 而不是靠一串增量事件累积(后者一旦漏一次就永久跑偏)。
+     *
+     * 判据(与 {@link markSourcesDeleted} 方向相反:那边问"来源是否**全部**消失",
+     * 这边问"来源是否**命中**冲突集",命中一条即存疑):
+     * - `active` 且来源命中冲突集 → `disputed`
+     * - `disputed` 且来源**不**命中冲突集 → 复原为 `active`
+     * - `archived` 墓碑两边都不动(墓碑是删除传播的产物,与争议无关)
+     *
+     * @returns 本次标记 / 复原的节点数。
+     */
+    syncDisputed(disputedRecordIds) {
+        if (!this.db)
+            return { marked: 0, cleared: 0 };
+        try {
+            const hit = new Set(disputedRecordIds);
+            const now = new Date().toISOString();
+            const nodes = this.loadGraph().nodes;
+            const toMark = nodes.filter((n) => n.status === 'active' && n.sourceRecordIds.some((id) => hit.has(id)));
+            // 冲突集为空 = 队列里没有未裁决对 → 所有 disputed 都该复原
+            const toClear = nodes.filter((n) => n.status === 'disputed' && !n.sourceRecordIds.some((id) => hit.has(id)));
+            if (toMark.length === 0 && toClear.length === 0)
+                return { marked: 0, cleared: 0 };
+            this.tx(() => {
+                for (const n of toMark) {
+                    this.db.prepare(`UPDATE graph_nodes SET status = 'disputed', updated_time = ? WHERE node_id = ?`).run(now, n.id);
+                }
+                for (const n of toClear) {
+                    this.db.prepare(`UPDATE graph_nodes SET status = 'active', updated_time = ? WHERE node_id = ?`).run(now, n.id);
+                }
+            });
+            this.logger?.info(`${TAG} 矛盾冻结同步:${toMark.length} 节点标 disputed,${toClear.length} 节点复原 active`);
+            return { marked: toMark.length, cleared: toClear.length };
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} 冻结状态同步失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
+            return { marked: 0, cleared: 0 };
         }
     }
     /** 清空全部图谱数据(L1 重建时调用——图谱是 L1 的投影,记录清空即图谱作废)。 */

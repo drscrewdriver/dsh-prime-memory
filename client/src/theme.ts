@@ -275,6 +275,8 @@ export function ensureThemeStyle() {
     '.dsh-mem-rb-card {',
     '  border: 1px solid var(--dsh-mem-border); border-radius: 10px; background: var(--dsh-mem-bg-card);',
     '  box-shadow: var(--dsh-mem-shadow-card); padding: 12px 14px; margin-bottom: 14px; font-size: 13px;',
+    // 剪掉行内溢出的固定宽控件（如维度输入框），防其顶破卡片圆角边界
+    '  overflow: hidden;',
     '}',
     '.dsh-mem-rb-bar { height: 8px; border-radius: 4px; overflow: hidden; flex: 1; background: var(--dsh-mem-track); }',
     '.dsh-mem-rb-fill { height: 100%; border-radius: 4px; background: var(--dsh-mem-accent-fill); transition: width .4s ease; }',

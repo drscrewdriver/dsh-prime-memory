@@ -7,7 +7,7 @@
 import Schema from '@deepseek-ai/schemastery';
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths';
 import type { EffortChoice, LayerRouteKey, StaticFallbackEntry } from './contract.js';
-import type { ExtractMode } from './types.js';
+import type { ExtractMode, ScopeMode } from './types.js';
 import { HALL_DEFAULT_ENABLED } from './types.js';
 
 /**
@@ -22,6 +22,10 @@ export interface MemoryConfig {
   dataDir: string;
   /** 新会话的默认记忆档位:auto(双族自动)| chat(个人)| work(工作)。 */
   family: ExtractMode;
+  /** §E 存储作用域(可见范围):`global`(默认,跨工作区可见)| `workspace`(按工作区隔离 work 族)。
+   *  与 `family` **正交**——前者问"这是什么内容",后者问"它该在多大范围内可见"(ADR-0008 条 1)。
+   *  默认 `global` 保证既有部署零漂移:检索侧"是否带工作区标识"即开关,不带即不过滤。 */
+  scope: ScopeMode;
   capture: {
     enabled: boolean;
     /** 助手消息是否剥离代码块(减少嵌入噪声)。 */
@@ -59,6 +63,20 @@ export interface MemoryConfig {
     /** 知识图谱投影总开关(部署级,默认关):开启后还需运行时蒸馏开关(live.distill)
      *  同时为真才执行;图谱是 L1 的可重建投影,关闭不影响记忆主链路。 */
     enabled: boolean;
+  };
+  /** §C 矛盾冻结:去重判定"两边都像是对的、机器判不了"时不自动裁决,
+   *  把冲突对停放到待人工裁决区(conflict_pending)。**默认关**——
+   *  冻结消耗人的注意力,不可默认全开。 */
+  conflictFreeze: {
+    /** 总开关。关闭时去重 prompt 与改动前**逐字一致**,冲突分支结构性不可达。 */
+    enabled: boolean;
+    /** 待裁决队列上限(条)。未裁决数达上限时**不再停放**,直接按 LLM 的
+     *  winner/loser 自动了结(仍写 conflict_pending,`resolution='auto'`)。
+     *  语义是「不收新的」而非「偷偷删旧的」——有界性由此结构性成立。 */
+    maxPending: number;
+    /** 超时降级(天):停放超过该天数的待裁决对在下一轮蒸馏开头被自动了结。
+     *  **0 = 不做超时降级**(显式关闭,而非"立刻全部超时")。 */
+    timeoutDays: number;
   };
   recall: {
     enabled: boolean;
@@ -159,6 +177,12 @@ export interface MemoryConfig {
 export const memorySchema = Schema.object({
   dataDir: Schema.string().default(''),
   family: Schema.union(['auto', 'chat', 'work']).default('auto'),
+  // §E 可见范围:默认 global(既有部署不传该键 = 行为与改动前逐字一致)。
+  // **实测**(schemastery):`Schema.union` 对非法值**抛错**——`$.x expected "a" | "b" but got "bogus"`;
+  // `Schema.string()` 则原样透传。ADR-0008 条 4 要求「解析失败不阻断启动」
+  // (历史上 `nullable` 崩溃整棵插件树的教训在案),故此处用 string + 消费侧 `normScope` 归一。
+  // ⚠️ 既有 `family` 仍是 union,存在同款风险(传 'bogus' 会抛)——已登记 findings §17,不在本波修。
+  scope: Schema.string().default('global'),
   capture: Schema.object({
     enabled: Schema.boolean().default(true),
     stripCodeBlocks: Schema.boolean().default(true),
@@ -184,6 +208,16 @@ export const memorySchema = Schema.object({
   // 知识图谱投影:默认关(新功能默认关,用户显式开启;开启后受运行时蒸馏门约束)
   graph: Schema.object({
     enabled: Schema.boolean().default(false),
+  }),
+  // §C 矛盾冻结:默认关(新功能默认关)。开启后去重决策词表多出 conflict 动作,
+  // 冲突对停放待人工裁决,不再由 LLM 直接 update/merge 覆盖。
+  conflictFreeze: Schema.object({
+    enabled: Schema.boolean().default(false),
+    // 上限给"人会看"留出余量:100 条待裁决 ≈ 连续 5~20 轮蒸馏全在冲突,
+    // 远超正常使用强度;真达到说明该调 prompt 而不是加容量。
+    maxPending: Schema.number().min(0).max(10_000).default(100),
+    // 30 天:足够跨过假期与项目间歇,又不至于让互相矛盾的两条记忆长期并列召回。
+    timeoutDays: Schema.number().min(0).max(3650).default(30),
   }),
   recall: Schema.object({
     enabled: Schema.boolean().default(true),

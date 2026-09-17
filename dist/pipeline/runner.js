@@ -2,6 +2,7 @@ import { resolveDataDir } from '../config.js';
 import { GRAPH_PRIORITY_NEW } from '../graph/types.js';
 import { emptyPending, freshWarmup, groupPendingBySession, loadPending, PENDING_MODES, pendingPathFor, savePending, } from '../store/pending.js';
 import { errDetail } from '../util/filelog.js';
+import { sessionWorkspaceIdOf } from '../workspace.js';
 import { advanceWarmupThreshold, effectiveExtractThreshold, extractionBackoffMs, idleSessionsToFlush, modeSwitchAction, pickSessionBackground, } from './trigger.js';
 import { runExtraction } from './l1.js';
 import { runGraphProjection } from './graph.js';
@@ -599,7 +600,11 @@ export class MemoryRunner {
                 ? pickSessionBackground(await this.stores.l0.recentBySession(sessionId, cfg.extract.backgroundMessages + slice.length), new Set(slice.map((m) => m.id)), cfg.extract.backgroundMessages)
                 : [];
             const t = Date.now();
-            const result = await runExtraction(this.ctx, cfg, this.stores.l1, this.states, slice, background, this.logger, mode);
+            const result = await runExtraction(this.ctx, cfg, this.stores.l1, this.states, slice, background, this.logger, mode, 
+            // §E 写入侧工作区:后台蒸馏手上只有 sessionId(没有 exec),经
+            // `ctx.get('agents')` 宽容解析——与 §A 的多级父链解析同一招。
+            // 拿不到 → undefined → 归属回落 global(pipeline 侧 `resolveRecordScope` 兜底)。
+            sessionWorkspaceIdOf(this.ctx, sessionId));
             if (!result.skipped) {
                 this.pending[mode] = rest;
                 // 重建轮(force)不是有机对话,不推进爬坡

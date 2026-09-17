@@ -1,6 +1,9 @@
 /**
  * 去重 prompt(批量冲突检测:store/update/merge/skip 决策词表)。
  *
+ * §C 矛盾冻结(task_20):`conflictFreeze` 开启时额外注入 `conflict` 动作
+ * (要求 winner/loser 两个不同 id),关闭时三份变体逐字不变。
+ *
  * 净室重写说明:本文件的 prompt 文案按重写规格(Phase 2 决策)逐字沿用——
  * prompt 内容直接决定蒸馏质量,是已发布行为的一部分,不属于可自由重写文本;
  * 代码结构与注释随实现重写。
@@ -194,9 +197,73 @@ export const ALL_CONFLICT_DETECTION_SYSTEM_PROMPT = `你是记忆冲突检测器
 - merged_priority：merge/update 后的新优先级（0-100 整数，merge/update 时必填）。合并后信息更完整、更确定，通常应**酌情提升** priority。参考标准：80-100（核心特质/重要事件/关键事实/重要任务/核心方法/重要资产），60-79（一般信息），<60（次要信息）。
 - merged_timestamps：合并后的时间戳数组。收集新记忆 + 所有被合并旧记忆的时间戳，去重排序。`;
 
-export function getConflictDetectionSystemPrompt(mode: ExtractMode): string {
-  if (mode === 'auto') return ALL_CONFLICT_DETECTION_SYSTEM_PROMPT;
-  return mode === 'work' ? WORK_CONFLICT_DETECTION_SYSTEM_PROMPT : CONFLICT_DETECTION_SYSTEM_PROMPT;
+/**
+ * §C 矛盾冻结:注入 `conflict` 动作后,三份变体输出契约里的 action 枚举。
+ * 用**字面量替换**而非把三份 base 改成函数——base 是已发布行为的一部分,
+ * 关闭态必须逐字不变(见 task_23 的零漂移判据)。
+ */
+const ACTION_ENUM_BASE = '"action": "store|update|skip|merge"';
+const ACTION_ENUM_FROZEN = '"action": "store|update|skip|merge|conflict"';
+
+/**
+ * §C 矛盾冻结追加的决策词表条款(与档位无关,三份变体共用)。
+ *
+ * 语义承自 mneme(dream layer **不**自动裁决 winner/loser):检测到矛盾后
+ * 不是"拦住写入",而是"不自动裁决"——把冲突对停放到待审区。
+ */
+export const CONFLICT_ACTION_CLAUSE = `## 矛盾冻结动作（"conflict"）
+
+上面四条动作在**判定冲突**时都不可用——"update" 与 "merge" 都会由你直接改写记忆，**没有"停下来等人裁决"这个选项**。故新增第五条动作：
+
+- "conflict"：新记忆与候选池中某条已有记忆**描述同一事实/事件/工作对象，但内容互相矛盾**，且你**无法依据现有信息判定哪一方更可信**时使用。**不覆盖、不合并**：该条新记忆照常写入，与冲突的已有记忆作为**一对**停放到待人工裁决区，双方内容都不被改写。
+
+### conflict 的追加输出字段
+
+{
+  "record_id": "本条新记忆的 record_id",
+  "action": "conflict",
+  "winner": "其中一方的 record_id",
+  "loser": "另一方的 record_id"
+}
+
+- "winner" / "loser"：**二者必须不同**。取值均为 record_id，来自「本条新记忆的 record_id」或「候选池中的 record_id」。
+- "winner" 只表示进入待裁决对时的排序位，**不代表最终结论**；最终结论由人工裁决写入。
+- action 为 "conflict" 时**不要**输出 merged_content / merged_type / merged_priority / merged_timestamps——它们只属于 update / merge。
+
+### 什么时候**不**用 conflict
+
+- 新记忆更具体、更新、更权威，或能明确纠正旧记忆的错误 → 仍用 "update"。
+- 新旧记忆信息互补且**不矛盾** → 仍用 "merge"。
+- 只是同属一个主题但描述对象不同 → 仍用 "store"。
+
+conflict 只留给"两边都像是对的、机器判不了"的情况——它消耗人的注意力，不可滥用。`;
+
+export interface DedupPromptOptions {
+  /** §C 矛盾冻结总开关。**默认关**：关闭时 prompt 与改动前逐字一致。 */
+  conflictFreeze?: boolean;
+}
+
+/**
+ * 把注入词表后的 prompt 交给调用方。
+ *
+ * 关闭态直接返回 base（逐字不变）；开启态先换掉 action 枚举行、再追加条款。
+ * 枚举行未被找到时**不抛错**——条款自身也重述了完整输出契约，退化为
+ * "只靠追加段覆盖"，属安全降级而非静默错误（回归由 task_20 的枚举行用例守住）。
+ */
+export function getConflictDetectionSystemPrompt(
+  mode: ExtractMode,
+  opts?: DedupPromptOptions,
+): string {
+  const base =
+    mode === 'auto'
+      ? ALL_CONFLICT_DETECTION_SYSTEM_PROMPT
+      : mode === 'work'
+        ? WORK_CONFLICT_DETECTION_SYSTEM_PROMPT
+        : CONFLICT_DETECTION_SYSTEM_PROMPT;
+  if (!opts?.conflictFreeze) return base;  const withEnum = base.includes(ACTION_ENUM_BASE)
+    ? base.replace(ACTION_ENUM_BASE, ACTION_ENUM_FROZEN)
+    : base;
+  return `${withEnum}\n\n${CONFLICT_ACTION_CLAUSE}`;
 }
 
 export interface CandidateMatch {

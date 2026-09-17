@@ -125,6 +125,65 @@ export function resolveRecordFamily(
   return forced ?? normExtractedFamily(extracted) ?? familyForType(type);
 }
 
+/**
+ * 存储作用域(§E):**可见范围**,与 family(内容类型)正交(ADR-0008 条 1)。
+ * - `global`    —— 跨工作区可见(默认;既有单根数据全部归此档);
+ * - `workspace` —— 仅在本工作区可见。
+ *
+ * 正交的含义是**四象限都存在**。把这条轴与 family 合并(如"work 族一律 workspace")
+ * 会把二维决策压成一维偏好,日后任何一格需要例外时都要返工。
+ */
+export type MemoryScope = 'global' | 'workspace';
+
+/** 配置侧的作用域**模式**取值(与记录级归属同词汇,但语义是「新记忆默认归哪档」)。 */
+export type ScopeMode = MemoryScope;
+
+/** 作用域归一:非法/缺省一律归 `global`(ADR-0008 条 4:不抛错、不阻断启动)。 */
+export function normScope(raw: unknown): MemoryScope {
+  return typeof raw === 'string' && raw.toLowerCase() === 'workspace' ? 'workspace' : 'global';
+}
+
+/**
+ * 可见性判定(§E **读取侧**,与 `resolveRecordScope` 是同一判据的两面)。
+ * `global` 记录对任何工作区可见;`workspace` 记录只对**归属工作区相同**的调用可见。
+ *
+ * `want` 为空串表示"不做过滤"——调用方没传工作区标识(即 `cfg.scope='global'`)时
+ * 必须**看不见这个函数存在**,而不是"过滤掉一切"。两条路径分开写死,
+ * 免得日后有人把"没传"误当成"匹配空归属"。
+ */
+export function isScopeVisible(scope: unknown, workspaceId: unknown, want: string): boolean {
+  if (normScope(scope) === 'global') return true;
+  return typeof workspaceId === 'string' && workspaceId !== '' && workspaceId === want;
+}
+
+/**
+ * 记录级归属判定(§E 写入侧)。与 `resolveRecordFamily` 同构的三级链:
+ * **记录显式覆盖 → 配置模式默认 → 兜底 global**。
+ *
+ * 三条刻意的规则:
+ * ① `workspace` 模式下 **work 族默认归 workspace、chat 族默认仍 global**——
+ *    个人记忆本就该跨项目("用户偏好简洁回答"不属于任何项目),而污染面恰在项目之间。
+ *    注意这是**默认值不是推导规则**:`explicit` 能把它推翻(四象限)。
+ * ② **工作区标识缺失时回落 `global`**——不抛、不阻断。宁可退化成"全局可见",
+ *    也不能因为拿不到 cwd 就让记忆**写不进去**(fail-open,与本仓库既有降级同向)。
+ * ③ `cfg='global'` 时**不写**工作区归属(清空 `workspaceId`)——保证既有部署零漂移:
+ *    检索侧"是否传 workspaceId"就是开关,不传即不过滤。
+ *
+ * @param explicit 记录级显式声明(四象限的载体)。**当前无产品调用方**,
+ *   存在的意义是把"正交"从文档里的一句话变成可测的语义;写入入口属未排期项。
+ */
+export function resolveRecordScope(
+  cfgScope: ScopeMode,
+  family: MemoryFamily,
+  workspaceId?: string,
+  explicit?: MemoryScope,
+): { scope: MemoryScope; workspaceId: string } {
+  const wantWorkspace = explicit ?? (cfgScope === 'workspace' && family === 'work' ? 'workspace' : 'global');
+  // 没有工作区标识就无从谈"本工作区"——无论请求来自默认还是显式,一律回落 global
+  if (wantWorkspace === 'workspace' && workspaceId) return { scope: 'workspace', workspaceId };
+  return { scope: 'global', workspaceId: '' };
+}
+
 /** L1 持久化记录(磁盘与 DB 的权威形状;version/source_message_ids/metadata 由写入侧补默认)。 */
 export interface MemoryRecord {
   id: string;
@@ -146,6 +205,12 @@ export interface MemoryRecord {
   sessionId?: string;
   /** 所属族(写入缺省由 familyForType(type) 回填;召回/浏览/去重候选按族过滤的唯一依据)。 */
   family?: MemoryFamily;
+  /** 可见范围(§E;写入缺省由 `resolveRecordScope` 回填,缺省 `global`)。
+   *  与 family 正交:family 问"这是什么内容",scope 问"它该在多大范围内可见"。 */
+  scope?: MemoryScope;
+  /** 工作区标识(仅 `scope='workspace'` 时非空;`global` 记录恒为空串)。
+   *  取值为会话 cwd 的归一形态——"哪个工作区"由会话本身回答,不做额外配置。 */
+  workspaceId?: string;
   /**
    * 有效期起(epoch ms):该事实在**真实世界**开始成立的时间。
    * 与 createdAt(入库时间)是两条不同的轴——"2026-03 在 A 项目"这条事实,

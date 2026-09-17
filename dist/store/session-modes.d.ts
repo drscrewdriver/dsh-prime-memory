@@ -17,6 +17,13 @@ export declare class SessionModeStore {
     get default(): MemoryMode;
     /** 同步读取:未设置过的会话返回默认档。 */
     get(sessionId: string): MemoryMode;
+    /**
+     * 该会话是否有**显式**档位条目(区别于 `get()` 的默认档回落)。
+     *
+     * 子代理档位继承(§A)靠它判断"这一层是否设过":未设过则继续沿父链上溯,
+     * 而不是立刻吃默认档——后者正是"用户显式 off 被绕过"的成因。
+     */
+    hasEntry(sessionId: string): boolean;
     /** 会话级注入覆盖原始值:undefined = 未覆盖,跟随全局。 */
     getRecall(sessionId: string): boolean | undefined;
     /** 解析后的注入开关:会话覆盖 ?? 全局运行时开关(部署级 cfg.recall.enabled

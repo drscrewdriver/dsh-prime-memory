@@ -158,7 +158,16 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
 
   const stores = {
     l0: new L0Store(dataDir, db, embed, logger),
-    l1: new L1Store(dataDir, db, embed, config.recall.strategy, logger, config.recall.decayHalfLifeDays),
+    l1: new L1Store(
+      dataDir,
+      db,
+      embed,
+      config.recall.strategy,
+      logger,
+      config.recall.decayHalfLifeDays,
+      // §D 第 3 路:图谱回链。图谱不可用时 searchNodes 自带 no-op,不影响双路。
+      (query, limit, family) => db.graphStore.searchNodes(query, limit, family ? [family] : undefined),
+    ),
     // L2/L3 分族隔离:各自目录与文件(scenes/chat|work、persona-chat|work.md)
     scenes: {
       chat: new SceneStore(dataDir, 'chat', logger),

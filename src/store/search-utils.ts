@@ -1,6 +1,7 @@
 /**
  * 检索工具:
  * - rrfMerge:RRF(Reciprocal Rank Fusion,k=60)多路结果融合,hybrid 检索用;
+ * - normalizeRrf:RRF 原始分按实际路数归一化到 0~1(hybrid 展示分);
  * - bm25RankToScore:FTS5 bm25 rank(负值=更相关)转 0~1 分数;
  * - applyDecayWeight:#29 时效衰减加权(读路径专用);
  * - buildFtsQuery / tokenizeForFts:FTS5 查询构造与写入侧分词。
@@ -71,6 +72,25 @@ export function rrfMerge<T>(
   return [...map.values()]
     .sort((a, b) => b.rrfScore - a.rrfScore)
     .map(({ item, rrfScore }) => ({ ...item, rrfScore }));
+}
+
+/**
+ * RRF 原始分归一化到 0~1(hybrid 检索的展示/比较分)。
+ *
+ * n 条列表融合时,单项最高原始分为 n/(k+1)(各列表 rank1 全中),故按**实际路数**
+ * lanes 归一:`rrfScore × (k+1) / lanes`,满分恰好 1.0,天然不越界。
+ * 旧实现把分母硬编码为 2,只对「FTS + 向量」双路成立;扩至 3/4 路后满分分别
+ * 达到 1.5 / 2.0,越出契约。2 路时本式与旧式逐字等价(无行为漂移)。
+ *
+ * 按「传入的路数」而非「非空路数」归一是有意的:向量源不可用时调用方仍传两条
+ * 列表(其一为空),旧实现给 FTS rank1 的分数是 0.5;按非空路数会变成 1.0,
+ * 反而破坏 2 路无漂移判据。
+ *
+ * 守卫:lanes 非正或非有限 → 0(退化输入不产生 NaN/Infinity)。
+ */
+export function normalizeRrf(rrfScore: number, lanes: number): number {
+  if (!Number.isFinite(lanes) || lanes <= 0) return 0;
+  return (rrfScore * (RRF_K + 1)) / lanes;
 }
 
 /** FTS5 bm25 rank(负值=更相关)转 0~1 分数。 */

@@ -19,16 +19,32 @@ import type { RuminateController } from '../pipeline/ruminate.js';
 import type { GraphStore } from '../store/graph-store.js';
 import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
+import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from '../store/receipts.js';
+import type { ReceiptQuery } from '../store/receipts.js';
+import { renderConflictResolution, resolveConflictPair } from '../conflict-service.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryFamily, MemoryLogger, MemoryRecord, Persistence } from '../types.js';
-import { normPersistence } from '../types.js';
+import { normPersistence, normScope, resolveRecordScope } from '../types.js';
+import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
 const WRITE_ONLY_NOTICE = '本会话为只写模式:记忆照常沉淀,但不读取。';
 const GLOBAL_OFF_NOTICE = '记忆注入已全局停用:本会话不读取记忆(沉淀照常)。';
+
+/**
+ * 工具执行上下文中本模块关心的字段:调用方 agent 标识 + 会话 header 的父链接。
+ * 宿主 `ToolRunContext.agent` 是活的 `Agent` 运行时对象,结构上满足本形状
+ * (`id: SessionId`、`session.header.parentSession?: SessionId`)。
+ */
+interface ToolExecLike {
+  agent?: {
+    id?: string;
+    session?: { header?: { id?: string; parentSession?: string } };
+  };
+}
 
 export function registerMemoryTools(
   ctx: Context,
@@ -50,33 +66,75 @@ export function registerMemoryTools(
   if (!cfg.tools) return;
 
   /**
+   * 沿父链解析**有效档位归属会话**(§A 修复)。
+   *
+   * 子代理以新 session id 调用工具时,其自身通常不在档位表里——原实现直接回落
+   * 全局默认档(auto),于是父会话被用户显式设为 `off`/只写时,**子代理仍能读到
+   * 用户明确关闭的记忆**,构成"用户显式指令被绕过"(P0)。
+   *
+   * 现改为沿 `session.header.parentSession` 上溯至**首个有显式档位的祖先**。
+   * 同步通路由 task_4 spike 实测确认(`findings.md §8`):子代理会话的 header
+   * **无条件**携带父会话 id(`dsh-subagent/.../child-agent.js:111-125`)。
+   *
+   * 多级链(孙代理等)需要按 id 取某个会话的 header → 走 `ctx.get('agents')`
+   * 的**宽容路径**(cordis 属性访问对未 inject 的服务会抛 "without inject";
+   * 同款先例见 `src/hooks/recall.ts:402-407,461`)。
+   *
+   * 降级(全部不抛错、不新增拒绝路径):
+   * - `exec.agent` 缺失 → 返回 undefined(保持既有 fail-open);
+   * - 服务缺失 / 链断 → 停止上溯,用自身 id(= 默认档,与修复前一致);
+   * - 链上做环检测,自环或成环都能终止。
+   */
+  const resolveModeOwner = (exec: ToolExecLike): string | undefined => {
+    const agent = exec.agent;
+    const selfId = agent?.id;
+    if (selfId === undefined) return undefined;
+    // 自身有显式档位 → 自己说了算(子代理会话也可被单独设置)
+    if (modes.hasEntry(selfId)) return selfId;
+    const seen = new Set<string>([selfId]);
+    let cur: string | undefined = agent?.session?.header?.parentSession;
+    while (cur !== undefined && !seen.has(cur)) {
+      if (modes.hasEntry(cur)) return cur;
+      seen.add(cur);
+      // 继续上溯:取该会话的 header(服务缺失时返回 undefined → 循环自然结束)
+      const upstream = ctx.get?.('agents') as { get?: (id: string) => ToolExecLike['agent'] } | undefined;
+      cur = upstream?.get?.(cur)?.session?.header?.parentSession;
+    }
+    return selfId; // 无祖先设过 → 自身(= 默认档,行为与修复前一致)
+  };
+
+  /**
    * 调用会话的检索族(auto → undefined 不过滤;off/只写 → null 表示整体禁用)。
    * fail-open:exec.agent 缺失(宿主调用路径未带 agent 标识)按全族检索放行——
    * 档位隔离依赖宿主正确传递 exec.agent.id,缺失只告警一次不拒绝工具调用。
    */
   let warnedNoAgent = false;
-  const familyOfCaller = (agentId: string | undefined): MemoryFamily | undefined | null => {
-    if (agentId === undefined) {
+  const familyOfCaller = (exec: ToolExecLike): MemoryFamily | undefined | null => {
+    const owner = resolveModeOwner(exec);
+    if (owner === undefined) {
       if (!warnedNoAgent) {
         warnedNoAgent = true;
         logger.warn('[memory] 工具调用缺少 agent 标识(exec.agent 未传递),档位过滤退化为全族检索');
       }
       return undefined;
     }
-    const mode = modes.get(agentId);
+    const mode = modes.get(owner);
     if (mode === 'off') return null;
     // 只写会话拒读:与注入同属读维度,不拒则"不注入"从工具路径漏风
-    if (!modes.resolvedRecall(agentId, live.get().recall)) return null;
+    if (!modes.resolvedRecall(owner, live.get().recall)) return null;
     return mode === 'auto' ? undefined : mode;
   };
 
   /** 拒读时的归因文案(familyOfCaller 判 null 后重查内存 Map,成本可忽略):
-   *  off 完全隐身 / 会话只写覆盖 / 全局召回关——三种停用各说各话,不谎报只写。 */
-  const blockNoticeOf = (agentId: string | undefined): string => {
-    if (agentId !== undefined) {
-      if (modes.get(agentId) === 'off') return OFF_NOTICE;
-      if (modes.getRecall(agentId) === false) return WRITE_ONLY_NOTICE;
-      if (!modes.resolvedRecall(agentId, live.get().recall)) return GLOBAL_OFF_NOTICE;
+   *  off 完全隐身 / 会话只写覆盖 / 全局召回关——三种停用各说各话,不谎报只写。
+   *  **注意按"有效档位归属会话"归因**:子代理拒读时文案取的是其祖先的档位,
+   *  而非子代理自身(后者未设置,会谎报成 off)。 */
+  const blockNoticeOf = (exec: ToolExecLike): string => {
+    const owner = resolveModeOwner(exec);
+    if (owner !== undefined) {
+      if (modes.get(owner) === 'off') return OFF_NOTICE;
+      if (modes.getRecall(owner) === false) return WRITE_ONLY_NOTICE;
+      if (!modes.resolvedRecall(owner, live.get().recall)) return GLOBAL_OFF_NOTICE;
     }
     return OFF_NOTICE;
   };
@@ -118,10 +176,16 @@ export function registerMemoryTools(
         ],
       },
       execute: async (args, exec) => {
-        const family = familyOfCaller(exec.agent?.id);
-        if (family === null) return { items: [], notice: blockNoticeOf(exec.agent?.id) };
+        const family = familyOfCaller(exec);
+        if (family === null) return { items: [], notice: blockNoticeOf(exec) };
         const limit = Math.min(Math.max(args.limit ?? 5, 1), 20);
-        const hits = await stores.l1.search(args.query, limit, { type: args.type || undefined, family: family ?? undefined });
+        const hits = await stores.l1.search(args.query, limit, {
+          type: args.type || undefined,
+          family: family ?? undefined,
+          // §E 可见范围:`cfg.scope` 非 workspace 时恒为 undefined(= 不过滤)，
+          // 零漂移由 `scopeFilterOf` 一处收口保证，不靠各调用点各自判断。
+          workspaceId: scopeFilterOf(cfg.scope, exec),
+        });
         return {
           items: hits.map((h) => ({
             content: h.content,
@@ -170,7 +234,7 @@ export function registerMemoryTools(
         ],
       },
       execute: async (args, exec) => {
-        if (familyOfCaller(exec.agent?.id) === null) return { items: [], notice: blockNoticeOf(exec.agent?.id) };
+        if (familyOfCaller(exec) === null) return { items: [], notice: blockNoticeOf(exec) };
         const limit = Math.min(Math.max(args.limit ?? 5, 1), 20);
         const records = await stores.l0.search(args.query, limit);
         return {
@@ -207,7 +271,7 @@ export function registerMemoryTools(
         ],
       },
       execute: async (args, exec) => {
-        if (familyOfCaller(exec.agent?.id) === null) return { content: blockNoticeOf(exec.agent?.id) };
+        if (familyOfCaller(exec) === null) return { content: blockNoticeOf(exec) };
         const p = args.path.trim();
         let content: string | undefined;
         if (p === 'persona.md' || p === 'persona-chat.md' || p === 'persona' || p === 'persona-chat') {
@@ -216,7 +280,7 @@ export function registerMemoryTools(
           content = await stores.persona.work.read();
         } else {
           // 场景文件在两族目录里按名查找(先本族后另一族)
-          const primary = familyOfCaller(exec.agent?.id) ?? 'chat';
+          const primary = familyOfCaller(exec) ?? 'chat';
           const other: MemoryFamily = primary === 'chat' ? 'work' : 'chat';
           content =
             (await stores.scenes[primary].read(p)) ?? (await stores.scenes[other].read(p));
@@ -271,7 +335,7 @@ export function registerMemoryTools(
    * 时间轴同时写顶层字段(时间增强列)与 metadata(列迁移前的兼容层,
    * 也是面板与图谱时间锚的读取点);`cf`/`rw` 落在 metadata.conflict/rewritten。
    */
-  function buildRecord(item: WriteItem, sceneName: string, now: number): MemoryRecord {
+  function buildRecord(item: WriteItem, sceneName: string, now: number, workspaceId?: string): MemoryRecord {
     const content = String(item.content ?? '').trim();
     const type = ADD_TYPES.includes(String(item.type ?? '')) ? String(item.type) : 'episodic';
     const family: MemoryFamily = type.startsWith('work') ? 'work' : 'chat';
@@ -306,6 +370,9 @@ export function registerMemoryTools(
       version: 0,
       metadata,
       family,
+      // §E 归属：与抽取管线**同一判据**（`resolveRecordScope`）。写入路径不止一条
+      // （pipeline / 本工具 / 批量导入），共用同一函数才不会有"某条路径忘了标归属"。
+      ...resolveRecordScope(normScope(cfg.scope), family, workspaceId),
       ...(validFrom !== undefined ? { validFrom } : {}),
       ...(validTo !== undefined ? { validTo } : {}),
       ...(persistence !== undefined ? { persistence } : {}),
@@ -360,13 +427,13 @@ export function registerMemoryTools(
         },
         render: (_args, value) => [{ type: 'text', text: value.notice ?? ('已记录记忆 ' + (value.id ?? '')) }],
       },
-      execute: async (args) => {
+      execute: async (args, exec) => {
         if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
         const content = String(args.content ?? '').trim();
         if (!content) return { notice: 'content 为空,未写入' };
         const scene =
           typeof args.scene === 'string' && args.scene.trim() ? args.scene.trim().slice(0, 120) : '__manual__';
-        const record = buildRecord(args, scene, Date.now());
+        const record = buildRecord(args, scene, Date.now(), workspaceIdOf(exec));
         await stores.l1.appendNew([record]);
         logger.info(
           `[memory] 高权限写入记忆(${record.type}${record.metadata?.hall ? '/' + String(record.metadata.hall) : ''},时间轴 ${record.persistence ?? '?'}):${record.content.slice(0, 120)}`,
@@ -431,7 +498,7 @@ export function registerMemoryTools(
           { type: 'text', text: value.notice ?? `已导入 ${value.written ?? 0} 条记忆` },
         ],
       },
-      execute: async (args) => {
+      execute: async (args, exec) => {
         if (!live.get().memoryMutate) {
           return { written: 0, ids: [], skipped: [], notice: MUTATE_OFF_NOTICE };
         }
@@ -467,7 +534,7 @@ export function registerMemoryTools(
             return;
           }
           seen.add(key);
-          records.push(buildRecord(item, scene, now));
+          records.push(buildRecord(item, scene, now, workspaceIdOf(exec)));
         });
         if (records.length > 0) await stores.l1.appendNew(records);
         logger.info(`[memory] 批量导入 ${records.length} 条(跳过 ${skipped.length} 条,场景 ${scene})`);
@@ -504,9 +571,12 @@ export function registerMemoryTools(
         if (!live.get().memoryMutate) return { deleted: 0, ids: [], notice: MUTATE_OFF_NOTICE };
         const query = String(args.query ?? '').trim();
         if (!query) return { deleted: 0, ids: [], notice: 'query 为空,未删除' };
-        const family = familyOfCaller(exec.agent?.id);
+        const family = familyOfCaller(exec);
         const limit = Math.min(Math.max(args.limit ?? 3, 1), 10);
-        const hits = await stores.l1.search(query, limit, { family: family && family !== null ? family : undefined });
+        const hits = await stores.l1.search(query, limit, {
+          family: family && family !== null ? family : undefined,
+          workspaceId: scopeFilterOf(cfg.scope, exec),
+        });
         const ids = hits.map((h) => h.id);
         if (ids.length === 0) return { deleted: 0, ids: [], notice: '未找到匹配的记忆,未删除' };
         await stores.l1.deleteBatch(ids);
@@ -556,8 +626,8 @@ export function registerMemoryTools(
         render: (_args, value) => [{ type: 'text', text: value.notice ?? renderGraphCards(value.items ?? []) }],
       },
       execute: async (args, exec) => {
-        const family = familyOfCaller(exec.agent?.id);
-        if (family === null) return { items: [], notice: blockNoticeOf(exec.agent?.id) };
+        const family = familyOfCaller(exec);
+        if (family === null) return { items: [], notice: blockNoticeOf(exec) };
         const graph = stores.graph;
         if (!graph) return { items: [], notice: GRAPH_OFF_NOTICE };
         const query = String(args.query ?? '').trim();
@@ -601,8 +671,8 @@ export function registerMemoryTools(
         render: (_args, value) => [{ type: 'text', text: value.notice ?? (value.node || '(节点不存在)') }],
       },
       execute: async (args, exec) => {
-        const family = familyOfCaller(exec.agent?.id);
-        if (family === null) return { notice: blockNoticeOf(exec.agent?.id) };
+        const family = familyOfCaller(exec);
+        if (family === null) return { notice: blockNoticeOf(exec) };
         const graph = stores.graph;
         if (!graph) return { notice: GRAPH_OFF_NOTICE };
         const id = String(args.id ?? '').trim();
@@ -774,7 +844,140 @@ export function registerMemoryTools(
     }),
   );
 
-  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
+  // ── memory_receipts: §B 决策凭证回溯(读;受与 memory_search 同款档位门) ──
+  // 为什么给它一个模型可见的工具:凭证链的价值全在"事后能问"。若只有 RPC 端点,
+  // 用户得自己去浏览器/curl 才能回溯,而真正会问「这条记忆怎么来的」的场合
+  // 恰恰是在对话里。工具是这条链唯一的**用户可见出口**。
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_receipts',
+      description:
+        '回溯 L1 记忆的**去重决策出处**(决策凭证链)。按 record_id 问"这条记忆出自哪一轮蒸馏、当时看到什么候选池、被判定成了什么";按 run_id 问"那一轮蒸馏都判了什么"(跨多条记录)。两者同给即问"这条记录在那一轮里被判成了什么"。返回决策当时的结论与输入指纹,**不含记忆正文**。注意:由于记录 id 每轮新铸,按 record_id 查询目前通常只返回一条——它回答的是"出自哪",不是"历次变更"。',
+      parameters: {
+        record_id: { type: 'string', description: '按记忆记录 id 回溯(与 run_id 至少给一个)' },
+        run_id: { type: 'string', description: '按某轮蒸馏的 run id 回溯(与 record_id 至少给一个)' },
+        limit: { type: 'number', description: `最大返回条数(默认 20,上限 ${RECEIPTS_QUERY_LIMIT_MAX})` },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            dimension: { type: 'string', description: '命中的维度:record / run / both / none' },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  receipt_id: { type: 'string' },
+                  run_id: { type: 'string' },
+                  record_id: { type: 'string' },
+                  kind: { type: 'string', description: 'store / update / merge / skip / conflict / skip_missing' },
+                  input_digest: { type: 'string' },
+                  decided_at: { type: 'string' },
+                },
+                additionalProperties: false,
+              },
+            },
+            total: { type: 'number' },
+            notice: { type: 'string', description: '非结果的状态提示(如本会话记忆已关闭)' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          { type: 'text', text: value.notice ?? renderReceipts(value.dimension, value.items ?? [], value.total ?? 0) },
+        ],
+      },
+      execute: async (args, exec) => {
+        // 档位拒读门与 memory_search 同款:off 会话对记忆系统完全隐身,不该反过来
+        // 能内省记忆系统的判定史(凭证虽不含正文,但泄漏"存在哪些记录/判了什么")。
+        const family = familyOfCaller(exec);
+        if (family === null) return { dimension: 'none' as const, items: [], total: 0, notice: blockNoticeOf(exec) };
+
+        const query: ReceiptQuery = {
+          recordId: typeof args.record_id === 'string' && args.record_id.trim() ? args.record_id.trim() : undefined,
+          runId: typeof args.run_id === 'string' && args.run_id.trim() ? args.run_id.trim() : undefined,
+        };
+        const dimension = dimensionOf(query);
+        if (dimension === 'none') {
+          return {
+            dimension,
+            items: [],
+            total: 0,
+            notice:
+              '需要至少一个维度:record_id(这条记忆出自哪一轮、当时候选池是什么)或 run_id(某一轮蒸馏的全部决策)。' +
+              '不提供"查全部凭证"——那等于把整库判定史一次性导出。',
+          };
+        }
+        const limit = Math.min(Math.max(args.limit ?? 20, 1), RECEIPTS_QUERY_LIMIT_MAX);
+        const rows = stores.l1.listReceipts({ ...query, limit });
+        return { dimension, items: rows.map(toReceiptView), total: stores.l1.countReceipts(query) };
+      },
+    }),
+  );
+
+  // ── memory_resolve_conflict: §C 矛盾冻结的人工裁决出口 ──
+  // 冻结把裁决权交还给人,那么**必须**有一个"人能把结论说回去"的出口——
+  // 否则待裁决队列是个只进不出的黑洞,安全阀(task_24)会成为唯一出路,
+  // 那等于把 opt-in 的冻结悄悄退回成"超时后机器自己判"。
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_resolve_conflict',
+      description:
+        '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
+      parameters: {
+        pair_id: { type: 'string', description: '待裁决对的 pair_id(来自待裁决队列)' },
+        outcome: { type: 'string', description: '裁决结论:winner | loser | both' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            pair_id: { type: 'string' },
+            outcome: { type: 'string' },
+            resolved_at: { type: 'string', description: '裁决时刻(ISO);空串表示未生效' },
+            removed_record_id: { type: 'string', description: '因裁决从检索中退场的记录 id(无则空串)' },
+            notice: { type: 'string', description: '非结果的状态提示(如未开启冻结 / 该对不存在或已裁决)' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: renderConflictResolution(value) }],
+      },
+      execute: async (args, exec) => {
+        const family = familyOfCaller(exec);
+        if (family === null) {
+          return { pair_id: '', outcome: '', resolved_at: '', removed_record_id: '', notice: blockNoticeOf(exec) };
+        }
+        const empty = { pair_id: '', outcome: '', resolved_at: '', removed_record_id: '' };
+        const pairId = typeof args.pair_id === 'string' ? args.pair_id.trim() : '';
+        const outcome = typeof args.outcome === 'string' ? args.outcome.trim() : '';
+        if (!pairId) return { ...empty, notice: '需要 pair_id:待裁决对没有"全部裁决"这种用法。' };
+        return resolveConflictPair(
+          { l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true },
+          pairId,
+          outcome,
+        );
+      },
+    }),
+  );
+
+  logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_receipts / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_resolve_conflict / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
+}
+
+/** 凭证回溯的人类可读渲染(含"还有多少条没显示")。 */
+function renderReceipts(
+  dimension: string | undefined,
+  items: Array<{ run_id?: string; record_id?: string; kind?: string; input_digest?: string; decided_at?: string }>,
+  total: number,
+): string {
+  const what = dimension === 'record' ? '该记录出自哪一轮' : dimension === 'run' ? '该批次的全部决策' : '该记录在该批次中的决策';
+  if (items.length === 0) return `(${what}:没有查到凭证——该 id 可能从未走过 L1 去重,或凭证已超出保留窗口)`;
+  const lines = items.map(
+    (it, i) =>
+      `${i + 1}. [${it.kind ?? ''}] run=${it.run_id ?? ''} record=${it.record_id ?? ''}` +
+      `\n   时刻: ${it.decided_at ?? ''}\n   输入指纹: ${(it.input_digest ?? '').slice(0, 16)}…`,
+  );
+  const more = total > items.length ? `\n…共 ${total} 条,已显示 ${items.length} 条` : '';
+  return `${what}(${items.length} 条):\n${lines.join('\n')}${more}`;
 }
 
 function renderGraphCards(

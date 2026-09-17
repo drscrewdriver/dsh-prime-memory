@@ -2,7 +2,25 @@
  * 图谱节点检索(纯函数,无 I/O):字段加权重叠计分 + 可解释命中输出。
  *
  * 与 L1 检索(FTS5/向量)不同,图谱节点量级是"可重建投影"的百~千级,在此
- * 直接内存打分即可,不建倒排索引(>2k 节点再考虑预建——见规划可延后清单)。
+ * 直接内存打分即可,不建倒排索引(>2k 节点再考虑预建)。
+ *
+ * ── 图谱演进阶梯(阈值触发,非按需猜测)──────────────────────────────
+ * 图谱是 L0 → L1 → 图谱 链上的可重建派生投影(不是事实源),故存储引擎**可随时替换,
+ * 且是重建而非迁移**——这是当前不引入图数据库不会锁死将来的核心依据。
+ * 本阶梯把"何时才该升级"固化成可判定的阈值,避免提前引入重型方案:
+ *
+ *   Tier  能力                                          存储      触发阈值                  成本
+ *   T0    邻接表 + 字段加权打分(即本文件)               SQLite    nodes 10²~10³(现状)      已有
+ *   T1    TS 内存 BFS/DFS:k-hop/最短路径/连通分量       **不变**  nodes ≤ ~10k             纯 TS,零 schema 变更
+ *                                                                edges ≤ ~100k(=T1 上限)
+ *   T2    递归 CTE(不物化全图)                          **不变**  图装不进内存              复杂 SQL + 手工防环
+ *   T3    闭包表/物化路径(传递闭包预计算)               **不变**  高频多跳重复查询          写放大,边变更需维护
+ *   T4    嵌入式图引擎(Kuzu 优先,非 Neo4j)              换引擎    T1-T3 全部不足            原生依赖,破坏自包含
+ *
+ * **2k 节点** = 预建倒排索引的检查点(上方既有判断);**10k / 100k** = T1 内存遍历的上限。
+ *
+ * **注意**:10k 节点 / 100k 边是**按内存占用推算的估算值**(10 万边 × ~100 字节 ≈ 10 MB),
+ * **非实测**,待真实规模数据校准。多跳遍历归 TS 纯函数层,**不使用 `WITH RECURSIVE`**。
  *
  * 设计要点:
  * - 分词与 L0/L1 共用 util/text.ts 的 tokenize(jieba 词 ∪ 拉丁词 ∪ CJK 二元组),
@@ -48,6 +66,38 @@ const FIELD_ORDER: SearchField[] = ['name', 'aliases', 'tags', 'currentState', '
 /** fact 值渲染进检索文本(数组值空格连接)。 */
 function factValueText(value: string | string[]): string {
   return Array.isArray(value) ? value.join(' ') : value;
+}
+
+/**
+ * 图谱命中 → L1 记录 id 序列(§D 第 3 路 RRF 的输入;纯函数,无 I/O)。
+ *
+ * 图谱是**可重建派生投影**,节点/fact 的 `sourceRecordIds` 是它回链 L1 的唯一凭证
+ * (types.ts:6-7)。此处把"节点排名"翻译成"L1 记录排名":
+ *
+ * - **保序**:按命中的 score 降序依次展开来源,先出现的记录 = 更高排名;
+ * - **去重**:同一 L1 记录可能被多个节点/fact 引用,只占首次出现的位置
+ *   (重复占位会凭空抬高该记录在 RRF 里的权重);
+ * - **节点自身来源优先于其 fact 来源**:节点的 sourceRecordIds 是它的身份来源,
+ *   而单个 fact 的来源可能引向与该查询无关的旁支记录;
+ * - **只取 active fact**:superseded 是历史状态,不该把旧记录拉进当前检索结果;
+ * - **不查库**:返回的 id 可能已被删除(墓碑边界),由调用方按"取不到的跳过"处理。
+ */
+export function graphHitRecordIds(hits: readonly GraphNodeSearchResult[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const take = (id: string): void => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+  };
+  for (const h of hits) {
+    for (const id of h.node.sourceRecordIds) take(id);
+    for (const f of h.node.facts) {
+      if (f.status !== 'active') continue;
+      for (const id of f.sourceRecordIds ?? []) take(id);
+    }
+  }
+  return out;
 }
 
 /**

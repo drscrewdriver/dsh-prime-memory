@@ -11,7 +11,9 @@
  *   是占用数字的唯一算术来源)。
  */
 import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { EFFORT_CHOICES, memorySchema, resolveDataDir } from '../src/config.js';
+import { MEMORY_ENDPOINTS } from '../src/stats.js';
 import { HALL_CATALOG, HALL_DEFAULT_ENABLED, familyForType, resolveRecordFamily } from '../src/types.js';
 import {
   CHARS_PER_TOKEN,
@@ -52,7 +54,7 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'memoryMutate',
 ] as const;
 
-/** 端点全集(26 个;含 records-delete 与图谱两端点)。 */
+/** 端点全集(31 个;含 records-delete / 图谱两端点 / receipts / conflict-resolve / ruminate 三端点)。 */
 const ENDPOINTS = [
   'dsh-memory/stats',
   'dsh-memory/token-cost',
@@ -63,6 +65,8 @@ const ENDPOINTS = [
   'dsh-memory/settings-set',
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
+  'dsh-memory/receipts',
+  'dsh-memory/conflict-resolve',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
@@ -71,6 +75,9 @@ const ENDPOINTS = [
   'dsh-memory/rebuild-status',
   'dsh-memory/rebuild-start',
   'dsh-memory/rebuild-cancel',
+  'dsh-memory/ruminate-status',
+  'dsh-memory/ruminate-start',
+  'dsh-memory/ruminate-cancel',
   'dsh-memory/llm-providers',
   'dsh-memory/llm-models',
   'dsh-memory/embedding-state-get',
@@ -97,9 +104,40 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 26 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(26);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(26);
+  it('exposes exactly the 31 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(31);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(31);
+  });
+
+  it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
+    // 注意:本副本与 MEMORY_ENDPOINTS 都是**手工维护**的清单,两者会一起漂移
+    // ——2026-09-16 实测:ruminate 三端点早已由 contract.ts 与分发器实现,却同时
+    // 缺席本副本与 MEMORY_ENDPOINTS,本断言照样全绿,而线上 /dsh-memory/rpc/
+    // ruminate-status 恒返 404、设置面板「反刍整理」整块静默消失。
+    // 因此本断言不是唯一门禁,必须配合下方对 contract.ts 源码的守卫。
+    expect([...ENDPOINTS].sort()).toEqual([...MEMORY_ENDPOINTS].sort());
+  });
+
+  it('唯一事实源守卫:与 src/stats.ts 分发器的 case 集逐项一致', async () => {
+    // MEMORY_ENDPOINTS 同时是 HTTP 前缀路由 /dsh-memory/rpc/<短名> 的**放行白名单**
+    // (见 stats.ts 的 SHORT_ENDPOINTS)。有 case 无白名单 = 该端点恒返 404,
+    // 而客户端 rpc 的 catch 会静默吞掉异常、面板整块消失(2026-09-16 ruminate 事故)。
+    const src = await readFile(new URL('../src/stats.ts', import.meta.url), 'utf8');
+    const cases = [...src.matchAll(/case '(dsh-memory\/[^']+)':/g)].map((m) => m[1]);
+    expect(cases.length).toBeGreaterThan(0);
+    expect([...MEMORY_ENDPOINTS].sort()).toEqual([...cases].sort());
+  });
+
+  it('契约守卫:contract.ts 声明的端点必须全部在白名单内', async () => {
+    // 单向包含即可捕获本类漂移:contract.ts 有、白名单没有 → 端点不可达。
+    // (反向差额是 contract.ts 自身的滞后,单独跟踪,不在此断言。)
+    const src = await readFile(new URL('../src/contract.ts', import.meta.url), 'utf8');
+    const body = /\bexport interface DshMemoryRequestMap\s*\{([\s\S]*?)\n\}/.exec(src);
+    expect(body, 'contract.ts 里找不到 DshMemoryRequestMap').not.toBeNull();
+    const contractKeys = [...body![1].matchAll(/'(dsh-memory\/[^']+)'\s*:/g)].map((m) => m[1]);
+    expect(contractKeys.length).toBeGreaterThan(0);
+    const missing = contractKeys.filter((k) => !MEMORY_ENDPOINTS.includes(k));
+    expect(missing, `contract.ts 声明但白名单缺失: ${missing.join(', ')}`).toEqual([]);
   });
 });
 
@@ -114,7 +152,7 @@ describe('memory live settings key registry', () => {
   it('static config schema keeps every deploy key with defaults', () => {
     // schemastery 对象可调用:空输入产出完整默认对象——键集/默认值缩水在此暴露
     const defaults = (memorySchema as unknown as (v: unknown) => Record<string, unknown>)({});
-    for (const k of ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl']) {
+    for (const k of ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl', 'graph', 'conflictFreeze']) {
       expect(defaults[k], `config key ${k} missing`).toBeDefined();
     }
     // 部署默认值抽查(与 0.9.0 契约逐项一致)
@@ -137,6 +175,8 @@ describe('memory live settings key registry', () => {
     expect((defaults.tokenCost as Record<string, unknown>).retentionDays).toBe(365);
     expect(defaults.tools).toBe(true);
     expect(defaults.benchControl).toBe(false);
+    // §C 矛盾冻结:新功能默认关(冻结消耗人的注意力,不可默认全开)
+    expect((defaults.conflictFreeze as Record<string, unknown>).enabled).toBe(false);
   });
 
   it('resolveDataDir falls back to dshHomePath("memory") shape', () => {

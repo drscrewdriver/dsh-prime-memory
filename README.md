@@ -337,6 +337,10 @@ ONNX 量化 **CPU 推理**——无需 API Key，数据不出本机）。本地�
 | `tokenCost.retentionDays`    | `365`                   | 蒸馏成本明细（token\_cost 表）保留天数，写入时滚动清理更早行；`0` = 永久保留。成本看板「近 N 天」窗口上限同此值                                                                                                                                                                                                                                                               |
 | `tools`                      | `true`                  | 是否注册模型可调用的记忆工具                                                                                                                                                                                                                                                                                                                   |
 | `benchControl`               | `false`                 | 注册 bench 控制服务（进程内 rebuild 触发/会话档位设置/蒸馏用量快照，供基准 lifecycle 赛道）。默认关——生产部署零表面积，勿随意开启                                                                                                                                                                                                                                                 |
+| `scope` | `global` | **存储作用域**（可见范围）：`global`（默认）= 跨工作区可见；`workspace` = 按工作区隔离 **`work` 族**。与 `family`（内容类型）**正交**——两轴问的是不同问题，四象限都存在（`chat×global` / `chat×workspace` / `work×global` / `work×workspace`）。`chat` 族默认仍全局：个人记忆本应跨项目。**默认 `global` 时行为与未引入该配置逐字一致**——既有单根数据全部归 `global`，迁移只标注归属、不搬不删（[ADR-0008](./docs/adr/0008-storage-scope-vs-family.md) / [ADR-0009](./docs/adr/0009-workspace-identity-source.md)）。拿不到会话工作区时回落 `global`（不抛、不阻断） |
+| `conflictFreeze.enabled`     | `false`                 | **矛盾冻结**总开关。开启后去重决策词表多出 `conflict` 动作：LLM 判定"两边都像是对的、机器判不了"时**不再自动 `update` 覆盖或 `merge` 合并**，而是把这一对**停放**到待裁决队列——新记忆照常入库，**双方内容都不被改写**，由新增的 `memory_resolve_conflict` 工具交人裁决。关闭时去重 prompt 与未开启该功能时**逐字一致**（零漂移）。默认关：冻结消耗人的注意力，不可默认全开（[ADR-0010](./docs/adr/0010-conflict-freeze-default-off-and-timeout.md)）                                                                                             |
+| `conflictFreeze.maxPending`  | `100`                   | 待裁决队列上限。未裁决数达上限时新的冲突**不再停放**，当场按 LLM 给出的 winner/loser 自动了结（该对**仍写入队列留痕**，`resolution` 记为 `auto` 以区别于人工结论）。语义是"**不收新的**"，不是"偷偷删旧的"——有界性由此成立，而不会丢掉人还没看过的裁决请求                                                                                                                                                                    |
+| `conflictFreeze.timeoutDays` | `30`                    | 超时降级（天）：停放超过该天数的待裁决对，在**下一轮蒸馏开头**被自动了结（同上，留痕为 `resolution=auto`）。`0` = **不做**超时降级（显式关闭，而非"立刻全部超时"）。没有安全阀时，"两条互相矛盾的记忆长期并列召回"会永久留在库里                                                                                                                                                                                             |
 
 ### 蒸馏回退链与慢 TTFT 模型
 
@@ -415,6 +419,24 @@ fsync），断电等极端崩溃最多丢最后一小段尾部，检索库可用
 - [ ] **Claude Code / Codex 记忆导入**：一键迁移既有记忆资产（`CLAUDE.md`、Claude Code 记忆文件、Codex `AGENTS.md` 等），导入后进入分层蒸馏管线
 
 ## 致谢
+
+本仓库的直接上游是 [JunNanLYS/dsh-layered-memory](https://github.com/JunNanLYS/dsh-layered-memory)
+——DSH 侧的分层蒸馏记忆插件。感谢原作者 **JunNanLYS** 开放该项目：本仓库在其基础上重写了实现层
+（首个提交 `0b506b8` 即「净室重写清场——移除旧实现与构建产物」），文档、图片与模块架构沿用上游。
+相对上游，本仓库新增了面向 Agent 的 12 个记忆工具（含高权限写入 `memory_add` / `memory_delete` /
+`memory_import`、反刍控制 `memory_ruminate` 系列、记忆图谱 `memory_search_graph` /
+`memory_expand_graph_node`、决策凭证回溯 `memory_receipts`、矛盾裁决 `memory_resolve_conflict`）、
+`skills/memport` 跨工具记忆搬运，以及商店截图声明。
+
+其中两个工具服务于**可追溯性**：
+
+- `memory_receipts` —— 回溯"这条记忆**怎么来的**"。每次 L1 去重决策都留一条凭证
+  （决策当时的**候选池输入摘要** + 结论），可按记录问"出自哪一轮、当时看到什么候选池"，
+  或按批次问"那一轮都判了什么"。凭证必须在事件**之前**存在——输入快照无法事后补录
+  （[ADR-0006](./docs/adr/0006-l1-decision-receipts.md)）。
+- `memory_resolve_conflict` —— 裁决**矛盾冻结**停放的冲突对（见 `conflictFreeze.*` 配置）。
+  结论 `winner` / `loser` / `both`：判某一方为真则另一方从检索中退场，判 `both` 表示
+  两者其实是各自独立的事实、都保留。
 
 记忆核心能力（分层蒸馏管线、Prompt 设计、双写存储架构）参考自
 [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
