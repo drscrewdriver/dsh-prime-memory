@@ -367,6 +367,14 @@ export async function runExtraction(
   }
   const byId = new Map(store.getByIds([...relatedIds]).map((r) => [r.id, r]));
   /**
+   * 本批次**全部**新记忆的 record_id。两个用途:
+   * ① 作为 `validateConflictPair` 的对手集之一 —— 同批次两条新记忆互相矛盾时,
+   *    对方的 id 不在候选池里(本轮刚生成、尚未入库),没有这个集合就**必然被判
+   *    不成对而回落 store**(2026-09-18 取证确认,见 findings R6 / Agent A);
+   * ② 队满自动了结的护栏 —— 败方若属本批新记忆,不得自动退场(见下方分支)。
+   */
+  const batchIds = new Set(extracted.map((e) => e.record_id));
+  /**
    * update/merge 取代掉的旧记录 → **取代它的**新记录 id。
    * 用 Map 而非 Set:退场标记要带 `by`,否则"被谁取代"只能靠时间猜。
    */
@@ -396,7 +404,7 @@ export async function runExtraction(
     if (action === 'conflict') {
       const pair =
         freezeEnabled
-          ? validateConflictPair(m.record_id, decision.winner, decision.loser, new Set(byId.keys()))
+          ? validateConflictPair(m.record_id, decision.winner, decision.loser, new Set(byId.keys()), batchIds)
           : null;
       if (pair) {
         added.push(toStoreRecord(m, now, ts, anchorMap));
@@ -411,6 +419,18 @@ export async function runExtraction(
         const pendingNow =
           store.countConflictPendingUnresolved() + frozen.filter((p) => p.resolvedAt === '').length;
         if (pendingNow >= maxPending) {
+          // 护栏(2026-09-18 随同批次冻结一起加):**败方是本轮新记忆时不做自动了结**。
+          // 自动了结 = `retire(loser)`,而本轮的 `added` 里刚把这条新记忆写入 ——
+          // 那等于"刚抽取出来的产出立刻退场",且没有任何人被告知。
+          // 改为不停放这一对(该条已在上方 added 中照常入库,记忆不丢),
+          // 只放弃这条裁决请求;队列有界性因此仍然成立。
+          if (batchIds.has(built.loserId)) {
+            logger.warn(
+              `[memory] 矛盾冻结:队列已满(${pendingNow}/${maxPending}),且该对的败方是本轮新记忆` +
+                `(${built.loserId})——不做自动了结(避免新记忆立即退场),改为不停放、照常入库`,
+            );
+            continue;
+          }
           built.resolvedAt = new Date(now).toISOString();
           built.resolution = 'auto';
           autoLosers.add(pair.loserId);

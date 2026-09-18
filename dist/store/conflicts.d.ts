@@ -50,13 +50,24 @@ export declare function buildConflictPair(input: ConflictPairInput): ConflictPai
  * 三条都必需,缺一即无法停放,调用方须回落 `store`(信息绝不丢):
  * ① winner / loser 都是非空 id;
  * ② 二者**不同**——指向同一条记录是无效输出(承自 mneme 的 `validateDecisions`);
- * ③ 其中**恰有一方是本条新记忆**(`recordId`),另一方是候选池里的已有记录
- *    (由调用方用 `knownIds` 判定存活)。否则"对"无从成立:要么新记忆没有对手,
- *    要么对侧是模型幻觉出来的 id。
+ * ③ **恰有一方是本条新记忆**(`recordId`),另一方是**可核实的对手**:
+ *    候选池里的已有记录(`knownIds`),**或同一批次里的另一条新记忆**(`batchIds`)。
+ *
+ * 关于 `batchIds`(2026-09-18 取证后放宽,见 findings R6 / Agent A):
+ * 此前另一方只认 `knownIds`(候选池 ∪ target_ids),而**同批次新记忆的 id 不在其中**
+ * ——它们是本轮刚生成的、尚未入库。于是"本轮两条新记忆互相矛盾"这种最典型的
+ * "机器判不了"情形,模型即便正确 emit 了 `conflict`,也**必然被判不成对而回落 store**。
+ * 实测:模型在生产 prompt 下对同批次矛盾 2/2 会 emit,但那一跳从未落库。
+ *
+ * 为何仍要求"恰有一方是 `recordId`":`conflict` 是**挂在某一条新记忆名下的决策**,
+ * 若允许"另外两条新记忆"配对,同一对会被每个兄弟重复申报一次。锁定一方为本条,
+ * 配对就唯一。
  *
  * 返回规范化后的 `{ winnerId, loserId }`,或 `null`(表示不构成冻结对)。
  */
-export declare function validateConflictPair(recordId: string, winner: unknown, loser: unknown, knownIds: ReadonlySet<string>): {
+export declare function validateConflictPair(recordId: string, winner: unknown, loser: unknown, knownIds: ReadonlySet<string>, 
+/** 本批次其它新记忆的 record_id(同批次互斥也可冻结)。不传 = 维持旧行为。 */
+batchIds?: ReadonlySet<string>): {
     winnerId: string;
     loserId: string;
 } | null;
