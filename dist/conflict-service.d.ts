@@ -12,7 +12,7 @@ import type { L1Store } from './store/l1.js';
 import type { ConflictPairView, ConflictsResponse as ConflictsView, ConflictResolveResponse as ConflictResolutionView } from './contract.js';
 export type { ConflictPairView, ConflictsView, ConflictResolutionView };
 export interface ConflictResolveDeps {
-    l1: Pick<L1Store, 'listConflictPending' | 'resolveConflictPending' | 'deleteBatch' | 'syncGraphDisputed'>;
+    l1: Pick<L1Store, 'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed'>;
     /** `conflictFreeze.enabled`。未开启时队列恒空,直接给出提示而非静默无操作。 */
     conflictFreezeEnabled: boolean;
 }
@@ -21,9 +21,11 @@ export interface ConflictResolveDeps {
  *
  * 顺序刻意如此:
  * ① **先打 `resolved_at` 再退场 loser**。反过来的话,退场成功但打标失败会留下
- *    "记录已消失、队列里那条仍在待裁决"的状态——人再点一次才发现无据可依。
+ *    "记录已退场、队列里那条仍在待裁决"的状态——人再点一次才发现无据可依。
  *    打标用 `WHERE resolved_at = ''`,天然防重复裁决:第二次调用拿到 0 行即中止。
  * ② 退场后才**重算**图谱 `disputed`(派生字段必须由当前事实重算,见 `syncDisputed`)。
+ * ③ 退场是**软删**(`retire`,可恢复),不是物理删除:主表行留着,`valid_to` 闭合 +
+ *    写取代标记,FTS/向量行撤掉。故"判错了"可以再恢复——裁决不可覆盖,但可以反悔。
  */
 export declare function resolveConflictPair(deps: ConflictResolveDeps, pairId: string, outcome: string): Promise<ConflictResolutionView>;
 /** 裁决结果的人类可读渲染(工具路径用)。schema 产出的是可选字段,故按部分取值渲染。 */

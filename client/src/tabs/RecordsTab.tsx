@@ -1,6 +1,6 @@
-/** Tab：L1 记忆浏览器（搜索/筛选/分页 + 展开详情 + 高权限删除：单条与批量勾选）。 */
+/** Tab：L1 记忆浏览器（搜索/筛选/分页 + 展开详情 + 高权限**退场(软删)** + 已退场区恢复）。 */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { ListRecordsRequest, UiRecord } from '../../../src/contract.js';
+import type { ListRecordsRequest, RetiredRecordView, UiRecord } from '../../../src/contract.js';
 import { TYPE_LABELS, fmtTime } from '../format.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
@@ -151,34 +151,35 @@ export function RecordsTab(props: { rpc: RpcFn }) {
     });
   };
 
-  /** 批量删除勾选记忆（records-delete，ids 数组一次 ≤200）。
+  /** 批量退场勾选记忆（records-delete = **软删**，ids 数组一次 ≤200）。
    *  写删门关闭时不动手：给提示引导先开高权限模式。 */
   const deleteSelected = () => {
     const ids = Array.from(sel);
     if (ids.length === 0) return;
     if (!hiPriv) {
-      setError('高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再删除记忆。');
+      setError('高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。');
       return;
     }
     if (ids.length > DELETE_LIMIT) {
-      setError('一次最多删除 ' + DELETE_LIMIT + ' 条（当前勾选 ' + ids.length + ' 条），请分批操作。');
+      setError('一次最多退场 ' + DELETE_LIMIT + ' 条（当前勾选 ' + ids.length + ' 条），请分批操作。');
       return;
     }
-    if (!window.confirm('删除勾选的 ' + ids.length + ' 条记忆？本操作不可逆（完整重建可能从 L0 复活，为已知边界）。')) return;
+    if (!window.confirm('退场勾选的 ' + ids.length + ' 条记忆？\n\n它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。')) return;
     rpc('dsh-memory/records-delete', { ids })
       .then((r) => {
         if (r && r.ok) {
           setSel(new Set());
           if (expandedId && ids.indexOf(expandedId) >= 0) setExpandedId(null);
           fetchPage(last, 0, false);
-        } else if (r) setError(r.error ? r.error.message : '删除失败');
+          if (showRetired) loadRetired();
+        } else if (r) setError(r.error ? r.error.message : '退场失败');
       })
       .catch((e: unknown) => setError(String((e && (e as Error).message) || e)));
   };
 
-  /** 单条删除（二次确认；host 侧同样有 memoryMutate 门兜底）。 */
+  /** 单条退场（软删，可恢复；host 侧同样有 memoryMutate 门兜底）。 */
   const deleteRecord = (id: string) => {
-    if (!window.confirm('删除该条记忆？本操作不可逆（完整重建可能从 L0 复活，为已知边界）。')) return;
+    if (!window.confirm('退场该条记忆？\n\n它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。')) return;
     rpc('dsh-memory/records-delete', { ids: [id] })
       .then((r) => {
         if (r && r.ok) {
@@ -189,9 +190,55 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           });
           if (expandedId === id) setExpandedId(null);
           fetchPage(last, 0, false);
-        } else if (r) setError(r.error ? r.error.message : '删除失败');
+          if (showRetired) loadRetired();
+        } else if (r) setError(r.error ? r.error.message : '退场失败');
       })
       .catch((e: unknown) => setError(String((e && (e as Error).message) || e)));
+  };
+
+  /** 已退场（软删）记录：可恢复。默认折叠，展开时才拉取——不让它拖慢正常浏览。 */
+  const [retired, setRetired] = useState<RetiredRecordView[]>([]);
+  const [retiredTotal, setRetiredTotal] = useState(0);
+  const [showRetired, setShowRetired] = useState(false);
+  const [retiredBusy, setRetiredBusy] = useState(false);
+
+  const loadRetired = useCallback(() => {
+    setRetiredBusy(true);
+    rpc('dsh-memory/records-retired', { limit: 100, offset: 0 })
+      .then((r) => {
+        if (r && r.ok) {
+          setRetired(r.value.items);
+          setRetiredTotal(r.value.total);
+        } else if (r) setError(r.error ? r.error.message : '已退场列表加载失败');
+      })
+      .catch((e: unknown) => setError(String((e && (e as Error).message) || e)))
+      .finally(() => setRetiredBusy(false));
+  }, [rpc]);
+
+  useEffect(() => {
+    if (showRetired) loadRetired();
+  }, [showRetired, loadRetired]);
+
+  /** 恢复：送回检索面（向量不可用时仅回关键词检索，不视为失败）。 */
+  const restoreRecords = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setRetiredBusy(true);
+    rpc('dsh-memory/records-restore', { ids })
+      .then((r) => {
+        if (r && r.ok) {
+          loadRetired();
+          fetchPage(last, 0, false);
+        } else if (r) setError(r.error ? r.error.message : '恢复失败');
+      })
+      .catch((e: unknown) => setError(String((e && (e as Error).message) || e)))
+      .finally(() => setRetiredBusy(false));
+  };
+
+  const RETIRE_REASON_LABEL: Record<string, string> = {
+    conflict: '裁决退场',
+    superseded: '被取代',
+    manual: '人工退场',
+    unknown: '已退场',
   };
 
   const countText = total !== null ? '共 ' + total + ' 条' : items.length + ' 条' + (hasMore ? '+' : '');
@@ -367,6 +414,43 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           );
         })
       )}
+      {/* 已退场（软删）区：与活动记忆**分开呈现**——"退场了"与"根本没这条"必须能分辨 */}
+      <div style={{ ...S.flexRow, marginTop: 12 }}>
+        <NButton onClick={() => setShowRetired((v) => !v)}>
+          {(showRetired ? '收起' : '展开') + '「已退场」（可恢复）'}
+        </NButton>
+        {showRetired && retiredBusy ? <span style={S.muted}>加载中…</span> : null}
+        {showRetired && !retiredBusy && retiredTotal > 0 ? (
+          <span style={S.muted}>{'共 ' + retiredTotal + ' 条可恢复'}</span>
+        ) : null}
+      </div>
+      {showRetired ? (
+        <div style={{ marginTop: 8 }}>
+          {retired.length === 0 ? (
+            <p style={S.hint}>{retiredBusy ? ' ' : '没有已退场的记忆。'}</p>
+          ) : (
+            <div>
+              {retired.map((m) => (
+                <div key={m.id} className="dsh-mem-card" style={S.card}>
+                  <div style={S.cardHead}>
+                    <span style={S.muted}>{RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason}</span>
+                    {m.verdict ? <span style={S.muted}>{'结论 ' + m.verdict}</span> : null}
+                    <div style={S.grow} />
+                    <span style={S.muted}>{fmtTime(m.retiredAt)}</span>
+                    <NButton disabled={retiredBusy} title="恢复到检索面" onClick={() => restoreRecords([m.id])}>
+                      恢复
+                    </NButton>
+                  </div>
+                  <div style={S.content}>{m.content}</div>
+                </div>
+              ))}
+              {retiredTotal > retired.length ? (
+                <p style={S.hint}>{'共 ' + retiredTotal + ' 条，此处显示 ' + retired.length + ' 条'}</p>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
       {hasMore ? (
         <div style={S.flexRow}>
           <div style={S.grow} />

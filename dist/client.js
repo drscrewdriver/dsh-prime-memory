@@ -606,7 +606,7 @@ var __defProp = Object.defineProperty;
 		// client/src/tabs/ConflictsTab.tsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var POLL_MS = 1e4;
-		var GONE = "（该记录已不在检索库：被合并或删除掉了）";
+		var GONE = "（该记录正文不可得：已不在主表，或被更早的清理清掉了）";
 		function ConflictsTab(props) {
 		  const rpc = props.rpc;
 		  const [view, setView] = (0, import_react2.useState)(null);
@@ -639,7 +639,7 @@ var __defProp = Object.defineProperty;
 		将要退场的记忆：
 		「${doomed}」
 		
-		它会从检索库移除（事实源保留，可从 L0 重建找回）。本操作不可覆盖。`
+		它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。裁决结论本身不可覆盖。`
 		      );
 		      if (!ok) return;
 		    }
@@ -3214,24 +3214,25 @@ var __defProp = Object.defineProperty;
 		    const ids = Array.from(sel);
 		    if (ids.length === 0) return;
 		    if (!hiPriv) {
-		      setError("高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再删除记忆。");
+		      setError("高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。");
 		      return;
 		    }
 		    if (ids.length > DELETE_LIMIT) {
-		      setError("一次最多删除 " + DELETE_LIMIT + " 条（当前勾选 " + ids.length + " 条），请分批操作。");
+		      setError("一次最多退场 " + DELETE_LIMIT + " 条（当前勾选 " + ids.length + " 条），请分批操作。");
 		      return;
 		    }
-		    if (!window.confirm("删除勾选的 " + ids.length + " 条记忆？本操作不可逆（完整重建可能从 L0 复活，为已知边界）。")) return;
+		    if (!window.confirm("退场勾选的 " + ids.length + " 条记忆？\n\n它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。")) return;
 		    rpc("dsh-memory/records-delete", { ids }).then((r) => {
 		      if (r && r.ok) {
 		        setSel(/* @__PURE__ */ new Set());
 		        if (expandedId && ids.indexOf(expandedId) >= 0) setExpandedId(null);
 		        fetchPage(last, 0, false);
-		      } else if (r) setError(r.error ? r.error.message : "删除失败");
+		        if (showRetired) loadRetired();
+		      } else if (r) setError(r.error ? r.error.message : "退场失败");
 		    }).catch((e) => setError(String(e && e.message || e)));
 		  };
 		  const deleteRecord = (id) => {
-		    if (!window.confirm("删除该条记忆？本操作不可逆（完整重建可能从 L0 复活，为已知边界）。")) return;
+		    if (!window.confirm("退场该条记忆？\n\n它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。")) return;
 		    rpc("dsh-memory/records-delete", { ids: [id] }).then((r) => {
 		      if (r && r.ok) {
 		        setSel((prev) => {
@@ -3241,8 +3242,41 @@ var __defProp = Object.defineProperty;
 		        });
 		        if (expandedId === id) setExpandedId(null);
 		        fetchPage(last, 0, false);
-		      } else if (r) setError(r.error ? r.error.message : "删除失败");
+		        if (showRetired) loadRetired();
+		      } else if (r) setError(r.error ? r.error.message : "退场失败");
 		    }).catch((e) => setError(String(e && e.message || e)));
+		  };
+		  const [retired, setRetired] = (0, import_react15.useState)([]);
+		  const [retiredTotal, setRetiredTotal] = (0, import_react15.useState)(0);
+		  const [showRetired, setShowRetired] = (0, import_react15.useState)(false);
+		  const [retiredBusy, setRetiredBusy] = (0, import_react15.useState)(false);
+		  const loadRetired = (0, import_react15.useCallback)(() => {
+		    setRetiredBusy(true);
+		    rpc("dsh-memory/records-retired", { limit: 100, offset: 0 }).then((r) => {
+		      if (r && r.ok) {
+		        setRetired(r.value.items);
+		        setRetiredTotal(r.value.total);
+		      } else if (r) setError(r.error ? r.error.message : "已退场列表加载失败");
+		    }).catch((e) => setError(String(e && e.message || e))).finally(() => setRetiredBusy(false));
+		  }, [rpc]);
+		  (0, import_react15.useEffect)(() => {
+		    if (showRetired) loadRetired();
+		  }, [showRetired, loadRetired]);
+		  const restoreRecords = (ids) => {
+		    if (ids.length === 0) return;
+		    setRetiredBusy(true);
+		    rpc("dsh-memory/records-restore", { ids }).then((r) => {
+		      if (r && r.ok) {
+		        loadRetired();
+		        fetchPage(last, 0, false);
+		      } else if (r) setError(r.error ? r.error.message : "恢复失败");
+		    }).catch((e) => setError(String(e && e.message || e))).finally(() => setRetiredBusy(false));
+		  };
+		  const RETIRE_REASON_LABEL = {
+		    conflict: "裁决退场",
+		    superseded: "被取代",
+		    manual: "人工退场",
+		    unknown: "已退场"
 		  };
 		  const countText = total !== null ? "共 " + total + " 条" : items.length + " 条" + (hasMore ? "+" : "");
 		  const selCount = sel.size;
@@ -3405,6 +3439,24 @@ var __defProp = Object.defineProperty;
 		        m.id
 		      );
 		    }),
+		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { ...S.flexRow, marginTop: 12 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(NButton, { onClick: () => setShowRetired((v) => !v), children: (showRetired ? "收起" : "展开") + "「已退场」（可恢复）" }),
+		      showRetired && retiredBusy ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "加载中…" }) : null,
+		      showRetired && !retiredBusy && retiredTotal > 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "共 " + retiredTotal + " 条可恢复" }) : null
+		    ] }),
+		    showRetired ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { marginTop: 8 }, children: retired.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("p", { style: S.hint, children: retiredBusy ? " " : "没有已退场的记忆。" }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { children: [
+		      retired.map((m) => /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: S.cardHead, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason }),
+		          m.verdict ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "结论 " + m.verdict }) : null,
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: fmtTime(m.retiredAt) }),
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(NButton, { disabled: retiredBusy, title: "恢复到检索面", onClick: () => restoreRecords([m.id]), children: "恢复" })
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.content, children: m.content })
+		      ] }, m.id)),
+		      retiredTotal > retired.length ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("p", { style: S.hint, children: "共 " + retiredTotal + " 条，此处显示 " + retired.length + " 条" }) : null
+		    ] }) }) : null,
 		    hasMore ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: S.flexRow, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(

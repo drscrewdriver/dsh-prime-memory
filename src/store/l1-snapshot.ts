@@ -258,3 +258,64 @@ export async function snapshotBeforeClear(
   const dir = snapshotPathFor(dataDir, now, reason);
   return createL1Snapshot(db, dir, reason, now);
 }
+
+/** 物理清理面(比快照面多一个删除能力)。 */
+export interface PurgeDbLike extends SnapshotDbLike {
+  deleteL1Batch: (ids: string[]) => number
+}
+
+export interface ExportThenPurgeResult {
+  /** 清理是否真的执行了。 */
+  ok: boolean
+  /** 门禁未通过而**中止**(`purged` 必为 0)。 */
+  aborted: boolean
+  /** 快照目录(中止时也给,便于人工查看失败现场)。 */
+  dir: string
+  purged: number
+  /** 校验差异(仅 aborted 时非空)。 */
+  diffs: string[]
+}
+
+/**
+ * **先导出,后清理**——把这句话变成调用方绕不过去的一步。
+ *
+ * 顺序与理由:
+ * ① 建快照(写正文 + 清单);**写盘失败即中止**,绝不"先删了再说";
+ * ② `verifySnapshot` 按**内容哈希**比对快照与当前库。不一致说明两者之间有别的写入
+ *    发生(并发蒸馏、另一次清理),此时快照**不代表**将要被删的那批数据 → 中止;
+ * ③ 只有 ①② 都通过,才 `deleteL1Batch` 做物理删除。
+ *
+ * 为什么值得这么严:物理删除是本插件唯一**不可逆**的动作。软删(退场)可以恢复,
+ * 而清理一旦没有可信的导出物,就只剩 `records/*.jsonl` 事实源这一条后路,
+ * 且那条路只覆盖 L1 记录、不覆盖 receipts/conflicts 的当时快照。
+ */
+export async function exportThenPurge(
+  db: PurgeDbLike,
+  dataDir: string,
+  ids: readonly string[],
+  reason: string,
+  logger?: { info: (m: string) => void; warn: (m: string) => void },
+  now: Date = new Date(),
+): Promise<ExportThenPurgeResult> {
+  if (ids.length === 0) return { ok: true, aborted: false, dir: '', purged: 0, diffs: [] };
+
+  let dir = '';
+  try {
+    const snap = await snapshotBeforeClear(db, dataDir, reason, now);
+    dir = snap.dir;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger?.warn(`[memory] 清理中止:快照写入失败(${msg})——未删除任何记录`);
+    return { ok: false, aborted: true, dir, purged: 0, diffs: [`快照写入失败:${msg}`] };
+  }
+
+  const verdict = await verifySnapshot(db, dir);
+  if (!verdict.ok) {
+    logger?.warn(`[memory] 清理中止:快照校验未通过(${verdict.diffs.join(';')})——未删除任何记录`);
+    return { ok: false, aborted: true, dir, purged: 0, diffs: verdict.diffs };
+  }
+
+  const purged = db.deleteL1Batch([...ids]);
+  logger?.info(`[memory] 已物理清理 ${purged} 条已退场记录(快照:${dir})`);
+  return { ok: true, aborted: false, dir, purged, diffs: [] };
+}

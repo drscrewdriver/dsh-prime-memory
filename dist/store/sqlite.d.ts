@@ -17,6 +17,7 @@ import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
 import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import { type SupersedeInfo } from './supersede.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
     id: string;
@@ -145,6 +146,48 @@ export declare class MemoryDb {
     /** 批量删除 L1(元数据 + 向量 + FTS),返回删除条数。IN 按 ≤900 分块(避变量数上限)。
      *  删除成功后触发图谱删除传播(来源全失效的节点/边惰性标 archived;失败不影响删除结果)。 */
     deleteL1Batch(ids: string[]): number;
+    /**
+     * **软删**(记忆退场):保留主表行,撤出检索面。
+     *
+     * 与 `deleteL1Batch` 的差别**只有一处**:不动 `l1_records` 行本身。
+     * `valid_to` 闭合 + `metadata_json` 写取代标记 → 记录仍能被 `listL1` 列出、
+     * 能被 `clearRetireMarker` + upsert 恢复;而 FTS 与向量行照旧删除,于是检索面
+     * (含去重候选召回)自然看不到它 —— **检索 SQL 一行都不用改**,活动记录零漂移
+     * 因此是构造性的,不是比对出来的。
+     *
+     * 顺序刻意如此:先打标记(可逆的那一半),再撤检索面,且整体在一个事务里。
+     * 反过来先撤索引而打标记失败,记录会落在"检索不到、也没被标记"的状态 ——
+     * 既查不出来也恢复不了,是最坏的一种中间态。
+     *
+     * **幂等**:已退场(`valid_to` 非空或已有标记)的 id 不再重复写标记,
+     * 保留首次退场的原因与时刻(「谁先取代了它」不该被后一次调用改写)。
+     *
+     * **不调** `graphStore.markSourcesDeleted`:那是"来源已物理消失"的传播,
+     * 而软删的记录仍活在主表里 —— 图谱侧的退役语义另计(见计划 findings R-a)。
+     */
+    retireL1Batch(ids: string[], info: SupersedeInfo): number;
+    /**
+     * 撤出检索面(删 FTS + 向量行,**主表保留**)。
+     * 与 `deleteL1Batch` 的删除面同源,只是不动 `l1_records`。
+     */
+    private detachL1FromRetrieval;
+    /**
+     * 清掉退场标记(恢复的**前半**)。返回清完标记的记录,供调用方 re-upsert 以重建
+     * FTS/向量 —— 那条路径(`upsertL1InTx`)已存在,不在这里重复实现。
+     *
+     * 只清 `valid_to` 与标记键,**不碰内容**:恢复不该修改记忆本身。
+     * 返回的 `validTo` 显式置 `undefined`(而非留着旧 epoch),否则 upsert 会
+     * 用 `toIso(旧值)` 把 `valid_to` 又写回去,恢复静默失败。
+     */
+    clearRetireMarker(ids: string[]): MemoryRecord[];
+    /** 已退场记录列表(面板用):`valid_to` 非空即已退场。失败返回空。 */
+    listRetiredL1(opts: {
+        limit: number;
+        offset: number;
+    }): {
+        items: MemoryRecord[];
+        total: number;
+    };
     private inStatement;
     /**
      * 清空 L1 检索库全部数据(重建用)。records/FTS 直接 DELETE;

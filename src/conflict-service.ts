@@ -30,7 +30,7 @@ function view(partial: Partial<ConflictResolutionView>): ConflictResolutionView 
 export interface ConflictResolveDeps {
   l1: Pick<
     L1Store,
-    'listConflictPending' | 'resolveConflictPending' | 'deleteBatch' | 'syncGraphDisputed'
+    'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed'
   >;
   /** `conflictFreeze.enabled`。未开启时队列恒空,直接给出提示而非静默无操作。 */
   conflictFreezeEnabled: boolean;
@@ -41,9 +41,11 @@ export interface ConflictResolveDeps {
  *
  * 顺序刻意如此:
  * ① **先打 `resolved_at` 再退场 loser**。反过来的话,退场成功但打标失败会留下
- *    "记录已消失、队列里那条仍在待裁决"的状态——人再点一次才发现无据可依。
+ *    "记录已退场、队列里那条仍在待裁决"的状态——人再点一次才发现无据可依。
  *    打标用 `WHERE resolved_at = ''`,天然防重复裁决:第二次调用拿到 0 行即中止。
  * ② 退场后才**重算**图谱 `disputed`(派生字段必须由当前事实重算,见 `syncDisputed`)。
+ * ③ 退场是**软删**(`retire`,可恢复),不是物理删除:主表行留着,`valid_to` 闭合 +
+ *    写取代标记,FTS/向量行撤掉。故"判错了"可以再恢复——裁决不可覆盖,但可以反悔。
  */
 export async function resolveConflictPair(
   deps: ConflictResolveDeps,
@@ -84,7 +86,17 @@ export async function resolveConflictPair(
     return view({ pair_id: pairId, outcome: clean, notice: '该对已被裁决,本次未生效(裁决不可覆盖)。' });
   }
 
-  if (removedId) await deps.l1.deleteBatch([removedId]);
+  if (removedId) {
+    // **软删**(退场),不是物理删除:主表行保留 + `valid_to` 闭合 + 写取代标记,
+    // FTS/向量行撤掉使其退出检索面。于是"判错了"可以再恢复,而不必去
+    // `records/*.jsonl` 事实源里手工捞——那是本功能上线前唯一的后悔药。
+    deps.l1.retire([removedId], {
+      at: resolvedAt,
+      reason: 'conflict',
+      verdict: clean,
+      pairId,
+    });
+  }
 
   // 图谱 disputed 重算:此刻仍未裁决的对才是争议集,已了结的节点自动复原 active
   const ids = new Set<string>();
@@ -103,7 +115,7 @@ export function renderConflictResolution(v: Partial<ConflictResolutionView>): st
   const outcome = v.outcome ?? '';
   const label = outcome === 'winner' ? '判定 LLM 建议的胜方为真' : outcome === 'loser' ? '判定败方为真' : '两者都保留(判为各自独立的事实)';
   const removed = v.removed_record_id
-    ? `\n退场记录:${v.removed_record_id}(已从检索中移除,事实源保留)`
+    ? `\n退场记录:${v.removed_record_id}(已移出检索面,**可恢复**——记忆列表里能找回)`
     : '\n未移除任何记录。';
   return `已裁决待裁决对 ${v.pair_id ?? ''}\n结论:${outcome}(${label})\n裁决时刻:${v.resolved_at ?? ''}${removed}`;
 }

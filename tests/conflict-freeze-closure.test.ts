@@ -155,9 +155,12 @@ describe('task_26 §C 冻结 → 裁决 闭环(端到端)', () => {
         deps,
       )) as { resolved_at: string; removed_record_id: string };
 
-      // 收敛态:胜方在库、败方退场、队列清空、行留痕
+      // 收敛态:胜方在库(活动)、败方**软删退场**(主表仍在,可恢复)、队列清空、行留痕
       expect(verdict.removed_record_id).toBe(oldId);
-      expect(store.getByIds([oldId])).toHaveLength(0);
+      const [retired] = store.getByIds([oldId]);
+      expect(retired, '软删:主表行必须保留').toBeDefined();
+      expect(retired.validTo).toBeDefined();
+      expect(store.listRetired({ limit: 10, offset: 0 }).items.map((r) => r.id)).toContain(oldId);
       expect(store.getByIds([newId])).toHaveLength(1);
       expect(store.listConflictPending()).toHaveLength(0);
 
@@ -185,8 +188,9 @@ describe('task_26 §C 冻结 → 裁决 闭环(端到端)', () => {
               裁决返回: verdict,
               裁决后队列行: resolvedRows,
               同批次凭证链: receipts,
-              裁决后_败方在库条数: store.getByIds([oldId]).length,
-              裁决后_胜方在库条数: store.getByIds([newId]).length,
+              裁决后_败方主表条数_软删可恢复: store.getByIds([oldId]).length,
+              裁决后_胜方主表条数: store.getByIds([newId]).length,
+              裁决后_已退场条数: store.listRetired({ limit: 100, offset: 0 }).total,
               裁决后_未裁决条数: store.listConflictPending().length,
             },
             null,

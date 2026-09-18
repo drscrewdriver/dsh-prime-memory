@@ -366,7 +366,11 @@ export async function runExtraction(
     for (const c of m.candidates) relatedIds.add(c.id);
   }
   const byId = new Map(store.getByIds([...relatedIds]).map((r) => [r.id, r]));
-  const deletedIds = new Set<string>();
+  /**
+   * update/merge 取代掉的旧记录 → **取代它的**新记录 id。
+   * 用 Map 而非 Set:退场标记要带 `by`,否则"被谁取代"只能靠时间猜。
+   */
+  const supersededBy = new Map<string, string>();
   const added: MemoryRecord[] = [];
   /** §C 本轮新冻结的冲突对(应用完新增记录后统一落盘)。 */
   const frozen: ConflictPair[] = [];
@@ -425,10 +429,12 @@ export async function runExtraction(
       continue;
     }
 
-    // update / merge:目标记录从检索库删除,合并结果作为新记录追加(版本 +1)
+    // update / merge:目标记录**退场(软删)**,合并结果作为新记录追加(版本 +1)
     // 候选召回按族隔离,合并产物保持新记忆的族标签
     const targets = (decision.target_ids ?? []).filter((id) => byId.has(id));
-    for (const id of targets) deletedIds.add(id);
+    // 同一目标被多条新记录取代时保留**首个**取代者:与 retire 的幂等语义一致
+    // (已退场记录不重复写标记),故先到先得而不是被后者覆盖
+    for (const id of targets) if (!supersededBy.has(id)) supersededBy.set(id, m.record_id);
     const targetVersion = targets.reduce((max, id) => Math.max(max, byId.get(id)?.version ?? 0), 0);
     const mergedTs = (decision.merged_timestamps ?? [])
       .map((t) => Date.parse(t))
@@ -465,11 +471,27 @@ export async function runExtraction(
   }
 
   await store.appendNew(added);
-  if (deletedIds.size > 0) await store.deleteBatch([...deletedIds]);
-  // §C 自动裁决的执行面:LLM 的 loser 从检索库退场(winner 存活)。
+  if (supersededBy.size > 0) {
+    // **软删**(取代):不是物理删除——主表行保留 + `valid_to` 闭合 + 取代标记,
+    // FTS/向量撤出检索面。于是"合并错了"也能恢复,而不必去 `records/*.jsonl` 手工捞。
+    // 按取代者分组落盘(一次事务一组),避免逐条开事务。
+    const retiredAt = new Date(now).toISOString();
+    const byNewRecord = new Map<string, string[]>();
+    for (const [targetId, newId] of supersededBy) {
+      const arr = byNewRecord.get(newId) ?? [];
+      arr.push(targetId);
+      byNewRecord.set(newId, arr);
+    }
+    for (const [newId, ids] of byNewRecord) {
+      store.retire(ids, { at: retiredAt, reason: 'superseded', by: newId });
+    }
+  }
+  // §C 自动裁决的执行面:LLM 的 loser 从检索面退场(winner 存活),同为**软删**。
   // 排在 appendNew 之后——若 loser 恰是**本轮新记忆**(LLM 判定新记忆更差),
-  // 也必须先让它进库再退场,以保证"本轮新增"与"本轮删除"的账面一致。
-  if (autoLosers.size > 0) await store.deleteBatch([...autoLosers]);
+  // 也必须先让它进库再退场,以保证"本轮新增"与"本轮退场"的账面一致。
+  if (autoLosers.size > 0) {
+    store.retire([...autoLosers], { at: new Date(now).toISOString(), reason: 'conflict', verdict: 'auto' });
+  }
 
   // ── §C 冻结对落盘(排在 appendNew 之后) ──
   // 顺序有讲究:先让新记忆真正进 L1,再登记"它和谁构成待裁决对"。反过来的话,
@@ -515,7 +537,7 @@ export async function runExtraction(
   markExtracted(states, mode, lastScene);
 
   logger.info(
-    `[memory] L1 抽取完成(mode=${mode}):消息 ${pending.length} 条,抽取 ${extracted.length} 条,去重后新增 ${added.length} 条(替换 ${deletedIds.size} 条,chat=${addedByFamily.chat}/work=${addedByFamily.work}),累计 chat=${states.chat.totalExtracted}/work=${states.work.totalExtracted}`,
+    `[memory] L1 抽取完成(mode=${mode}):消息 ${pending.length} 条,抽取 ${extracted.length} 条,去重后新增 ${added.length} 条(取代退场 ${supersededBy.size} 条,chat=${addedByFamily.chat}/work=${addedByFamily.work}),累计 chat=${states.chat.totalExtracted}/work=${states.work.totalExtracted}`,
   );
   return { stored: added.length, skipped: false, sceneName: lastScene, newRecords: added };
 }

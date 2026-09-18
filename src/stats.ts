@@ -33,6 +33,7 @@ import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/re
 import type { ReceiptQuery, ReceiptsView } from './store/receipts.js';
 import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
 import { sourceAnchorLabels } from './pipeline/anchors.js';
+import { readSupersedeMarker } from './store/supersede.js';
 import type { PersonaStore } from './store/persona.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
@@ -54,7 +55,7 @@ export interface MemoryStatusSource {
 }
 
 /**
- * 端点全集运行时清单(33 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(36 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -98,6 +99,9 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/embedding-runtime-cancel',
   'dsh-memory/embedding-reindex',
   'dsh-memory/embedding-reindex-cancel',
+  'dsh-memory/records-retired',
+  'dsh-memory/records-restore',
+  'dsh-memory/cleanup-retired',
 ];
 
 /** HTTP 路由前缀(客户端 fetch `/dsh-memory/rpc/<短方法名>`)。 */
@@ -205,6 +209,10 @@ import type {
   EmbeddingStateResponse,
   LayerChainView,
   ListRecordsResponse,
+  CleanupRetiredResponse,
+  RecordsRestoreResponse,
+  RecordsRetiredResponse,
+  RetiredRecordView,
   LlmModelsResponse,
   LlmProvidersResponse,
   DirectChannelView,
@@ -913,16 +921,113 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     }
 
     case 'dsh-memory/records-delete': {
-      // 面板高权限删除指定记忆;写入删权限门(memoryMutate)防御
+      // 面板高权限删除指定记忆;写入删权限门(memoryMutate)防御。
+      //
+      // **软删**(退场),不是物理删除:与裁决 / 取代共用同一原语。面板上的"删除"
+      // 因此可撤销;真要抹掉数据只能走 `cleanup-retired`(先落快照 + 校验通过才删)。
+      // 这样 `deleteL1Batch` 在整个代码里**只有一个调用方**(exportThenPurge),
+      // "物理删除必须先有可信导出物"就成了结构性事实,而不是一句约定。
       if (!live?.get().memoryMutate) {
         throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
       }
       const p = (payload ?? {}) as { ids?: unknown };
       const ids = (Array.isArray(p.ids) ? p.ids : []).filter((x): x is string => typeof x === 'string').slice(0, 200);
       if (ids.length === 0) throw new Error('ids 缺失');
-      await stores.l1.deleteBatch(ids);
-      deps.logger.info(`[memory] 高权限删除记忆 ${ids.length} 条(${ids.join('，')})`);
-      return { deleted: ids.length };
+      const n = stores.l1.retire(ids, { at: new Date().toISOString(), reason: 'manual' });
+      deps.logger.info(`[memory] 高权限退场(软删)记忆 ${n} 条(${ids.join('，')})`);
+      return { deleted: n };
+    }
+
+    // ── 记忆退场(软删)与清理:已退场列表 / 恢复 / 物理清理 ──
+    // 读方向**不开**权限门(与 conflicts 一致:看得见才知道要不要恢复);
+    // 恢复与物理清理由 memoryMutate 门控。
+    case 'dsh-memory/records-retired': {
+      const p = (payload ?? {}) as { limit?: unknown; offset?: unknown };
+      const limit = Math.min(Math.max(Math.floor(Number(p.limit)) || 50, 1), 200);
+      const offset = Math.min(Math.max(Math.floor(Number(p.offset)) || 0, 0), 1_000_000);
+      const { items, total } = stores.l1.listRetired({ limit, offset });
+      const resp: RecordsRetiredResponse = {
+        items: items.map((r) => {
+          const mark = readSupersedeMarker(r.metadata);
+          const view = hitToUiRecord(r) as RetiredRecordView;
+          return {
+            ...view,
+            // 标记缺失时退回 `valid_to`(软删的两条判据任一成立即算已退场)
+            retiredAt: mark?.at ?? (r.validTo !== undefined ? new Date(r.validTo).toISOString() : ''),
+            retiredReason: mark?.reason ?? 'unknown',
+            ...(mark?.verdict ? { verdict: mark.verdict } : {}),
+            ...(mark?.by ? { supersededBy: mark.by } : {}),
+          };
+        }),
+        total,
+      };
+      return resp;
+    }
+
+    case 'dsh-memory/records-restore': {
+      if (!live?.get().memoryMutate) {
+        throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+      }
+      const p = (payload ?? {}) as { ids?: unknown };
+      const ids = (Array.isArray(p.ids) ? p.ids : [])
+        .filter((x): x is string => typeof x === 'string' && x !== '')
+        .slice(0, 200);
+      if (ids.length === 0) throw new Error('ids 缺失');
+      const r = await stores.l1.restore(ids);
+      deps.logger.info(`[memory] 恢复已退场记忆 ${r.restored} 条(补向量 ${r.vectorsWritten} 条)`);
+      const resp: RecordsRestoreResponse = r;
+      return resp;
+    }
+
+    case 'dsh-memory/cleanup-retired': {
+      if (!live?.get().memoryMutate) {
+        throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+      }
+      const p = (payload ?? {}) as { ids?: unknown; dryRun?: unknown };
+      // **默认干跑**:省略 `dryRun` 即视为 true。物理删除是本插件唯一不可逆的动作,
+      // 必须由调用方显式要求才做(与"所有破坏性动作必须默认可回滚"同一条纪律)。
+      const dryRun = p.dryRun !== false;
+      const explicit = (Array.isArray(p.ids) ? p.ids : [])
+        .filter((x): x is string => typeof x === 'string' && x !== '')
+        .slice(0, 500);
+      let targets: string[];
+      if (explicit.length > 0) {
+        // 显式 id 也要**复核**是否真的处于已退场态:防止调用方用一个 id 列表
+        // 把活动记忆绕过软删直接物理抹掉(那等于给了一条硬删后门)。
+        targets = explicit.filter((id) => stores.l1.getByIds([id]).some((r) => r.validTo !== undefined));
+      } else {
+        targets = [];
+        for (let offset = 0; ; offset += 200) {
+          const page = stores.l1.listRetired({ limit: 200, offset });
+          targets.push(...page.items.map((r) => r.id));
+          if (page.items.length < 200) break;
+        }
+      }
+      if (dryRun) {
+        const resp: CleanupRetiredResponse = {
+          dryRun: true,
+          targets: targets.length,
+          purged: 0,
+          aborted: false,
+          dir: '',
+          diffs: [],
+        };
+        return resp;
+      }
+      if (targets.length === 0) {
+        const resp: CleanupRetiredResponse = { dryRun: false, targets: 0, purged: 0, aborted: false, dir: '', diffs: [] };
+        return resp;
+      }
+      const r = await stores.l1.purgeRetired(targets, 'cleanup-retired');
+      const resp: CleanupRetiredResponse = {
+        dryRun: false,
+        targets: targets.length,
+        purged: r.purged,
+        aborted: r.aborted,
+        dir: r.dir,
+        diffs: r.diffs,
+      };
+      return resp;
     }
 
     // ── 知识图谱(面板图谱视图;graph 未装配时返空不报错) ──

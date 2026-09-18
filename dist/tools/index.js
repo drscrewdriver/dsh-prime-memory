@@ -463,10 +463,18 @@ ruminate) {
     // memory_delete:显式"忘了 X"——按语义检索命中后删除(高权限门控)。
     ctx.tools.register(defineTool({
         name: 'memory_delete',
-        description: '删除与查询相关的记忆(L1)。仅当用户显式要求"忘记/删除某条记忆"时用;需高权限模式开启。按语义检索命中后删除(最多若干条),无法精确匹配时返回 zero。',
+        description: '退场(软删)与查询相关的记忆(L1)。仅当用户显式要求"忘记/删除某条记忆"时用;需高权限模式开启。' +
+            '默认只退场**最贴近的 1 条**;可用 limit 放大(上限 10)。' +
+            '退场是**软删**:记录移出检索面但保留在主表,可在记忆列表恢复,不是物理删除。' +
+            '已知确切 record_id 时应走 ids 参数(精确退场,不做语义匹配)。',
         parameters: {
-            query: { type: 'string', required: true, description: '要删除的记忆描述(自然语言,匹配最贴近的现存记忆)' },
-            limit: { type: 'number', description: '最多删除条数(默认 3,上限 10)' },
+            query: { type: 'string', description: '要退场的记忆描述(自然语言,匹配最贴近的现存记忆);给出 ids 时可省略' },
+            ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: '确切的 record_id 列表(给了它就不做语义匹配,只退场这些 id;上限同 limit)',
+            },
+            limit: { type: 'number', description: '最多退场条数(默认 1,上限 10)' },
         },
         output: {
             schema: {
@@ -479,27 +487,48 @@ ruminate) {
                 additionalProperties: false,
             },
             render: (_args, value) => [
-                { type: 'text', text: value.notice ?? `已删除 ${value.deleted ?? 0} 条记忆` },
+                {
+                    type: 'text',
+                    text: value.notice ??
+                        `已退场(软删)${value.deleted ?? 0} 条记忆` +
+                            (value.ids && value.ids.length ? `:${value.ids.join('，')}` : '') +
+                            '——它们仍在主表,可在记忆列表恢复',
+                },
             ],
         },
         execute: async (args, exec) => {
             if (!live.get().memoryMutate)
                 return { deleted: 0, ids: [], notice: MUTATE_OFF_NOTICE };
-            const query = String(args.query ?? '').trim();
-            if (!query)
-                return { deleted: 0, ids: [], notice: 'query 为空,未删除' };
             const family = familyOfCaller(exec);
-            const limit = Math.min(Math.max(args.limit ?? 3, 1), 10);
-            const hits = await stores.l1.search(query, limit, {
-                family: family && family !== null ? family : undefined,
-                workspaceId: scopeFilterOf(cfg.scope, exec),
-            });
-            const ids = hits.map((h) => h.id);
+            // 默认 1(原为 3):"忘记某条记忆"是一对一的意图,而 limit=3 会顺带退场
+            // 两条语义邻近但无关的记忆 —— 实测已发生过一次真实误删。
+            const limit = Math.min(Math.max(args.limit ?? 1, 1), 10);
+            // 精确路径优先:给了 ids 就**不做语义匹配**。语义匹配的"顺带多删几条"
+            // 正是误删的来源,而调用方一旦能给出 id,就没有理由再走模糊匹配。
+            const explicit = Array.isArray(args.ids)
+                ? args.ids.filter((x) => typeof x === 'string' && x.trim() !== '').slice(0, limit)
+                : [];
+            let ids;
+            if (explicit.length > 0) {
+                ids = explicit;
+            }
+            else {
+                const query = String(args.query ?? '').trim();
+                if (!query)
+                    return { deleted: 0, ids: [], notice: 'query 与 ids 均为空,未删除' };
+                const hits = await stores.l1.search(query, limit, {
+                    family: family && family !== null ? family : undefined,
+                    workspaceId: scopeFilterOf(cfg.scope, exec),
+                });
+                ids = hits.map((h) => h.id);
+            }
             if (ids.length === 0)
                 return { deleted: 0, ids: [], notice: '未找到匹配的记忆,未删除' };
-            await stores.l1.deleteBatch(ids);
-            logger.info(`[memory] 高权限删除记忆 ${ids.length} 条(${ids.join('，')})`);
-            return { deleted: ids.length, ids };
+            // **软删**(退场),不是物理删除:与裁决 / 取代共用同一原语,故"删错了"
+            // 可以在记忆列表里恢复,而不必去 records/*.jsonl 事实源手工捞。
+            const n = stores.l1.retire(ids, { at: new Date().toISOString(), reason: 'manual' });
+            logger.info(`[memory] 高权限退场(软删)记忆 ${n} 条(${ids.join('，')})`);
+            return { deleted: n, ids };
         },
     }));
     // ── 图谱工具(读;受与 memory_search 同款的档位/注入拒读门 + 族过滤) ──

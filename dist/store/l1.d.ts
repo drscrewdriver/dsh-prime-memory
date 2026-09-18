@@ -2,6 +2,8 @@ import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.j
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
 import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { SupersedeInfo } from './supersede.js';
+import { type ExportThenPurgeResult } from './l1-snapshot.js';
 import { type EmbeddingService } from './embedding.js';
 import { type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
@@ -102,7 +104,39 @@ export declare class L1Store {
      *  (见本文件 `reindex` 首行),调用方必须自己问这里——否则"根本没跑"
      *  会长得和"跑完了、零条待补"一模一样。 */
     vectorsReady(): boolean;
-    deleteBatch(ids: string[]): Promise<void>;
+    /**
+     * **软删**(记忆退场):保留主表行 + 撤出检索面,可被 `restore` 找回。
+     *
+     * 三条退场路径 —— 裁决判负 / 去重取代(`update`/`merge`) / 人工删除 ——
+     * **共用这一个入口**。分成三份实现迟早会出现"某条路径还在硬删"的不一致语义,
+     * 而那种不一致只有在误删发生时才暴露。
+     */
+    retire(ids: string[], info: SupersedeInfo): number;
+    /** 已退场(可恢复)记录列表(面板用)。 */
+    listRetired(opts: {
+        limit: number;
+        offset: number;
+    }): {
+        items: MemoryRecord[];
+        total: number;
+    };
+    /**
+     * 恢复:清退场标记 → 重新 upsert 以重建 FTS(与向量)。
+     *
+     * 嵌入不可用/超时时**不抛**:向量补不上只是"暂时只能关键词召回",而"恢复失败"
+     * 会让人以为记录丢了 —— 后者严重得多。记录先回到检索面,向量留给后续 `reindex`。
+     */
+    restore(ids: string[]): Promise<{
+        restored: number;
+        vectorsWritten: number;
+    }>;
+    /**
+     * 已退场记录的**物理清理**(不可逆):先落快照 + 校验,门禁不过即中止。
+     *
+     * 门禁本体在 `l1-snapshot.exportThenPurge`(与"重建前必快照"同一套设施);
+     * 这里只把 L1Store 已知的 dataDir 与 logger 接上去,避免端点层自己去推路径。
+     */
+    purgeRetired(ids: string[], reason: string): Promise<ExportThenPurgeResult>;
     /**
      * 三策略检索(自动召回与 memory_search 工具共用接缝)。
      * embedding 不可用时自动降级 keyword;type 后置过滤;

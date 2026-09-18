@@ -33,6 +33,7 @@ import { CostLedger } from './cost-ledger.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
+import { isRetired, readSupersedeMarker, stripSupersedeMarker, withSupersedeMarker } from './supersede.js';
 /** vec0 KNN 对遗留零向量的补偿缓冲。 */
 const ZERO_VEC_BUFFER = 10;
 /** IN 查询/删除的分块大小(保守避开 SQLite 变量数上限:现代构建 32766,老版 999)。 */
@@ -826,20 +827,28 @@ export class MemoryDb {
         // 全扫(批量写整体 O(N²))。只有主表已有该行(覆盖/合并)才可能有旧 FTS 行需要删。
         // 同批重复 id 也能正确处理:首条插入后,第二条的点查在同一事务内已见新行。
         const ftsExisted = this.ftsAvailable ? this.stmtL1Exists.get(record.id) !== undefined : false;
+        // **退场不变量必须在写入漏斗上强制**:已退场的记录(valid_to 闭合或带取代标记)
+        // 永不出现在检索面。只靠 `retireL1Batch` 保证是不够的——快照恢复 / 重建 /
+        // 旧版导入都会经这里写回记录,若照常重建 FTS/向量行,一条带退场标记的记录
+        // 会**悄悄回到检索结果里**(而检索侧刻意不看 valid_to,正是为了零漂移)。
+        const retiredNow = record.validTo !== undefined || readSupersedeMarker(record.metadata) !== undefined;
         this.stmtUpsertL1.run(record.id, record.content, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, toIso(record.createdAt), toIso(record.updatedAt), JSON.stringify(record.metadata ?? {}), family, toIso(record.validFrom), toIso(record.validTo), normPersistence(record.persistence) ?? '', scope, workspaceId);
-        // vec0 不支持 ON CONFLICT → 先删后插;零向量跳过(cosine 未定义)
+        // vec0 不支持 ON CONFLICT → 先删后插;零向量跳过(cosine 未定义)。
+        // 已退场则**只删不插**(见上方 retiredNow 的说明)。
         if (this.stmtDeleteL1Vec && this.stmtInsertL1Vec) {
             this.stmtDeleteL1Vec.run(record.id);
-            if (embedding && !isZeroVector(embedding)) {
+            if (!retiredNow && embedding && !isZeroVector(embedding)) {
                 this.stmtInsertL1Vec.run(record.id, vecToBuffer(embedding), toIso(record.updatedAt));
             }
         }
         // FTS 删除/插入与元数据同事务:失败必须整体回滚——若只吞 FTS 错误照常 COMMIT,
         // 已执行的 DELETE 会让该 id 的索引行被删未补,记录从此全文检索不可见(静默丢数据)。
         if (this.ftsAvailable) {
-            if (ftsExisted)
+            if (ftsExisted || retiredNow)
                 this.stmtL1FtsDelete.run(record.id);
-            this.stmtL1FtsInsert.run(tokenizeForFts(record.content), record.content, record.id, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, JSON.stringify(record.metadata ?? {}), family, scope, workspaceId);
+            if (!retiredNow) {
+                this.stmtL1FtsInsert.run(tokenizeForFts(record.content), record.content, record.id, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, JSON.stringify(record.metadata ?? {}), family, scope, workspaceId);
+            }
         }
     }
     /** 批量删除 L1(元数据 + 向量 + FTS),返回删除条数。IN 按 ≤900 分块(避变量数上限)。
@@ -866,6 +875,114 @@ export class MemoryDb {
         catch (err) {
             this.logger?.warn(`${TAG} L1 批量删除失败: ${err instanceof Error ? err.message : String(err)}`);
             return 0;
+        }
+    }
+    /**
+     * **软删**(记忆退场):保留主表行,撤出检索面。
+     *
+     * 与 `deleteL1Batch` 的差别**只有一处**:不动 `l1_records` 行本身。
+     * `valid_to` 闭合 + `metadata_json` 写取代标记 → 记录仍能被 `listL1` 列出、
+     * 能被 `clearRetireMarker` + upsert 恢复;而 FTS 与向量行照旧删除,于是检索面
+     * (含去重候选召回)自然看不到它 —— **检索 SQL 一行都不用改**,活动记录零漂移
+     * 因此是构造性的,不是比对出来的。
+     *
+     * 顺序刻意如此:先打标记(可逆的那一半),再撤检索面,且整体在一个事务里。
+     * 反过来先撤索引而打标记失败,记录会落在"检索不到、也没被标记"的状态 ——
+     * 既查不出来也恢复不了,是最坏的一种中间态。
+     *
+     * **幂等**:已退场(`valid_to` 非空或已有标记)的 id 不再重复写标记,
+     * 保留首次退场的原因与时刻(「谁先取代了它」不该被后一次调用改写)。
+     *
+     * **不调** `graphStore.markSourcesDeleted`:那是"来源已物理消失"的传播,
+     * 而软删的记录仍活在主表里 —— 图谱侧的退役语义另计(见计划 findings R-a)。
+     */
+    retireL1Batch(ids, info) {
+        if (this.degraded || ids.length === 0)
+            return 0;
+        try {
+            const existing = new Map(this.getL1ByIds(ids).map((r) => [r.id, r]));
+            const update = this.db.prepare('UPDATE l1_records SET valid_to = ?, metadata_json = ? WHERE record_id = ?');
+            const retired = [];
+            this.withTransaction(() => {
+                for (const id of ids) {
+                    const rec = existing.get(id);
+                    // 不存在的 id 静默跳过;已退场的跳过以保幂等
+                    if (!rec || isRetired(rec))
+                        continue;
+                    update.run(info.at, JSON.stringify(withSupersedeMarker(rec.metadata, info)), id);
+                    retired.push(id);
+                }
+                if (retired.length > 0)
+                    this.detachL1FromRetrieval(retired);
+            });
+            return retired.length;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L1 软删(退场)失败: ${err instanceof Error ? err.message : String(err)}`);
+            return 0;
+        }
+    }
+    /**
+     * 撤出检索面(删 FTS + 向量行,**主表保留**)。
+     * 与 `deleteL1Batch` 的删除面同源,只是不动 `l1_records`。
+     */
+    detachL1FromRetrieval(ids) {
+        if (this.stmtDeleteL1Vec) {
+            for (const chunk of chunkIds(ids))
+                this.inStatement('l1_vec', 'delete', chunk.length).run(...chunk);
+        }
+        if (this.ftsAvailable) {
+            for (const chunk of chunkIds(ids))
+                this.inStatement('l1_fts', 'delete', chunk.length).run(...chunk);
+        }
+    }
+    /**
+     * 清掉退场标记(恢复的**前半**)。返回清完标记的记录,供调用方 re-upsert 以重建
+     * FTS/向量 —— 那条路径(`upsertL1InTx`)已存在,不在这里重复实现。
+     *
+     * 只清 `valid_to` 与标记键,**不碰内容**:恢复不该修改记忆本身。
+     * 返回的 `validTo` 显式置 `undefined`(而非留着旧 epoch),否则 upsert 会
+     * 用 `toIso(旧值)` 把 `valid_to` 又写回去,恢复静默失败。
+     */
+    clearRetireMarker(ids) {
+        if (this.degraded || ids.length === 0)
+            return [];
+        try {
+            const existing = this.getL1ByIds(ids);
+            const update = this.db.prepare('UPDATE l1_records SET valid_to = ?, metadata_json = ? WHERE record_id = ?');
+            const restored = [];
+            this.withTransaction(() => {
+                for (const rec of existing) {
+                    const metadata = stripSupersedeMarker(rec.metadata);
+                    if (isRetired(rec))
+                        update.run('', JSON.stringify(metadata), rec.id);
+                    restored.push({ ...rec, metadata, validTo: undefined });
+                }
+            });
+            return restored;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L1 恢复(清退场标记)失败: ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+    }
+    /** 已退场记录列表(面板用):`valid_to` 非空即已退场。失败返回空。 */
+    listRetiredL1(opts) {
+        if (this.degraded)
+            return { items: [], total: 0 };
+        try {
+            const totalRow = this.db
+                .prepare("SELECT COUNT(*) AS n FROM l1_records WHERE COALESCE(valid_to, '') <> ''")
+                .get();
+            const rows = this.db
+                .prepare(`SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id
+           FROM l1_records WHERE COALESCE(valid_to, '') <> '' ORDER BY updated_time DESC LIMIT ? OFFSET ?`)
+                .all(opts.limit, opts.offset);
+            return { items: rows.map(rowToRecord), total: Number(totalRow?.n ?? 0) };
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} 已退场列表查询失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
+            return { items: [], total: 0 };
         }
     }
     inStatement(table, action, size) {

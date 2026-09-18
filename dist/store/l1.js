@@ -10,6 +10,7 @@ import { existsSync, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { familyForType, isScopeVisible } from '../types.js';
 import { graphHitRecordIds } from '../graph/search.js';
+import { exportThenPurge } from './l1-snapshot.js';
 import { EmbedHelper, NoopEmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
 import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
@@ -185,8 +186,63 @@ export class L1Store {
     vectorsReady() {
         return this.helper.vectorReady();
     }
-    async deleteBatch(ids) {
-        this.db.deleteL1Batch(ids);
+    // 这里**刻意没有** `deleteBatch`:物理删除(L1 三表同清)是不可逆的,
+    // 故它只能经由 `purgeRetired` → `exportThenPurge`(先落快照 + 校验通过)抵达。
+    // 曾经的 `deleteBatch(ids)` 是个无门禁的硬删入口,裁决 / 取代 / 面板删除都直接
+    // 调它 —— 那正是"删错了只能去 records/*.jsonl 手工捞"的根源。
+    // 若将来确需新增强删路径,请复用它下面的门禁,而不是重新暴露一个裸入口。
+    /**
+     * **软删**(记忆退场):保留主表行 + 撤出检索面,可被 `restore` 找回。
+     *
+     * 三条退场路径 —— 裁决判负 / 去重取代(`update`/`merge`) / 人工删除 ——
+     * **共用这一个入口**。分成三份实现迟早会出现"某条路径还在硬删"的不一致语义,
+     * 而那种不一致只有在误删发生时才暴露。
+     */
+    retire(ids, info) {
+        return this.db.retireL1Batch(ids, info);
+    }
+    /** 已退场(可恢复)记录列表(面板用)。 */
+    listRetired(opts) {
+        return this.db.listRetiredL1(opts);
+    }
+    /**
+     * 恢复:清退场标记 → 重新 upsert 以重建 FTS(与向量)。
+     *
+     * 嵌入不可用/超时时**不抛**:向量补不上只是"暂时只能关键词召回",而"恢复失败"
+     * 会让人以为记录丢了 —— 后者严重得多。记录先回到检索面,向量留给后续 `reindex`。
+     */
+    async restore(ids) {
+        const records = this.db.clearRetireMarker(ids);
+        let vectorsWritten = 0;
+        for (const rec of records) {
+            if (!rec.family)
+                rec.family = familyForType(rec.type);
+            let vec;
+            try {
+                vec = (await this.helper.batch([rec.content]))[0];
+            }
+            catch (err) {
+                this.logger?.warn(`[memory] 恢复时向量计算失败,先回关键词检索面(日后重建可补齐): ${err instanceof Error ? err.message : String(err)}`);
+            }
+            if (vec && !isZeroVector(vec))
+                vectorsWritten++;
+            this.db.upsertL1(rec, vec);
+        }
+        return { restored: records.length, vectorsWritten };
+    }
+    /**
+     * 已退场记录的**物理清理**(不可逆):先落快照 + 校验,门禁不过即中止。
+     *
+     * 门禁本体在 `l1-snapshot.exportThenPurge`(与"重建前必快照"同一套设施);
+     * 这里只把 L1Store 已知的 dataDir 与 logger 接上去,避免端点层自己去推路径。
+     */
+    async purgeRetired(ids, reason) {
+        // **只清理确实处于退场态的记录**。这道复核必须在删除发生的地方(而不是调用方):
+        // 否则任何调用方传一个 id 列表就能绕过软删、把活动记忆直接物理抹掉——
+        // 那等于给"先导出后清理"留了一条硬删后门。
+        const known = new Map(this.db.getL1ByIds(ids).map((r) => [r.id, r]));
+        const retiredIds = ids.filter((id) => known.get(id)?.validTo !== undefined);
+        return exportThenPurge(this.db, path.dirname(this.recordsDir), retiredIds, reason, this.logger);
     }
     /**
      * 三策略检索(自动召回与 memory_search 工具共用接缝)。

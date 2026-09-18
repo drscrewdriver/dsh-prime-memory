@@ -89,6 +89,9 @@ const ENDPOINTS = [
   'dsh-memory/embedding-runtime-cancel',
   'dsh-memory/embedding-reindex',
   'dsh-memory/embedding-reindex-cancel',
+  'dsh-memory/records-retired',
+  'dsh-memory/records-restore',
+  'dsh-memory/cleanup-retired',
 ] as const;
 
 describe('effort vocabulary', () => {
@@ -106,9 +109,9 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 33 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(33);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(33);
+  it('exposes exactly the 36 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(36);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(36);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {

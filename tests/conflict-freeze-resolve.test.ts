@@ -20,6 +20,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 const { L1Store } = await import('../src/store/l1.js');
 const { MemoryDb } = await import('../src/store/sqlite.js');
 const { conflictPairId } = await import('../src/store/conflicts.js');
+const { readSupersedeMarker } = await import('../src/store/supersede.js');
 const { resolveConflictPair } = await import('../src/conflict-service.js');
 const { handleEndpoint, buildEndpointDeps } = await import('../src/stats.js');
 const { memorySchema } = await import('../src/config.js');
@@ -140,8 +141,14 @@ describe('task_25 裁决闭环:winner / loser / both', () => {
       expect(r.resolved_at).toMatch(/^\d{4}-\d{2}-\d{2}T/); // 实际取值留档
       expect(r.removed_record_id).toBe(h.loserId);
 
-      expect(h.store.getByIds([h.loserId])).toHaveLength(0); // 退场
-      expect(h.store.getByIds([h.winnerId])).toHaveLength(1); // 保留
+      // **软删**(退场):主表行保留(可恢复的载体),但已撤出检索面。
+      // 旧断言是 `toHaveLength(0)`(物理删除)——那正是"删错了只能去 JSONL 事实源捞"的病根。
+      const [gone] = h.store.getByIds([h.loserId]);
+      expect(gone, '主表行必须保留,否则无从恢复').toBeDefined();
+      expect(gone.validTo).toBeDefined();
+      expect(readSupersedeMarker(gone.metadata)).toMatchObject({ reason: 'conflict', verdict: 'winner' });
+      expect(h.store.listRetired({ limit: 10, offset: 0 }).items.map((x) => x.id)).toContain(h.loserId);
+      expect(h.store.getByIds([h.winnerId])).toHaveLength(1); // 保留(活动)
 
       const byName = new Map(h.db.graphStore.loadGraph().nodes.map((n) => [n.name, n.status]));
       expect(byName.get(h.winnerNode)).toBe('active'); // 争议已了结 → 复原
@@ -170,7 +177,9 @@ describe('task_25 裁决闭环:winner / loser / both', () => {
     try {
       const r = await calls(h, h.pairId, 'loser');
       expect(r.removed_record_id).toBe(h.winnerId);
-      expect(h.store.getByIds([h.winnerId])).toHaveLength(0);
+      const [goneW] = h.store.getByIds([h.winnerId]);
+      expect(goneW?.validTo).toBeDefined();
+      expect(h.store.listRetired({ limit: 10, offset: 0 }).items.map((x) => x.id)).toContain(h.winnerId);
       expect(h.store.getByIds([h.loserId])).toHaveLength(1);
     } finally {
       h.close();
@@ -268,7 +277,10 @@ describe('task_25 RPC 端点(与工具共用同一形状与语义)', () => {
       expect(r.pair_id).toBe(h.pairId);
       expect(r.resolved_at).not.toBe('');
       expect(r.removed_record_id).toBe(h.loserId);
-      expect(h.store.getByIds([h.loserId])).toHaveLength(0);
+      // 端点路径与工具路径同语义:软删(可恢复),不是物理删除
+      const [viaEndpoint] = h.store.getByIds([h.loserId]);
+      expect(viaEndpoint?.validTo).toBeDefined();
+      expect(readSupersedeMarker(viaEndpoint?.metadata)).toMatchObject({ reason: 'conflict', verdict: 'winner' });
     } finally {
       h.close();
     }

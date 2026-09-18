@@ -610,13 +610,75 @@ export interface ListRecordsResponse {
     /** 场景筛选下拉选项(仅 offset===0 时附带)。 */
     scenes?: string[];
 }
-/** dsh-memory/records-delete(面板高权限删除指定记忆;须 memoryMutate 开启)。 */
+/** dsh-memory/records-delete(面板高权限退场指定记忆;须 memoryMutate 开启)。 */
 export interface RecordsDeleteRequest {
-    /** 要删除的 L1 record id 列表(≤200)。 */
+    /** 要**退场(软删)**的 L1 record id 列表(≤200)。不是物理删除,可恢复。 */
     ids: string[];
 }
 export interface RecordsDeleteResponse {
     deleted: number;
+}
+/**
+ * 已退场记录的一条(在浏览卡片之上补退场信息)。
+ *
+ * `retiredReason` 用宽松 `string` 而非字面量联合:契约要能在**客户端**那一档
+ * (`types: []`)独立编译,不该反向依赖宿主 store 的类型;严格联合留在 store 侧,
+ * 面板只做展示。新增原因时面板不认识也能照常显示,不会编译失败。
+ */
+export interface RetiredRecordView extends UiRecord {
+    /** 退场时刻(ISO 8601)。 */
+    retiredAt: string;
+    /** 退场原因:`conflict`(裁决) / `superseded`(去重取代) / `manual`(人工)。 */
+    retiredReason: string;
+    /** 裁决结论(仅 reason=conflict)。 */
+    verdict?: string;
+    /** 取代它的新记录 id(仅 reason=superseded)。 */
+    supersededBy?: string;
+}
+/** dsh-memory/records-retired(已退场列表;面板据此展示"可恢复"区)。 */
+export interface RecordsRetiredRequest {
+    limit?: number;
+    offset?: number;
+}
+export interface RecordsRetiredResponse {
+    items: RetiredRecordView[];
+    total: number;
+}
+/** dsh-memory/records-restore(把已退场记录送回检索面)。 */
+export interface RecordsRestoreRequest {
+    /** 要恢复的 record id 列表(≤200)。 */
+    ids: string[];
+}
+export interface RecordsRestoreResponse {
+    restored: number;
+    /** 成功补回向量的条数(嵌入不可用时可能小于 `restored`)。 */
+    vectorsWritten: number;
+}
+/**
+ * dsh-memory/cleanup-retired(物理清理已退场记录)。
+ *
+ * **默认干跑**:`dryRun` 省略即视为 `true`,只报"将要清理多少条"。
+ * 真要物理删除必须显式 `dryRun:false` —— 这是本插件唯一不可逆的动作。
+ * 即便显式执行,也要先落快照并校验通过,否则中止(`aborted:true`)。
+ */
+export interface CleanupRetiredRequest {
+    /** 限定要清理的 id;省略 = 全部已退场记录。 */
+    ids?: string[];
+    /** 默认 true(干跑)。显式 false 才真正删除。 */
+    dryRun?: boolean;
+}
+export interface CleanupRetiredResponse {
+    dryRun: boolean;
+    /** 本次涉及(干跑)或实际处理(真跑)的条数。 */
+    targets: number;
+    /** 真正物理删除的条数(干跑恒为 0;中止恒为 0)。 */
+    purged: number;
+    /** 门禁未通过而中止。 */
+    aborted: boolean;
+    /** 快照目录(真跑时非空)。 */
+    dir: string;
+    /** 中止原因(仅 aborted 时非空)。 */
+    diffs: string[];
 }
 /** dsh-memory/graph-search(图谱节点检索;紧凑节点卡)。 */
 export interface GraphSearchRequest {
@@ -903,6 +965,9 @@ export interface DshMemoryRequestMap {
     'dsh-memory/embedding-runtime-cancel': Record<string, never>;
     'dsh-memory/embedding-reindex': Record<string, never>;
     'dsh-memory/embedding-reindex-cancel': Record<string, never>;
+    'dsh-memory/records-retired': RecordsRetiredRequest;
+    'dsh-memory/records-restore': RecordsRestoreRequest;
+    'dsh-memory/cleanup-retired': CleanupRetiredRequest;
 }
 export interface DshMemoryResponseMap {
     'dsh-memory/stats': StatsResponse;
@@ -938,6 +1003,9 @@ export interface DshMemoryResponseMap {
     'dsh-memory/embedding-runtime-cancel': EmbeddingCancelResponse;
     'dsh-memory/embedding-reindex': EmbeddingReindexStartResponse;
     'dsh-memory/embedding-reindex-cancel': EmbeddingCancelResponse;
+    'dsh-memory/records-retired': RecordsRetiredResponse;
+    'dsh-memory/records-restore': RecordsRestoreResponse;
+    'dsh-memory/cleanup-retired': CleanupRetiredResponse;
 }
 /** 全部端点名(client 调用与 host case 表的共用字面量来源)。 */
 export type DshMemoryEndpoint = keyof DshMemoryResponseMap;

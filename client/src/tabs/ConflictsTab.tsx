@@ -36,7 +36,7 @@ import { NButton } from '../ui/primitives.js';
 const POLL_MS = 10_000;
 
 /** 取不到正文时的占位。**与"内容为空"是两回事**，必须分开说。 */
-const GONE = '（该记录已不在检索库：被合并或删除掉了）';
+const GONE = '（该记录正文不可得：已不在主表，或被更早的清理清掉了）';
 
 type Outcome = 'winner' | 'loser' | 'both';
 
@@ -80,7 +80,8 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
     if (doomed !== null) {
       const ok = window.confirm(
         `裁决这一对？\n\n将要退场的记忆：\n「${doomed}」\n\n` +
-          '它会从检索库移除（事实源保留，可从 L0 重建找回）。本操作不可覆盖。',
+          '它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。' +
+          '裁决结论本身不可覆盖。',
       );
       if (!ok) return;
     }
