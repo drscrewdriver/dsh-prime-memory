@@ -21,8 +21,7 @@ import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChai
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
 import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
-// R7:读回锚点走 anchors.ts 的**唯一入口**(形状校验从严),不在 UI 层自行解析 metadata。
-import { readSourceAnchors } from './pipeline/anchors.js';
+import { sourceAnchorLabels } from './pipeline/anchors.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
@@ -491,6 +490,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     distillMode: '', directBaseURL: '', directApiKey: '',
                     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
                     memoryMutate: false,
+                    conflictFreeze: live?.get()?.conflictFreeze === true,
                 }),
                 // 静态部署上限(cordis.patch.yml):运行时开关与它取 AND
                 ceilings: { capture: cfg.capture.enabled, distill: cfg.extract.enabled, recall: cfg.recall.enabled },
@@ -528,8 +528,8 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 throw new Error('开关通道未初始化');
             const patch = (payload ?? {});
             const clean = {};
-            // 布尔开关组:memoryMutate(高权限写删门)与主开关同列
-            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate']) {
+            // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
+            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze']) {
                 if (typeof patch[key] === 'boolean')
                     clean[key] = patch[key];
             }
@@ -729,11 +729,17 @@ export async function handleEndpoint(endpoint, payload, deps) {
         // 未开启冻结时同样走返回体(enabled:false + notice)而非抛错,理由同上。
         case 'dsh-memory/conflicts': {
             const p = (payload ?? {});
-            return listConflictPairs({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, { limit: Number(p.limit) || undefined });
+            // 冻结开关只有**一个**事实源:与去重管线同一套 effectiveCfg 解析
+            // (live.conflictFreeze 覆盖静态 cfg.conflictFreeze.enabled)。此前这里直接读
+            // cfg.conflictFreeze.enabled —— 面板开关写的是 live,而部署静态值恒 false,
+            // 于是开关已开、settings.yaml 已落 true,本页仍报"矛盾冻结未开启"。
+            return listConflictPairs({ l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true }, { limit: Number(p.limit) || undefined });
         }
         // ── §C 矛盾冻结裁决(task_25):与 memory_resolve_conflict 工具共用同一形状 ──
         // 端点层同样不给"提示文案"出口的例外只有一条:**队列未开启**不是调用错误而是
         // 部署状态,故它走返回体(带 notice)而非抛错;pair_id/outcome 缺参才抛。
+        // 开关判定与上面 conflicts 同源(effectiveCfg):读端与写端必须看同一份状态,
+        // 否则会出现"列表说开着、裁决说没开"的自相矛盾。
         case 'dsh-memory/conflict-resolve': {
             const p = (payload ?? {});
             const pairId = typeof p.pairId === 'string' ? p.pairId.trim() : '';
@@ -742,7 +748,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 throw new Error('需要 pairId(待裁决对的 pair_id)');
             if (!outcome)
                 throw new Error('需要 outcome(winner | loser | both)');
-            return await resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, pairId, outcome);
+            return await resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true }, pairId, outcome);
         }
         case 'dsh-memory/records-delete': {
             // 面板高权限删除指定记忆;写入删权限门(memoryMutate)防御
@@ -1058,11 +1064,16 @@ export async function handleEndpoint(endpoint, payload, deps) {
             return { cancelled: embedManager.cancelRuntimeInstall() };
         }
         case 'dsh-memory/embedding-reindex': {
+            // 手动触发重建(契约:`EmbeddingReindexStartResponse`,受理即返回,进度照旧轮询
+            // embedding-state-get 的 reindex 字段)。此前只登记了 -cancel:start 既不在白名单
+            // 也没有 case,于是 startReindex() 成了够不着的死代码,端点在面板上静默 404
+            // (契约门禁 tests/contract-keys.test.ts 早已为此标红)。
+            // 拒绝语义交给 startReindex 自己抛(已卸载/在跑/切源占锁/源未就绪),不在端点层复述。
             if (!embedManager)
-                throw new Error('嵌入管理器未初始化');
-            // 全部门槛判定收在 startReindex 里（含"未就绪时 reindex 会静默 0/0/0"这条），
-            // 此处不重复实现一遍——两处判定必然漂移，而这里漂移的后果是谎报成功。
-            return embedManager.startReindex();
+                throw new Error('嵌入管理器未初始化(存储不可用)');
+            const r = embedManager.startReindex();
+            deps.logger.info('[memory] 收到嵌入重建指令(设置页按钮)');
+            return r;
         }
         case 'dsh-memory/embedding-reindex-cancel': {
             if (!embedManager)
@@ -1087,18 +1098,13 @@ function hitToUiRecord(r) {
         createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
         updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : null,
         version: r.version ?? 0,
-        sourceAnchors: (readSourceAnchors(r.metadata) ?? []).map(formatAnchor),
+        // R7 来源锚点:契约字段是**标签数组**(`t12 s3`),由 metadata 的保留键读出。
+        // 此前这里仍在填已废弃的 `sourceMessageIds`——`l1_records` 从不存那一列,
+        // 该字段恒为 `[]`(死字段),而契约早已换成 `sourceAnchors`,于是
+        // `sourceAnchors` 永远缺失、来源行在 UI 上从未显示过。
+        sourceAnchors: sourceAnchorLabels(r.metadata),
         score: r.score ?? null,
     };
-}
-/**
- * 锚点的展示形态:`t12 s3` / 无 step 时 `t12`。
- *
- * 只做**可读化**,不携带 sessionId——单条记录的来源会话由记录自身语义决定,
- * 把 sessionId 塞进这一行会把 12 个字符的坐标变成 40 个字符。
- */
-function formatAnchor(a) {
-    return typeof a.step === 'number' ? `t${a.turn} s${a.step}` : `t${a.turn}`;
 }
 /**
  * 从文件尾反向分块读取最后 N 行:不整读全文件(轮转上限 2MB,整读会

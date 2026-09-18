@@ -47,3 +47,18 @@ export declare function withSourceAnchors(metadata: Record<string, unknown> | un
  * 宁可报告"无锚点",也不把半截坐标喂给下游的证据读取器。
  */
 export declare function readSourceAnchors(metadata: unknown): ConversationAnchor[] | undefined;
+/**
+ * 锚点的人类可读标签:**UI 契约(`UiRecord.sourceAnchors`)要的字符串形态**。
+ *
+ * 格式即 `t<turn>` / `t<turn> s<step>`(与 `reconcile.ts` 的证据行同一写法,
+ * 见 contract.ts 对 `sourceAnchors` 的说明)。`step` 缺失就**不写**——
+ * 不得用 0 或相邻事件的 step 补齐(红线 2:坐标永不推算)。
+ *
+ * 刻意**不带 sessionId**:该字段用于跨会话归并排序,而 UI 一行里只有
+ * "这条记忆出在会话内哪个位置",带上 id 反而把可用信息挤掉。
+ */
+export declare function anchorLabel(anchor: ConversationAnchor): string;
+/** 读侧一步到位:`l1_records.metadata_json` → UI 契约的标签数组。
+ *  无锚点返回**空数组**(`UiRecord.sourceAnchors` 的契约语义是"空数组 = 无锚点",
+ *  与 `readSourceAnchors` 的 `undefined` 区分开,故此处完成转换)。 */
+export declare function sourceAnchorLabels(metadata: unknown): string[];

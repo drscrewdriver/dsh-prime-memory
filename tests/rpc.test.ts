@@ -33,7 +33,12 @@ afterAll(async () => {
 
 const noopLogger: MemoryLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
-function cfg(over: Partial<MemoryConfig['llm']> = {}): MemoryConfig {
+function cfg(
+  over: Partial<MemoryConfig['llm']> = {},
+  /** 非 llm 子树覆盖(如 conflictFreeze):合并进返回的 cfg 字面量,供端点层验证
+   *  "运行时开关覆盖静态部署值"这一读路径。 */
+  cfgOver: Partial<MemoryConfig> = {},
+): MemoryConfig {
   return {
     dataDir: '', family: 'auto',
     capture: { enabled: true, stripCodeBlocks: true, maxMessageChars: 4000 },
@@ -47,6 +52,7 @@ function cfg(over: Partial<MemoryConfig['llm']> = {}): MemoryConfig {
     tokenCost: { retentionDays: 365 },
     tools: true,
     benchControl: false,
+    ...cfgOver,
   } as MemoryConfig;
 }
 
@@ -90,6 +96,8 @@ async function harness(opts: {
   live?: LiveSettingsHandle;
   sessionInfo?: SessionInfoSource;
   status?: MemoryStatusSource;
+  /** 静态部署 cfg 覆盖(非 llm 子树),用于验证运行时开关与静态值的优先级。 */
+  cfgOver?: Partial<MemoryConfig>;
 } = {}): Promise<Harness> {
   const dataDir = join(await tmp(), `rpc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
   const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
@@ -131,7 +139,7 @@ async function harness(opts: {
     llm: {} as never,
   } as unknown as Parameters<typeof registerMemoryRpc>[0];
 
-  registerMemoryRpc(ctx, cfg(), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined);
+  registerMemoryRpc(ctx, cfg({}, opts.cfgOver ?? {}), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined);
   return {
     call: async (endpoint, payload) => {
       // 模拟 HTTP 层:构造 loopback req(流式 body)+ 捕获型 res,过完整 handler
@@ -183,6 +191,28 @@ describe('rpc: stats / token-cost / unknown', () => {
     const near = await h.call('dsh-memory/token-cost', { granularity: 'month', rangeDays: 7 }) as { trend: { granularity: string } };
     expect(near.trend.granularity).toBe('day');
     resetTokenCost();
+    h.db.close();
+  });
+
+  it('conflicts: 面板读的 enabled 跟随**运行时开关**,不被静态部署值压住', async () => {
+    // 回归:端点曾读 cfg.conflictFreeze(静态部署值)。面板开关写的是 live settings,
+    // 于是开关已开、settings.yaml 已落 true,冲突页仍报 "矛盾冻结未开启" ——
+    // 读路径与写路径各看一份配置。此例钉死:静态关 + 运行时开 = 开。
+    const staticOff = { conflictFreeze: { enabled: false, maxPending: 100, timeoutDays: 30 } };
+    const h = await harness({ live: liveHandle({ conflictFreeze: true }), cfgOver: staticOff });
+    const v = (await h.call('dsh-memory/conflicts', {})) as { enabled: boolean; total: number; items: unknown[] };
+    expect(v.enabled).toBe(true);
+    expect(v.total).toBe(0);
+    expect(v.items).toEqual([]);
+    h.db.close();
+  });
+
+  it('conflicts: 运行时关闭时静态开启也不放行(开关双向都覆盖)', async () => {
+    const staticOn = { conflictFreeze: { enabled: true, maxPending: 100, timeoutDays: 30 } };
+    const h = await harness({ live: liveHandle({ conflictFreeze: false }), cfgOver: staticOn });
+    const v = (await h.call('dsh-memory/conflicts', {})) as { enabled: boolean; notice?: string };
+    expect(v.enabled).toBe(false);
+    expect(v.notice).toContain('矛盾冻结未开启');
     h.db.close();
   });
 

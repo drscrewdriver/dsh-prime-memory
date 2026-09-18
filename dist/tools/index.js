@@ -863,7 +863,7 @@ ruminate) {
             if (family === null) {
                 return { enabled: false, total: 0, items: [], notice: blockNoticeOf(exec) };
             }
-            return listConflictPairs({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, { limit: typeof args.limit === 'number' ? args.limit : undefined });
+            return listConflictPairs({ l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true }, { limit: typeof args.limit === 'number' ? args.limit : undefined });
         },
     }));
     // ── memory_resolve_conflict: §C 矛盾冻结的人工裁决出口 ──
@@ -901,7 +901,7 @@ ruminate) {
             const outcome = typeof args.outcome === 'string' ? args.outcome.trim() : '';
             if (!pairId)
                 return { ...empty, notice: '需要 pair_id:待裁决对没有"全部裁决"这种用法。' };
-            return resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, pairId, outcome);
+            return resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true }, pairId, outcome);
         },
     }));
     logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_receipts / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_resolve_conflict / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
