@@ -2965,6 +2965,7 @@ var __defProp = Object.defineProperty;
 		    if (off.length > 0) ceilingNote = "注意：部署配置已停用 " + off.join("、") + "（运行时开关无法开启）";
 		  }
 		  const mutate = settingsData && settingsData.settings ? !!settingsData.settings.memoryMutate : false;
+		  const cfEnabled = settingsData && settingsData.settings ? !!settingsData.settings.conflictFreeze : false;
 		  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { children: [
 		    settingsData && settingsData.supported === false ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("p", { style: S.hint, children: "settings 服务不可用，记忆模式开关未启用（记忆保持全开）。" }) : settingsData ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { style: S.switchPanel, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { style: S.panelLabel, children: "记忆模式" }),
@@ -3024,6 +3025,18 @@ var __defProp = Object.defineProperty;
 		          checked: mutate,
 		          onChange: (v) => {
 		            toggle("memoryMutate", v);
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { style: S.panelLabel, children: "人工冲突裁决" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+		        SwitchRow,
+		        {
+		          label: "人工冲突裁决",
+		          desc: cfEnabled ? '已开启：去重判定"两边都像对的"时冻结冲突对，停放到待人工裁决区' : "默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决",
+		          checked: cfEnabled,
+		          onChange: (v) => {
+		            toggle("conflictFreeze", v);
 		          }
 		        }
 		      ),
