@@ -367,6 +367,15 @@ describe('embedding manager', () => {
     const db = {
       swapProvider: vi.fn(() => ({ ok: true, needsReindex: false })),
       markEmbeddingSynced: vi.fn(),
+      // snapshot() 附带向量计数后,桩件必须覆盖这几个查询——
+      // `as never` 会绕过类型,漏掉哪个只会在跑的时候炸(2026-09-17 实测)
+      getVecSkipSet: () => new Set<string>(),
+      countL1Vec: () => 0,
+      countL1: () => 0,
+      countL1VecMissing: () => 0,
+      countL0Vec: () => 0,
+      countL0: () => 0,
+      countL0VecMissing: () => 0,
     } as never;
     const l0 = { setEmbeddingService: vi.fn() } as never;
     const l1 = { setEmbeddingService: vi.fn() } as never;
@@ -402,5 +411,103 @@ describe('makeLocalServiceFactory', () => {
     const svc = factory('bge-m3');
     expect(svc).not.toBeNull();
     svc?.close();
+  });
+});
+
+/**
+ * 手动重建(embedding-reindex)。
+ *
+ * 这组用例的重点**不是**"能不能跑起来",而是**该拒绝的时候有没有拒绝**:
+ * `L1Store.reindex` / `L0Store.reindex` 在向量能力未就绪时静默返回 0/0/0,
+ * 若入口不设门槛,受理一个"根本不会跑"的请求就等于向用户谎报"重建成功、零条待补"。
+ * 因此每条拒绝路径都要同时断言 **抛错** 且 **下游一次都没被调用**。
+ */
+describe('manual reindex (embedding-reindex)', () => {
+  async function mk(over: { vectorsReady?: boolean; sideEffectsOnly?: boolean; none?: boolean } = {}) {
+    const dataDir = join(await tmp(), `reindex-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+    await mkdir(dataDir, { recursive: true });
+    const store = new EmbeddingSourceStore(dataDir);
+    await store.init();
+    const downloader = new ModelDownloadQueue(dataDir, { mirror: 'https://hf-mirror.com' });
+    const installer = new RuntimeInstaller(dataDir, PINNED_TRANSFORMERS_VERSION, { logger: noopLogger });
+    const l1Reindex = vi.fn(async () => ({ written: 1, failed: 0, skipped: 0 }));
+    const l0Reindex = vi.fn(async () => ({ written: 1, failed: 0, skipped: 0 }));
+    const ready = over.vectorsReady ?? true;
+    const l1 = { setEmbeddingService: vi.fn(), vectorsReady: () => ready, reindex: l1Reindex } as never;
+    const l0 = { setEmbeddingService: vi.fn(), vectorsReady: () => ready, reindex: l0Reindex } as never;
+    const db = {
+      swapProvider: vi.fn(() => ({ ok: true, needsReindex: false })),
+      markEmbeddingSynced: vi.fn(),
+      getVecSkipSet: () => new Set<string>(),
+      countL1Vec: () => 3,
+      countL1: () => 5,
+      countL1VecMissing: () => 2,
+      countL0Vec: () => 7,
+      countL0: () => 9,
+      countL0VecMissing: () => 2,
+    } as never;
+    const svc = {
+      isReady: () => true,
+      getProviderInfo: () => ({ provider: 'remote', model: 'm', dimensions: 8 }),
+      getDimensions: () => 8,
+    } as never;
+    const initial = over.none
+      ? { svc: new NoopEmbeddingService(), dims: 0 }
+      : { svc, dims: 8, providerInfo: { provider: 'remote', model: 'm', dimensions: 8 } };
+    const manager = new EmbeddingManager({
+      dataDir, cfg: cfg(), db, l0, l1, sourceStore: store, installer, downloader, initial, logger: noopLogger,
+    });
+    return { manager, l1Reindex, l0Reindex };
+  }
+
+  it('嵌入源关闭（无 providerInfo）→ 拒绝，且下游一次都没跑', async () => {
+    const { manager, l1Reindex } = await mk({ none: true });
+    expect(() => manager.startReindex()).toThrow(/嵌入源已关闭/);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(l1Reindex).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
+  it('向量能力未就绪 → 拒绝，不谎报「已受理」', async () => {
+    const { manager, l1Reindex } = await mk({ vectorsReady: false });
+    expect(() => manager.startReindex()).toThrow(/未就绪/);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(l1Reindex).not.toHaveBeenCalled();
+    manager.dispose();
+  });
+
+  it('受理后跑 L1+L0；running 是同步置位的，并发第二次触发立即被拒', async () => {
+    const { manager, l1Reindex, l0Reindex } = await mk();
+    let release: () => void = () => {};
+    l1Reindex.mockImplementation(
+      () => new Promise((r) => { release = () => r({ written: 0, failed: 0, skipped: 0 }); }),
+    );
+    expect(manager.startReindex()).toEqual({ accepted: true });
+    // 不 await：reindexNow 在首个 await 之前就把 running 置了 true
+    expect(() => manager.startReindex()).toThrow(/已在进行中/);
+    await Promise.resolve();
+    expect(l1Reindex).toHaveBeenCalledTimes(1);
+    release();
+    for (let i = 0; i < 50; i++) {
+      if (!(await manager.snapshot()).reindex.running) break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect((await manager.snapshot()).reindex.running).toBe(false);
+    expect(l0Reindex).toHaveBeenCalledTimes(1);
+    manager.dispose();
+  });
+
+  it('卸载后拒绝', async () => {
+    const { manager } = await mk();
+    manager.dispose();
+    expect(() => manager.startReindex()).toThrow(/已卸载/);
+  });
+
+  it('snapshot 附带向量计数（口径：embedded/total/missing/skipped）', async () => {
+    const { manager } = await mk();
+    const snap = await manager.snapshot();
+    expect(snap.vectors.l1).toEqual({ embedded: 3, total: 5, missing: 2, skipped: 0 });
+    expect(snap.vectors.l0).toEqual({ embedded: 7, total: 9, missing: 2, skipped: 0 });
+    manager.dispose();
   });
 });

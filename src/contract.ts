@@ -396,7 +396,28 @@ export interface EmbeddingStateView {
   apply: { phase: ApplyPhase; message: string; startedAt: number; busy: boolean };
   local: { state: 'idle' | 'loading' | 'ready' | 'failed' | 'terminated'; error: string | null } | null;
   reindex: ReindexProgressState;
+  /** 向量索引概况（"已嵌入 X / 总 Y"的数据源）。 */
+  vectors: VectorIndexView;
   activeNote?: string;
+}
+
+/** 单层（L1 / L0）的向量索引计数。
+ *  不可用哨兵统一为 **-1**（沿用 db 层 `countL1Vec` / `countL1VecMissing` 的约定），
+ *  与"真的是 0 条"区分——`嵌入能力挂掉` 和 `一条都没嵌` 在 UI 上是两句不同的话。 */
+export interface VectorCountView {
+  /** 向量表行数（已嵌入）。 */
+  embedded: number;
+  /** 元数据行数（嵌入分母）。 */
+  total: number;
+  /** 缺向量且可补齐的条数（已排除 skip 集）。 */
+  missing: number;
+  /** 内容不可嵌入、已进 skip 集的条数（重试无意义）。 */
+  skipped: number;
+}
+
+export interface VectorIndexView {
+  l1: VectorCountView;
+  l0: VectorCountView;
 }
 
 // ── 端点请求/响应形状 ──
@@ -740,6 +761,13 @@ export interface EmbeddingCancelResponse {
   cancelled: boolean;
 }
 
+/** dsh-memory/embedding-reindex（手动触发重建）。
+ *  受理即返回，**不在此回传进度**——客户端照旧轮询 embedding-state-get 的 reindex 字段，
+ *  否则"受理响应"与"进度快照"会各有一套进度语义，两边迟早对不上。 */
+export interface EmbeddingReindexStartResponse {
+  accepted: true;
+}
+
 /** dsh-memory/embedding-model-delete */
 export interface EmbeddingModelDeleteRequest {
   modelId: string;
@@ -870,6 +898,7 @@ export interface DshMemoryRequestMap {
   'dsh-memory/embedding-download-cancel': Record<string, never>;
   'dsh-memory/embedding-model-delete': EmbeddingModelDeleteRequest;
   'dsh-memory/embedding-runtime-cancel': Record<string, never>;
+  'dsh-memory/embedding-reindex': Record<string, never>;
   'dsh-memory/embedding-reindex-cancel': Record<string, never>;
 }
 
@@ -905,6 +934,7 @@ export interface DshMemoryResponseMap {
   'dsh-memory/embedding-download-cancel': EmbeddingCancelResponse;
   'dsh-memory/embedding-model-delete': EmbeddingModelDeleteResponse;
   'dsh-memory/embedding-runtime-cancel': EmbeddingCancelResponse;
+  'dsh-memory/embedding-reindex': EmbeddingReindexStartResponse;
   'dsh-memory/embedding-reindex-cancel': EmbeddingCancelResponse;
 }
 

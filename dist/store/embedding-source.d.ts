@@ -8,7 +8,7 @@ import { ModelDownloadQueue } from './download-queue.js';
 import { RuntimeInstaller } from './runtime-installer.js';
 import type { MemoryDb } from './sqlite.js';
 import type { EmbeddingSourceKind, EmbeddingStateView } from '../contract.js';
-export type { ApplyPhase, EmbeddingSourceKind, EmbeddingStateView, ReindexProgressState } from '../contract.js';
+export type { ApplyPhase, EmbeddingSourceKind, EmbeddingStateView, ReindexProgressState, VectorCountView, VectorIndexView, } from '../contract.js';
 export interface EmbeddingSourceState {
     source: EmbeddingSourceKind;
     /** source=local 时启用的目录模型 id。 */
@@ -107,6 +107,22 @@ export declare class EmbeddingManager {
         error?: string;
     }>;
     cancelReindex(): boolean;
+    /**
+     * 手动触发重建(RPC:`embedding-reindex`)。
+     *
+     * 受理即返回,不等跑完——进度照旧走 `snapshot().reindex` 轮询,不在这里回传。
+     * 门槛全部前置,且**宁可拒绝也不谎报**:以下四种情况直接抛错而非"成功受理":
+     *
+     * - 插件已卸载 / 重嵌已在跑 / 嵌入源切换占着锁:并发语义,重复触发无意义;
+     * - 嵌入服务未就绪:`L1Store.reindex` / `L0Store.reindex` 会**静默短路**成
+     *   `0/0/0`,受理了就等于告诉用户"重建成功、零条待补"——而真相是它根本没开始。
+     *
+     * 用抛错而不是返回 `{accepted:false, error}`:与 `embedding-model-delete` 等既有
+     * 端点一致,客户端 `call()` 已有统一的错误呈现,多一套返回形状只会多一处要维护。
+     */
+    startReindex(): {
+        accepted: true;
+    };
     /** 应用链/后台任务是否在跑(backfill 并发门禁用)。 */
     isBusy(): boolean;
     /** 停机钩子(插件 dispose):取消 npm 安装、下载与重嵌——不留后台孤儿任务。 */
@@ -115,4 +131,15 @@ export declare class EmbeddingManager {
     private reindexNow;
     /** RPC 快照(设置页嵌入区块数据源;client 忙时 1s 轮询)。 */
     snapshot(): Promise<EmbeddingStateView>;
+    /**
+     * 向量索引计数(设置页「已嵌入 X / 总 Y」的数据源)。
+     *
+     * 直接读 db 的 COUNT,不走缓存:重建跑完后 UI 靠轮询同一份快照看结果,
+     * 缓存会让"重建完成"之后数字还停在旧值,用户以为白跑了。
+     * 计数在 `embedding-state-get` 每次调用时算一遍(仅忙时 1s 轮询),开销可忽略。
+     *
+     * db 层的 `-1` 哨兵原样透传(向量能力不可用),UI 据此换文案——
+     * 不在这里折叠成 0,否则"能力挂了"与"一条都没嵌"在界面上长得一样。
+     */
+    private vectorCounts;
 }

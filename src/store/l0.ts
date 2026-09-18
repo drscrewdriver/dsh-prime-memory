@@ -154,6 +154,13 @@ export class L0Store {
     this.helper.setService(svc);
   }
 
+  /** 向量写入能力是否就绪。`reindex` 在未就绪时**静默短路**成 0/0/0
+   *  (见本文件 `reindex` 首行),调用方必须自己问这里——否则"根本没跑"
+   *  会长得和"跑完了、零条待补"一模一样。 */
+  vectorsReady(): boolean {
+    return this.helper.vectorReady();
+  }
+
   /**
    * 增量重嵌入(同 L1Store.reindex:只补缺失向量,零向量记 skipped 并入 skip 集,
    * 不算失败、不阻塞同步标记——保证补齐判据收敛)。onProgress/shouldCancel

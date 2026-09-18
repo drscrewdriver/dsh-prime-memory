@@ -98,6 +98,10 @@ export declare class L1Store {
     upsert(record: MemoryRecord): Promise<void>;
     /** 活切换嵌入源:同步换底层服务(嵌入源三态切换用)。 */
     setEmbeddingService(svc: EmbeddingService): void;
+    /** 向量写入能力是否就绪。`reindex` 在未就绪时**静默短路**成 0/0/0
+     *  (见本文件 `reindex` 首行),调用方必须自己问这里——否则"根本没跑"
+     *  会长得和"跑完了、零条待补"一模一样。 */
+    vectorsReady(): boolean;
     deleteBatch(ids: string[]): Promise<void>;
     /**
      * 三策略检索(自动召回与 memory_search 工具共用接缝)。

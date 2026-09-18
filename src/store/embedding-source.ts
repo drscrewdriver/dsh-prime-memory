@@ -30,8 +30,22 @@ import type { MemoryDb } from './sqlite.js';
 // EmbeddingSourceKind/ApplyPhase/ReindexProgressState/EmbeddingStateView 来自契约
 // 单一事实源(src/contract.ts)——embedding-state-get 端点与 client 嵌入区块共享
 // 同一形状;import type 供本地使用,re-export 不断裂既有引用。
-import type { ApplyPhase, EmbeddingSourceKind, EmbeddingStateView, ReindexProgressState } from '../contract.js';
-export type { ApplyPhase, EmbeddingSourceKind, EmbeddingStateView, ReindexProgressState } from '../contract.js';
+import type {
+  ApplyPhase,
+  EmbeddingSourceKind,
+  EmbeddingStateView,
+  ReindexProgressState,
+  VectorCountView,
+  VectorIndexView,
+} from '../contract.js';
+export type {
+  ApplyPhase,
+  EmbeddingSourceKind,
+  EmbeddingStateView,
+  ReindexProgressState,
+  VectorCountView,
+  VectorIndexView,
+} from '../contract.js';
 
 export interface EmbeddingSourceState {
   source: EmbeddingSourceKind;
@@ -341,6 +355,38 @@ export class EmbeddingManager {
     return true;
   }
 
+  /**
+   * 手动触发重建(RPC:`embedding-reindex`)。
+   *
+   * 受理即返回,不等跑完——进度照旧走 `snapshot().reindex` 轮询,不在这里回传。
+   * 门槛全部前置,且**宁可拒绝也不谎报**:以下四种情况直接抛错而非"成功受理":
+   *
+   * - 插件已卸载 / 重嵌已在跑 / 嵌入源切换占着锁:并发语义,重复触发无意义;
+   * - 嵌入服务未就绪:`L1Store.reindex` / `L0Store.reindex` 会**静默短路**成
+   *   `0/0/0`,受理了就等于告诉用户"重建成功、零条待补"——而真相是它根本没开始。
+   *
+   * 用抛错而不是返回 `{accepted:false, error}`:与 `embedding-model-delete` 等既有
+   * 端点一致,客户端 `call()` 已有统一的错误呈现,多一套返回形状只会多一处要维护。
+   */
+  startReindex(): { accepted: true } {
+    if (this.disposedFlag) throw new Error('插件已卸载，无法重建');
+    if (this.reindex.running) throw new Error('重建已在进行中');
+    if (this.applyBusy) throw new Error('嵌入源切换进行中，请稍后再试');
+    if (!this.currentInfo) throw new Error('嵌入源已关闭，重建无意义（请先启用嵌入）');
+    if (!this.deps.l1.vectorsReady() || !this.deps.l0.vectorsReady()) {
+      throw new Error('嵌入服务未就绪（模型加载中或推理运行时未安装），请稍后再试');
+    }
+    void this.reindexNow()
+      .then((r) => {
+        if (r.error) this.deps.logger.warn(`[memory] 手动重建失败: ${r.error}`);
+        else this.deps.logger.info(`[memory] 手动重建结束（已取消=${r.cancelled}, 失败=${r.failedTotal}）`);
+      })
+      .catch(() => {
+        /* reindexNow 内部已兜底,不外抛(否则成未处理的 rejection) */
+      });
+    return { accepted: true };
+  }
+
   /** 应用链/后台任务是否在跑(backfill 并发门禁用)。 */
   isBusy(): boolean {
     return this.applyBusy || this.reindex.running || this.downloader.isBusy();
@@ -516,7 +562,32 @@ export class EmbeddingManager {
       apply: { phase: this.applyPhase, message: this.applyMessage, startedAt: this.applyStartedAt, busy: this.applyBusy },
       local: this.localSvc ? { state: this.localSvc.getState(), error: this.localSvc.getLoadError() } : null,
       reindex: { ...this.reindex },
+      vectors: this.vectorCounts(),
       activeNote: this.activeNote,
     };
+  }
+
+  /**
+   * 向量索引计数(设置页「已嵌入 X / 总 Y」的数据源)。
+   *
+   * 直接读 db 的 COUNT,不走缓存:重建跑完后 UI 靠轮询同一份快照看结果,
+   * 缓存会让"重建完成"之后数字还停在旧值,用户以为白跑了。
+   * 计数在 `embedding-state-get` 每次调用时算一遍(仅忙时 1s 轮询),开销可忽略。
+   *
+   * db 层的 `-1` 哨兵原样透传(向量能力不可用),UI 据此换文案——
+   * 不在这里折叠成 0,否则"能力挂了"与"一条都没嵌"在界面上长得一样。
+   */
+  private vectorCounts(): VectorIndexView {
+    const count = (kind: 'l1' | 'l0'): VectorCountView => {
+      const skip = this.deps.db.getVecSkipSet(kind);
+      return {
+        embedded: kind === 'l1' ? this.deps.db.countL1Vec() : this.deps.db.countL0Vec(),
+        total: kind === 'l1' ? this.deps.db.countL1() : this.deps.db.countL0(),
+        missing:
+          kind === 'l1' ? this.deps.db.countL1VecMissing(skip) : this.deps.db.countL0VecMissing(skip),
+        skipped: skip.size,
+      };
+    };
+    return { l1: count('l1'), l0: count('l0') };
   }
 }
