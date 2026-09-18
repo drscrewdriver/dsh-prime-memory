@@ -10,7 +10,8 @@ import { existsSync, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { familyForType, isScopeVisible } from '../types.js';
 import { graphHitRecordIds } from '../graph/search.js';
-import { exportThenPurge } from './l1-snapshot.js';
+import { isRetired } from './supersede.js';
+import { exportThenPurge, readSnapshotManifest, readSnapshotRecords, restoreL1Snapshot, selectSnapshotTargets, snapshotDirFor, listSnapshots as listSnapshotsIn } from './l1-snapshot.js';
 import { EmbedHelper, NoopEmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
 import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
@@ -20,6 +21,8 @@ const CANDIDATE_MULTIPLIER = 3;
 export class L1Store {
     db;
     strategy;
+    /** 记忆库根目录(`records/` 与 `snapshots/` 都在它下面)。 */
+    dataDir;
     recordsDir;
     legacyFile;
     helper;
@@ -36,6 +39,7 @@ export class L1Store {
     graphLane) {
         this.db = db;
         this.strategy = strategy;
+        this.dataDir = dataDir;
         this.recordsDir = path.join(dataDir, 'records');
         this.legacyFile = path.join(dataDir, 'l1', 'records.jsonl');
         this.embedSvc = embed;
@@ -242,7 +246,109 @@ export class L1Store {
         // 那等于给"先导出后清理"留了一条硬删后门。
         const known = new Map(this.db.getL1ByIds(ids).map((r) => [r.id, r]));
         const retiredIds = ids.filter((id) => known.get(id)?.validTo !== undefined);
-        return exportThenPurge(this.db, path.dirname(this.recordsDir), retiredIds, reason, this.logger);
+        return exportThenPurge(this.db, this.dataDir, retiredIds, reason, this.logger);
+    }
+    // ───────────────────────────────────────────────────────────────────────────
+    // 快照的**读与回灌**(task_27):`purgeRetired` 会先落快照,但只落不接等于
+    // 后悔药只做了一半——"清理不可逆"这句话必须配一条能走回去的路,否则
+    // `exportThenPurge` 的导出物就只是给人手工解析的 JSON。
+    //
+    // 恢复走 `restoreL1Snapshot`(本文件的 `restore` 管的是**软删**退场,
+    // 两者不是一件事:软删的行一直在主表里,快照恢复要管的是**已被物理删除**的行)。
+    // ───────────────────────────────────────────────────────────────────────────
+    /** 可用快照列表(按时间倒序;面板/工具据此选一份来恢复)。 */
+    listSnapshots(opts = {}) {
+        return listSnapshotsIn(this.dataDir, opts);
+    }
+    /**
+     * 名字 → 真实快照。
+     *
+     * 两道判定合一:名字合法(`snapshotDirFor`)且**清单存在且版本相符**
+     * (`readSnapshotManifest`)。只有前者会被"目录里有个同名空目录"骗过——
+     * 而那正是半截写入的产物,选中它恢复会得到 0 条却报成功。
+     */
+    async resolveSnapshot(name) {
+        const dir = snapshotDirFor(this.dataDir, name);
+        if (dir === undefined)
+            return undefined;
+        if ((await readSnapshotManifest(dir)) === undefined)
+            return undefined;
+        return { dir, records: await readSnapshotRecords(dir) };
+    }
+    /**
+     * 干跑:算出"这份快照恢复下去会发生什么",**不写库**。
+     *
+     * `missing` 才是真正被找回的条数——快照里绝大多数记录今天仍在库里(快照是
+     * **全库**拷贝,而被清掉的只是其中几条)。只报 `targets` 会让人以为"要恢复 787 条",
+     * 从而不敢按下去。
+     */
+    async planSnapshotRestore(name, ids) {
+        const resolved = await this.resolveSnapshot(name);
+        if (resolved === undefined) {
+            return { name, dir: '', found: false, inSnapshot: 0, targets: 0, missing: 0, stillRetired: [], notFound: [] };
+        }
+        const { targets, notFound } = selectSnapshotTargets(resolved.records, ids);
+        const targetIds = targets.filter((r) => typeof r?.id === 'string').map((r) => r.id);
+        const current = this.existingIds(targetIds);
+        return {
+            name,
+            dir: resolved.dir,
+            found: true,
+            inSnapshot: resolved.records.length,
+            targets: targets.length,
+            missing: targetIds.filter((id) => !current.has(id)).length,
+            // 目标里带退场标记的那些:它们即便回到主表也仍不在检索面(见字段说明)。
+            stillRetired: targets.filter((r) => isRetired(r)).map((r) => r.id),
+            notFound,
+        };
+    }
+    /**
+     * 从快照恢复(不可逆动作的**回程票**;本身幂等,可安全重跑)。
+     *
+     * 向量按整批补算(`helper.batch`),失败即降级成"暂时只走关键词召回"而不中止——
+     * 与 `restore` 同一条纪律:补不上向量是小事,让人以为记录丢了是大事。
+     *
+     * @param opts.unretire - 顺手把带退场标记的记录放回检索面(走既有 `restore`,
+     *   不新开写路径)。默认 `false`:只回主表,与"恢复的是当时的状态"一致。
+     */
+    async restoreFromSnapshot(name, opts = {}) {
+        const resolved = await this.resolveSnapshot(name);
+        if (resolved === undefined) {
+            return { dir: '', found: false, inSnapshot: 0, targets: 0, missing: 0, unretired: 0, stillRetired: [], restored: 0, failed: 0, vectorsWritten: 0, notFound: [] };
+        }
+        // `missing` 必须在写库**之前**算:写完再算恒为 0,那这个字段就废了。
+        const { targets } = selectSnapshotTargets(resolved.records, opts.ids);
+        const targetIds = targets.filter((r) => typeof r?.id === 'string').map((r) => r.id);
+        const current = this.existingIds(targetIds);
+        const missing = targetIds.filter((id) => !current.has(id)).length;
+        const retired = targets.filter((r) => isRetired(r)).map((r) => r.id);
+        const r = await restoreL1Snapshot(this.db, resolved.dir, {
+            logger: this.logger,
+            ids: opts.ids,
+            vectorize: async (records) => {
+                const vecs = await this.helper.batch(records.map((x) => x.content));
+                // 零向量 = "嵌入其实没算出来",按未补上计(与 `restore` 的判据一致)。
+                return vecs.map((v) => (v && !isZeroVector(v) ? v : undefined));
+            },
+        });
+        let unretired = 0;
+        let stillRetired = retired;
+        if (opts.unretire && retired.length > 0) {
+            // 复用已验收的 `restore`(清标记 + 重算向量 + 重建 FTS),不另开一条写路径。
+            const back = await this.restore(retired);
+            unretired = back.restored;
+            stillRetired = [];
+        }
+        return { ...r, dir: resolved.dir, found: true, missing, unretired, stillRetired };
+    }
+    /** 这批 id 里当前**在库**的集合(分块查,避免一次 IN 太多参数)。 */
+    existingIds(ids) {
+        const out = new Set();
+        for (let i = 0; i < ids.length; i += 400) {
+            for (const r of this.db.getL1ByIds(ids.slice(i, i + 400)))
+                out.add(r.id);
+        }
+        return out;
     }
     /**
      * 三策略检索(自动召回与 memory_search 工具共用接缝)。

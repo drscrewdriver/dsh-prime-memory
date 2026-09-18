@@ -20,7 +20,6 @@ import {
   exportThenPurge,
   readSnapshotManifest,
   readSnapshotRecords,
-  restoreL1Snapshot,
   verifySnapshot,
 } from '../src/store/l1-snapshot.js';
 import type { MemoryRecord } from '../src/types.js';
@@ -80,10 +79,13 @@ describe('清理前导出硬门禁', () => {
     const records = await readSnapshotRecords(r.dir);
     const back = records.find((x) => x.id === 'r1');
     expect(back?.content).toBe('待清理的记忆甲');
-    // 走既有恢复路径回写
-    const res = await restoreL1Snapshot(db as never, r.dir, noopLogger);
+    // 走**生产路径**回写(名字寻址,不是直接调底层原语)——"导出物真的可恢复"
+    // 这句话必须落在接线后的那一层上,否则测的是没人调用的函数。
+    const res = await store.restoreFromSnapshot(r.name, { ids: ['r1'] });
+    expect(res.found).toBe(true);
+    expect(res.missing).toBe(1); // 写库前算出:确实少这一条
     expect(res.restored).toBeGreaterThan(0);
-    expect(rowCount(db, 'r1')).toBe(1);
+    expect(rowCount(db, 'r1')).toBe(1); // 而且恢复的是**退场态**(valid_to 仍在)
     db.close();
   });
 

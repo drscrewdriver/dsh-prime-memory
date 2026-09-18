@@ -23,6 +23,49 @@ export interface L1SnapshotManifest {
 export declare function snapshotDirName(createdAt: Date, reason: string): string;
 /** 快照目录的绝对路径(与既有 `pendingPathFor` / `reconcileStatePathFor` 同风格)。 */
 export declare function snapshotPathFor(dataDir: string, createdAt: Date, reason: string): string;
+/** 快照的**存放根**(所有 `snapshotPathFor` 产物都在它下面)。 */
+export declare function snapshotsRootFor(dataDir: string): string;
+/** 目录路径 → 目录名(与 `snapshotDirFor` 互为逆运算;兼容 `/` 与 `\`)。 */
+export declare function snapshotNameOf(dir: string): string;
+/**
+ * 目录名是否是可寻址的快照名。
+ *
+ * **只接受"名字",不接受路径**——这是恢复入口的第一道门。若允许调用方传路径,
+ * 恢复就变成了"把任意目录里的 JSON 灌进记忆库",而这条 RPC 的信任级别只到
+ * "本机同用户",不该顺带获得读任意目录并把内容写进检索库的能力。
+ * 故:长度受限、必须带 `l1-` 前缀(与 `snapshotDirName` 的产物一致)、
+ * 且不含路径分隔符与 `..`。
+ */
+export declare function isSnapshotName(name: string): boolean;
+/** 名字 → 绝对路径(仅当名字合法;否则返回 `undefined`,由调用方拒绝)。 */
+export declare function snapshotDirFor(dataDir: string, name: string): string | undefined;
+/** 一份可用快照的摘要(面板 / 工具选哪份来恢复)。 */
+export interface SnapshotSummary {
+    /** 目录名(恢复时传它,不传路径)。 */
+    name: string;
+    dir: string;
+    createdAt: string;
+    /** 建这份快照的原因(如 `cleanup-retired` / `pre-rebuild`)。 */
+    reason: string;
+    records: number;
+    receipts: number;
+    conflicts: number;
+    /** `l1_vec` 行数(派生投影,只记数)。 */
+    vecCount: number;
+}
+/**
+ * 列出可用快照(按时间**倒序**:最新的在前)。
+ *
+ * 只认**带合法清单**的目录:清单缺失或版本不符的目录不算快照(半截写入的产物
+ * 不能出现在"选一份来恢复"的列表里,否则人会选中一份根本恢复不了的东西)。
+ * 目录不存在**不抛**,返回空列表——"还没建过快照"是部署状态,不是调用错误。
+ */
+export declare function listSnapshots(dataDir: string, opts?: {
+    limit?: number;
+}): Promise<{
+    items: SnapshotSummary[];
+    total: number;
+}>;
 /** 稳定内容哈希(与 `canonicalRecords` 配套:同内容恒同哈希)。 */
 export declare function hashRecords(records: readonly MemoryRecord[]): string;
 /** 任意对象的内容哈希(用于 receipts / conflicts 这类外来形状)。 */
@@ -45,12 +88,14 @@ export interface SnapshotDbLike {
         limit?: number;
     }) => readonly unknown[];
     countL1Vec: () => number;
-    upsertL1: (record: MemoryRecord) => boolean;
+    upsertL1: (record: MemoryRecord, embedding?: Float32Array) => boolean;
 }
 /** 分页取全量 L1(一次 500,避免大库一次性拉爆内存)。 */
 export declare function listAllL1(db: SnapshotDbLike, hardLimit?: number): MemoryRecord[];
 export interface CreateSnapshotResult {
     dir: string;
+    /** 目录名——`snapshot-restore` 的寻址口径(调用方不必自己切路径)。 */
+    name: string;
     manifest: L1SnapshotManifest;
     records: readonly MemoryRecord[];
 }
@@ -75,20 +120,74 @@ export interface SnapshotVerification {
 /** 比对快照与当前库(**按内容哈希**,不是按行数)。 */
 export declare function verifySnapshot(db: SnapshotDbLike, dir: string): Promise<SnapshotVerification>;
 export interface RestoreResult {
+    /** 快照里的记录总数(按 `ids` 过滤**之前**)。 */
+    inSnapshot: number;
+    /** 本次实际要恢复的条数(过滤**之后**)。 */
+    targets: number;
     restored: number;
     failed: number;
+    /** 成功补上向量的条数(未提供 `vectorize` 时恒为 0)。 */
+    vectorsWritten: number;
+    /** 请求了但快照里没有的 id(仅传 `ids` 时可能非空)。 */
+    notFound: string[];
 }
+export interface RestoreOptions {
+    /** 日志出口(缺省静默)。 */
+    logger?: {
+        info: (m: string) => void;
+        warn: (m: string) => void;
+    };
+    /** 只恢复这些 id;省略 = 快照内全部。 */
+    ids?: readonly string[];
+    /**
+     * 可选向量补算钩子。
+     *
+     * 为何是**注入的函数**而不是直接 import 嵌入模块:快照模块刻意不依赖嵌入栈
+     * (见模块头——`l1_vec` 是派生投影,不落快照)。把向量能力做成参数,单向依赖
+     * 就保住了:快照模块提供"从 JSON 回到检索库"的事实,调用方提供"怎么算向量"。
+     * 实现方在嵌入不可用时应返回 `undefined` 而**不是抛**——见 `restore` 的同款理由。
+     */
+    vectorize?: (records: readonly MemoryRecord[]) => Promise<readonly (Float32Array | undefined)[]>;
+}
+/** 干跑结论:这份快照恢复下去**会发生什么**(不写库)。 */
+export interface SnapshotRestorePlan {
+    name: string;
+    /** 解析出的绝对路径;名字非法或清单缺失时为空串。 */
+    dir: string;
+    /** 这个名字是否指向一份**真实存在且清单合法**的快照。 */
+    found: boolean;
+    inSnapshot: number;
+    /** 本次实际要恢复的条数(按 `ids` 过滤后)。 */
+    targets: number;
+    /** 其中当前**不在库**的条数——这才是真正被找回的条数。 */
+    missing: number;
+    /**
+     * 目标里**仍处于退场态**的 id。
+     *
+     * 为什么这个字段是必需的:`cleanup-retired` 只清理**已退场**记录,而快照拍在删除
+     * **之前** ——所以清理快照能找回的每一条都带着退场标记。于是"回到主表"≠"回到
+     * 检索面":记录行在,但仍不出现在召回里,还要 `records-restore` 才放得回去。
+     * 不报这个,调用方会以为恢复完了、而记忆其实还是不可见的。
+     */
+    stillRetired: string[];
+    notFound: string[];
+}
+/** 按 id 过滤快照记录,并报出请求了却没找到的 id(人工恢复要能看到"没找到哪条")。 */
+export declare function selectSnapshotTargets(records: readonly MemoryRecord[], ids?: readonly string[]): {
+    targets: MemoryRecord[];
+    notFound: string[];
+};
 /**
  * 从快照恢复 L1。
  *
  * **幂等**:走 `upsertL1`(按 id upsert),恢复两遍与一遍等价,中断后重跑安全。
  * 只恢复 `l1_records`——receipts / conflicts 今天不被 `clearL1()` 销毁(见模块头),
  * 且它们的写入口不归本模块所有(单一所有者)。
+ *
+ * **向量一次算完再逐条写**:`vectorize` 收的是整批记录,而不是每条回调一次——
+ * 否则恢复 787 条就是 787 次嵌入往返。
  */
-export declare function restoreL1Snapshot(db: SnapshotDbLike, dir: string, logger?: {
-    info: (m: string) => void;
-    warn: (m: string) => void;
-}): Promise<RestoreResult>;
+export declare function restoreL1Snapshot(db: SnapshotDbLike, dir: string, opts?: RestoreOptions): Promise<RestoreResult>;
 /**
  * 清空前必须调用的守门函数:先建快照,再允许清空。
  *
@@ -108,6 +207,8 @@ export interface ExportThenPurgeResult {
     aborted: boolean;
     /** 快照目录(中止时也给,便于人工查看失败现场)。 */
     dir: string;
+    /** 快照**目录名**(供 `snapshot-restore` 直接寻址;中止且未建快照时为空串)。 */
+    name: string;
     purged: number;
     /** 校验差异(仅 aborted 时非空)。 */
     diffs: string[];

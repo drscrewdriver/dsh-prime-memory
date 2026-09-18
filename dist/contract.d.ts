@@ -677,8 +677,89 @@ export interface CleanupRetiredResponse {
     aborted: boolean;
     /** 快照目录(真跑时非空)。 */
     dir: string;
+    /**
+     * 快照**目录名**(真跑时非空)。
+     *
+     * `dir` 是给人看的绝对路径;`name` 是给 `snapshot-restore` 用的**唯一寻址口径**
+     * ——恢复入口只收名字、不收路径(见 `isSnapshotName`)。没有它,调用方就得自己
+     * 从 `dir` 里切最后一段,还要同时兼容 `/` 与 `\` 两种分隔符。
+     */
+    name: string;
     /** 中止原因(仅 aborted 时非空)。 */
     diffs: string[];
+}
+/** dsh-memory/snapshots-list(可用快照清单;恢复前先看有哪些)。 */
+export interface SnapshotsListRequest {
+    /** 最多返回几份(1~200,默认 50)。 */
+    limit?: number;
+}
+/** 一份快照的摘要(与 `l1-snapshot.SnapshotSummary` 同形)。 */
+export interface SnapshotSummaryView {
+    /** 目录名——恢复时传它。 */
+    name: string;
+    /** 绝对路径(给人看/给运维定位)。 */
+    dir: string;
+    createdAt: string;
+    /** 建它的原因(如 `cleanup-retired` / `pre-rebuild`)。 */
+    reason: string;
+    /** `l1_records` 条数。 */
+    records: number;
+    receipts: number;
+    conflicts: number;
+    /** `l1_vec` 行数(派生投影,不落快照,只记数)。 */
+    vecCount: number;
+}
+export interface SnapshotsListResponse {
+    /** 按时间**倒序**(最新的在前)。 */
+    items: SnapshotSummaryView[];
+    total: number;
+}
+/**
+ * dsh-memory/snapshot-restore(从快照把已物理删除的记录灌回检索库)。
+ *
+ * **默认干跑**:`dryRun` 省略即视为 `true`。恢复本身是幂等的 upsert(不删任何东西),
+ * 但它是"把历史状态写回当前库",仍须调用方显式要求才做——与 `cleanup-retired` 同一条纪律。
+ */
+export interface SnapshotRestoreRequest {
+    /** 快照**目录名**(见 snapshots-list)。**不接受路径**。 */
+    name: string;
+    /** 只恢复这些 id(≤2000);省略 = 快照内全部。 */
+    ids?: string[];
+    /** 默认 true(干跑)。显式 false 才真正写库。 */
+    dryRun?: boolean;
+    /**
+     * 顺手把带回的记录**放回检索面**(清退场标记 + 重建索引)。默认 `false`。
+     *
+     * 为什么默认关:`cleanup-retired` 只清理**已退场**记录,快照又拍在删除**之前**
+     * ——所以清理快照找回的每一条都带退场标记,只回主表、不回召回。默认关 = 恢复
+     * 的是"当时的状态";要一步到位(真正的回滚)再显式打开。两种情形都会在
+     * `stillRetired` / `unretired` 里如实报出,不存在"悄悄复活"。
+     */
+    unretire?: boolean;
+}
+export interface SnapshotRestoreResponse {
+    name: string;
+    dir: string;
+    dryRun: boolean;
+    /** 快照里的记录总数(过滤前)。 */
+    inSnapshot: number;
+    /** 本次涉及(过滤后)的条数。 */
+    targets: number;
+    /** 其中当前**不在库**的条数——真正被找回的条数。 */
+    missing: number;
+    /** 实际写回条数(干跑恒为 0)。 */
+    restored: number;
+    failed: number;
+    /** 成功补回向量的条数(干跑恒为 0;嵌入不可用时可能为 0)。 */
+    vectorsWritten: number;
+    /** 本次顺手放回检索面的条数(仅 `unretire:true` 时可能非零)。 */
+    unretired: number;
+    /** 回到主表但**仍不在检索面**的 id(再调 `records-restore` 可放回)。 */
+    stillRetired: string[];
+    /** 请求了但该快照里没有的 id。 */
+    notFound: string[];
+    /** 提示(如名字非法/快照不存在,或"还有记录没回到检索面")。 */
+    notice?: string;
 }
 /** dsh-memory/graph-search(图谱节点检索;紧凑节点卡)。 */
 export interface GraphSearchRequest {
@@ -968,6 +1049,8 @@ export interface DshMemoryRequestMap {
     'dsh-memory/records-retired': RecordsRetiredRequest;
     'dsh-memory/records-restore': RecordsRestoreRequest;
     'dsh-memory/cleanup-retired': CleanupRetiredRequest;
+    'dsh-memory/snapshots-list': SnapshotsListRequest;
+    'dsh-memory/snapshot-restore': SnapshotRestoreRequest;
 }
 export interface DshMemoryResponseMap {
     'dsh-memory/stats': StatsResponse;
@@ -1006,6 +1089,8 @@ export interface DshMemoryResponseMap {
     'dsh-memory/records-retired': RecordsRetiredResponse;
     'dsh-memory/records-restore': RecordsRestoreResponse;
     'dsh-memory/cleanup-retired': CleanupRetiredResponse;
+    'dsh-memory/snapshots-list': SnapshotsListResponse;
+    'dsh-memory/snapshot-restore': SnapshotRestoreResponse;
 }
 /** 全部端点名(client 调用与 host case 表的共用字面量来源)。 */
 export type DshMemoryEndpoint = keyof DshMemoryResponseMap;

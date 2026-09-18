@@ -2,8 +2,8 @@ import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.j
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
 import type { ConflictPair, ConflictResolution } from './conflicts.js';
-import type { SupersedeInfo } from './supersede.js';
-import { type ExportThenPurgeResult } from './l1-snapshot.js';
+import { type SupersedeInfo } from './supersede.js';
+import { type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { type EmbeddingService } from './embedding.js';
 import { type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
@@ -30,9 +30,28 @@ export interface L1SearchOptions {
     /** 嵌入查询内层钳制(ms,只缩短不放大;召回路径传入给 FTS 降级留时间)。 */
     embeddingTimeoutMs?: number;
 }
+/** 快照回灌的结果(在 `RestoreResult` 之上补"从哪来"与"找回了多少")。 */
+export interface SnapshotRestoreOutcome extends RestoreResult {
+    /** 解析出的快照目录;名字非法或快照不存在时为空串。 */
+    dir: string;
+    /** 这个名字是否指向一份真实存在且清单合法的快照。 */
+    found: boolean;
+    /** 其中当前**不在库**、本次被找回的条数(写库前算出)。 */
+    missing: number;
+    /** 本次顺手放回检索面的条数(仅 `unretire: true` 时可能非零)。 */
+    unretired: number;
+    notFound: string[];
+    /**
+     * 回到主表但**仍未回到检索面**的 id(见 `SnapshotRestorePlan.stillRetired`)。
+     * `unretire: true` 且放回成功时为空数组。
+     */
+    stillRetired: string[];
+}
 export declare class L1Store {
     private readonly db;
     private readonly strategy;
+    /** 记忆库根目录(`records/` 与 `snapshots/` 都在它下面)。 */
+    private readonly dataDir;
     private readonly recordsDir;
     private readonly legacyFile;
     private readonly helper;
@@ -137,6 +156,44 @@ export declare class L1Store {
      * 这里只把 L1Store 已知的 dataDir 与 logger 接上去,避免端点层自己去推路径。
      */
     purgeRetired(ids: string[], reason: string): Promise<ExportThenPurgeResult>;
+    /** 可用快照列表(按时间倒序;面板/工具据此选一份来恢复)。 */
+    listSnapshots(opts?: {
+        limit?: number;
+    }): Promise<{
+        items: SnapshotSummary[];
+        total: number;
+    }>;
+    /**
+     * 名字 → 真实快照。
+     *
+     * 两道判定合一:名字合法(`snapshotDirFor`)且**清单存在且版本相符**
+     * (`readSnapshotManifest`)。只有前者会被"目录里有个同名空目录"骗过——
+     * 而那正是半截写入的产物,选中它恢复会得到 0 条却报成功。
+     */
+    private resolveSnapshot;
+    /**
+     * 干跑:算出"这份快照恢复下去会发生什么",**不写库**。
+     *
+     * `missing` 才是真正被找回的条数——快照里绝大多数记录今天仍在库里(快照是
+     * **全库**拷贝,而被清掉的只是其中几条)。只报 `targets` 会让人以为"要恢复 787 条",
+     * 从而不敢按下去。
+     */
+    planSnapshotRestore(name: string, ids?: readonly string[]): Promise<SnapshotRestorePlan>;
+    /**
+     * 从快照恢复(不可逆动作的**回程票**;本身幂等,可安全重跑)。
+     *
+     * 向量按整批补算(`helper.batch`),失败即降级成"暂时只走关键词召回"而不中止——
+     * 与 `restore` 同一条纪律:补不上向量是小事,让人以为记录丢了是大事。
+     *
+     * @param opts.unretire - 顺手把带退场标记的记录放回检索面(走既有 `restore`,
+     *   不新开写路径)。默认 `false`:只回主表,与"恢复的是当时的状态"一致。
+     */
+    restoreFromSnapshot(name: string, opts?: {
+        ids?: readonly string[];
+        unretire?: boolean;
+    }): Promise<SnapshotRestoreOutcome>;
+    /** 这批 id 里当前**在库**的集合(分块查,避免一次 IN 太多参数)。 */
+    private existingIds;
     /**
      * 三策略检索(自动召回与 memory_search 工具共用接缝)。
      * embedding 不可用时自动降级 keyword;type 后置过滤;

@@ -33,6 +33,7 @@
  * 等于把证据链悄悄拆了。这条有专门用例。
  */
 import { createHash } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 import { atomicWriteJson, readJsonIfExists } from '../util/io.js';
 export const SNAPSHOT_VERSION = 1;
 /** 快照目录名:`l1-<时间戳>-<原因>`。**时间戳在前**,目录自然按时间排序。 */
@@ -44,6 +45,80 @@ export function snapshotDirName(createdAt, reason) {
 /** 快照目录的绝对路径(与既有 `pendingPathFor` / `reconcileStatePathFor` 同风格)。 */
 export function snapshotPathFor(dataDir, createdAt, reason) {
     return `${dataDir.replace(/[\\/]+$/, '')}/snapshots/${snapshotDirName(createdAt, reason)}`;
+}
+/** 快照的**存放根**(所有 `snapshotPathFor` 产物都在它下面)。 */
+export function snapshotsRootFor(dataDir) {
+    return `${dataDir.replace(/[\\/]+$/, '')}/snapshots`;
+}
+/** 目录路径 → 目录名(与 `snapshotDirFor` 互为逆运算;兼容 `/` 与 `\`)。 */
+export function snapshotNameOf(dir) {
+    return dir.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? '';
+}
+/**
+ * 目录名是否是可寻址的快照名。
+ *
+ * **只接受"名字",不接受路径**——这是恢复入口的第一道门。若允许调用方传路径,
+ * 恢复就变成了"把任意目录里的 JSON 灌进记忆库",而这条 RPC 的信任级别只到
+ * "本机同用户",不该顺带获得读任意目录并把内容写进检索库的能力。
+ * 故:长度受限、必须带 `l1-` 前缀(与 `snapshotDirName` 的产物一致)、
+ * 且不含路径分隔符与 `..`。
+ */
+export function isSnapshotName(name) {
+    if (typeof name !== 'string')
+        return false;
+    const n = name.trim();
+    if (n.length === 0 || n.length > 200)
+        return false;
+    if (!n.startsWith('l1-'))
+        return false;
+    if (n.includes('/') || n.includes('\\') || n.includes('..'))
+        return false;
+    return true;
+}
+/** 名字 → 绝对路径(仅当名字合法;否则返回 `undefined`,由调用方拒绝)。 */
+export function snapshotDirFor(dataDir, name) {
+    return isSnapshotName(name) ? `${snapshotsRootFor(dataDir)}/${name.trim()}` : undefined;
+}
+/**
+ * 列出可用快照(按时间**倒序**:最新的在前)。
+ *
+ * 只认**带合法清单**的目录:清单缺失或版本不符的目录不算快照(半截写入的产物
+ * 不能出现在"选一份来恢复"的列表里,否则人会选中一份根本恢复不了的东西)。
+ * 目录不存在**不抛**,返回空列表——"还没建过快照"是部署状态,不是调用错误。
+ */
+export async function listSnapshots(dataDir, opts = {}) {
+    const root = snapshotsRootFor(dataDir);
+    let names;
+    try {
+        names = await readdir(root);
+    }
+    catch {
+        return { items: [], total: 0 };
+    }
+    // 目录名里时间戳在前(`l1-<时间戳>-<原因>`),故字典序倒序即时间倒序。
+    names.sort((a, b) => b.localeCompare(a));
+    const items = [];
+    for (const name of names) {
+        if (!isSnapshotName(name))
+            continue;
+        const dir = `${root}/${name}`;
+        const manifest = await readSnapshotManifest(dir);
+        if (manifest === undefined)
+            continue;
+        items.push({
+            name,
+            dir,
+            createdAt: manifest.createdAt,
+            reason: manifest.reason,
+            records: manifest.sections.records.count,
+            receipts: manifest.sections.receipts.count,
+            conflicts: manifest.sections.conflicts.count,
+            vecCount: manifest.vecCount,
+        });
+    }
+    const raw = Math.floor(Number(opts.limit));
+    const limit = Number.isFinite(raw) && raw > 0 ? raw : items.length;
+    return { items: items.slice(0, limit), total: items.length };
 }
 /** 记录数组的规范序列化:键序固定 + 按 id 排序,保证**同一内容恒得同一哈希**。 */
 function canonicalRecords(records) {
@@ -116,7 +191,7 @@ export async function createL1Snapshot(db, dir, reason, now = new Date()) {
     await atomicWriteJson(`${dir}/l1-receipts.json`, receipts);
     await atomicWriteJson(`${dir}/l1-conflicts.json`, conflicts);
     await atomicWriteJson(`${dir}/manifest.json`, manifest);
-    return { dir, manifest, records };
+    return { dir, name: snapshotNameOf(dir), manifest, records };
 }
 /** 读快照清单;不存在或版本不符返回 undefined。 */
 export async function readSnapshotManifest(dir) {
@@ -149,23 +224,54 @@ export async function verifySnapshot(db, dir) {
         diffs.push('conflict_pending 内容与快照不一致');
     return { ok: diffs.length === 0, diffs };
 }
+/** 按 id 过滤快照记录,并报出请求了却没找到的 id(人工恢复要能看到"没找到哪条")。 */
+export function selectSnapshotTargets(records, ids) {
+    if (!ids || ids.length === 0)
+        return { targets: [...records], notFound: [] };
+    const wanted = new Set(ids);
+    const targets = records.filter((r) => typeof r?.id === 'string' && wanted.has(r.id));
+    const found = new Set(targets.map((r) => r.id));
+    return { targets, notFound: [...wanted].filter((id) => !found.has(id)) };
+}
 /**
  * 从快照恢复 L1。
  *
  * **幂等**:走 `upsertL1`(按 id upsert),恢复两遍与一遍等价,中断后重跑安全。
  * 只恢复 `l1_records`——receipts / conflicts 今天不被 `clearL1()` 销毁(见模块头),
  * 且它们的写入口不归本模块所有(单一所有者)。
+ *
+ * **向量一次算完再逐条写**:`vectorize` 收的是整批记录,而不是每条回调一次——
+ * 否则恢复 787 条就是 787 次嵌入往返。
  */
-export async function restoreL1Snapshot(db, dir, logger) {
-    const records = await readSnapshotRecords(dir);
+export async function restoreL1Snapshot(db, dir, opts = {}) {
+    const { logger, ids, vectorize } = opts;
+    const all = await readSnapshotRecords(dir);
+    const { targets, notFound } = selectSnapshotTargets(all, ids);
+    let vectors = [];
+    if (vectorize && targets.length > 0) {
+        try {
+            vectors = await vectorize(targets);
+        }
+        catch (err) {
+            // 向量补算失败**不中止恢复**:记录先回到检索面(关键词仍可召回)比"一条都没恢复"
+            // 严重程度低得多。缺失的向量留给后续 `embedding-reindex`。
+            logger?.warn(`[memory] 快照恢复:向量补算失败,先回关键词检索面(日后重建可补齐): ${err instanceof Error ? err.message : String(err)}`);
+            vectors = [];
+        }
+    }
     let restored = 0;
     let failed = 0;
-    for (const record of records) {
+    let vectorsWritten = 0;
+    for (let i = 0; i < targets.length; i++) {
+        const record = targets[i];
         if (typeof record?.id !== 'string' || typeof record.content !== 'string') {
             failed += 1;
             continue;
         }
-        if (db.upsertL1(record))
+        const vec = vectors[i];
+        if (vec !== undefined)
+            vectorsWritten += 1;
+        if (db.upsertL1(record, vec))
             restored += 1;
         else
             failed += 1;
@@ -174,7 +280,7 @@ export async function restoreL1Snapshot(db, dir, logger) {
         logger?.warn(`[memory] 快照恢复:${restored} 条成功,${failed} 条失败`);
     else
         logger?.info(`[memory] 快照恢复:${restored} 条`);
-    return { restored, failed };
+    return { inSnapshot: all.length, targets: targets.length, restored, failed, vectorsWritten, notFound };
 }
 /**
  * 清空前必须调用的守门函数:先建快照,再允许清空。
@@ -202,23 +308,25 @@ export async function snapshotBeforeClear(db, dataDir, reason, now = new Date())
  */
 export async function exportThenPurge(db, dataDir, ids, reason, logger, now = new Date()) {
     if (ids.length === 0)
-        return { ok: true, aborted: false, dir: '', purged: 0, diffs: [] };
+        return { ok: true, aborted: false, dir: '', name: '', purged: 0, diffs: [] };
     let dir = '';
+    let name = '';
     try {
         const snap = await snapshotBeforeClear(db, dataDir, reason, now);
         dir = snap.dir;
+        name = snap.name;
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger?.warn(`[memory] 清理中止:快照写入失败(${msg})——未删除任何记录`);
-        return { ok: false, aborted: true, dir, purged: 0, diffs: [`快照写入失败:${msg}`] };
+        return { ok: false, aborted: true, dir, name, purged: 0, diffs: [`快照写入失败:${msg}`] };
     }
     const verdict = await verifySnapshot(db, dir);
     if (!verdict.ok) {
         logger?.warn(`[memory] 清理中止:快照校验未通过(${verdict.diffs.join(';')})——未删除任何记录`);
-        return { ok: false, aborted: true, dir, purged: 0, diffs: verdict.diffs };
+        return { ok: false, aborted: true, dir, name, purged: 0, diffs: verdict.diffs };
     }
     const purged = db.deleteL1Batch([...ids]);
     logger?.info(`[memory] 已物理清理 ${purged} 条已退场记录(快照:${dir})`);
-    return { ok: true, aborted: false, dir, purged, diffs: [] };
+    return { ok: true, aborted: false, dir, name, purged, diffs: [] };
 }

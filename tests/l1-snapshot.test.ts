@@ -144,7 +144,7 @@ describe('快照 → 清空 → 恢复', () => {
 
       // ③ 恢复
       const result = await restoreL1Snapshot(db, snap.dir);
-      expect(result).toEqual({ restored: 3, failed: 0 });
+      expect(result).toEqual({ inSnapshot: 3, targets: 3, restored: 3, failed: 0, vectorsWritten: 0, notFound: [] });
       expect(hashRecords(listAllL1(db))).toBe(before);
 
       // ④ 锚点必须原样还在 —— 否则恢复出来的记忆再也无法取证
@@ -251,8 +251,8 @@ describe('恢复的边界', () => {
       const { atomicWriteJson } = await import('../src/util/io.js');
       await atomicWriteJson(`${snapDir}/l1-records.json`, [{ id: 'ok', content: 'fine' }, { id: 42 }, { nope: true }]);
       const warn: string[] = [];
-      const result = await restoreL1Snapshot(db, snapDir, { info: () => {}, warn: (m) => warn.push(m) });
-      expect(result).toEqual({ restored: 1, failed: 2 });
+      const result = await restoreL1Snapshot(db, snapDir, { logger: { info: () => {}, warn: (m) => warn.push(m) } });
+      expect(result).toEqual({ inSnapshot: 3, targets: 3, restored: 1, failed: 2, vectorsWritten: 0, notFound: [] });
       expect(warn.join()).toContain('2 条失败');
     });
   });
@@ -260,13 +260,13 @@ describe('恢复的边界', () => {
   it('空快照恢复 0 条,不报错', async () => {
     await withDb('empty', async (db, dir) => {
       const snap = await createL1Snapshot(db, join(dir, 'snap'), 'r');
-      await expect(restoreL1Snapshot(db, snap.dir)).resolves.toEqual({ restored: 0, failed: 0 });
+      await expect(restoreL1Snapshot(db, snap.dir)).resolves.toEqual({ inSnapshot: 0, targets: 0, restored: 0, failed: 0, vectorsWritten: 0, notFound: [] });
     });
   });
 
   it('快照目录不存在时恢复为空,不抛', async () => {
     await withDb('missing-snap', async (db, dir) => {
-      await expect(restoreL1Snapshot(db, join(dir, 'nope'))).resolves.toEqual({ restored: 0, failed: 0 });
+      await expect(restoreL1Snapshot(db, join(dir, 'nope'))).resolves.toEqual({ inSnapshot: 0, targets: 0, restored: 0, failed: 0, vectorsWritten: 0, notFound: [] });
     });
   });
 });

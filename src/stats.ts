@@ -34,6 +34,7 @@ import type { ReceiptQuery, ReceiptsView } from './store/receipts.js';
 import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
 import { sourceAnchorLabels } from './pipeline/anchors.js';
 import { readSupersedeMarker } from './store/supersede.js';
+import { isSnapshotName } from './store/l1-snapshot.js';
 import type { PersonaStore } from './store/persona.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
@@ -102,6 +103,8 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/records-retired',
   'dsh-memory/records-restore',
   'dsh-memory/cleanup-retired',
+  'dsh-memory/snapshots-list',
+  'dsh-memory/snapshot-restore',
 ];
 
 /** HTTP 路由前缀(客户端 fetch `/dsh-memory/rpc/<短方法名>`)。 */
@@ -213,6 +216,8 @@ import type {
   RecordsRestoreResponse,
   RecordsRetiredResponse,
   RetiredRecordView,
+  SnapshotsListResponse,
+  SnapshotRestoreResponse,
   LlmModelsResponse,
   LlmProvidersResponse,
   DirectChannelView,
@@ -1010,12 +1015,13 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           purged: 0,
           aborted: false,
           dir: '',
+          name: '',
           diffs: [],
         };
         return resp;
       }
       if (targets.length === 0) {
-        const resp: CleanupRetiredResponse = { dryRun: false, targets: 0, purged: 0, aborted: false, dir: '', diffs: [] };
+        const resp: CleanupRetiredResponse = { dryRun: false, targets: 0, purged: 0, aborted: false, dir: '', name: '', diffs: [] };
         return resp;
       }
       const r = await stores.l1.purgeRetired(targets, 'cleanup-retired');
@@ -1025,7 +1031,107 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         purged: r.purged,
         aborted: r.aborted,
         dir: r.dir,
+        name: r.name,
         diffs: r.diffs,
+      };
+      return resp;
+    }
+
+    // ── 快照(清单 / 回灌):`cleanup-retired` 与「重建」的**回程票** ──
+    // 在此之前 `restoreL1Snapshot` 只有测试调用:导出物会落盘,却没有任何出口能
+    // 装回去 —— "清理是本插件唯一不可逆的动作"这句话因此只成立了一半。
+    // 读方向(列表)不开权限门(看得见才知道要不要恢复);回灌由 memoryMutate 门控。
+    case 'dsh-memory/snapshots-list': {
+      const p = (payload ?? {}) as { limit?: unknown };
+      const raw = Math.floor(Number(p.limit));
+      const limit = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 200) : 50;
+      const { items, total } = await stores.l1.listSnapshots({ limit });
+      const resp: SnapshotsListResponse = { items, total };
+      return resp;
+    }
+
+    case 'dsh-memory/snapshot-restore': {
+      if (!live?.get().memoryMutate) {
+        throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+      }
+      const p = (payload ?? {}) as { name?: unknown; ids?: unknown; dryRun?: unknown; unretire?: unknown };
+      const name = typeof p.name === 'string' ? p.name.trim() : '';
+      if (!name) throw new Error('需要 name(快照目录名,见 dsh-memory/snapshots-list)');
+      // 只收名字、不收路径:恢复入口若接受任意路径,就等于顺带给这条 RPC 开放了
+      // "读任意目录并把内容写进检索库"的能力。非法名一律拒绝而不是静默返零。
+      if (!isSnapshotName(name)) {
+        throw new Error('name 非法:只接受快照目录名(形如 l1-<时间戳>-<原因>),不接受路径');
+      }
+      // **默认干跑**:省略 `dryRun` 即视为 true(与 cleanup-retired 同一条纪律)。
+      const dryRun = p.dryRun !== false;
+      const unretire = p.unretire === true;
+      const ids = (Array.isArray(p.ids) ? p.ids : [])
+        .filter((x): x is string => typeof x === 'string' && x !== '')
+        .slice(0, 2000);
+      if (dryRun) {
+        const plan = await stores.l1.planSnapshotRestore(name, ids);
+        const resp: SnapshotRestoreResponse = {
+          name,
+          dir: plan.dir,
+          dryRun: true,
+          inSnapshot: plan.inSnapshot,
+          targets: plan.targets,
+          missing: plan.missing,
+          restored: 0,
+          failed: 0,
+          vectorsWritten: 0,
+          unretired: 0,
+          stillRetired: unretire ? [] : plan.stillRetired,
+          notFound: plan.notFound,
+          ...(plan.found ? {} : { notice: `找不到快照 ${name}:snapshots/ 下没有同名目录,或它的 manifest.json 缺失/版本不符` }),
+        };
+        return resp;
+      }
+      const r = await stores.l1.restoreFromSnapshot(name, { ids, unretire });
+      if (!r.found) {
+        const resp: SnapshotRestoreResponse = {
+          name,
+          dir: '',
+          dryRun: false,
+          inSnapshot: 0,
+          targets: 0,
+          missing: 0,
+          restored: 0,
+          failed: 0,
+          vectorsWritten: 0,
+          unretired: 0,
+          stillRetired: [],
+          notFound: [],
+          notice: `找不到快照 ${name}:snapshots/ 下没有同名目录,或它的 manifest.json 缺失/版本不符`,
+        };
+        return resp;
+      }
+      deps.logger.info(
+        `[memory] 快照恢复 ${name}:写回 ${r.restored} 条(补向量 ${r.vectorsWritten} 条,失败 ${r.failed} 条,放回检索面 ${r.unretired} 条)`,
+      );
+      const resp: SnapshotRestoreResponse = {
+        name,
+        dir: r.dir,
+        dryRun: false,
+        inSnapshot: r.inSnapshot,
+        targets: r.targets,
+        missing: r.missing,
+        restored: r.restored,
+        failed: r.failed,
+        vectorsWritten: r.vectorsWritten,
+        unretired: r.unretired,
+        stillRetired: r.stillRetired,
+        notFound: r.notFound,
+        // 写回主表 ≠ 回到检索面:清理快照里的记录都带退场标记,不明说会让人以为
+        // "恢复完了"而记忆其实仍不可见。这是本次接线最容易漏掉的一跳。
+        ...(r.stillRetired.length > 0
+          ? {
+              notice:
+                `已写回主表,但其中 ${r.stillRetired.length} 条仍处于退场态、不会出现在召回里` +
+                `(清理只清理已退场记录,快照拍在删除之前)。要放回检索面:` +
+                `再调 dsh-memory/records-restore(或本次改用 unretire:true)。`,
+            }
+          : {}),
       };
       return resp;
     }
