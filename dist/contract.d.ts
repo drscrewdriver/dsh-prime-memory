@@ -146,6 +146,14 @@ export interface RebuildStatus {
     error: string | null;
     /** 归档产物名(提示用户可手工找回)。 */
     archiveNote: string | null;
+    /**
+     * 保留集说明(无 L0 来源、清空前被保全的记忆;task_8c)。
+     *
+     * 与 `archiveNote` 并列暴露,是因为"重建后导入记忆还在不在"必须**可观测** ——
+     * 只写日志的话,用户看到"重建完成"根本无从得知那些外部记忆是被保住了还是被清掉了。
+     * null 表示尚未进入准备阶段。
+     */
+    preserveNote: string | null;
 }
 /** 反刍阶段。 */
 export type RuminatePhase = 'idle' | 'refreshing' | 'distilling' | 'consolidating' | 'updating' | 'done' | 'cancelled' | 'failed';
@@ -580,7 +588,15 @@ export interface UiRecord {
     createdAt: string | null;
     updatedAt: string | null;
     version: number;
-    sourceMessageIds: string[];
+    /**
+     * 来源锚点(R7):形如 `t12 s3`(无 step 时为 `t12`),来自
+     * `metadata.dsh_source_anchors`。**空数组 = 该记忆无锚点**(老数据 / 捕获侧
+     * 未打戳 / 解析不到坐标),不是"没有来源"。
+     *
+     * 2026-09-17 替换原 `sourceMessageIds`:`l1_records` 从不存该列,原字段
+     * 永远是 `[]`(死字段,UI 因此从未显示过来源行)。锚点是同一意图的**活实现**。
+     */
+    sourceAnchors: string[];
     /** 检索相关度(列表路径无 score → null)。 */
     score: number | null;
 }

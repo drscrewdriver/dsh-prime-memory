@@ -1,5 +1,5 @@
 /**
- * Tab：§C 人工冲突裁决面板。
+ * Tab：§C 矛盾冻结的人工裁决面板。
  *
  * ## 为什么有这个 Tab
  *
@@ -110,7 +110,7 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
     <div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>
-          {view === null ? '加载中…' : view.enabled ? `待裁决 ${view.total} 对` : '人工冲突裁决未开启'}
+          {view === null ? '加载中…' : view.enabled ? `待裁决 ${view.total} 对` : '矛盾冻结未开启'}
         </span>
         <div style={S.grow} />
         <NButton onClick={load}>刷新</NButton>
@@ -122,15 +122,15 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
       {/* 未开启与"开启了但队列为空"必须分开说：前者要去开开关，后者无事可做 */}
       {view !== null && !view.enabled ? (
         <p style={S.intro}>
-          {view.notice ?? '人工冲突裁决未开启。'}
+          {view.notice ?? '矛盾冻结未开启。'}
           <br />
-          人工冲突裁决是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。
+          矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。
           确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。
         </p>
       ) : null}
 
       {view !== null && view.enabled && items.length === 0 ? (
-        <p style={S.intro}>没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且人工冲突裁决已开启，那一对会停到这里。</p>
+        <p style={S.intro}>没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。</p>
       ) : null}
 
       {items.map((p) => (

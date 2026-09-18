@@ -402,20 +402,37 @@ export class MemoryDb {
         timestamp INTEGER DEFAULT 0
       )
     `);
+        // R7(2026-09-17):补 turn/step 两列,给 L1 锚点提供**可落库的坐标**。
+        // 加列不改语义;旧行留 NULL ⇒ 读侧一律视作「无锚点」,不伪造回填。
+        // 沿用本文件既有的 hasColumn 幂等补列范式(family / scope / workspace_id 同款)。
+        if (!this.hasColumn('l0_conversations', 'turn')) {
+            this.db.exec('ALTER TABLE l0_conversations ADD COLUMN turn INTEGER');
+            this.logger?.info(`${TAG} l0_conversations 补 turn 列(旧行留空=无锚点)`);
+        }
+        if (!this.hasColumn('l0_conversations', 'step')) {
+            this.db.exec('ALTER TABLE l0_conversations ADD COLUMN step INTEGER');
+            this.logger?.info(`${TAG} l0_conversations 补 step 列(旧行留空=无锚点)`);
+        }
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l0_session_id ON l0_conversations(session_id)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l0_recorded ON l0_conversations(recorded_at)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l0_timestamp ON l0_conversations(timestamp)');
+        // 锚点定位的唯一命中路径是 (session_id, turn[, step]) —— 无索引时按锚点取消息要全扫。
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_l0_session_turn ON l0_conversations(session_id, turn)');
+        // turn/step 用 ON CONFLICT **保留旧值**:老写路径(不带锚点)覆盖同一 record_id 时
+        // 不得把已落库的坐标抹成 NULL —— 坐标丢了就再也补不回来。
         this.stmtUpsertL0 = this.db.prepare(`
-      INSERT INTO l0_conversations (record_id, session_id, role, message_text, recorded_at, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO l0_conversations (record_id, session_id, role, message_text, recorded_at, timestamp, turn, step)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         session_id=excluded.session_id,
         role=excluded.role,
         message_text=excluded.message_text,
         recorded_at=excluded.recorded_at,
-        timestamp=excluded.timestamp
+        timestamp=excluded.timestamp,
+        turn=COALESCE(excluded.turn, l0_conversations.turn),
+        step=COALESCE(excluded.step, l0_conversations.step)
     `);
-        this.stmtGetL0 = this.db.prepare('SELECT session_id, role, message_text, recorded_at, timestamp FROM l0_conversations WHERE record_id = ?');
+        this.stmtGetL0 = this.db.prepare('SELECT session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE record_id = ?');
         this.stmtL0Exists = this.db.prepare('SELECT 1 FROM l0_conversations WHERE record_id = ?');
         this.prepareL0VecStatements();
         // ── token_cost:蒸馏成本明细表(成本账本自治) ──
@@ -1269,9 +1286,13 @@ export class MemoryDb {
                     const content = rec.content ?? '';
                     const recordedAt = rec.recordedAt ?? '';
                     const timestamp = rec.timestamp ?? 0;
+                    // R7:锚点两列。缺省给 **null**(不是 0)——0 是一个真实的轮次号,
+                    // 用它冒充"没有坐标"会让读侧以为存在第 0 轮。
+                    const turn = typeof rec.turn === 'number' && Number.isFinite(rec.turn) ? rec.turn : null;
+                    const step = typeof rec.step === 'number' && Number.isFinite(rec.step) ? rec.step : null;
                     // 同 upsertL1 的点查预判:全新增路径跳过 UNINDEXED 列的 FTS 全扫删除
                     const ftsExisted = this.ftsAvailable ? this.stmtL0Exists.get(rec.id) !== undefined : false;
-                    this.stmtUpsertL0.run(rec.id, sessionId, role, content, recordedAt, timestamp);
+                    this.stmtUpsertL0.run(rec.id, sessionId, role, content, recordedAt, timestamp, turn, step);
                     if (this.stmtDeleteL0Vec && this.stmtInsertL0Vec) {
                         this.stmtDeleteL0Vec.run(rec.id);
                         const vec = embeddings?.[i];
@@ -1356,23 +1377,57 @@ export class MemoryDb {
             return [];
         try {
             const rows = this.db
-                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp FROM l0_conversations WHERE session_id = ? ORDER BY timestamp DESC, rowid DESC LIMIT ?')
+                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE session_id = ? ORDER BY timestamp DESC, rowid DESC LIMIT ?')
                 .all(sessionId, limit);
-            return rows
-                .map((r) => ({
-                sessionId: r.session_id,
-                recordedAt: r.recorded_at,
-                id: r.record_id,
-                role: r.role,
-                content: r.message_text,
-                timestamp: r.timestamp ?? 0,
-            }))
-                .reverse();
+            return rows.map((r) => this.toL0Record(r)).reverse();
         }
         catch (err) {
             this.logger?.warn(`[memory] L0 按会话取最近消息失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
             return [];
         }
+    }
+    /**
+     * 锚点定向取消息(R7):按 `(session_id, turn[, step])` 取该回合的 L0 消息。
+     *
+     * 与 `recentL0BySession` 的区别是**按坐标而非按时间**:证据读取器(R2)手上
+     * 只有锚点,没有"最近"的概念。`step` 缺省即整轮(不过滤 step)。
+     *
+     * 返回按 `timestamp, rowid` 升序——同一轮内的原始顺序,供下游拼回回合文本。
+     */
+    l0ByAnchor(sessionId, turn, step) {
+        if (this.degraded || !Number.isFinite(turn))
+            return [];
+        try {
+            const sql = step === undefined
+                ? 'SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE session_id = ? AND turn = ? ORDER BY timestamp ASC, rowid ASC'
+                : 'SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE session_id = ? AND turn = ? AND step = ? ORDER BY timestamp ASC, rowid ASC';
+            const stmt = this.db.prepare(sql);
+            const rows = (step === undefined ? stmt.all(sessionId, turn) : stmt.all(sessionId, turn, step));
+            return rows.map((r) => this.toL0Record(r));
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L0 按锚点取消息失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+    }
+    /**
+     * L0 行 → 记录的统一映射。turn/step 为 NULL(旧行 / 无坐标)时**不写键**,
+     * 使"无锚点"与"锚点为空"在类型层就是两件事。
+     */
+    toL0Record(r) {
+        const rec = {
+            sessionId: r.session_id,
+            recordedAt: r.recorded_at,
+            id: r.record_id,
+            role: r.role,
+            content: r.message_text,
+            timestamp: r.timestamp ?? 0,
+        };
+        if (typeof r.turn === 'number')
+            rec.turn = r.turn;
+        if (typeof r.step === 'number')
+            rec.step = r.step;
+        return rec;
     }
     /** L0 全量列举(重建快照用;按时间升序,事务一致性避开 JSONL 追加竞态)。 */
     listL0All() {
@@ -1380,16 +1435,9 @@ export class MemoryDb {
             return [];
         try {
             const rows = this.db
-                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp FROM l0_conversations ORDER BY timestamp ASC')
+                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations ORDER BY timestamp ASC')
                 .all();
-            return rows.map((r) => ({
-                sessionId: r.session_id,
-                recordedAt: r.recorded_at,
-                id: r.record_id,
-                role: r.role,
-                content: r.message_text,
-                timestamp: r.timestamp ?? 0,
-            }));
+            return rows.map((r) => this.toL0Record(r));
         }
         catch (err) {
             this.logger?.warn(`${TAG} L0 全量列举失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
@@ -1472,7 +1520,7 @@ export class MemoryDb {
                 const row = this.stmtGetL0.get(record_id);
                 if (!row)
                     continue;
-                hits.push({
+                const hit = {
                     sessionId: row.session_id,
                     recordedAt: row.recorded_at,
                     id: record_id,
@@ -1480,7 +1528,13 @@ export class MemoryDb {
                     content: row.message_text,
                     timestamp: row.timestamp ?? 0,
                     score: 1.0 - distance,
-                });
+                };
+                // R7:坐标随命中一起带出(向量路命中同样需要可回溯)
+                if (typeof row.turn === 'number')
+                    hit.turn = row.turn;
+                if (typeof row.step === 'number')
+                    hit.step = row.step;
+                hits.push(hit);
             }
             return hits.slice(0, topK);
         }

@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
 import type { L1Store } from '../store/l1.js';
 import type { MemoryState } from '../store/state.js';
-import type { ConversationMessage, ExtractMode, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
+import type { ConversationAnchor, ConversationMessage, ExtractMode, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 export interface ExtractionResult {
     stored: number;
     skipped: boolean;
@@ -22,4 +22,10 @@ export declare function runExtraction(ctx: Context, cfg: MemoryConfig, store: L1
  * 传 undefined 时行为与改动前**逐字一致**——`cfg.scope='global'` 的既有部署
  * 永远走这条分支,这是零漂移的构造性保证。
  */
-workspaceId?: string): Promise<ExtractionResult>;
+workspaceId?: string, 
+/**
+ * R7 锚点映射(`L0 消息 id → 会话坐标`),由调用方经 `buildAnchorMap` 构造。
+ * **缺省时行为与改动前逐字一致**——传入的 `pending` 消息若不带锚点(老数据、
+ * 未启用捕获侧打戳),`resolveSourceAnchors` 一律返回 undefined,不写 metadata 键。
+ */
+anchorMap?: ReadonlyMap<string, ConversationAnchor>): Promise<ExtractionResult>;

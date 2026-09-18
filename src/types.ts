@@ -77,6 +77,24 @@ export interface MemoryLogger {
   error(msg: string): void;
 }
 
+/**
+ * 会话位置锚点(R7):一条 L0 消息在内核会话日志里的精确坐标。
+ *
+ * 与 `source_message_ids` 的区别是本类型的**存在理由**:后者是 L0 消息 id
+ * (`msg_<epoch_ms>_<hex>`),而 L0 表没有 turn/step 列 → 从一条记忆**跳不到**
+ * 会话里的位置。锚点直接记录内核给出的 `(turn, step)`,与会话日志同一坐标系。
+ *
+ * **降级语义(红线)**:`turn` 拿不到时**整个锚点不成立**(`turn` 非可选);
+ * `step` 拿不到(如 `user/message` 事件本身不带 step)时留空,**不得推算**。
+ */
+export interface ConversationAnchor {
+  sessionId: string;
+  /** 内核轮次号。缺它则该锚点无意义 → 由调用方直接不构造锚点。 */
+  turn: number;
+  /** 内核步骤号;`user/message` 等事件不带该字段时为 undefined(显式留空,不推算)。 */
+  step?: number;
+}
+
 /** L0 会话消息(管线内的运行时形态)。 */
 export interface ConversationMessage {
   /** 唯一消息 ID(L1 prompt 的 source_message_ids 追踪用)。 */
@@ -85,6 +103,8 @@ export interface ConversationMessage {
   content: string;
   /** epoch ms */
   timestamp: number;
+  /** 会话位置锚点(R7;捕获侧带上,老数据/无锚点场景缺省)。 */
+  anchor?: ConversationAnchor;
 }
 
 /** L0 JSONL 记录(一条消息一行,磁盘事实源形状)。 */
@@ -95,6 +115,10 @@ export interface L0MessageRecord {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** 内核轮次(= anchor.turn);旧数据缺省。 */
+  turn?: number;
+  /** 内核步骤(= anchor.step);`user/message` 无 step 时缺省,不推算。 */
+  step?: number;
 }
 
 /** L1 抽取产出(LLM 返回的记忆条目,尚未分配 record id)。 */
@@ -199,6 +223,17 @@ export interface MemoryRecord {
   version?: number;
   /** 来源消息 id(JSONL 事实源保留;检索库不存该列)。 */
   source_message_ids?: string[];
+  /**
+   * 来源锚点集合(R7):本记忆**由哪些会话位置**蒸馏而来。
+   *
+   * 取值 = 该批 `source_message_ids` 逐个映射到的 `ConversationAnchor`,去重后按
+   * `(turn, step)` 升序 —— 由 `pipeline/anchors.ts::resolveSourceAnchors` 计算。
+   *
+   * **落库位置**:与 `source_message_ids` 一样,检索库**不加列**;写入侧把它放进
+   * `metadata_json` 的保留键 `dsh_source_anchors`(见 `ANCHOR_METADATA_KEY`),
+   * 因为锚点是**派生元数据**而非事实列,而 `l1_records` 的 DDL 是磁盘契约。
+   */
+  sourceAnchors?: ConversationAnchor[];
   /** 类型附加信息(episodic 的活动起止时间等)。 */
   metadata?: Record<string, unknown>;
   /** 来源会话(缺省 default;跨会话记忆共享)。 */

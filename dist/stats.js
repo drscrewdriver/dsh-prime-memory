@@ -20,13 +20,15 @@ import { emptyRecallStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
-import { resolveConflictPair } from './conflict-service.js';
+import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
+// R7:读回锚点走 anchors.ts 的**唯一入口**(形状校验从严),不在 UI 层自行解析 metadata。
+import { readSourceAnchors } from './pipeline/anchors.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
 export const PLUGIN_VERSION = require('../package.json').version;
 /**
- * 端点全集运行时清单(31 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(33 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -47,6 +49,7 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/list-records',
     'dsh-memory/records-delete',
     'dsh-memory/receipts',
+    'dsh-memory/conflicts',
     'dsh-memory/conflict-resolve',
     'dsh-memory/graph-search',
     'dsh-memory/graph-node-get',
@@ -720,6 +723,14 @@ export async function handleEndpoint(endpoint, payload, deps) {
             };
             return resp;
         }
+        // ── §C 矛盾冻结的**读**方向:与 memory_conflicts 工具共用同一形状 ──
+        // 裁决端点(conflict-resolve)早就在,但只有"写"没有"读" —— 于是 pair_id
+        // 无处可得:模型被指到不存在的 memory_conflicts 工具,人也没有面板。
+        // 未开启冻结时同样走返回体(enabled:false + notice)而非抛错,理由同上。
+        case 'dsh-memory/conflicts': {
+            const p = (payload ?? {});
+            return listConflictPairs({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, { limit: Number(p.limit) || undefined });
+        }
         // ── §C 矛盾冻结裁决(task_25):与 memory_resolve_conflict 工具共用同一形状 ──
         // 端点层同样不给"提示文案"出口的例外只有一条:**队列未开启**不是调用错误而是
         // 部署状态,故它走返回体(带 notice)而非抛错;pair_id/outcome 缺参才抛。
@@ -1076,9 +1087,18 @@ function hitToUiRecord(r) {
         createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
         updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : null,
         version: r.version ?? 0,
-        sourceMessageIds: r.source_message_ids ?? [],
+        sourceAnchors: (readSourceAnchors(r.metadata) ?? []).map(formatAnchor),
         score: r.score ?? null,
     };
+}
+/**
+ * 锚点的展示形态:`t12 s3` / 无 step 时 `t12`。
+ *
+ * 只做**可读化**,不携带 sessionId——单条记录的来源会话由记录自身语义决定,
+ * 把 sessionId 塞进这一行会把 12 个字符的坐标变成 40 个字符。
+ */
+function formatAnchor(a) {
+    return typeof a.step === 'number' ? `t${a.turn} s${a.step}` : `t${a.turn}`;
 }
 /**
  * 从文件尾反向分块读取最后 N 行:不整读全文件(轮转上限 2MB,整读会

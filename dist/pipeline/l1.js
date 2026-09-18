@@ -12,6 +12,7 @@ import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipt
 import { buildConflictPair, validateConflictPair } from '../store/conflicts.js';
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
+import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
 import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope } from '../types.js';
 /** 解析 ISO/epoch 时间证据,非法或非正值一律 undefined——不猜测。 */
 function parseTimeEvidence(raw) {
@@ -51,8 +52,11 @@ function mergeTemporal(self, targets) {
  * 构造一条**全新**L1 记录(store 语义)。§C 冻结复用同一构造:
  * "新记忆照常入 L1"必须与既有 store 路径**逐字段一致**,否则冻结会引入
  * 一种只在开启开关时才出现的新记录形状。
+ *
+ * 第 4 个参数是 R7 的锚点映射(`L0 消息 id → 会话坐标`)。**传 undefined 时
+ * 行为与改动前逐字一致**——老调用方与没有锚点的会话走这条分支。
  */
-function toStoreRecord(m, now, ts) {
+function toStoreRecord(m, now, ts, anchorMap) {
     return {
         id: m.record_id,
         content: m.content,
@@ -64,7 +68,9 @@ function toStoreRecord(m, now, ts) {
         updatedAt: now,
         version: 0,
         source_message_ids: m.source_message_ids ?? [],
-        metadata: m.metadata ?? {},
+        // R7:锚点与 source_message_ids 同源解析;解析不到就**不写键**(不是空数组),
+        // 使无锚点记录与改动前的 metadata 逐字一致。
+        metadata: withSourceAnchors(m.metadata, anchorMap === undefined ? undefined : resolveSourceAnchors(m.source_message_ids, anchorMap)),
         family: m.family,
         scope: m.scope,
         workspaceId: m.workspaceId,
@@ -104,7 +110,13 @@ export async function runExtraction(ctx, cfg, store, states, pending, background
  * 传 undefined 时行为与改动前**逐字一致**——`cfg.scope='global'` 的既有部署
  * 永远走这条分支,这是零漂移的构造性保证。
  */
-workspaceId) {
+workspaceId, 
+/**
+ * R7 锚点映射(`L0 消息 id → 会话坐标`),由调用方经 `buildAnchorMap` 构造。
+ * **缺省时行为与改动前逐字一致**——传入的 `pending` 消息若不带锚点(老数据、
+ * 未启用捕获侧打戳),`resolveSourceAnchors` 一律返回 undefined,不写 metadata 键。
+ */
+anchorMap) {
     if (!cfg.extract.enabled)
         return { stored: 0, skipped: true, sceneName: chainHead(states, mode), newRecords: [] };
     // 触发阈值(渐进爬坡 + 按会话切片计数)由 runner 判定(trigger.ts);
@@ -272,7 +284,7 @@ workspaceId) {
         const action = decision.action;
         const ts = m.metadata?.activity_start_time ? Date.parse(String(m.metadata.activity_start_time)) : now;
         if (action === 'store') {
-            added.push(toStoreRecord(m, now, ts));
+            added.push(toStoreRecord(m, now, ts, anchorMap));
             continue;
         }
         // ── §C 矛盾冻结:不自动裁决 ──
@@ -286,7 +298,7 @@ workspaceId) {
                 ? validateConflictPair(m.record_id, decision.winner, decision.loser, new Set(byId.keys()))
                 : null;
             if (pair) {
-                added.push(toStoreRecord(m, now, ts));
+                added.push(toStoreRecord(m, now, ts, anchorMap));
                 const built = buildConflictPair({
                     runId,
                     winnerId: pair.winnerId,
@@ -307,7 +319,7 @@ workspaceId) {
             else {
                 logger.warn(`[memory] 矛盾冻结:第 ${m.record_id} 条的 conflict 决策无法构成冻结对` +
                     `(winner=${String(decision.winner)} loser=${String(decision.loser)}),已回落 store`);
-                added.push(toStoreRecord(m, now, ts));
+                added.push(toStoreRecord(m, now, ts, anchorMap));
             }
             continue;
         }
@@ -334,7 +346,10 @@ workspaceId) {
             updatedAt: now,
             version: targetVersion + 1,
             source_message_ids: m.source_message_ids ?? [],
-            metadata: m.metadata ?? {},
+            // R7:合并/更新产出的记录同样带锚点——否则"合并一次就丢坐标",
+            // 而合并恰恰是长会话里最常发生的动作。无映射时传空表 →
+            // resolveSourceAnchors 返回 undefined → 不写 metadata 键(零漂移)。
+            metadata: withSourceAnchors(m.metadata, resolveSourceAnchors(m.source_message_ids, anchorMap ?? new Map())),
             family: m.family,
             // 合并的有效期取并集:起 = 两侧最早;止 = 任一侧未闭合则仍未闭合(undefined)。
             ...mergeTemporal(temporalOf(m.metadata), targets.map((id) => byId.get(id)).filter((r) => r !== undefined)),

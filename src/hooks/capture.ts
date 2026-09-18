@@ -13,7 +13,7 @@ import type { MemoryRunner } from '../pipeline/runner.js';
 import type { SessionModeStore } from '../store/session-modes.js';
 import type { L0Store } from '../store/l0.js';
 import type { LiveSettingsHandle } from '../settings.js';
-import type { ConversationMessage, MemoryLogger } from '../types.js';
+import type { ConversationAnchor, ConversationMessage, MemoryLogger } from '../types.js';
 import { blocksToText } from '../util/text.js';
 import { sanitizeText, shouldCaptureL0, stripCodeBlocks } from '../util/sanitize.js';
 
@@ -21,8 +21,18 @@ import { sanitizeText, shouldCaptureL0, stripCodeBlocks } from '../util/sanitize
  * 需要进缓冲的事件类型。流式 chunk(text-delta/reasoning 等)一秒钟可达数百条,
  * 缓冲它们会把 MAX_BUFFER 撑爆、把轮次头部(turn/start + user 消息)裁掉——
  * 2026-08-16 真实事故:长回复轮次丢失 user 消息。
+ *
+ * `step/start` (2026-09-17 加入,R7):只为 **fold 出 step 坐标** 而缓冲,自身不落盘。
+ * 实测占比仅 **0.68%**(`memory-evidence-reconcile/findings.md` 容量表),相对
+ * 47% 的 streaming delta 可忽略;换来的是 `user/message` 也能拿到同轮 step。
  */
-const RELEVANT_TYPES = new Set(['user/message', 'assistant/message', 'turn/start', 'turn/end']);
+const RELEVANT_TYPES = new Set([
+  'user/message',
+  'assistant/message',
+  'turn/start',
+  'turn/end',
+  'step/start',
+]);
 
 export function isCaptureRelevant(type: string): boolean {
   return RELEVANT_TYPES.has(type);
@@ -107,7 +117,7 @@ export function registerCapture(
       if (event.type === 'turn/end') {
         const turn = event.data.turn;
         const turnEvents = buffers.takeTurn(sid, turn);
-        const messages = turnEventsToMessages(turnEvents, cfg, logger);
+        const messages = turnEventsToMessages(turnEvents, cfg, logger, sid, turn);
         if (messages.length > 0) {
           const roles = messages.reduce<Record<string, number>>((acc, m) => {
             acc[m.role] = (acc[m.role] ?? 0) + 1;
@@ -183,9 +193,26 @@ function turnEventsToMessages(
   events: SessionEvent[],
   cfg: MemoryConfig,
   logger: MemoryLogger,
+  sessionId: string,
+  turn: number,
 ): ConversationMessage[] {
   const out: ConversationMessage[] = [];
+  /**
+   * step fold(R7):`assistant/message` 与 `tool/result` 自带 `{turn, step}`,
+   * 但 `user/message` **不带**(内核 `types.d.ts:274` 对 `:291-324`)。按 seq 序
+   * 推进当前 step,让轮内的 user 消息也能拿到**同轮**坐标。
+   *
+   * 红线:`step/start` 之前出现的 user 消息**留空 step**,不拿上一轮的 step 顶替
+   * ——"轮内第一个 step 尚未开始"是真的没有坐标,编一个比留空更糟。
+   */
+  let currentStep: number | undefined;
   for (const event of events) {
+    // step 边界推进 fold 游标(不作为消息落盘,故不参与 out)
+    if (event.type === 'step/start') {
+      const s = (event.data as { step?: unknown }).step;
+      if (typeof s === 'number' && Number.isFinite(s)) currentStep = s;
+      continue;
+    }
     if (event.type === 'user/message') {
       const msg = event.data as UserMessage;
       // 只捕获真实用户输入(source.kind === 'user'),跳过插件注入上下文
@@ -195,14 +222,21 @@ function turnEventsToMessages(
       }
       const content = sanitizeText(blocksToText(msg.content));
       if (shouldCaptureL0(content)) {
-        out.push(makeMessage('user', content, event.time, cfg.capture.maxMessageChars));
+        const anchor: ConversationAnchor = { sessionId, turn };
+        if (currentStep !== undefined) anchor.step = currentStep;
+        out.push(makeMessage('user', content, event.time, cfg.capture.maxMessageChars, anchor));
       }
     } else if (event.type === 'assistant/message') {
-      const data = event.data as { message: AssistantMessage };
+      const data = event.data as { message: AssistantMessage; turn?: unknown; step?: unknown };
       let content = sanitizeText(blocksToText(data.message?.content));
       if (cfg.capture.stripCodeBlocks) content = stripCodeBlocks(content);
       if (shouldCaptureL0(content)) {
-        out.push(makeMessage('assistant', content, event.time, cfg.capture.maxMessageChars));
+        // 事件自带 turn/step 优先(fold 只服务于不带该字段的事件类型)
+        const evTurn = typeof data.turn === 'number' && Number.isFinite(data.turn) ? data.turn : turn;
+        const evStep = typeof data.step === 'number' && Number.isFinite(data.step) ? data.step : currentStep;
+        const anchor: ConversationAnchor = { sessionId, turn: evTurn };
+        if (evStep !== undefined) anchor.step = evStep;
+        out.push(makeMessage('assistant', content, event.time, cfg.capture.maxMessageChars, anchor));
       }
     }
   }
@@ -217,11 +251,14 @@ function makeMessage(
   content: string,
   timestamp: number,
   maxChars: number,
+  anchor?: ConversationAnchor,
 ): ConversationMessage {
-  return {
+  const msg: ConversationMessage = {
     id: `msg_${Date.now()}_${randomBytes(3).toString('hex')}`,
     role,
     content: content.slice(0, maxChars),
     timestamp,
   };
+  if (anchor !== undefined) msg.anchor = anchor;
+  return msg;
 }
