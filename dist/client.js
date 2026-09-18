@@ -662,18 +662,18 @@ var __defProp = Object.defineProperty;
 		  const items = view?.items ?? [];
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: S.muted, children: view === null ? "加载中…" : view.enabled ? `待裁决 ${view.total} 对` : "矛盾冻结未开启" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: S.muted, children: view === null ? "加载中…" : view.enabled ? `待裁决 ${view.total} 对` : "人工冲突裁决未开启" }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(NButton, { onClick: load, children: "刷新" })
 		    ] }),
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: S.error, children: error }) : null,
 		    note ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: S.hint, children: note }) : null,
 		    view !== null && !view.enabled ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", { style: S.intro, children: [
-		      view.notice ?? "矛盾冻结未开启。",
+		      view.notice ?? "人工冲突裁决未开启。",
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("br", {}),
-		      "矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。"
+		      "人工冲突裁决是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。"
 		    ] }) : null,
-		    view !== null && view.enabled && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: S.intro, children: "没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。" }) : null,
+		    view !== null && view.enabled && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: S.intro, children: "没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且人工冲突裁决已开启，那一对会停到这里。" }) : null,
 		    items.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ConflictCard, { pair: p, busy: busy === p.pair_id, onResolve: resolve }, p.pair_id))
 		  ] });
 		}
@@ -2946,6 +2946,7 @@ var __defProp = Object.defineProperty;
 		    if (off.length > 0) ceilingNote = "注意：部署配置已停用 " + off.join("、") + "（运行时开关无法开启）";
 		  }
 		  const mutate = settingsData && settingsData.settings ? !!settingsData.settings.memoryMutate : false;
+		  const cfEnabled = settingsData && settingsData.settings ? !!settingsData.settings.conflictFreeze : false;
 		  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { children: [
 		    settingsData && settingsData.supported === false ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("p", { style: S.hint, children: "settings 服务不可用，记忆模式开关未启用（记忆保持全开）。" }) : settingsData ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { style: S.switchPanel, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { style: S.panelLabel, children: "记忆模式" }),
@@ -3005,6 +3006,18 @@ var __defProp = Object.defineProperty;
 		          checked: mutate,
 		          onChange: (v) => {
 		            toggle("memoryMutate", v);
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { style: S.panelLabel, children: "人工冲突裁决" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+		        SwitchRow,
+		        {
+		          label: "人工冲突裁决",
+		          desc: cfEnabled ? '已开启：去重判定"两边都像对的"时冻结冲突对，停放到待人工裁决区' : "默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决",
+		          checked: cfEnabled,
+		          onChange: (v) => {
+		            toggle("conflictFreeze", v);
 		          }
 		        }
 		      ),

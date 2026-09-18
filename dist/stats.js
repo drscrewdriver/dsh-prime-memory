@@ -488,6 +488,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     distillMode: '', directBaseURL: '', directApiKey: '',
                     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
                     memoryMutate: false,
+                    conflictFreeze: cfg.conflictFreeze?.enabled === true,
                 }),
                 // 静态部署上限(cordis.patch.yml):运行时开关与它取 AND
                 ceilings: { capture: cfg.capture.enabled, distill: cfg.extract.enabled, recall: cfg.recall.enabled },
@@ -525,8 +526,8 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 throw new Error('开关通道未初始化');
             const patch = (payload ?? {});
             const clean = {};
-            // 布尔开关组:memoryMutate(高权限写删门)与主开关同列
-            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate']) {
+            // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
+            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze']) {
                 if (typeof patch[key] === 'boolean')
                     clean[key] = patch[key];
             }

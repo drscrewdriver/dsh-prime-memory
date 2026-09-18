@@ -115,11 +115,16 @@ export function effectiveCfg(cfg, live) {
             },
         }
         : null;
-    if (!override && !budgets && !maxInput && !fallbacksTakeover && !chainEffort && !chainFallbacks && !effortInject && !layerChains && !hasChannel && !embedOverride)
+    // §C 人工冲突裁决运行时覆盖:live.conflictFreeze 覆盖静态 cfg.conflictFreeze.enabled
+    const cfOverride = s?.conflictFreeze !== undefined
+        ? { conflictFreeze: { ...(cfg.conflictFreeze ?? {}), enabled: s.conflictFreeze } }
+        : null;
+    if (!override && !budgets && !maxInput && !fallbacksTakeover && !chainEffort && !chainFallbacks && !effortInject && !layerChains && !hasChannel && !embedOverride && !cfOverride)
         return cfg;
     return {
         ...cfg,
         ...(embedOverride ?? {}),
+        ...(cfOverride ?? {}),
         llm: {
             ...cfg.llm,
             ...(effortInject ?? {}),

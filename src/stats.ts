@@ -654,6 +654,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           distillMode: '', directBaseURL: '', directApiKey: '',
           embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
           memoryMutate: false,
+          conflictFreeze: cfg.conflictFreeze?.enabled === true,
         }),
         // 静态部署上限(cordis.patch.yml):运行时开关与它取 AND
         ceilings: { capture: cfg.capture.enabled, distill: cfg.extract.enabled, recall: cfg.recall.enabled },
@@ -691,8 +692,8 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       if (!live) throw new Error('开关通道未初始化');
       const patch = (payload ?? {}) as Record<string, unknown>;
       const clean: Record<string, boolean | string | number | DistillChainEntry[] | { extract: number; dedup: number; l2: number; l3: number; graph: number } | { l1: DistillChainEntry[]; l2: DistillChainEntry[]; l3: DistillChainEntry[] }> = {};
-      // 布尔开关组:memoryMutate(高权限写删门)与主开关同列
-      for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate'] as const) {
+      // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
+      for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
       }
       // 运行时统一路由链:结构校验后整体写入(空数组 = 回到跟随部署配置)

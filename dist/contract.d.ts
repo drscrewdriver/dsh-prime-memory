@@ -93,6 +93,9 @@ export interface MemoryLiveSettings {
     /** 记忆写删权限门:true 才允许写删记忆工具(memory_add/memory_delete)与面板高权限删除
      *  (records-delete)。默认 false(模型写删风险高,须显式在面板开启高权限模式)。 */
     memoryMutate: boolean;
+    /** §C 人工冲突裁决总开关:true = 去重判定"两边都像对的"时冻结冲突对,停放到待人工裁决区;
+     *  false = 默认,冲突按 LLM 的 winner/loser 自动了结。运行时覆盖静态 config 的 conflictFreeze.enabled。 */
+    conflictFreeze: boolean;
 }
 /** 召回停用原因(session-stats recall.enabled=false 时带出;短路序第一个为假的因子)。 */
 export type RecallDisabledReason = 'deploy' | 'global' | 'session' | 'mode';
@@ -525,6 +528,8 @@ export interface SettingsSetRequest {
     embedRemoteApiKey?: string;
     /** 记忆写删权限门(true = 允许写删工具与面板高权限删除)。 */
     memoryMutate?: boolean;
+    /** §C 人工冲突裁决总开关(true = 冻结冲突对,停放到待人工裁决区)。 */
+    conflictFreeze?: boolean;
 }
 export interface SettingsSetResponse {
     ok: true;
