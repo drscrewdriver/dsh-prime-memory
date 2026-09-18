@@ -967,7 +967,7 @@ export function registerMemoryTools(
           return { enabled: false, total: 0, items: [], notice: blockNoticeOf(exec) };
         }
         return listConflictPairs(
-          { l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true },
+          { l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true },
           { limit: typeof args.limit === 'number' ? args.limit : undefined },
         );
       },
@@ -1011,7 +1011,7 @@ export function registerMemoryTools(
         const outcome = typeof args.outcome === 'string' ? args.outcome.trim() : '';
         if (!pairId) return { ...empty, notice: '需要 pair_id:待裁决对没有"全部裁决"这种用法。' };
         return resolveConflictPair(
-          { l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true },
+          { l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true },
           pairId,
           outcome,
         );
