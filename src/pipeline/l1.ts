@@ -9,6 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
+import { normHallEnabled } from '../config.js';
 import { callLLM, parseJsonLogged, resolveLayerTokens } from '../llm.js';
 import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipts.js';
 import { buildConflictPair, validateConflictPair } from '../store/conflicts.js';
@@ -28,7 +29,7 @@ import type {
   MemoryRecord,
   MemoryScope,
 } from '../types.js';
-import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope } from '../types.js';
+import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope, HALL_FALLBACK } from '../types.js';
 
 /** 时间轴三元组(抽取产出 → 记录字段)。 */
 type Temporal = Pick<MemoryRecord, 'validFrom' | 'validTo' | 'persistence'>;
@@ -256,12 +257,18 @@ export async function runExtraction(
   const extracted: Array<PendingMemory> = [];
   let lastScene = chainState.lastSceneName;
   let sceneCount = 0;
+  // hall 打标候选(R14 归一化后的启用列表);general(跨域兜底)仅在 auto 档追加进候选
+  const hallCandidates = normHallEnabled(cfg.hall?.enabled);
+  const halls =
+    mode === 'auto' && !hallCandidates.includes(HALL_FALLBACK)
+      ? [...hallCandidates, HALL_FALLBACK]
+      : hallCandidates;
   for (const chunk of chunks) {
     const userPrompt = formatExtractionPrompt({
       newMessages: chunk,
       backgroundMessages: backgroundMsgs,
       previousSceneName: lastScene || '无',
-      halls: cfg.hall?.enabled,
+      halls,
     });
     const raw = await callLLM(ctx, cfg, {
       system: getExtractMemoriesSystemPrompt(mode),

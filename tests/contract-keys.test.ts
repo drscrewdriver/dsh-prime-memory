@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { EFFORT_CHOICES, memorySchema, resolveDataDir } from '../src/config.js';
 import { MEMORY_ENDPOINTS } from '../src/stats.js';
-import { HALL_CATALOG, HALL_DEFAULT_ENABLED, familyForType, resolveRecordFamily } from '../src/types.js';
+import { HALL_CATALOG, HALL_CORNERS, HALL_DEFAULT_ENABLED, HALL_FALLBACK, hallLabel, familyForType, resolveRecordFamily } from '../src/types.js';
 import {
   CHARS_PER_TOKEN,
   CONTEXT_METER_CIRCUMFERENCE,
@@ -104,10 +104,32 @@ describe('effort vocabulary', () => {
 });
 
 describe('hall catalog', () => {
-  it('keeps the 5-entry catalog and mainline defaults', () => {
-    expect(HALL_CATALOG.map((h) => h.id)).toEqual(['work', 'relationships', 'general', 'finance', 'journey']);
-    expect(HALL_CATALOG.filter((h) => h.experimental).map((h) => h.id)).toEqual(['finance', 'journey']);
-    expect([...HALL_DEFAULT_ENABLED]).toEqual(['work', 'relationships', 'general']);
+  it('keeps the 8-corner catalog and mainline defaults', () => {
+    expect(HALL_CATALOG.map((h) => h.id)).toEqual([
+      'work',
+      'relationships',
+      'learning',
+      'creative',
+      'health',
+      'home',
+      'finance',
+      'journey',
+    ]);
+    // experimental 字段已退休(8 角全主线);角集 = 全目录,general 移出角集作跨域兜底
+    expect(HALL_CORNERS.map((h) => h.id)).toEqual(HALL_CATALOG.map((h) => h.id));
+    expect(HALL_CATALOG.some((h) => h.id === 'general')).toBe(false);
+    expect(HALL_FALLBACK).toBe('general');
+    expect(hallLabel('general')).toBe('跨域');
+    expect([...HALL_DEFAULT_ENABLED]).toEqual([
+      'work',
+      'relationships',
+      'learning',
+      'creative',
+      'health',
+      'home',
+      'finance',
+      'journey',
+    ]);
   });
 });
 
@@ -179,7 +201,16 @@ describe('memory live settings key registry', () => {
     expect((defaults.llm as Record<string, unknown>).mode).toBe('host');
     expect((defaults.llm as Record<string, unknown>).maxTokens).toBe(65_536);
     expect((defaults.llm as Record<string, unknown>).maxInputChars).toBe(700_000);
-    expect((defaults.hall as Record<string, unknown>).enabled).toEqual(['work', 'relationships', 'general']);
+    expect((defaults.hall as Record<string, unknown>).enabled).toEqual([
+      'work',
+      'relationships',
+      'learning',
+      'creative',
+      'health',
+      'home',
+      'finance',
+      'journey',
+    ]);
     expect((defaults.tokenCost as Record<string, unknown>).retentionDays).toBe(365);
     expect(defaults.tools).toBe(true);
     expect(defaults.benchControl).toBe(false);

@@ -606,6 +606,12 @@ export interface ListRecordsResponse {
   truncated: boolean;
   /** 场景筛选下拉选项(仅 offset===0 时附带)。 */
   scenes?: string[];
+  /**
+   * Hall 词表(R8 单一事实源:服务端随 list-records 下发,client 不再手抄;仅 offset===0 时附带)。
+   * 含 8 角 + `general`(跨域兜底,存量大 reserved 值仍可筛)。缺省(旧服务端)时 client
+   * 降级为从已加载记录的 hall 值派生选项。
+   */
+  hallCatalog?: Array<{ id: string; label: string }>;
 }
 
 /** dsh-memory/records-delete(面板高权限退场指定记忆;须 memoryMutate 开启)。 */

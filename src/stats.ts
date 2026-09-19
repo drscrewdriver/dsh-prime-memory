@@ -40,7 +40,7 @@ import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
-import type { MemoryFamily, MemoryLogger, MemoryMode } from './types.js';
+import { HALL_CATALOG, HALL_FALLBACK, type MemoryFamily, type MemoryLogger, type MemoryMode } from './types.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 
@@ -833,6 +833,11 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       if (p.query !== undefined && p.query.length > 4096) throw new Error('query 过长(≤4096 字符)');
       const limit = Math.min(Math.max(Number(p.limit) || 50, 1), 200);
       const offset = Math.min(Math.max(Number(p.offset) || 0, 0), 1_000_000);
+      // Hall 词表随首屏下发(R8 单一事实源,client 不手抄);常量拼接,零 I/O,不触碰热路径规则
+      const hallCatalog =
+        offset === 0
+          ? [...HALL_CATALOG.map((h) => ({ id: h.id, label: h.label })), { id: HALL_FALLBACK, label: '跨域' }]
+          : undefined;
       // 关键词路径:复用检索唯一缝(与召回同源),取回后做场景/Hall 过滤 + 手工分页。
       // 检索侧单次上限 200:分页窗口触达上限时显式标记 truncated(结果可能不完整)。
       if (p.query && p.query.trim()) {
@@ -856,6 +861,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           total: null,
           truncated: wanted > SEARCH_CAP,
           scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
+          hallCatalog,
         };
         return resp;
       }
@@ -866,6 +872,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         total,
         truncated: false,
         scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
+        hallCatalog,
       };
       return resp;
     }

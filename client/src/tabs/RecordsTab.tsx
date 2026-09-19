@@ -25,15 +25,8 @@ const TYPE_CHOICES = [
   'work_artifact',
 ];
 
-// Hall 属性通道筛选项（粗分类；与 host types.ts 的 HALL_CATALOG 对齐，client 侧不 import 运行时代码）
-const HALL_CHOICES = [
-  { id: 'work', label: '工作' },
-  { id: 'relationships', label: '人际关系' },
-  { id: 'general', label: '通用' },
-  { id: 'finance', label: '财务' },
-  { id: 'journey', label: '旅程' },
-];
-const HALL_LABEL: Record<string, string> = Object.fromEntries(HALL_CHOICES.map((h) => [h.id, h.label]));
+// Hall 属性通道筛选项(R8 单一事实源):随 list-records 首屏由服务端下发(8 角 + general 跨域),
+// client 不再手抄词表。下发缺失(旧服务端)时降级为从已加载记录的 hall 值派生选项(只显示已有标签)。
 
 /** records-delete 单次上限（契约：ids ≤200）。 */
 const DELETE_LIMIT = 200;
@@ -60,6 +53,8 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [typeFilter, setTypeFilter] = useState('');
   const [sceneFilter, setSceneFilter] = useState('');
   const [hallFilter, setHallFilter] = useState('');
+  // Hall 词表(服务端下发,R8);null = 未下发(降级:从已加载记录派生)
+  const [hallCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
 
   // 上一次实际生效的查询条件（「加载更多」按它续页）
   const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', hall: '' });
@@ -93,6 +88,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           setTotal(v.total === undefined || v.total === null ? null : v.total);
           setTruncated(!!v.truncated);
           if (v.scenes) setSceneOptions(v.scenes);
+          if (v.hallCatalog) setHallCatalog(v.hallCatalog);
         })
         .catch((e: unknown) => {
           if (token !== seqRef.current) return;
@@ -281,9 +277,10 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         <NSel
           style={{ maxWidth: 150 }}
           options={([{ id: '', label: '全部 Hall' }] as NSelOption[]).concat(
-            HALL_CHOICES.map((h) => {
-              return { id: h.id, label: h.label };
-            }),
+            (
+              hallCatalog ??
+              Array.from(new Set(items.map((m) => m.hall).filter((h): h is string => !!h))).map((id) => ({ id, label: id }))
+            ).map((h) => ({ id: h.id, label: h.label })),
           )}
           value={hallFilter}
           onChange={setHallFilter}
@@ -365,7 +362,11 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                   }}
                 />
                 <span className={'dsh-mem-tag dsh-mem-tag-' + m.type}>{TYPE_LABELS[m.type] || m.type}</span>
-                {m.hall ? <span className="dsh-mem-tag dsh-mem-tag-work-fact">{'Hall · ' + (HALL_LABEL[m.hall] || m.hall)}</span> : null}
+                {m.hall ? (
+                  <span className="dsh-mem-tag dsh-mem-tag-work-fact">
+                    {'Hall · ' + (hallCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
+                  </span>
+                ) : null}
                 <span style={S.muted}>{'优先级 ' + m.priority}</span>
                 {m.score !== null && m.score !== undefined ? (
                   <span style={S.muted}>{'相关度 ' + Number(m.score).toFixed(2)}</span>
