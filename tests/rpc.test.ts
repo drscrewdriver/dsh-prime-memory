@@ -227,7 +227,15 @@ describe('rpc: session mode endpoints', () => {
   it('mode set with recall override; validation rejects bad mode/payload shape', async () => {
     const h = await harness({ live: liveHandle({ recall: true }) });
     const set = await h.call('dsh-memory/session-mode-set', { sessionId: 's1', mode: 'work', recall: false }) as { mode: string; recall: boolean | null; recallResolved: boolean };
-    expect(set).toEqual({ sessionId: 's1', mode: 'work', recall: false, recallResolved: false });
+    expect(set).toEqual({
+      sessionId: 's1',
+      mode: 'work',
+      recall: false,
+      recallResolved: false,
+      hall: null,
+      hallIncludeUnlabeled: true,
+      hallIncludeGeneral: false,
+    });
     // 显式 null 清除覆盖
     const cleared = await h.call('dsh-memory/session-mode-set', { sessionId: 's1', mode: 'auto', recall: null }) as { recall: null; recallResolved: boolean };
     expect(cleared.recall).toBeNull();

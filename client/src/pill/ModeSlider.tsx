@@ -1,10 +1,11 @@
-/** 滑动选择器浮层（macOS 滑动器式：拖拽圆头 1:1 连续跟手，松手按动量投影吸附最近档）。 */
-import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Segmented } from '../ui/controls.js';
-import type { RpcFn } from '../rpc.js';
-import { ensureThemeStyle } from '../theme.js';
+/**
+ * 强制单族覆写滑轨（v5 降级）：原"滑动选择器浮层"在 hall 八边形接管门面后，
+ * 只保留档位滑轨本体（日常 → 智能 → 工作），作为 HallWheel 图形外的覆写面板。
+ * 浮层壳 / 注入三态行 / 会话信息区 / off 停点特例均已移出
+ * （off 由图形外关闭闸承载；注入行与信息区归 HallWheel 排布）。
+ */
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { FIELD_TIERS, INNER_W, MODES, RAIL_H, THUMB, TRACK_W, modeIndex, smStep } from './modes.js';
-import { SessionInfoArea } from './SessionInfoArea.js';
 
 interface DragState {
   /** 圆头连续位置 px */
@@ -20,7 +21,6 @@ interface GeoSnapshot {
   origin: number;
   rightEdge: number;
   tier: number;
-  show: boolean;
   dragging: boolean;
 }
 
@@ -33,17 +33,7 @@ interface GridCell {
   phase: number;
 }
 
-export function ModeSlider(props: {
-  mode: string;
-  onCommit(key: string): void;
-  /** 会话级注入覆盖（#38）：null = 跟随全局；缺省（未传）= 浮层不渲染注入行。 */
-  recall?: boolean | null;
-  onCommitRecall?(next: boolean | null): void;
-  error?: string | null;
-  rpc?: RpcFn;
-  sessionId?: string;
-}) {
-  ensureThemeStyle(); // 主题令牌与浮层/气泡 class 共用同一张注入样式表
+export function ModeSlider(props: { mode: string; onCommit(key: string): void }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -94,8 +84,7 @@ export function ModeSlider(props: {
   geoRef.current = {
     origin: thumbLeft + THUMB / 2, // 密度/亮度中心 = 圆球中心
     rightEdge: thumbLeft + THUMB, // 粒子活动区右界 = 填充右缘（不越过圆球）
-    tier: activeIdx, // 场强档位（与填充/气泡同源；拖拽预览即时升降级）
-    show: activeIdx > 0 || drag !== null, // 与填充显隐同源
+    tier: activeIdx, // 场强档位（与填充同源；拖拽预览即时升降级）
     dragging: drag !== null,
   };
 
@@ -142,9 +131,9 @@ export function ModeSlider(props: {
     };
 
     const draw = (time: number) => {
-      const st = geoRef.current || { origin: 0, rightEdge: 0, tier: 0, show: false, dragging: false };
+      const st = geoRef.current || { origin: 0, rightEdge: 0, tier: 1, dragging: false };
       ctx.clearRect(0, 0, width, height);
-      if (!st.show || st.rightEdge <= 0) {
+      if (st.rightEdge <= 0) {
         fieldOn = false;
         return;
       }
@@ -230,50 +219,7 @@ export function ModeSlider(props: {
     };
   }, []);
 
-  // ── 水平视口夹持（手机端适配）：浮层以 pill 中心为轴悬浮，而 pill 在输入栏左侧，
-  // 窄视口下浮层左半会出屏。挂载即量一次，超界平移贴边（边距 8px），
-  // 窗口 resize/旋转重算；桌面浮层天然在界内，shiftX 恒 0 零行为变化。
-  // 垂直不夹：浮层只向上弹，点 pill 顺带收起软键盘，上方空间恒充裕。
-  // ModeSlider 只在展开期间挂载，挂载即打开；useLayoutEffect 保证首帧前量完不闪位。
-  // shift 参与变换，测量时须抵掉旧值还原理想中轴位置。
-  const popRef = useRef<HTMLDivElement | null>(null);
-  const shiftRef = useRef(0);
-  const [shiftX, setShiftX] = useState(0);
-  useLayoutEffect(() => {
-    const clamp = () => {
-      const el = popRef.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      if (r.width === 0) return;
-      const left = r.left - shiftRef.current;
-      // 取舍（审查 P2-1）：视口窄于浮层+双边距时左缘优先、右半不可达——
-      // 不做居中回退，保持定点稳定不振荡
-      const edge = 8;
-      let next = 0;
-      if (left < edge) next = edge - left;
-      else if (left + r.width > window.innerWidth - edge) {
-        next = window.innerWidth - edge - (left + r.width);
-      }
-      if (next !== shiftRef.current) {
-        shiftRef.current = next;
-        setShiftX(next);
-      }
-    };
-    clamp();
-    window.addEventListener('resize', clamp);
-    // 布局位移不都伴随 resize（侧边栏开合、软键盘、宿主动画）：浮层「开着即挂载」
-    // 是短命表面，挂载期间 100ms 周期重夹——一次 getBoundingClientRect + 几次数值
-    // 比较，与打开期间本来就在跑的粒子层 rAF 循环同级开销。不用 Intersection-
-    // Observer：其回调依赖渲染帧派发，页面被遮挡/后台时整体停摆；定时器后台只是
-    // 节流到 1s、仍会跑。
-    const iv = window.setInterval(clamp, 100);
-    return () => {
-      window.removeEventListener('resize', clamp);
-      window.clearInterval(iv);
-    };
-  }, []);
-
-  // 停点刻度：轨道上的 4 个小点提示可吸附位置；档位名改由拖动气泡显示
+  // 停点刻度：轨道上的 3 个小点提示可吸附位置；档位名改由拖动气泡显示
   const stops = [];
   for (let i = 0; i < MODES.length; i++) {
     const stopLeft = (i / (MODES.length - 1)) * INNER_W + THUMB / 2;
@@ -297,140 +243,79 @@ export function ModeSlider(props: {
 
   return (
     <div
-      // 外壳只负责定位（带 transform 居中悬浮在按钮上方，水平中轴对齐 pill 中心）；
-      // shiftX = 水平视口夹持的贴边平移量（桌面恒 0）
-      ref={popRef}
+      ref={trackRef}
+      className="dsh-mem-hitband"
       style={{
-        position: 'absolute',
-        bottom: 'calc(100% + 8px)',
-        left: '50%',
-        transform: 'translateX(calc(-50% + ' + shiftX + 'px))',
-        zIndex: 1000,
+        position: 'relative',
+        // 容器宽 = thumb 活动范围（0..INNER_W + THUMB），点击映射与视觉两端严格对齐
+        width: TRACK_W,
+        height: RAIL_H,
+        borderRadius: 999,
+        background: 'var(--dsh-mem-track)',
+        touchAction: 'none',
+        cursor: drag === null ? 'pointer' : 'grabbing',
       }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
+      {/* 填充：从滑轨左端铺到圆球右缘（width = thumbLeft + THUMB，整球落在填充
+          末端上与其重合，无空隙不割裂）。off 档移出滑轨后三档恒显示填充，
+          原"静态关闭档不渲染"的显隐两分支随之删除 */}
       <div
-        // dsh 原生菜单同配方浮层：不透明实底 + inverted 描边 + lv3 阴影；
-        // 上下内边距对称（滑轨垂直居中、浮层紧凑），拖动气泡经 overflow: visible 溢出浮层上方
-        className="dsh-mem-popover"
-        style={{ position: 'relative', padding: '14px 16px' }}
-      >
-        <div
-          ref={trackRef}
-          className="dsh-mem-hitband"
-          style={{
-            position: 'relative',
-            // 容器宽 = thumb 活动范围（0..INNER_W + THUMB），点击映射与视觉两端严格对齐
-            width: TRACK_W,
-            height: RAIL_H,
-            borderRadius: 999,
-            background: 'var(--dsh-mem-track)',
-            touchAction: 'none',
-            cursor: drag === null ? 'pointer' : 'grabbing',
-          }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-        >
-          {/* 填充：从滑轨左端铺到圆球右缘（width = thumbLeft + THUMB，整球落在填充
-              末端上与其重合，无空隙不割裂；auto 档恰好全轨蓝、不超出轨道）；
-              颜色从左往右渐变：左浅（fill-1）到球侧深（fill-2）。
-              显隐两支：静态关闭档（off 且未拖拽）不渲染；拖拽中无论预览到哪档恒显示
-             （松手落 off 才随提交消失）；松手吸附时 width 与圆球 left 同走 120ms ease
-             （防球与填充瞬时分家） */}
-          {activeIdx > 0 || drag !== null ? (
-            <div
-              style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                bottom: 0,
-                width: thumbLeft + THUMB,
-                borderRadius: 999,
-                background: 'linear-gradient(90deg, var(--dsh-mem-fill-1), var(--dsh-mem-fill-2))',
-                pointerEvents: 'none',
-                zIndex: 1,
-                transition: drag === null ? 'width 120ms ease' : 'none',
-              }}
-            />
-          ) : null}
-          {stops}
-          {/* 粒子层：点阵粒子场（pointerEvents none 不挡拖拽；拖拽时滤镜增饱和提亮） */}
-          <canvas
-            ref={canvasRef}
-            className="dsh-mem-particles"
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              width: '100%',
-              height: '100%',
-              pointerEvents: 'none',
-              zIndex: 2,
-              filter: drag !== null ? 'saturate(1.45) brightness(1.28) contrast(1.06)' : 'none',
-            }}
-          />
-          {/* 圆球：被粗滑轨包裹（RAIL_H > THUMB），品牌蓝描边，拖拽时阴影加重 */}
-          <div
-            style={{
-              position: 'absolute',
-              left: thumbLeft,
-              top: (RAIL_H - THUMB) / 2,
-              width: THUMB,
-              height: THUMB,
-              borderRadius: '50%',
-              background: 'var(--dsh-mem-thumb)',
-              border: '1px solid var(--dsh-mem-accent)',
-              boxShadow: drag !== null ? '0 2px 8px rgba(0,0,0,0.35)' : '0 1px 4px rgba(0,0,0,0.25)',
-              pointerEvents: 'none',
-              transition: drag === null ? 'left 120ms ease' : 'none',
-              zIndex: 3,
-            }}
-          />
-          {/* 拖动气泡：仅拖拽期间显示当前档位名，下尖角指向圆球，松手即消失 */}
-          {drag !== null ? (
-            <div className="dsh-mem-bubble" style={{ left: thumbLeft + THUMB / 2, zIndex: 4 }}>
-              {info.label}
-            </div>
-          ) : null}
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: thumbLeft + THUMB,
+          borderRadius: 999,
+          background: 'linear-gradient(90deg, var(--dsh-mem-fill-1), var(--dsh-mem-fill-2))',
+          pointerEvents: 'none',
+          zIndex: 1,
+          transition: drag === null ? 'width 120ms ease' : 'none',
+        }}
+      />
+      {stops}
+      {/* 粒子层：点阵粒子场（pointerEvents none 不挡拖拽；拖拽时滤镜增饱和提亮） */}
+      <canvas
+        ref={canvasRef}
+        className="dsh-mem-particles"
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 2,
+          filter: drag !== null ? 'saturate(1.45) brightness(1.28) contrast(1.06)' : 'none',
+        }}
+      />
+      {/* 圆球：被粗滑轨包裹（RAIL_H > THUMB），品牌蓝描边，拖拽时阴影加重 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: thumbLeft,
+          top: (RAIL_H - THUMB) / 2,
+          width: THUMB,
+          height: THUMB,
+          borderRadius: '50%',
+          background: 'var(--dsh-mem-thumb)',
+          border: '1px solid var(--dsh-mem-accent)',
+          boxShadow: drag !== null ? '0 2px 8px rgba(0,0,0,0.35)' : '0 1px 4px rgba(0,0,0,0.25)',
+          pointerEvents: 'none',
+          transition: drag === null ? 'left 120ms ease' : 'none',
+          zIndex: 3,
+        }}
+      />
+      {/* 拖动气泡：仅拖拽期间显示当前档位名，下尖角指向圆球，松手即消失 */}
+      {drag !== null ? (
+        <div className="dsh-mem-bubble" style={{ left: thumbLeft + THUMB / 2, zIndex: 4 }}>
+          {info.label}
         </div>
-        {props.error ? (
-          <div style={{ fontSize: 11, color: 'var(--dsh-mem-danger)', marginTop: 10, whiteSpace: 'nowrap' }}>
-            {props.error}
-          </div>
-        ) : null}
-        {/* 注入三态行（#38 只写不读）：滑轨（族维度）正下方，档位与注入正交分立。
-            文案极简：标签两字 + 三态词；「跟随全局」即清除会话覆盖。
-            off 档时行禁用（完全隐身包含注入，开关无意义） */}
-        {props.recall !== undefined && props.onCommitRecall ? (
-          <div
-            style={{
-              borderTop: '1px solid var(--dsh-mem-border)',
-              marginTop: 10,
-              paddingTop: 8,
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 8,
-            }}
-          >
-            <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>注入</span>
-            <Segmented
-              value={props.recall === null ? 'follow' : props.recall ? 'on' : 'off'}
-              disabled={props.mode === 'off'}
-              options={[
-                { key: 'follow', label: '跟随全局', title: '清除本会话覆盖，跟随全局召回开关' },
-                { key: 'on', label: '开', title: '本会话强制注入记忆' },
-                { key: 'off', label: '关', title: '只写：记忆照常沉淀，但不注入本会话' },
-              ]}
-              onChange={(key) => props.onCommitRecall!(key === 'on' ? true : key === 'off' ? false : null)}
-            />
-          </div>
-        ) : null}
-        {/* 会话信息区（分隔线 + 2×2 指标 + 状态行）：session-stats 热路径端点，
-            宿主不支持 / 数据缺失时整体不渲染（best-effort 增强，不占位） */}
-        {props.rpc && props.sessionId ? <SessionInfoArea rpc={props.rpc} sessionId={props.sessionId} /> : null}
-      </div>
+      ) : null}
     </div>
   );
 }

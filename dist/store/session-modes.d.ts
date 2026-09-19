@@ -1,5 +1,7 @@
 import type { MemoryLogger, MemoryMode } from '../types.js';
 export declare function isMemoryMode(v: unknown): v is MemoryMode;
+/** 合法角 id 判定(锁域只认 8 角;general 是兜底值不是角,不可锁定)。 */
+export declare function isHallCorner(v: unknown): v is string;
 export declare class SessionModeStore {
     private readonly defaultMode;
     private readonly logger?;
@@ -31,6 +33,18 @@ export declare class SessionModeStore {
     resolvedRecall(sessionId: string, globalRecall: boolean): boolean;
     /** 设置会话级注入覆盖(undefined = 清除覆盖跟随全局。写穿持久化)。 */
     setRecall(sessionId: string, recall: boolean | undefined): void;
+    /** 会话级域锁定原始值:undefined = 中心(智能档,无锁域)。 */
+    getHall(sessionId: string): string | undefined;
+    /** 锁定域边界开关:未打标是否包含(缺省 true)/ general 是否包含(缺省 false)。 */
+    hallBoundaries(sessionId: string): {
+        includeUnlabeled: boolean;
+        includeGeneral: boolean;
+    };
+    /** 设置会话级域锁定(hall = 角 id;undefined = 回中心清除锁定。写穿持久化)。 */
+    setHall(sessionId: string, hall: string | undefined, boundaries?: {
+        includeUnlabeled?: boolean;
+        includeGeneral?: boolean;
+    }): void;
     /** 注册档位切换回调(同步调用;回调异常只记日志不阻断写穿)。 */
     setModeChangeHandler(cb: (sessionId: string, oldMode: MemoryMode, newMode: MemoryMode) => void): void;
     /** 设置会话档位(写穿持久化;持久化失败保持内存态生效)。 */

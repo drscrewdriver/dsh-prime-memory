@@ -1476,6 +1476,28 @@ export class MemoryDb {
     }
   }
 
+  /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
+  hallL1Counts(): { counts: Record<string, number>; unlabeled: number } {
+    if (this.degraded) return { counts: {}, unlabeled: 0 };
+    try {
+      const rows = this.db
+        .prepare(
+          "SELECT json_extract(metadata_json, '$.hall') AS hall, COUNT(*) AS n FROM l1_records GROUP BY hall",
+        )
+        .all() as Array<{ hall: string | null; n: number | bigint }>;
+      const counts: Record<string, number> = {};
+      let unlabeled = 0;
+      for (const r of rows) {
+        const n = Number(r.n);
+        if (typeof r.hall === 'string' && r.hall !== '') counts[r.hall] = n;
+        else unlabeled += n;
+      }
+      return { counts, unlabeled };
+    } catch {
+      return { counts: {}, unlabeled: 0 };
+    }
+  }
+
   // ============================
   // L1 检索
   // ============================

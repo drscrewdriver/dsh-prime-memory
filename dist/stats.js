@@ -24,6 +24,9 @@ import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
 import { sourceAnchorLabels } from './pipeline/anchors.js';
 import { readSupersedeMarker } from './store/supersede.js';
 import { isSnapshotName } from './store/l1-snapshot.js';
+import { HALL_CATALOG, HALL_FALLBACK } from './types.js';
+import { isHallCorner } from './store/session-modes.js';
+import { startHallBackfill } from './hall-backfill.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
@@ -44,6 +47,8 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/token-cost',
     'dsh-memory/session-mode-get',
     'dsh-memory/session-mode-set',
+    'dsh-memory/hall-overview',
+    'dsh-memory/hall-backfill',
     'dsh-memory/session-stats',
     'dsh-memory/settings-get',
     'dsh-memory/settings-set',
@@ -350,12 +355,16 @@ export async function handleEndpoint(endpoint, payload, deps) {
             // 注入解析权威在 host:recall 是原始覆盖(null=跟随全局),recallResolved 是生效值
             const s = live?.get();
             const globalRecall = s?.recall ?? true;
+            const bounds = modes.hallBoundaries(sessionId);
             const v = {
                 sessionId,
                 mode: modes.get(sessionId),
                 defaultMode: modes.default,
                 recall: modes.getRecall(sessionId) ?? null,
                 recallResolved: modes.resolvedRecall(sessionId, globalRecall),
+                hall: modes.getHall(sessionId) ?? null,
+                hallIncludeUnlabeled: bounds.includeUnlabeled,
+                hallIncludeGeneral: bounds.includeGeneral,
             };
             return v;
         }
@@ -374,6 +383,11 @@ export async function handleEndpoint(endpoint, payload, deps) {
             if (p.recall !== undefined && typeof p.recall !== 'boolean' && p.recall !== null) {
                 throw new Error(`非法注入覆盖: ${String(p.recall)}(允许 true/false/null)`);
             }
+            // 域锁定可选同车:角 id = 锁定;显式 null = 回中心;缺省 = 不动。
+            // 只认 8 角 id(general 是兜底值不是角,不可锁定),非法值整体拒绝(不做部分提交)
+            if (p.hall !== undefined && p.hall !== null && !isHallCorner(p.hall)) {
+                throw new Error(`非法域锁定: ${String(p.hall)}(允许 ${HALL_CATALOG.map((h) => h.id).join('/')}/null)`);
+            }
             modes.set(sessionId, p.mode);
             if (typeof p.recall === 'boolean') {
                 modes.setRecall(sessionId, p.recall);
@@ -381,15 +395,40 @@ export async function handleEndpoint(endpoint, payload, deps) {
             else if (p.recall === null) {
                 modes.setRecall(sessionId, undefined);
             }
-            deps.logger.info(`[memory] 会话档位设置 session=${sessionId} mode=${p.mode} recall=${JSON.stringify(modes.getRecall(sessionId) ?? null)}`);
+            if (p.hall !== undefined || p.hallIncludeUnlabeled !== undefined || p.hallIncludeGeneral !== undefined) {
+                modes.setHall(sessionId, p.hall === null ? undefined : p.hall, {
+                    includeUnlabeled: p.hallIncludeUnlabeled,
+                    includeGeneral: p.hallIncludeGeneral,
+                });
+            }
+            deps.logger.info(`[memory] 会话档位设置 session=${sessionId} mode=${p.mode} recall=${JSON.stringify(modes.getRecall(sessionId) ?? null)} hall=${JSON.stringify(modes.getHall(sessionId) ?? null)}`);
             const s = live?.get();
+            const bounds = modes.hallBoundaries(sessionId);
             const v = {
                 sessionId,
                 mode: p.mode,
                 recall: modes.getRecall(sessionId) ?? null,
                 recallResolved: modes.resolvedRecall(sessionId, s?.recall ?? true),
+                hall: modes.getHall(sessionId) ?? null,
+                hallIncludeUnlabeled: bounds.includeUnlabeled,
+                hallIncludeGeneral: bounds.includeGeneral,
             };
             return v;
+        }
+        // ── Hall 八边形角计数(HallWheel 打开时拉取;非热路径,组查询一条 SQL) ──
+        case 'dsh-memory/hall-overview': {
+            const { counts, unlabeled } = stores.l1.hallCounts();
+            const v = {
+                corners: HALL_CATALOG.map((h) => ({ id: h.id, label: h.label, count: counts[h.id] ?? 0 })),
+                general: counts[HALL_FALLBACK] ?? 0,
+                unlabeled,
+            };
+            return v;
+        }
+        // ── 一键回填(task_15):后台任务,单飞;端点立即返回,进度看 hall-overview ──
+        case 'dsh-memory/hall-backfill': {
+            const r = startHallBackfill({ ctx: deps.ctx, cfg: deps.cfg, l1: stores.l1, logger: deps.logger });
+            return r;
         }
         // ── 会话级统计(悬浮卡信息区;热路径端点,见 SessionInfoSource 的零 I/O 硬规则) ──
         case 'dsh-memory/session-stats': {
@@ -672,6 +711,10 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 throw new Error('query 过长(≤4096 字符)');
             const limit = Math.min(Math.max(Number(p.limit) || 50, 1), 200);
             const offset = Math.min(Math.max(Number(p.offset) || 0, 0), 1_000_000);
+            // Hall 词表随首屏下发(R8 单一事实源,client 不手抄);常量拼接,零 I/O,不触碰热路径规则
+            const hallCatalog = offset === 0
+                ? [...HALL_CATALOG.map((h) => ({ id: h.id, label: h.label })), { id: HALL_FALLBACK, label: '跨域' }]
+                : undefined;
             // 关键词路径:复用检索唯一缝(与召回同源),取回后做场景/Hall 过滤 + 手工分页。
             // 检索侧单次上限 200:分页窗口触达上限时显式标记 truncated(结果可能不完整)。
             if (p.query && p.query.trim()) {
@@ -696,6 +739,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     total: null,
                     truncated: wanted > SEARCH_CAP,
                     scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
+                    hallCatalog,
                 };
                 return resp;
             }
@@ -706,6 +750,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 total,
                 truncated: false,
                 scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
+                hallCatalog,
             };
             return resp;
         }

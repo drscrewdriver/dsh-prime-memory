@@ -61,6 +61,8 @@ const ENDPOINTS = [
   'dsh-memory/token-cost',
   'dsh-memory/session-mode-get',
   'dsh-memory/session-mode-set',
+  'dsh-memory/hall-overview',
+  'dsh-memory/hall-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
   'dsh-memory/settings-set',
@@ -134,9 +136,9 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 38 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(38);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(38);
+  it('exposes exactly the 40 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(40);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(40);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {

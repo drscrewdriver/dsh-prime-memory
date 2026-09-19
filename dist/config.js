@@ -6,7 +6,7 @@
  */
 import Schema from '@deepseek-ai/schemastery';
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths';
-import { HALL_DEFAULT_ENABLED } from './types.js';
+import { HALL_DEFAULT_ENABLED, HALL_FALLBACK } from './types.js';
 /**
  * 蒸馏思考档位全词汇表(唯一事实源):'' = 自动(模型默认档 → high),
  * 其余为各适配器通用档位词汇(deepseek 认 'off',OpenAI 系是 'none')。
@@ -142,4 +142,22 @@ export function resolveDataDir(cfg) {
     if (cfg.dataDir)
         return cfg.dataDir;
     return dshHomePath('memory');
+}
+/**
+ * `hall.enabled` 归一化(R14 三条规则,唯一实现点):
+ * ① **空数组保持为空** = 关闭 hall 打标(既有语义,`pipeline/l1.ts` 据此整段省略打标指令)
+ *    ——不得被归一化补全吃掉,否则用户显式关闭的意图被静默撤销;
+ * ② **含退休 id `general` → 补全 8 角全集**:含 `general` 的配置必然是旧默认
+ *    (v0.12 词表),按子集解读会被静默缩到 2 角,故补全而非过滤;
+ * ③ **不含 `general` 的其他子集原样保留**(尊重显式配置,不悄悄扩写)。
+ */
+export function normHallEnabled(raw) {
+    const ids = Array.isArray(raw)
+        ? raw.filter((x) => typeof x === 'string' && x.trim() !== '').map((x) => x.trim())
+        : [];
+    if (ids.length === 0)
+        return [];
+    if (ids.includes(HALL_FALLBACK))
+        return [...HALL_DEFAULT_ENABLED];
+    return ids;
 }

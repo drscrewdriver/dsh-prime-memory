@@ -257,6 +257,12 @@ var __defProp = Object.defineProperty;
 		    "  --dsh-mem-thumb: #ffffff;",
 		    "  --dsh-mem-track: rgba(128,140,150,0.32);",
 		    "  --dsh-mem-dot: rgba(128,140,150,0.55);",
+		    // hall 八边形令牌（HallWheel）：连线 / 角默认 / 角选中 / 空角与未打标态；
+		    // 全部引用既有中性色与品牌蓝体系，双主题各自声明，无裸色溢出
+		    "  --dsh-mem-hall-line: rgba(128,140,150,0.35);",
+		    "  --dsh-mem-hall-corner: var(--dsh-mem-text-2);",
+		    "  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);",
+		    "  --dsh-mem-hall-empty: var(--dsh-mem-text-3);",
 		    "  --dsh-mem-shadow-card: var(--dsw-shadow-lv1, 0 2px 4px 0 rgba(0,0,0,0.05));",
 		    "  --dsh-mem-shadow-pop: var(--dsw-shadow-lv3, 0 0 1px 0 rgba(0,0,0,.2), 0 0 4px 0 rgba(0,0,0,.02), 0 12px 32px 0 rgba(0,0,0,0.08));",
 		    "}",
@@ -293,6 +299,10 @@ var __defProp = Object.defineProperty;
 		    "  --dsh-mem-thumb: #e8ebf5;",
 		    "  --dsh-mem-track: rgba(148,160,180,0.30);",
 		    "  --dsh-mem-dot: rgba(148,160,180,0.5);",
+		    "  --dsh-mem-hall-line: rgba(148,160,180,0.32);",
+		    "  --dsh-mem-hall-corner: var(--dsh-mem-text-2);",
+		    "  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);",
+		    "  --dsh-mem-hall-empty: var(--dsh-mem-text-3);",
 		    "  --dsh-mem-shadow-card: var(--dsw-shadow-lv1, 0 2px 4px 0 rgba(0,0,0,0.3));",
 		    "  --dsh-mem-shadow-pop: var(--dsw-shadow-lv3, 0 0 1px 0 rgba(0,0,0,.2), 0 0 4px 0 rgba(0,0,0,.02), 0 12px 32px 0 rgba(0,0,0,0.08));",
 		    "}",
@@ -1118,23 +1128,21 @@ var __defProp = Object.defineProperty;
 		
 		// client/src/pill/modes.ts
 		var MODES = [
-		  { key: "off", label: "关闭", color: "var(--dsh-mem-text-2)" },
 		  { key: "chat", label: "日常", color: "var(--dsh-mem-mode-chat)" },
-		  { key: "work", label: "工作", color: "var(--dsh-mem-mode-work)" },
-		  { key: "auto", label: "智能", color: "var(--dsh-mem-mode-auto)" }
+		  { key: "auto", label: "智能", color: "var(--dsh-mem-mode-auto)" },
+		  { key: "work", label: "工作", color: "var(--dsh-mem-mode-work)" }
 		];
 		var TRACK_W = 200;
 		var THUMB = 16;
 		var RAIL_H = 22;
 		var INNER_W = TRACK_W - THUMB;
 		var FIELD_TIERS = [
-		  { density: 0, alpha: 0, wave: 0, tempo: 1 },
 		  { density: 0.34, alpha: 0.5, wave: 0, tempo: 1 },
 		  // 日常：稀疏微光
-		  { density: 0.55, alpha: 0.78, wave: 1, tempo: 1.15 },
-		  // 工作：中强 + 水波纹
-		  { density: 0.72, alpha: 1, wave: 1, tempo: 1.3 }
+		  { density: 0.72, alpha: 1, wave: 1, tempo: 1.3 },
 		  // 智能：满场最活跃
+		  { density: 0.55, alpha: 0.78, wave: 1, tempo: 1.15 }
+		  // 工作：中强 + 水波纹
 		];
 		function smStep(a, b, x) {
 		  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -1142,7 +1150,7 @@ var __defProp = Object.defineProperty;
 		}
 		function modeInfo(key) {
 		  for (let i = 0; i < MODES.length; i++) if (MODES[i].key === key) return MODES[i];
-		  return MODES[3];
+		  return MODES[1];
 		}
 		function modeLabel(key) {
 		  if (key === "auto") return "智能（双族）";
@@ -1152,7 +1160,7 @@ var __defProp = Object.defineProperty;
 		}
 		function modeIndex(key) {
 		  for (let i = 0; i < MODES.length; i++) if (MODES[i].key === key) return i;
-		  return 3;
+		  return 1;
 		}
 		
 		// client/src/tabs/DistillSettings.tsx
@@ -3110,14 +3118,6 @@ var __defProp = Object.defineProperty;
 		  "work_method",
 		  "work_artifact"
 		];
-		var HALL_CHOICES = [
-		  { id: "work", label: "工作" },
-		  { id: "relationships", label: "人际关系" },
-		  { id: "general", label: "通用" },
-		  { id: "finance", label: "财务" },
-		  { id: "journey", label: "旅程" }
-		];
-		var HALL_LABEL = Object.fromEntries(HALL_CHOICES.map((h) => [h.id, h.label]));
 		var DELETE_LIMIT = 200;
 		function RecordsTab(props) {
 		  const rpc = props.rpc;
@@ -3137,6 +3137,7 @@ var __defProp = Object.defineProperty;
 		  const [typeFilter, setTypeFilter] = (0, import_react15.useState)("");
 		  const [sceneFilter, setSceneFilter] = (0, import_react15.useState)("");
 		  const [hallFilter, setHallFilter] = (0, import_react15.useState)("");
+		  const [hallCatalog, setHallCatalog] = (0, import_react15.useState)(null);
 		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", hall: "" });
 		  const seqRef = (0, import_react15.useRef)(0);
 		  const fetchPage = (0, import_react15.useCallback)(
@@ -3163,6 +3164,7 @@ var __defProp = Object.defineProperty;
 		        setTotal(v.total === void 0 || v.total === null ? null : v.total);
 		        setTruncated(!!v.truncated);
 		        if (v.scenes) setSceneOptions(v.scenes);
+		        if (v.hallCatalog) setHallCatalog(v.hallCatalog);
 		      }).catch((e) => {
 		        if (token !== seqRef.current) return;
 		        setLoading(false);
@@ -3327,9 +3329,7 @@ var __defProp = Object.defineProperty;
 		        {
 		          style: { maxWidth: 150 },
 		          options: [{ id: "", label: "全部 Hall" }].concat(
-		            HALL_CHOICES.map((h) => {
-		              return { id: h.id, label: h.label };
-		            })
+		            (hallCatalog ?? Array.from(new Set(items.map((m) => m.hall).filter((h) => !!h))).map((id) => ({ id, label: id }))).map((h) => ({ id: h.id, label: h.label }))
 		          ),
 		          value: hallFilter,
 		          onChange: setHallFilter
@@ -3414,7 +3414,7 @@ var __defProp = Object.defineProperty;
 		                }
 		              ),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + m.type, children: TYPE_LABELS[m.type] || m.type }),
-		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Hall · " + (HALL_LABEL[m.hall] || m.hall) }) : null,
+		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Hall · " + (hallCatalog?.find((h) => h.id === m.hall)?.label || m.hall) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "优先级 " + m.priority }),
 		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "相关度 " + Number(m.score).toFixed(2) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
@@ -3578,7 +3578,7 @@ var __defProp = Object.defineProperty;
 		}
 		
 		// client/src/pill/MemoryModePill.tsx
-		var import_react20 = require("react");
+		var import_react21 = require("react");
 		
 		// src/util/context-occupancy.ts
 		var CONTEXT_METER_CIRCUMFERENCE = 34.55751918948772;
@@ -3893,126 +3893,17 @@ var __defProp = Object.defineProperty;
 		  return section;
 		}
 		
-		// client/src/pill/ModeSlider.tsx
-		var import_react19 = require("react");
+		// client/src/pill/HallWheel.tsx
+		var import_react20 = require("react");
 		
-		// client/src/pill/SessionInfoArea.tsx
+		// client/src/pill/ModeSlider.tsx
 		var import_react18 = require("react");
 		var import_jsx_runtime18 = require("react/jsx-runtime");
-		function sinfoCell(val, label, title) {
-		  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { title: title || void 0, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-val", children: val }),
-		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-label", children: label })
-		  ] });
-		}
-		function SessionInfoArea(props) {
-		  const rpc = props.rpc;
-		  const sessionId = props.sessionId;
-		  const [stats, setStats] = (0, import_react18.useState)(void 0);
-		  const busyRef = (0, import_react18.useRef)(false);
-		  (0, import_react18.useEffect)(() => {
-		    if (!rpc || !sessionId) return void 0;
-		    let alive = true;
-		    let timer = null;
-		    let seq = 0;
-		    const tick = () => {
-		      const token = ++seq;
-		      rpc("dsh-memory/session-stats", { sessionId }).then((r) => {
-		        if (!alive || token !== seq) return;
-		        if (r && r.ok && r.value) {
-		          if (r.value.supported === false) {
-		            setStats(null);
-		          } else {
-		            const v = r.value;
-		            setStats(v);
-		            const d = v.distill || {};
-		            const g = v.global || {};
-		            busyRef.current = (d.pendingSlice || 0) > 0 || (d.parkedSlices || 0) > 0 || (g.pendingTotal || 0) > 0;
-		          }
-		        }
-		      }).catch(() => {
-		      }).then(() => {
-		        if (alive) timer = setTimeout(tick, busyRef.current ? 2e3 : 5e3);
-		      });
-		    };
-		    tick();
-		    return () => {
-		      alive = false;
-		      if (timer) clearTimeout(timer);
-		    };
-		  }, [rpc, sessionId]);
-		  if (stats === null) return null;
-		  if (stats === void 0) {
-		    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
-		      sinfoCell("…", "召回命中"),
-		      sinfoCell("…", "攒批进度"),
-		      sinfoCell("…", "本会话记忆"),
-		      sinfoCell("…", "会话消息")
-		    ] }) });
-		  }
-		  const rc = stats.recall || {};
-		  const di = stats.distill || {};
-		  const gl = stats.global || {};
-		  const isOff = stats.mode === "off";
-		  let rcVal;
-		  let rcLabel;
-		  let rcTitle;
-		  if (rc.enabled === false) {
-		    rcVal = "停用";
-		    rcLabel = "召回命中";
-		    const reasonText = {
-		      deploy: "部署未启用",
-		      global: "全局开关关闭",
-		      session: "会话只写",
-		      mode: "档位关闭"
-		    };
-		    rcTitle = rc.reason ? "召回已停用（" + (reasonText[rc.reason] ?? rc.reason) + "）" : "召回已停用（开关关闭 / 档位关闭 / 部署未启用）";
-		  } else {
-		    rcVal = (rc.hitTurns || 0) + "/" + (rc.injectedTurns || 0);
-		    rcLabel = "召回命中 · " + (rc.totalHits || 0) + " 条";
-		    rcTitle = "最近一轮命中 " + (rc.lastHits || 0) + " 条，耗时 " + (rc.lastDurationMs || 0) + "ms" + ((rc.timeouts || 0) > 0 ? "，超时跳过 " + rc.timeouts + " 次" : "");
-		  }
-		  let dVal;
-		  let dLabel;
-		  let dTitle;
-		  if (isOff) {
-		    dVal = String(di.parkedSlices || 0);
-		    dLabel = "挂起切片";
-		    dTitle = "档位关闭：未蒸馏切片挂起，切回档位后继续";
-		  } else {
-		    dVal = (di.pendingSlice || 0) + "/" + (di.threshold != null ? di.threshold : "-");
-		    dLabel = (di.parkedSlices || 0) > 0 ? "攒批 · 挂起 " + di.parkedSlices : "攒批进度";
-		    dTitle = "达到阈值后自动蒸馏（阈值随使用渐进爬坡到稳态）";
-		  }
-		  const pTitle = di.lastDistillAt ? "最近蒸馏 " + fmtTime(di.lastDistillAt) : "本会话尚未蒸馏";
-		  const warn = gl.degraded ? "⚠ 存储不可用，记忆功能已停用" : null;
-		  let note = null;
-		  if (!gl.degraded) {
-		    if (stats.retrieval === "keyword" && !isOff) note = "检索降级：纯关键词（向量不可用）";
-		    else if (stats.retrieval === "none") note = "检索不可用（FTS 与向量均失效）";
-		  }
-		  const ago = fmtAgo(gl.lastExtractAt);
-		  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dsh-mem-sinfo", children: [
-		    warn ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-warn", children: warn }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
-		      sinfoCell(rcVal, rcLabel, rcTitle),
-		      sinfoCell(dVal, dLabel, dTitle),
-		      sinfoCell(String(di.producedRecords || 0), "本会话记忆", pTitle),
-		      sinfoCell(stats.l0Count != null ? String(stats.l0Count) : "…", "会话消息")
-		    ] }),
-		    note ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-note", children: note }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-sum", children: "待蒸馏 " + (gl.pendingTotal || 0) + " · 上次蒸馏 " + (ago || "尚未蒸馏") })
-		  ] });
-		}
-		
-		// client/src/pill/ModeSlider.tsx
-		var import_jsx_runtime19 = require("react/jsx-runtime");
 		function ModeSlider(props) {
-		  ensureThemeStyle();
-		  const trackRef = (0, import_react19.useRef)(null);
-		  const [drag, setDrag] = (0, import_react19.useState)(null);
-		  const canvasRef = (0, import_react19.useRef)(null);
-		  const geoRef = (0, import_react19.useRef)(null);
+		  const trackRef = (0, import_react18.useRef)(null);
+		  const [drag, setDrag] = (0, import_react18.useState)(null);
+		  const canvasRef = (0, import_react18.useRef)(null);
+		  const geoRef = (0, import_react18.useRef)(null);
 		  const clampX = (x) => {
 		    if (x < 0) return 0;
 		    if (x > INNER_W) return INNER_W;
@@ -4055,12 +3946,10 @@ var __defProp = Object.defineProperty;
 		    rightEdge: thumbLeft + THUMB,
 		    // 粒子活动区右界 = 填充右缘（不越过圆球）
 		    tier: activeIdx,
-		    // 场强档位（与填充/气泡同源；拖拽预览即时升降级）
-		    show: activeIdx > 0 || drag !== null,
-		    // 与填充显隐同源
+		    // 场强档位（与填充同源；拖拽预览即时升降级）
 		    dragging: drag !== null
 		  };
-		  (0, import_react19.useEffect)(() => {
+		  (0, import_react18.useEffect)(() => {
 		    const canvas = canvasRef.current;
 		    if (!canvas) return void 0;
 		    const ctx = canvas.getContext && canvas.getContext("2d");
@@ -4098,9 +3987,9 @@ var __defProp = Object.defineProperty;
 		      }
 		    };
 		    const draw = (time) => {
-		      const st = geoRef.current || { origin: 0, rightEdge: 0, tier: 0, show: false, dragging: false };
+		      const st = geoRef.current || { origin: 0, rightEdge: 0, tier: 1, dragging: false };
 		      ctx.clearRect(0, 0, width, height);
-		      if (!st.show || st.rightEdge <= 0) {
+		      if (st.rightEdge <= 0) {
 		        fieldOn = false;
 		        return;
 		      }
@@ -4166,10 +4055,504 @@ var __defProp = Object.defineProperty;
 		      themeObs.disconnect();
 		    };
 		  }, []);
-		  const popRef = (0, import_react19.useRef)(null);
-		  const shiftRef = (0, import_react19.useRef)(0);
-		  const [shiftX, setShiftX] = (0, import_react19.useState)(0);
-		  (0, import_react19.useLayoutEffect)(() => {
+		  const stops = [];
+		  for (let i = 0; i < MODES.length; i++) {
+		    const stopLeft = i / (MODES.length - 1) * INNER_W + THUMB / 2;
+		    stops.push(
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+		        "div",
+		        {
+		          style: {
+		            position: "absolute",
+		            left: stopLeft - 3,
+		            top: (RAIL_H - 6) / 2,
+		            width: 6,
+		            height: 6,
+		            borderRadius: "50%",
+		            background: "var(--dsh-mem-dot)",
+		            zIndex: 2,
+		            pointerEvents: "none"
+		          }
+		        },
+		        "stop" + i
+		      )
+		    );
+		  }
+		  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
+		    "div",
+		    {
+		      ref: trackRef,
+		      className: "dsh-mem-hitband",
+		      style: {
+		        position: "relative",
+		        // 容器宽 = thumb 活动范围（0..INNER_W + THUMB），点击映射与视觉两端严格对齐
+		        width: TRACK_W,
+		        height: RAIL_H,
+		        borderRadius: 999,
+		        background: "var(--dsh-mem-track)",
+		        touchAction: "none",
+		        cursor: drag === null ? "pointer" : "grabbing"
+		      },
+		      onPointerDown,
+		      onPointerMove,
+		      onPointerUp,
+		      onPointerCancel: onPointerUp,
+		      children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+		          "div",
+		          {
+		            style: {
+		              position: "absolute",
+		              left: 0,
+		              top: 0,
+		              bottom: 0,
+		              width: thumbLeft + THUMB,
+		              borderRadius: 999,
+		              background: "linear-gradient(90deg, var(--dsh-mem-fill-1), var(--dsh-mem-fill-2))",
+		              pointerEvents: "none",
+		              zIndex: 1,
+		              transition: drag === null ? "width 120ms ease" : "none"
+		            }
+		          }
+		        ),
+		        stops,
+		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+		          "canvas",
+		          {
+		            ref: canvasRef,
+		            className: "dsh-mem-particles",
+		            style: {
+		              position: "absolute",
+		              left: 0,
+		              top: 0,
+		              width: "100%",
+		              height: "100%",
+		              pointerEvents: "none",
+		              zIndex: 2,
+		              filter: drag !== null ? "saturate(1.45) brightness(1.28) contrast(1.06)" : "none"
+		            }
+		          }
+		        ),
+		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+		          "div",
+		          {
+		            style: {
+		              position: "absolute",
+		              left: thumbLeft,
+		              top: (RAIL_H - THUMB) / 2,
+		              width: THUMB,
+		              height: THUMB,
+		              borderRadius: "50%",
+		              background: "var(--dsh-mem-thumb)",
+		              border: "1px solid var(--dsh-mem-accent)",
+		              boxShadow: drag !== null ? "0 2px 8px rgba(0,0,0,0.35)" : "0 1px 4px rgba(0,0,0,0.25)",
+		              pointerEvents: "none",
+		              transition: drag === null ? "left 120ms ease" : "none",
+		              zIndex: 3
+		            }
+		          }
+		        ),
+		        drag !== null ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-bubble", style: { left: thumbLeft + THUMB / 2, zIndex: 4 }, children: info.label }) : null
+		      ]
+		    }
+		  );
+		}
+		
+		// client/src/pill/SessionInfoArea.tsx
+		var import_react19 = require("react");
+		var import_jsx_runtime19 = require("react/jsx-runtime");
+		function sinfoCell(val, label, title) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { title: title || void 0, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-val", children: val }),
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-label", children: label })
+		  ] });
+		}
+		function SessionInfoArea(props) {
+		  const rpc = props.rpc;
+		  const sessionId = props.sessionId;
+		  const [stats, setStats] = (0, import_react19.useState)(void 0);
+		  const busyRef = (0, import_react19.useRef)(false);
+		  (0, import_react19.useEffect)(() => {
+		    if (!rpc || !sessionId) return void 0;
+		    let alive = true;
+		    let timer = null;
+		    let seq = 0;
+		    const tick = () => {
+		      const token = ++seq;
+		      rpc("dsh-memory/session-stats", { sessionId }).then((r) => {
+		        if (!alive || token !== seq) return;
+		        if (r && r.ok && r.value) {
+		          if (r.value.supported === false) {
+		            setStats(null);
+		          } else {
+		            const v = r.value;
+		            setStats(v);
+		            const d = v.distill || {};
+		            const g = v.global || {};
+		            busyRef.current = (d.pendingSlice || 0) > 0 || (d.parkedSlices || 0) > 0 || (g.pendingTotal || 0) > 0;
+		          }
+		        }
+		      }).catch(() => {
+		      }).then(() => {
+		        if (alive) timer = setTimeout(tick, busyRef.current ? 2e3 : 5e3);
+		      });
+		    };
+		    tick();
+		    return () => {
+		      alive = false;
+		      if (timer) clearTimeout(timer);
+		    };
+		  }, [rpc, sessionId]);
+		  if (stats === null) return null;
+		  if (stats === void 0) {
+		    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
+		      sinfoCell("…", "召回命中"),
+		      sinfoCell("…", "攒批进度"),
+		      sinfoCell("…", "本会话记忆"),
+		      sinfoCell("…", "会话消息")
+		    ] }) });
+		  }
+		  const rc = stats.recall || {};
+		  const di = stats.distill || {};
+		  const gl = stats.global || {};
+		  const isOff = stats.mode === "off";
+		  let rcVal;
+		  let rcLabel;
+		  let rcTitle;
+		  if (rc.enabled === false) {
+		    rcVal = "停用";
+		    rcLabel = "召回命中";
+		    const reasonText = {
+		      deploy: "部署未启用",
+		      global: "全局开关关闭",
+		      session: "会话只写",
+		      mode: "档位关闭"
+		    };
+		    rcTitle = rc.reason ? "召回已停用（" + (reasonText[rc.reason] ?? rc.reason) + "）" : "召回已停用（开关关闭 / 档位关闭 / 部署未启用）";
+		  } else {
+		    rcVal = (rc.hitTurns || 0) + "/" + (rc.injectedTurns || 0);
+		    rcLabel = "召回命中 · " + (rc.totalHits || 0) + " 条";
+		    rcTitle = "最近一轮命中 " + (rc.lastHits || 0) + " 条，耗时 " + (rc.lastDurationMs || 0) + "ms" + ((rc.timeouts || 0) > 0 ? "，超时跳过 " + rc.timeouts + " 次" : "");
+		  }
+		  let dVal;
+		  let dLabel;
+		  let dTitle;
+		  if (isOff) {
+		    dVal = String(di.parkedSlices || 0);
+		    dLabel = "挂起切片";
+		    dTitle = "档位关闭：未蒸馏切片挂起，切回档位后继续";
+		  } else {
+		    dVal = (di.pendingSlice || 0) + "/" + (di.threshold != null ? di.threshold : "-");
+		    dLabel = (di.parkedSlices || 0) > 0 ? "攒批 · 挂起 " + di.parkedSlices : "攒批进度";
+		    dTitle = "达到阈值后自动蒸馏（阈值随使用渐进爬坡到稳态）";
+		  }
+		  const pTitle = di.lastDistillAt ? "最近蒸馏 " + fmtTime(di.lastDistillAt) : "本会话尚未蒸馏";
+		  const warn = gl.degraded ? "⚠ 存储不可用，记忆功能已停用" : null;
+		  let note = null;
+		  if (!gl.degraded) {
+		    if (stats.retrieval === "keyword" && !isOff) note = "检索降级：纯关键词（向量不可用）";
+		    else if (stats.retrieval === "none") note = "检索不可用（FTS 与向量均失效）";
+		  }
+		  const ago = fmtAgo(gl.lastExtractAt);
+		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dsh-mem-sinfo", children: [
+		    warn ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-warn", children: warn }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
+		      sinfoCell(rcVal, rcLabel, rcTitle),
+		      sinfoCell(dVal, dLabel, dTitle),
+		      sinfoCell(String(di.producedRecords || 0), "本会话记忆", pTitle),
+		      sinfoCell(stats.l0Count != null ? String(stats.l0Count) : "…", "会话消息")
+		    ] }),
+		    note ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-note", children: note }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-sum", children: "待蒸馏 " + (gl.pendingTotal || 0) + " · 上次蒸馏 " + (ago || "尚未蒸馏") })
+		  ] });
+		}
+		
+		// client/src/pill/HallWheel.tsx
+		var import_jsx_runtime20 = require("react/jsx-runtime");
+		var SIZE = 236;
+		var CENTER = SIZE / 2;
+		var R_CORNER = 86;
+		var R_POLY = 66;
+		function cornerPos(i, radius) {
+		  const a = (-90 + i * 45) * Math.PI / 180;
+		  return { left: CENTER + radius * Math.cos(a), top: CENTER + radius * Math.sin(a) };
+		}
+		function HallWheel(props) {
+		  ensureThemeStyle();
+		  const isOff = props.mode === "off";
+		  const [overview, setOverview] = (0, import_react20.useState)(null);
+		  const [backfillBusy, setBackfillBusy] = (0, import_react20.useState)(false);
+		  const [localError, setLocalError] = (0, import_react20.useState)(null);
+		  const timersRef = (0, import_react20.useRef)([]);
+		  (0, import_react20.useEffect)(
+		    () => () => {
+		      for (const t of timersRef.current) window.clearTimeout(t);
+		    },
+		    []
+		  );
+		  (0, import_react20.useEffect)(() => {
+		    let alive = true;
+		    props.rpc("dsh-memory/hall-overview", {}).then((r) => {
+		      if (!alive) return;
+		      if (r && r.ok) setOverview(r.value);
+		    }).catch(() => {
+		    });
+		    return () => {
+		      alive = false;
+		    };
+		  }, [props.rpc]);
+		  const cornerCount = (id) => {
+		    if (!overview) return null;
+		    if (id === "general") return overview.general;
+		    return overview.corners.find((c) => c.id === id)?.count ?? 0;
+		  };
+		  const labelOf = (id) => overview?.corners.find((c) => c.id === id)?.label ?? id;
+		  const backfill = () => {
+		    if (backfillBusy || !overview || overview.unlabeled === 0) return;
+		    setBackfillBusy(true);
+		    setLocalError(null);
+		    let polls = 0;
+		    const tick = () => {
+		      polls++;
+		      props.rpc("dsh-memory/hall-overview", {}).then((r) => {
+		        if (r && r.ok) setOverview(r.value);
+		        if (polls < 20) {
+		          const t = window.setTimeout(tick, 3e3);
+		          timersRef.current.push(t);
+		        }
+		      }).catch(() => {
+		      });
+		    };
+		    props.rpc("dsh-memory/hall-backfill", {}).then((r) => {
+		      if (!r || !r.ok) {
+		        setLocalError(r && r.error ? "回填失败：" + r.error.message : "回填失败");
+		        return;
+		      }
+		      timersRef.current.push(window.setTimeout(tick, 3e3));
+		    }).catch((e) => setLocalError("回填失败：" + String(e && e.message || e))).finally(() => setBackfillBusy(false));
+		  };
+		  const polyPoints = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+		    const p = cornerPos(i, R_POLY);
+		    return `${p.left},${p.top}`;
+		  }).join(" ");
+		  const grayStyle = isOff ? { opacity: 0.45, pointerEvents: "none" } : {};
+		  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: { position: "relative", width: SIZE, height: SIZE, ...grayStyle }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+		        "svg",
+		        {
+		          width: SIZE,
+		          height: SIZE,
+		          style: { position: "absolute", inset: 0, pointerEvents: "none" },
+		          "aria-hidden": "true",
+		          children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		              "polygon",
+		              {
+		                points: polyPoints,
+		                fill: "none",
+		                stroke: "var(--dsh-mem-hall-line)",
+		                strokeWidth: "1"
+		              }
+		            ),
+		            [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+		              const p = cornerPos(i, R_CORNER);
+		              return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		                "line",
+		                {
+		                  x1: CENTER,
+		                  y1: CENTER,
+		                  x2: p.left,
+		                  y2: p.top,
+		                  stroke: "var(--dsh-mem-hall-line)",
+		                  strokeWidth: "1"
+		                },
+		                "spoke" + i
+		              );
+		            })
+		          ]
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		        "button",
+		        {
+		          type: "button",
+		          title: "智能档：自动判断召回各域（回中心 = 全域）",
+		          onClick: () => props.onCommitHall(null),
+		          style: {
+		            position: "absolute",
+		            left: CENTER,
+		            top: CENTER,
+		            transform: "translate(-50%, -50%)",
+		            width: 52,
+		            height: 52,
+		            borderRadius: "50%",
+		            border: props.hall === null ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid var(--dsh-mem-hall-line)",
+		            background: "var(--dsh-mem-bg-card)",
+		            color: props.hall === null ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
+		            fontSize: 12,
+		            fontWeight: 600,
+		            cursor: "pointer"
+		          },
+		          children: "智能"
+		        }
+		      ),
+		      [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+		        const corner = overview?.corners[i];
+		        const id = corner?.id;
+		        const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
+		        const count = id ? cornerCount(id) : null;
+		        const active = id !== void 0 && props.hall === id;
+		        const empty = count === 0;
+		        const p = cornerPos(i, R_CORNER);
+		        return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+		          "button",
+		          {
+		            type: "button",
+		            title: id ? `锁定「${label}」域：本会话只召回该域${empty ? "（当前空角）" : `（${count} 条）`}` : "词表加载中",
+		            disabled: !id,
+		            onClick: () => id && props.onCommitHall(active ? null : id),
+		            style: {
+		              position: "absolute",
+		              left: p.left,
+		              top: p.top,
+		              transform: "translate(-50%, -50%)",
+		              display: "flex",
+		              flexDirection: "column",
+		              alignItems: "center",
+		              gap: 0,
+		              padding: "2px 6px",
+		              borderRadius: 8,
+		              border: active ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid transparent",
+		              background: active ? "var(--dsh-mem-accent-weak)" : "transparent",
+		              color: active ? "var(--dsh-mem-hall-corner-on)" : empty ? "var(--dsh-mem-hall-empty)" : "var(--dsh-mem-hall-corner)",
+		              fontSize: 11,
+		              lineHeight: "14px",
+		              fontWeight: active ? 600 : 400,
+		              cursor: id ? "pointer" : "default",
+		              whiteSpace: "nowrap"
+		            },
+		            children: [
+		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: label }),
+		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 9, opacity: 0.75, fontVariantNumeric: "tabular-nums" }, children: count === null ? " " : `${count} 条` })
+		            ]
+		          },
+		          id ?? i
+		        );
+		      })
+		    ] }),
+		    props.hall !== null ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+		      "div",
+		      {
+		        style: {
+		          display: "flex",
+		          justifyContent: "space-between",
+		          alignItems: "center",
+		          gap: 8,
+		          marginTop: 8,
+		          opacity: isOff ? 0.45 : void 0,
+		          pointerEvents: isOff ? "none" : void 0
+		        },
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, title: "锁定域时两类无角记忆是否参与召回", children: overview ? `另有 ${overview.unlabeled} 条未打标` : "未打标" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("span", { style: { display: "flex", gap: 8 }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		              Segmented,
+		              {
+		                value: props.hallIncludeUnlabeled ? "in" : "ex",
+		                options: [
+		                  { key: "in", label: "含未打标", title: "未打标记忆默认包含（默认排除会静默丢掉一半语料）" },
+		                  { key: "ex", label: "不含", title: "锁定域时排除未打标记忆" }
+		                ],
+		                onChange: (key) => props.onCommitHallBoundaries({ includeUnlabeled: key === "in" })
+		              }
+		            ),
+		            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		              Segmented,
+		              {
+		                value: props.hallIncludeGeneral ? "in" : "ex",
+		                options: [
+		                  { key: "in", label: "含跨域", title: "跨域（general）兜底记忆也参与召回" },
+		                  { key: "ex", label: "不含", title: "跨域与单主题相悖，默认不含（可切换）" }
+		                ],
+		                onChange: (key) => props.onCommitHallBoundaries({ includeGeneral: key === "in" })
+		              }
+		            )
+		          ] })
+		        ]
+		      }
+		    ) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 10 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "会话" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		        Segmented,
+		        {
+		          value: isOff ? "off" : "on",
+		          options: [
+		            { key: "on", label: "启用", title: "本会话正常捕获/蒸馏/注入记忆" },
+		            { key: "off", label: "关闭", title: "本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留，不改全局）" }
+		          ],
+		          onChange: (key) => props.onCommit(key === "off" ? "off" : "auto")
+		        }
+		      )
+		    ] }),
+		    props.recall !== void 0 && props.onCommitRecall ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 8 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "注入" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		        Segmented,
+		        {
+		          value: props.recall === null ? "follow" : props.recall ? "on" : "off",
+		          disabled: isOff,
+		          options: [
+		            { key: "follow", label: "跟随全局", title: "清除本会话覆盖，跟随全局召回开关" },
+		            { key: "on", label: "开", title: "本会话强制注入记忆" },
+		            { key: "off", label: "关", title: "只写：记忆照常沉淀，但不注入本会话" }
+		          ],
+		          onChange: (key) => props.onCommitRecall(key === "on" ? true : key === "off" ? false : null)
+		        }
+		      )
+		    ] }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+		      "div",
+		      {
+		        style: {
+		          borderTop: "1px solid var(--dsh-mem-border)",
+		          marginTop: 10,
+		          paddingTop: 10,
+		          display: "flex",
+		          justifyContent: "space-between",
+		          alignItems: "center",
+		          gap: 8,
+		          opacity: isOff ? 0.45 : void 0,
+		          pointerEvents: isOff ? "none" : void 0
+		        },
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, title: "覆写蒸馏族判定；默认跟随智能档", children: "强制单族" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(ModeSlider, { mode: props.mode === "off" ? "auto" : props.mode, onCommit: props.onCommit })
+		        ]
+		      }
+		    ),
+		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 10 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: overview ? `未打标 ${overview.unlabeled} 条（抽取只跑新消息，存量需回填）` : "未打标计数加载中" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		        Segmented,
+		        {
+		          value: "go",
+		          disabled: !overview || overview.unlabeled === 0 || backfillBusy,
+		          options: [{ key: "go", label: backfillBusy ? "回填中…" : "一键回填", title: "对存量未打标记忆批量补打 hall 标签（复用抽取打标路径）" }],
+		          onChange: () => backfill()
+		        }
+		      )
+		    ] }),
+		    props.error || localError ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-danger)", marginTop: 8, whiteSpace: "nowrap" }, children: props.error || localError }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(SessionInfoArea, { rpc: props.rpc, sessionId: props.sessionId })
+		  ] });
+		}
+		var LABEL_FALLBACK = ["工作", "人际", "学习", "创作娱乐", "健康", "居家", "财务", "出行"];
+		function useViewportClamp(popRef) {
+		  const shiftRef = (0, import_react20.useRef)(0);
+		  const [shiftX, setShiftX] = (0, import_react20.useState)(0);
+		  (0, import_react20.useLayoutEffect)(() => {
 		    const clamp = () => {
 		      const el = popRef.current;
 		      if (!el) return;
@@ -4194,177 +4577,29 @@ var __defProp = Object.defineProperty;
 		      window.removeEventListener("resize", clamp);
 		      window.clearInterval(iv);
 		    };
-		  }, []);
-		  const stops = [];
-		  for (let i = 0; i < MODES.length; i++) {
-		    const stopLeft = i / (MODES.length - 1) * INNER_W + THUMB / 2;
-		    stops.push(
-		      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		        "div",
-		        {
-		          style: {
-		            position: "absolute",
-		            left: stopLeft - 3,
-		            top: (RAIL_H - 6) / 2,
-		            width: 6,
-		            height: 6,
-		            borderRadius: "50%",
-		            background: "var(--dsh-mem-dot)",
-		            zIndex: 2,
-		            pointerEvents: "none"
-		          }
-		        },
-		        "stop" + i
-		      )
-		    );
-		  }
-		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		    "div",
-		    {
-		      ref: popRef,
-		      style: {
-		        position: "absolute",
-		        bottom: "calc(100% + 8px)",
-		        left: "50%",
-		        transform: "translateX(calc(-50% + " + shiftX + "px))",
-		        zIndex: 1e3
-		      },
-		      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
-		        "div",
-		        {
-		          className: "dsh-mem-popover",
-		          style: { position: "relative", padding: "14px 16px" },
-		          children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
-		              "div",
-		              {
-		                ref: trackRef,
-		                className: "dsh-mem-hitband",
-		                style: {
-		                  position: "relative",
-		                  // 容器宽 = thumb 活动范围（0..INNER_W + THUMB），点击映射与视觉两端严格对齐
-		                  width: TRACK_W,
-		                  height: RAIL_H,
-		                  borderRadius: 999,
-		                  background: "var(--dsh-mem-track)",
-		                  touchAction: "none",
-		                  cursor: drag === null ? "pointer" : "grabbing"
-		                },
-		                onPointerDown,
-		                onPointerMove,
-		                onPointerUp,
-		                onPointerCancel: onPointerUp,
-		                children: [
-		                  activeIdx > 0 || drag !== null ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                    "div",
-		                    {
-		                      style: {
-		                        position: "absolute",
-		                        left: 0,
-		                        top: 0,
-		                        bottom: 0,
-		                        width: thumbLeft + THUMB,
-		                        borderRadius: 999,
-		                        background: "linear-gradient(90deg, var(--dsh-mem-fill-1), var(--dsh-mem-fill-2))",
-		                        pointerEvents: "none",
-		                        zIndex: 1,
-		                        transition: drag === null ? "width 120ms ease" : "none"
-		                      }
-		                    }
-		                  ) : null,
-		                  stops,
-		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                    "canvas",
-		                    {
-		                      ref: canvasRef,
-		                      className: "dsh-mem-particles",
-		                      style: {
-		                        position: "absolute",
-		                        left: 0,
-		                        top: 0,
-		                        width: "100%",
-		                        height: "100%",
-		                        pointerEvents: "none",
-		                        zIndex: 2,
-		                        filter: drag !== null ? "saturate(1.45) brightness(1.28) contrast(1.06)" : "none"
-		                      }
-		                    }
-		                  ),
-		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                    "div",
-		                    {
-		                      style: {
-		                        position: "absolute",
-		                        left: thumbLeft,
-		                        top: (RAIL_H - THUMB) / 2,
-		                        width: THUMB,
-		                        height: THUMB,
-		                        borderRadius: "50%",
-		                        background: "var(--dsh-mem-thumb)",
-		                        border: "1px solid var(--dsh-mem-accent)",
-		                        boxShadow: drag !== null ? "0 2px 8px rgba(0,0,0,0.35)" : "0 1px 4px rgba(0,0,0,0.25)",
-		                        pointerEvents: "none",
-		                        transition: drag === null ? "left 120ms ease" : "none",
-		                        zIndex: 3
-		                      }
-		                    }
-		                  ),
-		                  drag !== null ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-bubble", style: { left: thumbLeft + THUMB / 2, zIndex: 4 }, children: info.label }) : null
-		                ]
-		              }
-		            ),
-		            props.error ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-danger)", marginTop: 10, whiteSpace: "nowrap" }, children: props.error }) : null,
-		            props.recall !== void 0 && props.onCommitRecall ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
-		              "div",
-		              {
-		                style: {
-		                  borderTop: "1px solid var(--dsh-mem-border)",
-		                  marginTop: 10,
-		                  paddingTop: 8,
-		                  display: "flex",
-		                  justifyContent: "space-between",
-		                  alignItems: "center",
-		                  gap: 8
-		                },
-		                children: [
-		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "注入" }),
-		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                    Segmented,
-		                    {
-		                      value: props.recall === null ? "follow" : props.recall ? "on" : "off",
-		                      disabled: props.mode === "off",
-		                      options: [
-		                        { key: "follow", label: "跟随全局", title: "清除本会话覆盖，跟随全局召回开关" },
-		                        { key: "on", label: "开", title: "本会话强制注入记忆" },
-		                        { key: "off", label: "关", title: "只写：记忆照常沉淀，但不注入本会话" }
-		                      ],
-		                      onChange: (key) => props.onCommitRecall(key === "on" ? true : key === "off" ? false : null)
-		                    }
-		                  )
-		                ]
-		              }
-		            ) : null,
-		            props.rpc && props.sessionId ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SessionInfoArea, { rpc: props.rpc, sessionId: props.sessionId }) : null
-		          ]
-		        }
-		      )
-		    }
-		  );
+		  }, [popRef]);
+		  return shiftX;
 		}
 		
 		// client/src/pill/MemoryModePill.tsx
-		var import_jsx_runtime20 = require("react/jsx-runtime");
+		var import_jsx_runtime21 = require("react/jsx-runtime");
 		function MemoryModePill(props) {
 		  const rpc = props.rpc;
 		  const sessionId = props.sessionId || props.session && props.session.sessionId;
-		  const [mode, setMode] = (0, import_react20.useState)(null);
-		  const [recall, setRecall] = (0, import_react20.useState)(null);
-		  const [recallResolved, setRecallResolved] = (0, import_react20.useState)(true);
-		  const [error, setError] = (0, import_react20.useState)(null);
-		  const [open, setOpen] = (0, import_react20.useState)(false);
-		  const wrapRef = (0, import_react20.useRef)(null);
-		  const seqRef = (0, import_react20.useRef)(0);
-		  const load = (0, import_react20.useCallback)(() => {
+		  const [mode, setMode] = (0, import_react21.useState)(null);
+		  const [recall, setRecall] = (0, import_react21.useState)(null);
+		  const [recallResolved, setRecallResolved] = (0, import_react21.useState)(true);
+		  const [hall, setHall] = (0, import_react21.useState)(null);
+		  const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = (0, import_react21.useState)(true);
+		  const [hallIncludeGeneral, setHallIncludeGeneral] = (0, import_react21.useState)(false);
+		  const [hallLabels, setHallLabels] = (0, import_react21.useState)({});
+		  const [error, setError] = (0, import_react21.useState)(null);
+		  const [open, setOpen] = (0, import_react21.useState)(false);
+		  const wrapRef = (0, import_react21.useRef)(null);
+		  const popRef = (0, import_react21.useRef)(null);
+		  const shiftX = useViewportClamp(popRef);
+		  const seqRef = (0, import_react21.useRef)(0);
+		  const load = (0, import_react21.useCallback)(() => {
 		    if (!sessionId || !rpc) return;
 		    const token = ++seqRef.current;
 		    setError(null);
@@ -4374,19 +4609,28 @@ var __defProp = Object.defineProperty;
 		        setMode(r.value.mode);
 		        setRecall(r.value.recall);
 		        setRecallResolved(r.value.recallResolved);
+		        setHall(r.value.hall);
+		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
 		      } else setError(r && !r.ok ? r.error.message : "RPC error");
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
 		      setError(String(e && e.message || e));
 		    });
+		    rpc("dsh-memory/hall-overview", {}).then((r) => {
+		      if (r && r.ok && r.value) {
+		        setHallLabels(Object.fromEntries(r.value.corners.map((c) => [c.id, c.label])));
+		      }
+		    }).catch(() => {
+		    });
 		  }, [sessionId, rpc]);
-		  (0, import_react20.useEffect)(() => {
+		  (0, import_react21.useEffect)(() => {
 		    load();
 		  }, [load]);
-		  (0, import_react20.useEffect)(() => {
+		  (0, import_react21.useEffect)(() => {
 		    watchSidebarIcon();
 		  }, []);
-		  (0, import_react20.useEffect)(() => {
+		  (0, import_react21.useEffect)(() => {
 		    initOccupancyIndicator(
 		      (endpoint, payload) => rpc(endpoint, payload)
 		    );
@@ -4394,7 +4638,7 @@ var __defProp = Object.defineProperty;
 		    watchContextMeter();
 		    noteOccupancySession(sessionId ?? null);
 		  }, [sessionId, rpc]);
-		  (0, import_react20.useEffect)(() => {
+		  (0, import_react21.useEffect)(() => {
 		    if (!open) return;
 		    const onDown = (e) => {
 		      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
@@ -4452,12 +4696,64 @@ var __defProp = Object.defineProperty;
 		      setError("注入设置失败：" + String(e && e.message || e));
 		    });
 		  };
+		  const commitHall = (next) => {
+		    if (!rpc || !sessionId || mode === null || next === hall) return;
+		    const prevHall = hall;
+		    const token = seqRef.current;
+		    setHall(next);
+		    setError(null);
+		    rpc("dsh-memory/session-mode-set", { sessionId, mode, hall: next }).then((r) => {
+		      if (token !== seqRef.current) return;
+		      if (!r || !r.ok) {
+		        setHall(prevHall);
+		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
+		      } else {
+		        setHall(r.value.hall);
+		      }
+		    }).catch((e) => {
+		      if (token !== seqRef.current) return;
+		      setHall(prevHall);
+		      setError("域设置失败：" + String(e && e.message || e));
+		    });
+		  };
+		  const commitHallBoundaries = (patch) => {
+		    if (!rpc || !sessionId || mode === null) return;
+		    const prev = { unlabeled: hallIncludeUnlabeled, general: hallIncludeGeneral };
+		    const token = seqRef.current;
+		    if (patch.includeUnlabeled !== void 0) setHallIncludeUnlabeled(patch.includeUnlabeled);
+		    if (patch.includeGeneral !== void 0) setHallIncludeGeneral(patch.includeGeneral);
+		    setError(null);
+		    rpc("dsh-memory/session-mode-set", {
+		      sessionId,
+		      mode,
+		      hall,
+		      hallIncludeUnlabeled: patch.includeUnlabeled,
+		      hallIncludeGeneral: patch.includeGeneral
+		    }).then((r) => {
+		      if (token !== seqRef.current) return;
+		      if (!r || !r.ok) {
+		        setHallIncludeUnlabeled(prev.unlabeled);
+		        setHallIncludeGeneral(prev.general);
+		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
+		      } else {
+		        setHall(r.value.hall);
+		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
+		      }
+		    }).catch((e) => {
+		      if (token !== seqRef.current) return;
+		      setHallIncludeUnlabeled(prev.unlabeled);
+		      setHallIncludeGeneral(prev.general);
+		      setError("域设置失败：" + String(e && e.message || e));
+		    });
+		  };
 		  if (!sessionId || !rpc) return null;
 		  const info = modeInfo(mode);
 		  const loaded = mode !== null;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
-		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : info.label;
+		  const hallText = hall ? hallLabels[hall] ?? hall : null;
+		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : hallText ? hallText : info.label;
 		  ensureThemeStyle();
 		  const pillStyle = {
 		    position: "relative",
@@ -4480,12 +4776,12 @@ var __defProp = Object.defineProperty;
 		    pillStyle.boxShadow = "0 0 12px color-mix(in srgb, " + info.color + " 30%, transparent)";
 		    pillStyle["--dsh-mem-pill-tint"] = info.color;
 		  }
-		  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { ref: wrapRef, style: { position: "relative", display: "inline-flex" }, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+		  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { ref: wrapRef, style: { position: "relative", display: "inline-flex" }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
 		      "button",
 		      {
 		        type: "button",
-		        title: error ? "档位读取失败：" + error + "（点击重试）" : "本会话记忆档位（点击切换）",
+		        title: error ? "档位读取失败：" + error + "（点击重试）" : "本会话记忆域与档位（点击切换）",
 		        onClick: () => {
 		          if (error) load();
 		          setOpen(!open);
@@ -4494,20 +4790,45 @@ var __defProp = Object.defineProperty;
 		        style: pillStyle,
 		        children: [
 		          "记忆 · ",
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: faceLabel })
+		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: faceLabel })
 		        ]
 		      }
 		    ),
-		    open ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		      ModeSlider,
+		    open ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		      "div",
 		      {
-		        mode: mode || "auto",
-		        onCommit: commit,
-		        recall: loaded ? recall : void 0,
-		        onCommitRecall: commitRecall,
-		        error,
-		        rpc,
-		        sessionId
+		        ref: popRef,
+		        style: {
+		          position: "absolute",
+		          bottom: "calc(100% + 8px)",
+		          left: "50%",
+		          transform: "translateX(calc(-50% + " + shiftX + "px))",
+		          zIndex: 1e3
+		        },
+		        children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		          "div",
+		          {
+		            className: "dsh-mem-popover",
+		            style: { position: "relative", padding: "14px 16px" },
+		            children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		              HallWheel,
+		              {
+		                mode: mode || "auto",
+		                hall,
+		                hallIncludeUnlabeled,
+		                hallIncludeGeneral,
+		                onCommit: commit,
+		                onCommitHall: commitHall,
+		                onCommitHallBoundaries: commitHallBoundaries,
+		                recall: loaded ? recall : void 0,
+		                onCommitRecall: commitRecall,
+		                error,
+		                rpc,
+		                sessionId
+		              }
+		            )
+		          }
+		        )
 		      }
 		    ) : null
 		  ] });

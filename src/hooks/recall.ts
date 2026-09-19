@@ -43,6 +43,7 @@ import {
 } from '../util/context-occupancy.js';
 import { errDetail } from '../util/filelog.js';
 import { blocksToText } from '../util/text.js';
+import { domainGate, formatWeights, hardFilterByHallLock, sortByDomainWeight, HALL_ANCHORS } from '../domain-gate.js';
 
 const PROFILE_TTL = 60_000;
 
@@ -191,6 +192,32 @@ export function registerRecall(
     work: { persona: '', nav: '' },
   };
 
+  // ── 域软门禁(task_19)的锚向量缓存:8 条锚文本静态不变,进程内嵌一次 ──
+  // 嵌入未就绪/失败 → null(降级关键词路径),不重试以免每轮付出失败代价
+  let anchorVecs: Float32Array[] | null = null;
+  let anchorVecsTried = false;
+  const ensureAnchorVecs = async (): Promise<Float32Array[] | null> => {
+    if (anchorVecsTried) return anchorVecs;
+    anchorVecsTried = true;
+    if (!stores.l1.vectorsReady()) return anchorVecs;
+    try {
+      const vecs: Array<Float32Array | undefined> = [];
+      for (const a of HALL_ANCHORS) vecs.push(await stores.l1.embedText(a.anchor));
+      anchorVecs = vecs.every((v) => v !== undefined && v.length > 0) ? (vecs as Float32Array[]) : null;
+    } catch {
+      anchorVecs = null;
+    }
+    return anchorVecs;
+  };
+
+  /** hits 的 hall 归属表(检索命中不含 metadata,按 id 批量取回一次)。 */
+  const hallByIdOf = (hits: Array<{ id: string }>): Map<string, unknown> => {
+    const map = new Map<string, unknown>();
+    if (hits.length === 0) return map;
+    for (const r of stores.l1.getByIds(hits.map((h) => h.id))) map.set(r.id, r.metadata?.hall);
+    return map;
+  };
+
   const refreshProfile = async (): Promise<void> => {
     try {
       const [chat, work] = await Promise.all([
@@ -283,18 +310,47 @@ export function registerRecall(
             return decision;
           }
           st.lastDurationMs = Date.now() - searchStart;
+          // ── hall 域范围(Phase 1c,R2/R12):锁角 = 硬过滤(手动挡);
+          // 中心 = 软门禁(域相关度加权,task_19)。写侧零感知(蒸馏/打标不过此路)。 ──
+          let scoped = hits;
+          const hallLock = modes.getHall(payload.agent.id);
+          if (hallLock) {
+            // 手动挡:只召回锁定域;未打标默认包含(524/994,默认排除会静默丢一半),
+            // general(跨域)默认不含;两个边界均可由会话开关切换
+            const { includeUnlabeled, includeGeneral } = modes.hallBoundaries(payload.agent.id);
+            scoped = hardFilterByHallLock(hits, (id) => hallByIdOf(hits).get(id), hallLock, includeUnlabeled, includeGeneral);
+            logger.debug?.(
+              `[memory] 域硬过滤 hall=${hallLock}:${hits.length} → ${scoped.length} 条(未打标${includeUnlabeled ? '含' : '不含'}/跨域${includeGeneral ? '含' : '不含'})`,
+            );
+          } else {
+            // 智能档(中心):域相关度 → 每域权重,加权排序 + 预算截断实现"低相关域降权
+            // 而非消失";嵌入不可用降级关键词,再退化为无偏置(零干预)。零额外 LLM。
+            const anchorVecsReady = await ensureAnchorVecs();
+            const queryVec =
+              anchorVecsReady && stores.l1.vectorsReady()
+                ? await stores.l1.embedText(query, RECALL_EMBED_CAP_MS)
+                : undefined;
+            const gate = domainGate(query, { queryVec, anchorVecs: anchorVecsReady ?? undefined });
+            if (gate.source !== 'none' && scoped.length > 1) {
+              const hallById = hallByIdOf(scoped);
+              scoped = sortByDomainWeight(scoped, (id) => hallById.get(id), gate.weights);
+              logger.info(
+                `[memory] 域软门禁(source=${gate.source}) ${formatWeights(gate.weights)} agent=${payload.agent.id}`,
+              );
+            }
+          }
           // 召回去重:同会话已注入过的记录不再重复注入(模型上下文已持有,省 token)。
           // 纯过滤——剩几条注几条,全量压制(0 条新鲜命中)是正确状态而非未命中。
           const seen = dedupe.seen(payload.agent.id);
-          const fresh = hits.filter((h) => !seen.has(h.id));
-          const suppressed = hits.length - fresh.length;
+          const fresh = scoped.filter((h) => !seen.has(h.id));
+          const suppressed = scoped.length - fresh.length;
           st.suppressedRecalls += suppressed;
           if (suppressed > 0) {
             logger.debug?.(
               `[memory] 召回去重:压制 ${suppressed} 条已注入记忆(agent=${payload.agent.id},余 ${fresh.length} 条新鲜命中)`,
             );
           }
-          if (hits.length > 0) {
+          if (scoped.length > 0) {
             // 全量压制轮也计入命中:相关记忆已在模型上下文里,本质是命中
             st.hitTurns++;
             st.totalHits += fresh.length;

@@ -12,7 +12,7 @@ import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
-import type { MemoryFamily, MemoryLogger } from './types.js';
+import { type MemoryFamily, type MemoryLogger } from './types.js';
 export declare const PLUGIN_VERSION: string;
 /** 运行态来源(index.ts 注入):避免 stats 撒谎字段。 */
 export interface MemoryStatusSource {

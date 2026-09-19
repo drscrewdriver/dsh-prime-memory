@@ -5,6 +5,7 @@
  * 存储失败只降级为内存态(warn 不崩),与插件的存储降级不变量一致。
  */
 import * as path from 'node:path';
+import { HALL_CATALOG } from '../types.js';
 import { errDetail } from '../util/filelog.js';
 import { atomicWriteJson, ensureDir, readJsonIfExists } from '../util/io.js';
 const MODES = ['auto', 'chat', 'work', 'off'];
@@ -12,6 +13,10 @@ const PRUNE_MS = 90 * 24 * 3600_000;
 const MAX_ENTRIES = 500;
 export function isMemoryMode(v) {
     return typeof v === 'string' && MODES.includes(v);
+}
+/** 合法角 id 判定(锁域只认 8 角;general 是兜底值不是角,不可锁定)。 */
+export function isHallCorner(v) {
+    return typeof v === 'string' && HALL_CATALOG.some((h) => h.id === v);
 }
 export class SessionModeStore {
     defaultMode;
@@ -46,6 +51,10 @@ export class SessionModeStore {
                 mode: entry.mode,
                 // 非布尔视为损坏丢弃(= 跟随全局);旧文件无此键同款兼容
                 recall: typeof entry.recall === 'boolean' ? entry.recall : undefined,
+                // 域锁定只认 8 角 id;非法/缺省 = 中心(智能档)
+                hall: isHallCorner(entry.hall) ? entry.hall : undefined,
+                hallIncludeUnlabeled: typeof entry.hallIncludeUnlabeled === 'boolean' ? entry.hallIncludeUnlabeled : undefined,
+                hallIncludeGeneral: typeof entry.hallIncludeGeneral === 'boolean' ? entry.hallIncludeGeneral : undefined,
                 updatedAt: entry.updatedAt ?? now,
             });
             count++;
@@ -84,6 +93,35 @@ export class SessionModeStore {
         this.entries.set(sessionId, {
             mode: entry?.mode ?? this.loaded,
             recall,
+            // 域锁定与注入正交:设置注入不动锁域(照抄"切档不动覆盖"模板)
+            hall: entry?.hall,
+            hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
+            hallIncludeGeneral: entry?.hallIncludeGeneral,
+            updatedAt: Date.now(),
+        });
+        this.writeChain = this.writeChain.then(() => this.persist());
+    }
+    /** 会话级域锁定原始值:undefined = 中心(智能档,无锁域)。 */
+    getHall(sessionId) {
+        return this.entries.get(sessionId)?.hall;
+    }
+    /** 锁定域边界开关:未打标是否包含(缺省 true)/ general 是否包含(缺省 false)。 */
+    hallBoundaries(sessionId) {
+        const e = this.entries.get(sessionId);
+        return {
+            includeUnlabeled: e?.hallIncludeUnlabeled ?? true,
+            includeGeneral: e?.hallIncludeGeneral ?? false,
+        };
+    }
+    /** 设置会话级域锁定(hall = 角 id;undefined = 回中心清除锁定。写穿持久化)。 */
+    setHall(sessionId, hall, boundaries) {
+        const entry = this.entries.get(sessionId);
+        this.entries.set(sessionId, {
+            mode: entry?.mode ?? this.loaded,
+            recall: entry?.recall,
+            hall: hall !== undefined && isHallCorner(hall) ? hall : undefined,
+            hallIncludeUnlabeled: boundaries?.includeUnlabeled ?? entry?.hallIncludeUnlabeled,
+            hallIncludeGeneral: boundaries?.includeGeneral ?? entry?.hallIncludeGeneral,
             updatedAt: Date.now(),
         });
         this.writeChain = this.writeChain.then(() => this.persist());
@@ -95,9 +133,17 @@ export class SessionModeStore {
     /** 设置会话档位(写穿持久化;持久化失败保持内存态生效)。 */
     set(sessionId, mode) {
         const old = this.get(sessionId);
-        // 已有注入覆盖跨切档保留(档位与注入正交,切档不动覆盖)
-        const recall = this.entries.get(sessionId)?.recall;
-        this.entries.set(sessionId, { mode, recall, updatedAt: Date.now() });
+        // 已有注入覆盖跨切档保留(档位与注入正交,切档不动覆盖);
+        // 域锁定同语义:跨切档保留
+        const entry = this.entries.get(sessionId);
+        this.entries.set(sessionId, {
+            mode,
+            recall: entry?.recall,
+            hall: entry?.hall,
+            hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
+            hallIncludeGeneral: entry?.hallIncludeGeneral,
+            updatedAt: Date.now(),
+        });
         this.writeChain = this.writeChain.then(() => this.persist());
         if (old !== mode && this.onModeChange) {
             try {

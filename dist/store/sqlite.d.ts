@@ -310,6 +310,11 @@ export declare class MemoryDb {
     };
     /** 场景名去重列表(UI 筛选器数据源)。失败返回空。 */
     distinctL1Scenes(): string[];
+    /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
+    hallL1Counts(): {
+        counts: Record<string, number>;
+        unlabeled: number;
+    };
     /** FTS5 BM25 检索(family / workspaceId 缺省不过滤)。失败返回空数组(调用方降级)。 */
     searchL1Fts(query: string, limit: number, family?: string, workspaceId?: string): L1SearchHit[];
     /**

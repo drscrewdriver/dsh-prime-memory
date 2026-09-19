@@ -453,6 +453,12 @@ export interface SessionModeGetResponse {
   recall: boolean | null;
   /** host 解析后的注入生效值(会话覆盖 ?? 全局开关):pill 面文直接消费。 */
   recallResolved: boolean;
+  /** 会话级域锁定(hall 八边形手动挡):角 id = 锁定单域;null = 中心(智能档)。 */
+  hall: string | null;
+  /** 锁定域边界开关:未打标记忆是否参与召回(默认包含)。 */
+  hallIncludeUnlabeled: boolean;
+  /** 锁定域边界开关:跨域兜底 general 是否参与召回(默认不含)。 */
+  hallIncludeGeneral: boolean;
 }
 export interface SessionModeSetRequest {
   sessionId: string;
@@ -460,6 +466,11 @@ export interface SessionModeSetRequest {
   /** 会话级注入覆盖:布尔 = 设置覆盖;显式 null = 清除(跟随全局);缺省 = 不动
    *  (旧 client 纯切档兼容,覆盖不丢)。mode 与 recall 可独立设置。 */
   recall?: boolean | null;
+  /** 会话级域锁定:角 id = 锁定;显式 null = 回中心(清除锁定);缺省 = 不动。 */
+  hall?: string | null;
+  /** 锁定域边界开关(缺省 = 不动)。 */
+  hallIncludeUnlabeled?: boolean;
+  hallIncludeGeneral?: boolean;
 }
 export interface SessionModeSetResponse {
   sessionId: string;
@@ -468,6 +479,27 @@ export interface SessionModeSetResponse {
   recall: boolean | null;
   /** 设置后的注入生效值(client 面文直接消费;清除覆盖后由 host 告知解析结果)。 */
   recallResolved: boolean;
+  /** 设置后的域锁定(null = 中心)。 */
+  hall: string | null;
+  hallIncludeUnlabeled: boolean;
+  hallIncludeGeneral: boolean;
+}
+
+/** dsh-memory/hall-overview(八边形角计数;HallWheel 打开时拉取,非热路径)。 */
+export interface HallOverviewResponse {
+  /** 8 角逐域计数(词表顺序)。 */
+  corners: Array<{ id: string; label: string; count: number }>;
+  /** 跨域兜底值(general)计数。 */
+  general: number;
+  /** 未打标(metadata 无 hall)计数——角上"另有 N 条未打标"与一键回填的数据源。 */
+  unlabeled: number;
+}
+
+/** dsh-memory/hall-backfill(一键回填,后台任务;端点立即返回,进度以 hall-overview 轮询)。 */
+export interface HallBackfillResponse {
+  /** true = 本次触发启动了新任务;false = 已有任务在跑(单飞,不叠加)。 */
+  started: boolean;
+  running: boolean;
 }
 
 /** dsh-memory/session-stats(悬浮卡信息区;热路径端点)。 */
@@ -1046,6 +1078,8 @@ export interface DshMemoryRequestMap {
   'dsh-memory/token-cost': TokenCostRequest;
   'dsh-memory/session-mode-get': SessionModeGetRequest;
   'dsh-memory/session-mode-set': SessionModeSetRequest;
+  'dsh-memory/hall-overview': Record<string, never>;
+  'dsh-memory/hall-backfill': Record<string, never>;
   'dsh-memory/session-stats': SessionStatsRequest;
   'dsh-memory/settings-get': Record<string, never>;
   'dsh-memory/settings-set': SettingsSetRequest;
@@ -1087,6 +1121,8 @@ export interface DshMemoryResponseMap {
   'dsh-memory/token-cost': TokenCostResponse;
   'dsh-memory/session-mode-get': SessionModeGetResponse;
   'dsh-memory/session-mode-set': SessionModeSetResponse;
+  'dsh-memory/hall-overview': HallOverviewResponse;
+  'dsh-memory/hall-backfill': HallBackfillResponse;
   'dsh-memory/session-stats': SessionStatsResponse;
   'dsh-memory/settings-get': SettingsGetResponse;
   'dsh-memory/settings-set': SettingsSetResponse;
