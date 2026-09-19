@@ -1,8 +1,15 @@
-# slider-spec — 悬浮板滑动选择器
+# slider-spec — 强制单族覆写滑轨（原悬浮板滑动选择器）
 
-组件：`ModeSlider`（点击记忆 pill 展开的档位滑动选择浮层，macOS 滑动器交互参考）
-及其下半部的 `SessionInfoArea` 会话信息区。全局令牌与守则见 `global-spec.md`；
-档位定义见 `pill-spec.md`。
+组件：`ModeSlider`。**v5（hall 八边形）降级**：档位滑轨不再是门面浮层，只剩滑轨本体，
+作为 `HallWheel` 图形外的"强制单族"覆写面板（日常 → 智能 → 工作三档）。
+
+> 随降级迁移的职责（现状）：浮层壳与水平视口夹持 → `MemoryModePill`；
+> 注入三态行、会话关闭闸、会话信息区（`SessionInfoArea`）→ `HallWheel`
+> 图形外排布（见 `hall-wheel-spec.md`）。off 档移出滑轨，由图形外关闭闸承载，
+> 原 tier0（整层不画）与"静态关闭档不渲染填充"的显隐分支随之删除——
+> 填充与粒子场恒显示。
+
+全局令牌与守则见 `global-spec.md`；档位定义见 `pill-spec.md`。
 
 ## 浮层（.dsh-mem-popover）
 
@@ -24,8 +31,8 @@
 （球顶 `(RAIL_H-THUMB)/2 = 3`，被轨包裹不凸出）。
 
 - 轨底 `--dsh-mem-track`，圆角 999；
-- 停点刻度：4 个 6px 圆点（`--dsh-mem-dot`），左缘
-  `i/3 * INNER_W + THUMB/2 - 3`，zIndex 2（浮在填充上、球下）；
+- 停点刻度：**3** 个 6px 圆点（`--dsh-mem-dot`），左缘
+  `i/(MODES.length-1) * INNER_W + THUMB/2 - 3`，zIndex 2（浮在填充上、球下）；
 - 圆球：`--dsh-mem-thumb` 底 + 1px `--dsh-mem-accent` 描边，拖拽时阴影加重
   （`0 2px 8px` vs 静止 `0 1px 4px`）。
 
@@ -35,10 +42,8 @@
   整颗圆球落在填充末端上与其**重合**（无空隙不割裂）；auto 档恰好全轨蓝
   （184+16=200），任何档位不超出轨道。
 - **颜色**：从左往右渐变，左侧浅（`--dsh-mem-fill-1`）到球侧深（`--dsh-mem-fill-2`）。
-- **显隐两分支**（`activeIdx > 0 || drag !== null`）：
-  - 静态关闭档（off 且未拖拽）**不渲染**；
-  - 拖拽中无论预览到哪档（含关闭区）**恒显示**，松手落 off 才随提交消失；
-  - `activeIdx` 与拖动气泡档名同源（`Math.round(thumbLeft / INNER_W * 3)`）。
+- **恒显示**（off 档移出滑轨后原显隐两分支删除）；
+  - `activeIdx` 与拖动气泡档名同源（`Math.round(thumbLeft / INNER_W * (MODES.length-1))`）。
 - **吸附动画**：松手时 `width` 与圆球 `left` 同条件同走 `width/left 120ms ease`
   （拖拽中两者 `transition: none` 保 1:1 跟手）——等差恒定，填充右缘与球右缘不分离。
 
@@ -56,7 +61,6 @@
 
 | 档位 | density 密度门 | alpha 亮度 | wave 水波纹 | tempo 节拍 |
 |---|---|---|---|---|
-| 关闭 | —（整层不画） | — | — | — |
 | 日常 | 0.34 | 0.5 | 无 | 1 |
 | 工作 | 0.55 | 0.78 | 有 | 1.15 |
 | 智能 | 0.72 | 1 | 有 | 1.3 |
@@ -113,7 +117,10 @@
 
 `props.error` 在滑轨下方 11px danger 色一行（`whiteSpace: nowrap`）。
 
-## 注入三态行（#38 只写不读）
+## 注入三态行（#38 只写不读）——已迁至 HallWheel
+
+> v5：本行不再由 ModeSlider 承载，改在 `hall-wheel-spec.md` 图形外排布
+> （`session-modes.json` 的 `recall` 覆盖语义不变）。以下为历史落点记录。
 
 滑轨（族维度）正下方、会话信息区上方的一行分段控件——档位与注入正交分立的 UI 落点：
 

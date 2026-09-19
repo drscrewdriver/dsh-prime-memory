@@ -257,6 +257,8 @@ export declare class L1Store {
         counts: Record<string, number>;
         unlabeled: number;
     };
+    /** 主表全量元数据扫描(单一所有者共享函数,供并行计划引用门禁复用;见 MemoryDb.scanL1Metadata)。 */
+    scanAllMetadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number;
     /** 查询向量(域软门禁用):复用既有嵌入源;失败/未就绪返回 undefined,调用方降级。 */
     embedText(text: string, timeoutMs?: number): Promise<Float32Array | undefined>;
     /**

@@ -56,7 +56,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.test.json",
     "build:smoke": "tsc src/smoke.ts --outDir dist-smoke --module nodenext --moduleResolution nodenext --target es2022 --strict --skipLibCheck --esModuleInterop",
     "lint": "eslint src client/src scripts tests",
-    "test": "vitest run"
+    "test": "vitest run",
+    "hall-migrate": "npm run build && node scripts/hall-migrate.mjs"
   },
   "engines": {
     "node": ">=22.16.0",

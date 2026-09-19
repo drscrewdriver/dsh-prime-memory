@@ -69,6 +69,15 @@ body[data-ds-dark-theme] { --dsh-mem-...: <暗色值> }  /* 暗色整组覆盖 *
 
 会话档位色令牌（`--dsh-mem-mode-chat/work/auto`）归 `pill-spec.md`。
 
+hall 八边形域轮令牌（`hall-wheel-spec.md`，v5 新增；引用既有中性色与品牌蓝，双主题成对）：
+
+| 令牌 | 取值 | 语义 |
+|---|---|---|
+| `--dsh-mem-hall-line` | `rgba(128,140,150,0.35)` / 暗 `rgba(148,160,180,0.32)` | 连线与八边形外框 |
+| `--dsh-mem-hall-corner` | `var(--dsh-mem-text-2)` | 角默认文字 |
+| `--dsh-mem-hall-corner-on` | `var(--dsh-mem-accent)` | 选中角/中心文字与描边 |
+| `--dsh-mem-hall-empty` | `var(--dsh-mem-text-3)` | 空角（0 条）与未打标态 |
+
 ## 品牌强调色：三档语义
 
 DeepSeek 品牌蓝拆三档，各司其职，**双主题 WCAG AA 全部达标**（数值经独立审查复算）：

@@ -1478,6 +1478,50 @@ export class MemoryDb {
     }
   }
 
+  /**
+   * 主表全量元数据扫描(单一所有者共享函数):对 l1_records **全表**(含 retired 行,
+   * 不加 valid_to 过滤——退场判定见 retireL1Batch,restore 后行仍须可解析)逐行回调
+   * metadata。并行计划的引用门禁(如 multimodal 的 image_refs 清理判据)必须复用本函数,
+   * 不得各写一份"活跃面扫描"——口径漂移会造成 restore 后死链。
+   * 返回扫描行数;存储降级返回 0。
+   */
+  scanL1Metadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number {
+    if (this.degraded) return 0;
+    try {
+      const rows = this.db
+        .prepare('SELECT record_id, metadata_json FROM l1_records')
+        .all() as Array<{ record_id: string; metadata_json: string | null }>;
+      for (const r of rows) {
+        let meta: Record<string, unknown> | null = null;
+        if (typeof r.metadata_json === 'string' && r.metadata_json !== '') {
+          try {
+            const parsed = JSON.parse(r.metadata_json);
+            if (parsed && typeof parsed === 'object') meta = parsed as Record<string, unknown>;
+          } catch {
+            meta = null; // 损坏行:回调 null,由调用方计入异常计数
+          }
+        }
+        cb(r.record_id, meta);
+      }
+      return rows.length;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** retired 行计数(退场判定与 listRetiredL1 同口径:valid_to 非空)。失败返回 0。 */
+  retiredL1Count(): number {
+    if (this.degraded) return 0;
+    try {
+      const row = this.db
+        .prepare("SELECT COUNT(*) AS n FROM l1_records WHERE COALESCE(valid_to, '') <> ''")
+        .get() as { n: number | bigint };
+      return Number(row?.n ?? 0);
+    } catch {
+      return 0;
+    }
+  }
+
   /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
   hallL1Counts(): { counts: Record<string, number>; unlabeled: number } {
     if (this.degraded) return { counts: {}, unlabeled: 0 };
