@@ -143,19 +143,19 @@ export function formatWeights(weights: Record<string, number>): string {
   return HALL_ANCHORS.map(({ id }) => `${id}=${(weights[id] ?? HALL_GATE_NEUTRAL).toFixed(2)}`).join(' ');
 }
 
-/** 手动挡硬过滤(纯函数,回归锚点):锁角 = 只留该域;未打标/跨域按边界开关放行。
- *  验证口径:单主题咨询下其他域记忆零注入。 */
+/** 手动挡硬过滤(纯函数,回归锚点):锁定集(多选,命中任一)= 只留锁定域;
+ *  未打标/跨域按边界开关放行。验证口径:单主题咨询下其他域记忆零注入。 */
 export function hardFilterByHallLock<T extends { id: string }>(
   hits: readonly T[],
   hallOf: (id: string) => unknown,
-  lock: string,
+  locks: readonly string[],
   includeUnlabeled: boolean,
   includeGeneral: boolean,
 ): T[] {
   return hits.filter((h) => {
     const hall = hallOf(h.id);
     if (typeof hall === 'string' && hall !== '') {
-      return hall === lock || (hall === HALL_FALLBACK && includeGeneral);
+      return locks.includes(hall) || (hall === HALL_FALLBACK && includeGeneral);
     }
     return includeUnlabeled;
   });

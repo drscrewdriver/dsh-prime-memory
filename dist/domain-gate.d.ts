@@ -34,11 +34,11 @@ export declare function neutralWeights(): Record<string, number>;
 export declare function domainOfHall(hall: unknown): string | null;
 /** 权重的可读日志形态(每次召回可解释:8 个域权重逐个读出)。 */
 export declare function formatWeights(weights: Record<string, number>): string;
-/** 手动挡硬过滤(纯函数,回归锚点):锁角 = 只留该域;未打标/跨域按边界开关放行。
- *  验证口径:单主题咨询下其他域记忆零注入。 */
+/** 手动挡硬过滤(纯函数,回归锚点):锁定集(多选,命中任一)= 只留锁定域;
+ *  未打标/跨域按边界开关放行。验证口径:单主题咨询下其他域记忆零注入。 */
 export declare function hardFilterByHallLock<T extends {
     id: string;
-}>(hits: readonly T[], hallOf: (id: string) => unknown, lock: string, includeUnlabeled: boolean, includeGeneral: boolean): T[];
+}>(hits: readonly T[], hallOf: (id: string) => unknown, locks: readonly string[], includeUnlabeled: boolean, includeGeneral: boolean): T[];
 /** 软门禁加权排序(纯函数,回归锚点):按域权重降序(同权重按原相关度 score 降序)。
  *  低相关域被降权而非消失——排序 + 预算截断实现"每域配额",不硬排除。 */
 export declare function sortByDomainWeight<T extends {

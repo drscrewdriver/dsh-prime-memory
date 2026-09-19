@@ -429,8 +429,11 @@ export interface SessionModeGetResponse {
     recall: boolean | null;
     /** host 解析后的注入生效值(会话覆盖 ?? 全局开关):pill 面文直接消费。 */
     recallResolved: boolean;
-    /** 会话级域锁定(hall 八边形手动挡):角 id = 锁定单域;null = 中心(智能档)。 */
+    /** 会话级域锁定(hall 八边形手动挡):角 id = 锁定单域;null = 中心(智能档)。
+     *  Phase 2 多选:完整选择集在 halls,本字段取第一个锁定域(兼容)。 */
     hall: string | null;
+    /** 多选域锁定:命中任一锁定域即通过硬过滤;空数组 = 中心。 */
+    halls: string[];
     /** 锁定域边界开关:未打标记忆是否参与召回(默认包含)。 */
     hallIncludeUnlabeled: boolean;
     /** 锁定域边界开关:跨域兜底 general 是否参与召回(默认不含)。 */
@@ -442,8 +445,11 @@ export interface SessionModeSetRequest {
     /** 会话级注入覆盖:布尔 = 设置覆盖;显式 null = 清除(跟随全局);缺省 = 不动
      *  (旧 client 纯切档兼容,覆盖不丢)。mode 与 recall 可独立设置。 */
     recall?: boolean | null;
-    /** 会话级域锁定:角 id = 锁定;显式 null = 回中心(清除锁定);缺省 = 不动。 */
+    /** 会话级域锁定:角 id = 锁定;显式 null = 回中心(清除锁定);缺省 = 不动。
+     *  单值保留兼容;多选传 halls。 */
     hall?: string | null;
+    /** 多选域锁定:角 id 数组(去重,非法 id 整体拒绝);显式 null/空数组 = 回中心;缺省 = 不动。 */
+    halls?: readonly string[] | null;
     /** 锁定域边界开关(缺省 = 不动)。 */
     hallIncludeUnlabeled?: boolean;
     hallIncludeGeneral?: boolean;
@@ -455,8 +461,9 @@ export interface SessionModeSetResponse {
     recall: boolean | null;
     /** 设置后的注入生效值(client 面文直接消费;清除覆盖后由 host 告知解析结果)。 */
     recallResolved: boolean;
-    /** 设置后的域锁定(null = 中心)。 */
+    /** 设置后的域锁定(null = 中心);多选完整集在 halls。 */
     hall: string | null;
+    halls: string[];
     hallIncludeUnlabeled: boolean;
     hallIncludeGeneral: boolean;
 }
@@ -601,8 +608,10 @@ export interface ListRecordsRequest {
     query?: string;
     type?: string;
     scene?: string;
-    /** Hall 过滤(metadata.hall == 该值;空 = 不过滤)。 */
+    /** Hall 过滤(metadata.hall == 该值;空 = 不过滤)。单值保留兼容;多选走 halls。 */
     hall?: string;
+    /** Hall 过滤多值(R13):命中任一即可;查询可多选,记录打标仍单值。 */
+    halls?: readonly string[];
     /** 1~200,默认 50。 */
     limit?: number;
     /** 0~1_000_000。 */

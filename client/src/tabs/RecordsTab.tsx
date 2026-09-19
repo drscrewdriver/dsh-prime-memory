@@ -11,7 +11,7 @@ interface QueryConds {
   query: string;
   type: string;
   scene: string;
-  hall: string;
+  halls: string[];
 }
 
 // 两族混合视图：筛选器提供全部 7 种类型
@@ -52,12 +52,12 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [sceneFilter, setSceneFilter] = useState('');
-  const [hallFilter, setHallFilter] = useState('');
+  const [hallFilter, setHallFilter] = useState<string[]>([]);
   // Hall 词表(服务端下发,R8);null = 未下发(降级:从已加载记录派生)
   const [hallCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
 
   // 上一次实际生效的查询条件（「加载更多」按它续页）
-  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', hall: '' });
+  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [] });
 
   // 请求序号：快速搜索/翻页时旧响应过期即弃，避免慢响应覆盖新结果
   const seqRef = useRef(0);
@@ -71,7 +71,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       if (conds.query) payload.query = conds.query;
       if (conds.type) payload.type = conds.type;
       if (conds.scene) payload.scene = conds.scene;
-      if (conds.hall) payload.hall = conds.hall;
+      if (conds.halls.length > 0) payload.halls = conds.halls;
       rpc('dsh-memory/list-records', payload)
         .then((r) => {
           if (token !== seqRef.current) return;
@@ -100,13 +100,13 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   );
 
   const search = () => {
-    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, hall: hallFilter };
+    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter };
     setLast(conds);
     fetchPage(conds, 0, false);
   };
 
   useEffect(() => {
-    fetchPage({ query: '', type: '', scene: '', hall: '' }, 0, false);
+    fetchPage({ query: '', type: '', scene: '', halls: [] }, 0, false);
   }, [fetchPage]);
 
   // 读当前写删门状态（settings-get 的 key 均脱敏，memoryMutate 布尔原样）
@@ -274,15 +274,12 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           value={sceneFilter}
           onChange={setSceneFilter}
         />
-        <NSel
-          style={{ maxWidth: 150 }}
-          options={([{ id: '', label: '全部 Hall' }] as NSelOption[]).concat(
-            (
-              hallCatalog ??
-              Array.from(new Set(items.map((m) => m.hall).filter((h): h is string => !!h))).map((id) => ({ id, label: id }))
-            ).map((h) => ({ id: h.id, label: h.label })),
-          )}
-          value={hallFilter}
+        <HallMultiSelect
+          options={
+            hallCatalog ??
+            Array.from(new Set(items.map((m) => m.hall).filter((h): h is string => !!h))).map((id) => ({ id, label: id }))
+          }
+          selected={hallFilter}
           onChange={setHallFilter}
         />
         <NButton onClick={search}>搜索</NButton>
@@ -463,6 +460,79 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           >
             {loading ? '加载中…' : '加载更多'}
           </NButton>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
+/** Hall 筛选多选下拉（R13 查询侧多选；选项 = 服务端下发的词表，缺失时降级为已有标签）。
+ *  触发钮沿用 .dsh-mem-select 观感；面板复用 .dsh-mem-pop 材质，行内勾选即时切换。 */
+function HallMultiSelect(props: {
+  options: Array<{ id: string; label: string }>;
+  selected: string[];
+  onChange(next: string[]): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  const labelOf = (id: string) => props.options.find((o) => o.id === id)?.label ?? id;
+  const summary =
+    props.selected.length === 0
+      ? '全部 Hall'
+      : props.selected.length <= 2
+        ? props.selected.map(labelOf).join(' + ')
+        : `${labelOf(props.selected[0]!)} 等 ${props.selected.length} 域`;
+  const toggle = (id: string) => {
+    props.onChange(props.selected.includes(id) ? props.selected.filter((x) => x !== id) : [...props.selected, id]);
+  };
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', maxWidth: 150 }}>
+      <button
+        type="button"
+        className="dsh-mem-select"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="dsh-mem-select-label" title={summary}>
+          {summary}
+        </span>
+        <span className={'dsh-mem-sel-chev' + (open ? ' dsh-mem-sel-chev-open' : '')} />
+      </button>
+      {open ? (
+        <div className="dsh-mem-pop" role="listbox" style={{ left: 0, right: 'auto', minWidth: 150 }}>
+          {props.options.length === 0 ? <div className="dsh-mem-pop-empty">暂无可筛 Hall</div> : null}
+          {props.options.map((o) => {
+            const active = props.selected.includes(o.id);
+            return (
+              <button key={o.id} type="button" className="dsh-mem-pop-opt" onClick={() => toggle(o.id)} aria-selected={active}>
+                <span className="dsh-mem-pop-check">{active ? '✓' : ''}</span>
+                <span className="dsh-mem-pop-label">{o.label}</span>
+              </button>
+            );
+          })}
+          {props.selected.length > 0 ? (
+            <button type="button" className="dsh-mem-pop-opt" onClick={() => props.onChange([])}>
+              <span className="dsh-mem-pop-check" />
+              <span className="dsh-mem-pop-label">清除筛选</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

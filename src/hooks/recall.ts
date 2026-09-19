@@ -313,14 +313,14 @@ export function registerRecall(
           // ── hall 域范围(Phase 1c,R2/R12):锁角 = 硬过滤(手动挡);
           // 中心 = 软门禁(域相关度加权,task_19)。写侧零感知(蒸馏/打标不过此路)。 ──
           let scoped = hits;
-          const hallLock = modes.getHall(payload.agent.id);
-          if (hallLock) {
+          const hallLocks = modes.getHalls(payload.agent.id);
+          if (hallLocks.length > 0) {
             // 手动挡:只召回锁定域;未打标默认包含(524/994,默认排除会静默丢一半),
             // general(跨域)默认不含;两个边界均可由会话开关切换
             const { includeUnlabeled, includeGeneral } = modes.hallBoundaries(payload.agent.id);
-            scoped = hardFilterByHallLock(hits, (id) => hallByIdOf(hits).get(id), hallLock, includeUnlabeled, includeGeneral);
+            scoped = hardFilterByHallLock(hits, (id) => hallByIdOf(hits).get(id), hallLocks, includeUnlabeled, includeGeneral);
             logger.debug?.(
-              `[memory] 域硬过滤 hall=${hallLock}:${hits.length} → ${scoped.length} 条(未打标${includeUnlabeled ? '含' : '不含'}/跨域${includeGeneral ? '含' : '不含'})`,
+              `[memory] 域硬过滤 hall=${hallLocks.join('+')}:${hits.length} → ${scoped.length} 条(未打标${includeUnlabeled ? '含' : '不含'}/跨域${includeGeneral ? '含' : '不含'})`,
             );
           } else {
             // 智能档(中心):域相关度 → 每域权重,加权排序 + 预算截断实现"低相关域降权

@@ -33,15 +33,18 @@ export declare class SessionModeStore {
     resolvedRecall(sessionId: string, globalRecall: boolean): boolean;
     /** 设置会话级注入覆盖(undefined = 清除覆盖跟随全局。写穿持久化)。 */
     setRecall(sessionId: string, recall: boolean | undefined): void;
-    /** 会话级域锁定原始值:undefined = 中心(智能档,无锁域)。 */
+    /** 会话级域锁定(多选):空数组 = 中心(智能档,无锁域)。 */
+    getHalls(sessionId: string): string[];
+    /** 兼容读取(单选口径,取第一个锁定域):undefined = 中心。 */
     getHall(sessionId: string): string | undefined;
     /** 锁定域边界开关:未打标是否包含(缺省 true)/ general 是否包含(缺省 false)。 */
     hallBoundaries(sessionId: string): {
         includeUnlabeled: boolean;
         includeGeneral: boolean;
     };
-    /** 设置会话级域锁定(hall = 角 id;undefined = 回中心清除锁定。写穿持久化)。 */
-    setHall(sessionId: string, hall: string | undefined, boundaries?: {
+    /** 设置会话级域锁定(多选:角 id 数组;空数组/undefined = 回中心清除锁定。写穿持久化)。
+     *  单角时镜像写 `hall` 兼容键,多角时置空(旧读者按无锁域读)。 */
+    setHall(sessionId: string, halls: readonly string[] | undefined, boundaries?: {
         includeUnlabeled?: boolean;
         includeGeneral?: boolean;
     }): void;

@@ -242,6 +242,7 @@ export declare class L1Store {
         scene?: string;
         family?: string;
         hall?: string;
+        halls?: readonly string[];
         workspaceId?: string;
         limit: number;
         offset: number;

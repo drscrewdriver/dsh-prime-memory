@@ -1283,10 +1283,12 @@ export class MemoryDb {
                 where.push("(scope = 'global' OR workspace_id = ?)");
                 params.push(opts.workspaceId);
             }
-            if (opts.hall) {
-                // Hall 存于 metadata_json,用 json_extract 过滤(表小,逐行代价可接受)
-                where.push(`json_extract(metadata_json, '$.hall') = ?`);
-                params.push(opts.hall);
+            if (opts.hall || (opts.halls && opts.halls.length > 0)) {
+                // Hall 存于 metadata_json,用 json_extract 过滤(表小,逐行代价可接受);
+                // R13 多值:IN (?,?,…),命中任一即可
+                const values = opts.halls && opts.halls.length > 0 ? opts.halls : [opts.hall];
+                where.push(`json_extract(metadata_json, '$.hall') IN (${values.map(() => '?').join(',')})`);
+                params.push(...values);
             }
             const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
             const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params);

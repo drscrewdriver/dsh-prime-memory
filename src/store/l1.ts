@@ -577,7 +577,7 @@ export class L1Store {
   }
 
   /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall / 可见范围过滤。 */
-  list(opts: { type?: string; scene?: string; family?: string; hall?: string; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
+  list(opts: { type?: string; scene?: string; family?: string; hall?: string; halls?: readonly string[]; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
     return this.db.listL1(opts);
   }
 

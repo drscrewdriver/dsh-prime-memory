@@ -356,13 +356,15 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const s = live?.get();
             const globalRecall = s?.recall ?? true;
             const bounds = modes.hallBoundaries(sessionId);
+            const locked = modes.getHalls(sessionId);
             const v = {
                 sessionId,
                 mode: modes.get(sessionId),
                 defaultMode: modes.default,
                 recall: modes.getRecall(sessionId) ?? null,
                 recallResolved: modes.resolvedRecall(sessionId, globalRecall),
-                hall: modes.getHall(sessionId) ?? null,
+                hall: locked[0] ?? null,
+                halls: locked,
                 hallIncludeUnlabeled: bounds.includeUnlabeled,
                 hallIncludeGeneral: bounds.includeGeneral,
             };
@@ -383,10 +385,16 @@ export async function handleEndpoint(endpoint, payload, deps) {
             if (p.recall !== undefined && typeof p.recall !== 'boolean' && p.recall !== null) {
                 throw new Error(`非法注入覆盖: ${String(p.recall)}(允许 true/false/null)`);
             }
-            // 域锁定可选同车:角 id = 锁定;显式 null = 回中心;缺省 = 不动。
+            // 域锁定可选同车:角 id = 锁定;显式 null/空数组 = 回中心;缺省 = 不动。
             // 只认 8 角 id(general 是兜底值不是角,不可锁定),非法值整体拒绝(不做部分提交)
             if (p.hall !== undefined && p.hall !== null && !isHallCorner(p.hall)) {
                 throw new Error(`非法域锁定: ${String(p.hall)}(允许 ${HALL_CATALOG.map((h) => h.id).join('/')}/null)`);
+            }
+            if (p.halls !== undefined && p.halls !== null) {
+                const bad = Array.from(p.halls).find((x) => !isHallCorner(x));
+                if (bad !== undefined) {
+                    throw new Error(`非法域锁定: ${String(bad)}(允许 ${HALL_CATALOG.map((h) => h.id).join('/')}/null)`);
+                }
             }
             modes.set(sessionId, p.mode);
             if (typeof p.recall === 'boolean') {
@@ -395,8 +403,19 @@ export async function handleEndpoint(endpoint, payload, deps) {
             else if (p.recall === null) {
                 modes.setRecall(sessionId, undefined);
             }
-            if (p.hall !== undefined || p.hallIncludeUnlabeled !== undefined || p.hallIncludeGeneral !== undefined) {
-                modes.setHall(sessionId, p.hall === null ? undefined : p.hall, {
+            if (p.hall !== undefined ||
+                p.halls !== undefined ||
+                p.hallIncludeUnlabeled !== undefined ||
+                p.hallIncludeGeneral !== undefined) {
+                // 多选优先;单值 hall 归一成单元素数组;显式 null/空数组 = 回中心
+                const nextHalls = p.halls === null || p.hall === null
+                    ? []
+                    : p.halls !== undefined
+                        ? p.halls
+                        : p.hall !== undefined
+                            ? [p.hall]
+                            : undefined;
+                modes.setHall(sessionId, nextHalls, {
                     includeUnlabeled: p.hallIncludeUnlabeled,
                     includeGeneral: p.hallIncludeGeneral,
                 });
@@ -404,12 +423,14 @@ export async function handleEndpoint(endpoint, payload, deps) {
             deps.logger.info(`[memory] 会话档位设置 session=${sessionId} mode=${p.mode} recall=${JSON.stringify(modes.getRecall(sessionId) ?? null)} hall=${JSON.stringify(modes.getHall(sessionId) ?? null)}`);
             const s = live?.get();
             const bounds = modes.hallBoundaries(sessionId);
+            const locked = modes.getHalls(sessionId);
             const v = {
                 sessionId,
                 mode: p.mode,
                 recall: modes.getRecall(sessionId) ?? null,
                 recallResolved: modes.resolvedRecall(sessionId, s?.recall ?? true),
-                hall: modes.getHall(sessionId) ?? null,
+                hall: locked[0] ?? null,
+                halls: locked,
                 hallIncludeUnlabeled: bounds.includeUnlabeled,
                 hallIncludeGeneral: bounds.includeGeneral,
             };
@@ -709,6 +730,12 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const p = (payload ?? {});
             if (p.query !== undefined && p.query.length > 4096)
                 throw new Error('query 过长(≤4096 字符)');
+            // R13 多值归一: halls 数组只留非空字符串(≤40 字符),去重,上限 8(角数);
+            // hall 单值保留兼容,归一后与 halls 合并
+            const hallSel = Array.from(new Set([
+                ...(Array.isArray(p.halls) ? p.halls.filter((x) => typeof x === 'string' && x.trim() !== '').map((x) => x.trim().slice(0, 40)) : []),
+                ...(p.hall ? [p.hall.trim().slice(0, 40)] : []),
+            ].slice(0, HALL_CATALOG.length + 1)));
             const limit = Math.min(Math.max(Number(p.limit) || 50, 1), 200);
             const offset = Math.min(Math.max(Number(p.offset) || 0, 0), 1_000_000);
             // Hall 词表随首屏下发(R8 单一事实源,client 不手抄);常量拼接,零 I/O,不触碰热路径规则
@@ -724,14 +751,17 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 let filtered = p.scene ? hits.filter((h) => h.scene_name === p.scene) : hits;
                 // Hall 过滤(检索命中不含 metadata):按 id 批量取回元数据后过滤
                 let metaById = null;
-                if (p.hall && filtered.length > 0) {
+                if (hallSel.length > 0 && filtered.length > 0) {
                     const meta = new Map();
                     for (const r of stores.l1.getByIds(filtered.map((h) => h.id))) {
                         if (r.metadata)
                             meta.set(r.id, r.metadata);
                     }
                     metaById = meta;
-                    filtered = filtered.filter((h) => (meta.get(h.id)?.hall) === p.hall);
+                    filtered = filtered.filter((h) => {
+                        const hall = meta.get(h.id)?.hall;
+                        return typeof hall === 'string' && hall !== '' && hallSel.includes(hall);
+                    });
                 }
                 const resp = {
                     items: filtered.slice(offset, offset + limit).map((h) => hitToUiRecord({ ...h, metadata: metaById?.get(h.id) })),
@@ -743,7 +773,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 };
                 return resp;
             }
-            const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, limit, offset });
+            const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: hallSel.length > 0 ? hallSel : undefined, limit, offset });
             const resp = {
                 items: items.map(hitToUiRecord),
                 hasMore: offset + items.length < total,

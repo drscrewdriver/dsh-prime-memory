@@ -233,6 +233,7 @@ describe('rpc: session mode endpoints', () => {
       recall: false,
       recallResolved: false,
       hall: null,
+      halls: [],
       hallIncludeUnlabeled: true,
       hallIncludeGeneral: false,
     });
@@ -312,6 +313,23 @@ describe('rpc: list-records / records-delete', () => {
     expect(browse.items[0].hall).toBe('work');
     const search = await h.call('dsh-memory/list-records', { query: '咖啡 记忆', hall: 'work' }) as { items: Array<{ id: string }> };
     expect(search.items.map((i) => i.id)).toEqual(['h1']);
+    h.db.close();
+  });
+
+  it('list-records multi-value halls on browse path (R13: 无 query 的 list 分支)', async () => {
+    const h = await harness();
+    await seed(h);
+    const now = Date.now();
+    await h.stores.l1.appendNew([
+      { id: 'h3', content: '跨域记忆', type: 'episodic', priority: 60, scene_name: '日常', timestamps: [now], createdAt: now, updatedAt: now, metadata: { hall: 'general' } },
+    ]);
+    const both = await h.call('dsh-memory/list-records', { halls: ['work', 'general'] }) as { items: Array<{ id: string }> };
+    expect(both.items.map((i) => i.id)).toEqual(expect.arrayContaining(['h1']));
+    const single = await h.call('dsh-memory/list-records', { halls: ['general'] }) as { items: Array<{ id: string }> };
+    expect(single.items.map((i) => i.id)).not.toContain('h1');
+    // 单值 hall 与 halls 合并去重
+    const merged = await h.call('dsh-memory/list-records', { hall: 'work', halls: ['general'] }) as { items: Array<{ id: string }> };
+    expect(merged.items.map((i) => i.id)).toEqual(expect.arrayContaining(['h1']));
     h.db.close();
   });
 

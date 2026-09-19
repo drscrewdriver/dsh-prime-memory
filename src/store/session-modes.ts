@@ -21,8 +21,12 @@ interface ModeEntry {
   recall?: boolean;
   /** 会话级域锁定(hall 八边形手动挡):角 id = 只召回该域(召回硬过滤);
    *  缺省/undefined = 中心(智能档,按域相关度软门禁)。与档位/注入正交,跨切档保留。
-   *  写侧不收窄:蒸馏与打标零感知(标签只反映内容,无选中域偏向)。 */
+   *  写侧不收窄:蒸馏与打标零感知(标签只反映内容,无选中域偏向)。
+   *  Phase 2 多选(R13):单值 `hall` 保留为磁盘兼容键(旧文件/单角时镜像),
+   *  新多选写 `halls` 数组。 */
   hall?: string;
+  /** 多选域锁定:命中任一锁定域即通过硬过滤;空/缺省 = 中心。 */
+  halls?: string[];
   /** 锁定域时的边界开关:未打标记忆是否参与召回(默认包含——默认排除会静默丢掉一半语料)。 */
   hallIncludeUnlabeled?: boolean;
   /** 锁定域时跨域兜底 `general` 是否参与召回(默认不含——跨域与单主题相悖)。 */
@@ -76,8 +80,13 @@ export class SessionModeStore {
         mode: entry.mode,
         // 非布尔视为损坏丢弃(= 跟随全局);旧文件无此键同款兼容
         recall: typeof entry.recall === 'boolean' ? entry.recall : undefined,
-        // 域锁定只认 8 角 id;非法/缺省 = 中心(智能档)
+        // 域锁定只认 8 角 id;非法/缺省 = 中心(智能档)。多选数组优先,单值键兜底
         hall: isHallCorner(entry.hall) ? entry.hall : undefined,
+        halls: Array.isArray(entry.halls)
+          ? Array.from(new Set(entry.halls.filter((x) => isHallCorner(x))))
+          : isHallCorner(entry.hall)
+            ? [entry.hall]
+            : undefined,
         hallIncludeUnlabeled:
           typeof entry.hallIncludeUnlabeled === 'boolean' ? entry.hallIncludeUnlabeled : undefined,
         hallIncludeGeneral:
@@ -127,6 +136,7 @@ export class SessionModeStore {
       recall,
       // 域锁定与注入正交:设置注入不动锁域(照抄"切档不动覆盖"模板)
       hall: entry?.hall,
+      halls: entry?.halls,
       hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: entry?.hallIncludeGeneral,
       updatedAt: Date.now(),
@@ -134,9 +144,16 @@ export class SessionModeStore {
     this.writeChain = this.writeChain.then(() => this.persist());
   }
 
-  /** 会话级域锁定原始值:undefined = 中心(智能档,无锁域)。 */
+  /** 会话级域锁定(多选):空数组 = 中心(智能档,无锁域)。 */
+  getHalls(sessionId: string): string[] {
+    const e = this.entries.get(sessionId);
+    if (e?.halls && e.halls.length > 0) return e.halls;
+    return e?.hall ? [e.hall] : [];
+  }
+
+  /** 兼容读取(单选口径,取第一个锁定域):undefined = 中心。 */
   getHall(sessionId: string): string | undefined {
-    return this.entries.get(sessionId)?.hall;
+    return this.getHalls(sessionId)[0];
   }
 
   /** 锁定域边界开关:未打标是否包含(缺省 true)/ general 是否包含(缺省 false)。 */
@@ -148,17 +165,20 @@ export class SessionModeStore {
     };
   }
 
-  /** 设置会话级域锁定(hall = 角 id;undefined = 回中心清除锁定。写穿持久化)。 */
+  /** 设置会话级域锁定(多选:角 id 数组;空数组/undefined = 回中心清除锁定。写穿持久化)。
+   *  单角时镜像写 `hall` 兼容键,多角时置空(旧读者按无锁域读)。 */
   setHall(
     sessionId: string,
-    hall: string | undefined,
+    halls: readonly string[] | undefined,
     boundaries?: { includeUnlabeled?: boolean; includeGeneral?: boolean },
   ): void {
     const entry = this.entries.get(sessionId);
+    const locked = Array.from(new Set((halls ?? []).filter((x) => isHallCorner(x))));
     this.entries.set(sessionId, {
       mode: entry?.mode ?? this.loaded,
       recall: entry?.recall,
-      hall: hall !== undefined && isHallCorner(hall) ? hall : undefined,
+      hall: locked.length === 1 ? locked[0] : undefined,
+      halls: locked.length > 0 ? locked : undefined,
       hallIncludeUnlabeled: boundaries?.includeUnlabeled ?? entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: boundaries?.includeGeneral ?? entry?.hallIncludeGeneral,
       updatedAt: Date.now(),
@@ -181,6 +201,7 @@ export class SessionModeStore {
       mode,
       recall: entry?.recall,
       hall: entry?.hall,
+      halls: entry?.halls,
       hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: entry?.hallIncludeGeneral,
       updatedAt: Date.now(),

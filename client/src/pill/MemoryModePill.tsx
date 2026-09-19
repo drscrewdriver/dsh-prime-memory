@@ -20,8 +20,8 @@ export function MemoryModePill(props: {
   // 生效值（面文直接消费——client 不另知全局开关，解析权威在 host）
   const [recall, setRecall] = useState<boolean | null>(null);
   const [recallResolved, setRecallResolved] = useState(true);
-  // 会话级域锁定（hall 八边形手动挡）：null = 中心（智能档）；角 id = 锁定单域
-  const [hall, setHall] = useState<string | null>(null);
+  // 会话级域锁定（hall 八边形手动挡，Phase 2 多选）：空数组 = 中心（智能档）
+  const [halls, setHalls] = useState<string[]>([]);
   const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = useState(true);
   const [hallIncludeGeneral, setHallIncludeGeneral] = useState(false);
   // 面文域显示名（hall-overview 下发，词表单一事实源在服务端）
@@ -45,7 +45,7 @@ export function MemoryModePill(props: {
           setMode(r.value.mode);
           setRecall(r.value.recall);
           setRecallResolved(r.value.recallResolved);
-          setHall(r.value.hall);
+          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
           setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
           setHallIncludeGeneral(r.value.hallIncludeGeneral);
         } else setError(r && !r.ok ? r.error.message : 'RPC error');
@@ -157,27 +157,29 @@ export function MemoryModePill(props: {
       });
   };
 
-  /** 域锁定提交（R12 手动挡）：角 id = 锁定；null = 回中心（清除锁定）。
+  /** 域锁定提交（R12 手动挡，Phase 2 多选）：角 id 数组 = 锁定集；null = 回中心。
    *  mode 未加载时拒绝提交（请求必带 mode，同 commitRecall 的口径）。 */
-  const commitHall = (next: string | null) => {
-    if (!rpc || !sessionId || mode === null || next === hall) return;
-    const prevHall = hall;
+  const commitHall = (next: string[] | null) => {
+    if (!rpc || !sessionId || mode === null) return;
+    const norm = next ?? [];
+    if (JSON.stringify(norm) === JSON.stringify(halls)) return;
+    const prevHalls = halls;
     const token = seqRef.current;
-    setHall(next);
+    setHalls(norm);
     setError(null);
-    rpc('dsh-memory/session-mode-set', { sessionId, mode: mode as 'auto', hall: next })
+    rpc('dsh-memory/session-mode-set', { sessionId, mode: mode as 'auto', halls: next })
       .then((r) => {
         if (token !== seqRef.current) return;
         if (!r || !r.ok) {
-          setHall(prevHall);
+          setHalls(prevHalls);
           setError(r && r.error ? '域设置失败：' + r.error.message : '域设置失败');
         } else {
-          setHall(r.value.hall);
+          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
         }
       })
       .catch((e: unknown) => {
         if (token !== seqRef.current) return;
-        setHall(prevHall);
+        setHalls(prevHalls);
         setError('域设置失败：' + String((e && (e as Error).message) || e));
       });
   };
@@ -193,7 +195,7 @@ export function MemoryModePill(props: {
     rpc('dsh-memory/session-mode-set', {
       sessionId,
       mode: mode as 'auto',
-      hall: hall,
+      halls: halls.length > 0 ? halls : null,
       hallIncludeUnlabeled: patch.includeUnlabeled,
       hallIncludeGeneral: patch.includeGeneral,
     })
@@ -204,7 +206,7 @@ export function MemoryModePill(props: {
           setHallIncludeGeneral(prev.general);
           setError(r && r.error ? '域设置失败：' + r.error.message : '域设置失败');
         } else {
-          setHall(r.value.hall);
+          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
           setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
           setHallIncludeGeneral(r.value.hallIncludeGeneral);
         }
@@ -224,9 +226,14 @@ export function MemoryModePill(props: {
   // 其余 = 同款流光 + 光晕，区分靠蓝阶文字色与流光内底混色深度
   const isOff = loaded && mode === 'off';
   const isFlow = loaded && !isOff;
-  // 面文换字：off → 「关闭」；注入关 → 「只写」；锁角 → 「记忆 · <域>」（词表下发
-  // 的显示名，未送达时原样显示角 id）；否则档位名。域锁定是最新的用户意图，优先上脸。
-  const hallText = hall ? hallLabels[hall] ?? hall : null;
+  // 面文换字：off → 「关闭」；注入关 → 「只写」；锁域 → 「记忆 · <域>」（单选显域名，
+  // 多选显「N 域」；词表下发的显示名，未送达时原样显示角 id）；否则档位名。
+  const hallText =
+    halls.length === 1
+      ? hallLabels[halls[0]!] ?? halls[0]!
+      : halls.length > 1
+        ? `${halls.length} 域`
+        : null;
   const faceLabel = !loaded
     ? error
       ? '⚠'
@@ -296,7 +303,7 @@ export function MemoryModePill(props: {
           >
             <HallWheel
               mode={mode || 'auto'}
-              hall={hall}
+              halls={halls}
               hallIncludeUnlabeled={hallIncludeUnlabeled}
               hallIncludeGeneral={hallIncludeGeneral}
               onCommit={commit}

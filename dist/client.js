@@ -3136,9 +3136,9 @@ var __defProp = Object.defineProperty;
 		  const [query, setQuery] = (0, import_react15.useState)("");
 		  const [typeFilter, setTypeFilter] = (0, import_react15.useState)("");
 		  const [sceneFilter, setSceneFilter] = (0, import_react15.useState)("");
-		  const [hallFilter, setHallFilter] = (0, import_react15.useState)("");
+		  const [hallFilter, setHallFilter] = (0, import_react15.useState)([]);
 		  const [hallCatalog, setHallCatalog] = (0, import_react15.useState)(null);
-		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", hall: "" });
+		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", halls: [] });
 		  const seqRef = (0, import_react15.useRef)(0);
 		  const fetchPage = (0, import_react15.useCallback)(
 		    (conds, offset, append) => {
@@ -3149,7 +3149,7 @@ var __defProp = Object.defineProperty;
 		      if (conds.query) payload.query = conds.query;
 		      if (conds.type) payload.type = conds.type;
 		      if (conds.scene) payload.scene = conds.scene;
-		      if (conds.hall) payload.hall = conds.hall;
+		      if (conds.halls.length > 0) payload.halls = conds.halls;
 		      rpc("dsh-memory/list-records", payload).then((r) => {
 		        if (token !== seqRef.current) return;
 		        setLoading(false);
@@ -3174,12 +3174,12 @@ var __defProp = Object.defineProperty;
 		    [rpc]
 		  );
 		  const search = () => {
-		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, hall: hallFilter };
+		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter };
 		    setLast(conds);
 		    fetchPage(conds, 0, false);
 		  };
 		  (0, import_react15.useEffect)(() => {
-		    fetchPage({ query: "", type: "", scene: "", hall: "" }, 0, false);
+		    fetchPage({ query: "", type: "", scene: "", halls: [] }, 0, false);
 		  }, [fetchPage]);
 		  const loadHiPriv = (0, import_react15.useCallback)(() => {
 		    rpc("dsh-memory/settings-get", {}).then((r) => {
@@ -3325,13 +3325,10 @@ var __defProp = Object.defineProperty;
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
-		        NSel,
+		        HallMultiSelect,
 		        {
-		          style: { maxWidth: 150 },
-		          options: [{ id: "", label: "全部 Hall" }].concat(
-		            (hallCatalog ?? Array.from(new Set(items.map((m) => m.hall).filter((h) => !!h))).map((id) => ({ id, label: id }))).map((h) => ({ id: h.id, label: h.label }))
-		          ),
-		          value: hallFilter,
+		          options: hallCatalog ?? Array.from(new Set(items.map((m) => m.hall).filter((h) => !!h))).map((id) => ({ id, label: id })),
+		          selected: hallFilter,
 		          onChange: setHallFilter
 		        }
 		      ),
@@ -3469,6 +3466,60 @@ var __defProp = Object.defineProperty;
 		          children: loading ? "加载中…" : "加载更多"
 		        }
 		      )
+		    ] }) : null
+		  ] });
+		}
+		function HallMultiSelect(props) {
+		  const [open, setOpen] = (0, import_react15.useState)(false);
+		  const wrapRef = (0, import_react15.useRef)(null);
+		  (0, import_react15.useEffect)(() => {
+		    if (!open) return;
+		    const onDown = (e) => {
+		      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+		    };
+		    const onKey = (e) => {
+		      if (e.key === "Escape") setOpen(false);
+		    };
+		    document.addEventListener("pointerdown", onDown);
+		    document.addEventListener("keydown", onKey);
+		    return () => {
+		      document.removeEventListener("pointerdown", onDown);
+		      document.removeEventListener("keydown", onKey);
+		    };
+		  }, [open]);
+		  const labelOf = (id) => props.options.find((o) => o.id === id)?.label ?? id;
+		  const summary = props.selected.length === 0 ? "全部 Hall" : props.selected.length <= 2 ? props.selected.map(labelOf).join(" + ") : `${labelOf(props.selected[0])} 等 ${props.selected.length} 域`;
+		  const toggle = (id) => {
+		    props.onChange(props.selected.includes(id) ? props.selected.filter((x) => x !== id) : [...props.selected, id]);
+		  };
+		  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { ref: wrapRef, style: { position: "relative", maxWidth: 150 }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+		      "button",
+		      {
+		        type: "button",
+		        className: "dsh-mem-select",
+		        "aria-haspopup": "listbox",
+		        "aria-expanded": open,
+		        onClick: () => setOpen(!open),
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-select-label", title: summary, children: summary }),
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-sel-chev" + (open ? " dsh-mem-sel-chev-open" : "") })
+		        ]
+		      }
+		    ),
+		    open ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dsh-mem-pop", role: "listbox", style: { left: 0, right: "auto", minWidth: 150 }, children: [
+		      props.options.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-pop-empty", children: "暂无可筛 Hall" }) : null,
+		      props.options.map((o) => {
+		        const active = props.selected.includes(o.id);
+		        return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("button", { type: "button", className: "dsh-mem-pop-opt", onClick: () => toggle(o.id), "aria-selected": active, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-pop-check", children: active ? "✓" : "" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-pop-label", children: o.label })
+		        ] }, o.id);
+		      }),
+		      props.selected.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("button", { type: "button", className: "dsh-mem-pop-opt", onClick: () => props.onChange([]), children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-pop-check" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-pop-label", children: "清除筛选" })
+		      ] }) : null
 		    ] }) : null
 		  ] });
 		}
@@ -4387,9 +4438,9 @@ var __defProp = Object.defineProperty;
 		            width: 52,
 		            height: 52,
 		            borderRadius: "50%",
-		            border: props.hall === null ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid var(--dsh-mem-hall-line)",
+		            border: props.halls.length === 0 ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid var(--dsh-mem-hall-line)",
 		            background: "var(--dsh-mem-bg-card)",
-		            color: props.hall === null ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
+		            color: props.halls.length === 0 ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
 		            fontSize: 12,
 		            fontWeight: 600,
 		            cursor: "pointer"
@@ -4402,7 +4453,7 @@ var __defProp = Object.defineProperty;
 		        const id = corner?.id;
 		        const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
 		        const count = id ? cornerCount(id) : null;
-		        const active = id !== void 0 && props.hall === id;
+		        const active = id !== void 0 && props.halls.includes(id);
 		        const empty = count === 0;
 		        const p = cornerPos(i, R_CORNER);
 		        return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
@@ -4411,7 +4462,11 @@ var __defProp = Object.defineProperty;
 		            type: "button",
 		            title: id ? `锁定「${label}」域：本会话只召回该域${empty ? "（当前空角）" : `（${count} 条）`}` : "词表加载中",
 		            disabled: !id,
-		            onClick: () => id && props.onCommitHall(active ? null : id),
+		            onClick: () => {
+		              if (!id) return;
+		              const next = active ? props.halls.filter((x) => x !== id) : [...props.halls, id];
+		              props.onCommitHall(next.length > 0 ? next : null);
+		            },
 		            style: {
 		              position: "absolute",
 		              left: p.left,
@@ -4441,7 +4496,7 @@ var __defProp = Object.defineProperty;
 		        );
 		      })
 		    ] }),
-		    props.hall !== null ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+		    props.halls.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
 		      "div",
 		      {
 		        style: {
@@ -4589,7 +4644,7 @@ var __defProp = Object.defineProperty;
 		  const [mode, setMode] = (0, import_react21.useState)(null);
 		  const [recall, setRecall] = (0, import_react21.useState)(null);
 		  const [recallResolved, setRecallResolved] = (0, import_react21.useState)(true);
-		  const [hall, setHall] = (0, import_react21.useState)(null);
+		  const [halls, setHalls] = (0, import_react21.useState)([]);
 		  const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = (0, import_react21.useState)(true);
 		  const [hallIncludeGeneral, setHallIncludeGeneral] = (0, import_react21.useState)(false);
 		  const [hallLabels, setHallLabels] = (0, import_react21.useState)({});
@@ -4609,7 +4664,7 @@ var __defProp = Object.defineProperty;
 		        setMode(r.value.mode);
 		        setRecall(r.value.recall);
 		        setRecallResolved(r.value.recallResolved);
-		        setHall(r.value.hall);
+		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
 		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
 		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
 		      } else setError(r && !r.ok ? r.error.message : "RPC error");
@@ -4697,22 +4752,24 @@ var __defProp = Object.defineProperty;
 		    });
 		  };
 		  const commitHall = (next) => {
-		    if (!rpc || !sessionId || mode === null || next === hall) return;
-		    const prevHall = hall;
+		    if (!rpc || !sessionId || mode === null) return;
+		    const norm = next ?? [];
+		    if (JSON.stringify(norm) === JSON.stringify(halls)) return;
+		    const prevHalls = halls;
 		    const token = seqRef.current;
-		    setHall(next);
+		    setHalls(norm);
 		    setError(null);
-		    rpc("dsh-memory/session-mode-set", { sessionId, mode, hall: next }).then((r) => {
+		    rpc("dsh-memory/session-mode-set", { sessionId, mode, halls: next }).then((r) => {
 		      if (token !== seqRef.current) return;
 		      if (!r || !r.ok) {
-		        setHall(prevHall);
+		        setHalls(prevHalls);
 		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
 		      } else {
-		        setHall(r.value.hall);
+		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
 		      }
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
-		      setHall(prevHall);
+		      setHalls(prevHalls);
 		      setError("域设置失败：" + String(e && e.message || e));
 		    });
 		  };
@@ -4726,7 +4783,7 @@ var __defProp = Object.defineProperty;
 		    rpc("dsh-memory/session-mode-set", {
 		      sessionId,
 		      mode,
-		      hall,
+		      halls: halls.length > 0 ? halls : null,
 		      hallIncludeUnlabeled: patch.includeUnlabeled,
 		      hallIncludeGeneral: patch.includeGeneral
 		    }).then((r) => {
@@ -4736,7 +4793,7 @@ var __defProp = Object.defineProperty;
 		        setHallIncludeGeneral(prev.general);
 		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
 		      } else {
-		        setHall(r.value.hall);
+		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
 		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
 		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
 		      }
@@ -4752,7 +4809,7 @@ var __defProp = Object.defineProperty;
 		  const loaded = mode !== null;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
-		  const hallText = hall ? hallLabels[hall] ?? hall : null;
+		  const hallText = halls.length === 1 ? hallLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} 域` : null;
 		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : hallText ? hallText : info.label;
 		  ensureThemeStyle();
 		  const pillStyle = {
@@ -4814,7 +4871,7 @@ var __defProp = Object.defineProperty;
 		              HallWheel,
 		              {
 		                mode: mode || "auto",
-		                hall,
+		                halls,
 		                hallIncludeUnlabeled,
 		                hallIncludeGeneral,
 		                onCommit: commit,

@@ -32,12 +32,13 @@ function cornerPos(i: number, radius: number): { left: number; top: number } {
 
 export function HallWheel(props: {
   mode: string;
-  /** 会话级域锁定：null = 中心（智能档）。 */
-  hall: string | null;
+  /** 会话级域锁定（多选）：空数组 = 中心（智能档）。 */
+  halls: string[];
   hallIncludeUnlabeled: boolean;
   hallIncludeGeneral: boolean;
   onCommit(key: string): void;
-  onCommitHall(hall: string | null): void;
+  /** 锁定提交：角 id 数组 = 多选锁定；null = 回中心（清除全部锁定）。 */
+  onCommitHall(halls: string[] | null): void;
   onCommitHallBoundaries(patch: { includeUnlabeled?: boolean; includeGeneral?: boolean }): void;
   /** 会话级注入覆盖（复用既有控件）：缺省 = 浮层不渲染注入行。 */
   recall?: boolean | null;
@@ -172,9 +173,9 @@ export function HallWheel(props: {
             width: 52,
             height: 52,
             borderRadius: '50%',
-            border: props.hall === null ? '1.5px solid var(--dsh-mem-hall-corner-on)' : '1px solid var(--dsh-mem-hall-line)',
+            border: props.halls.length === 0 ? '1.5px solid var(--dsh-mem-hall-corner-on)' : '1px solid var(--dsh-mem-hall-line)',
             background: 'var(--dsh-mem-bg-card)',
-            color: props.hall === null ? 'var(--dsh-mem-hall-corner-on)' : 'var(--dsh-mem-hall-corner)',
+            color: props.halls.length === 0 ? 'var(--dsh-mem-hall-corner-on)' : 'var(--dsh-mem-hall-corner)',
             fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',
@@ -188,9 +189,10 @@ export function HallWheel(props: {
           const id = corner?.id;
           const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
           const count = id ? cornerCount(id) : null;
-          const active = id !== undefined && props.hall === id;
+          const active = id !== undefined && props.halls.includes(id);
           const empty = count === 0;
           const p = cornerPos(i, R_CORNER);
+          // Phase 2 多选：点击切换该角在锁定集里的存在；回中心 = 清空
           return (
             <button
               key={id ?? i}
@@ -201,7 +203,11 @@ export function HallWheel(props: {
                   : '词表加载中'
               }
               disabled={!id}
-              onClick={() => id && props.onCommitHall(active ? null : id)}
+              onClick={() => {
+                if (!id) return;
+                const next = active ? props.halls.filter((x) => x !== id) : [...props.halls, id];
+                props.onCommitHall(next.length > 0 ? next : null);
+              }}
               style={{
                 position: 'absolute',
                 left: p.left,
@@ -238,7 +244,7 @@ export function HallWheel(props: {
 
       {/* ── 图形外：会话闸 + 边界开关 + 覆写滑轨 ── */}
       {/* 锁角时的边界开关（D1）：未打标默认包含 / 跨域 general 默认不含；off 时禁用 */}
-      {props.hall !== null ? (
+      {props.halls.length > 0 ? (
         <div
           style={{
             display: 'flex',

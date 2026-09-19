@@ -115,15 +115,18 @@ describe('manual hall lock (task_18)', () => {
     id === 'w1' ? 'work' : id === 'f1' ? 'finance' : id === 'g1' ? HALL_FALLBACK : undefined;
 
   it('default boundaries: only locked domain + unlabeled pass; other domains and general are zero-injected', () => {
-    const out = hardFilterByHallLock(hits, hallOf, 'work', true, false);
+    const out = hardFilterByHallLock(hits, hallOf, ['work'], true, false);
     expect(out.map((h) => h.id)).toEqual(['w1', 'n1']);
   });
   it('boundary toggles: unlabeled excluded / general included per switch', () => {
-    expect(hardFilterByHallLock(hits, hallOf, 'work', false, false).map((h) => h.id)).toEqual(['w1']);
-    expect(hardFilterByHallLock(hits, hallOf, 'work', true, true).map((h) => h.id)).toEqual(['w1', 'g1', 'n1']);
+    expect(hardFilterByHallLock(hits, hallOf, ['work'], false, false).map((h) => h.id)).toEqual(['w1']);
+    expect(hardFilterByHallLock(hits, hallOf, ['work'], true, true).map((h) => h.id)).toEqual(['w1', 'g1', 'n1']);
+  });
+  it('multi-select lock: hits in any locked domain pass (R13)', () => {
+    expect(hardFilterByHallLock(hits, hallOf, ['work', 'finance'], true, false).map((h) => h.id)).toEqual(['w1', 'f1', 'n1']);
   });
   it('empty corner: lock yields only unlabeled (诚实空角,不报错)', () => {
-    expect(hardFilterByHallLock(hits, hallOf, 'health', true, false).map((h) => h.id)).toEqual(['n1']);
+    expect(hardFilterByHallLock(hits, hallOf, ['health'], true, false).map((h) => h.id)).toEqual(['n1']);
   });
 });
 
@@ -141,7 +144,7 @@ describe('session hall lock storage (task_18①: 同存储/写穿/正交/跨切�
     const { join } = await import('node:path');
     const dir = await mkdtemp(join(tmpdir(), 'dsh-hall-'));
     const store = new SessionModeStore(dir, 'auto');
-    store.setHall('s1', 'finance', { includeUnlabeled: false, includeGeneral: true });
+    store.setHall('s1', ['finance'], { includeUnlabeled: false, includeGeneral: true });
     store.setRecall('s1', false); // 注入覆盖不动锁域(正交)
     store.set('s1', 'work'); // 切档不动锁域(跨切档保留)
     await store.flush(); // 写穿是异步链,落盘后再验证
@@ -154,6 +157,12 @@ describe('session hall lock storage (task_18①: 同存储/写穿/正交/跨切�
     expect(reloaded.getHall('s1')).toBe('finance');
     // 回中心 = 清除锁定
     store.setHall('s1', undefined);
-    expect(store.getHall('s1')).toBeUndefined();
+    expect(store.getHalls('s1')).toEqual([]);
+    // 多选:两域锁定 + 单角镜像兼容键
+    store.setHall('s2', ['work', 'finance']);
+    expect(store.getHalls('s2')).toEqual(['work', 'finance']);
+    expect(store.getHall('s2')).toBe('work');
+    store.setHall('s2', []);
+    expect(store.getHalls('s2')).toEqual([]);
   });
 });
