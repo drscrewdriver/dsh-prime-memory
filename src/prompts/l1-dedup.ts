@@ -287,7 +287,7 @@ export interface CandidateMatch {
 /**
  * 格式化批量冲突检测 prompt（统一候选池）。
  */
-export function formatBatchConflictPrompt(matches: CandidateMatch[]): string {
+export function formatBatchConflictPrompt(matches: CandidateMatch[], opts?: DedupPromptOptions): string {
   const unifiedPool = new Map<string, MemoryRecord>();
   const perMemoryCandidateIds = new Map<string, string[]>();
 
@@ -309,10 +309,16 @@ export function formatBatchConflictPrompt(matches: CandidateMatch[]): string {
     timestamps: c.timestamps,
     // §C 三轴(conflict-3axis):把有效期与持续性一并交给检测器,
     // 使其能在"内容矛盾"时先按时间轴判定先后/过期,减少误判 conflict。
-    // 与 timestamps 同单位(epoch ms),缺则为 null——属数据增强,不改 prompt 文案。
-    valid_from_ms: c.validFrom ?? null,
-    valid_to_ms: c.validTo ?? null,
-    persistence: c.persistence ?? null,
+    // 与 timestamps 同单位(epoch ms),缺则为 null。
+    // **门控(task_a.5)**:仅在 conflictFreeze 开启时注入候选池——关闭态输出必须与
+    // 改动前逐字节相同(spec R6 的零漂移须覆盖 system 与 user 两路 prompt)。
+    ...(opts?.conflictFreeze === true
+      ? {
+          valid_from_ms: c.validFrom ?? null,
+          valid_to_ms: c.validTo ?? null,
+          persistence: c.persistence ?? null,
+        }
+      : {}),
   }));
 
   let poolSection: string;

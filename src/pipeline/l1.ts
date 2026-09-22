@@ -306,7 +306,9 @@ export async function runExtraction(
       candidates: await store.searchCandidates(m.content, cfg.extract.candidatePool, m.family, wsFilter),
     })),
   );
-  const dedupPrompt = formatBatchConflictPrompt(matches);
+  const dedupPrompt = formatBatchConflictPrompt(matches, {
+    conflictFreeze: cfg.conflictFreeze.enabled,
+  });
   const dedupRaw = await callLLM(ctx, cfg, {
     system: getConflictDetectionSystemPrompt(mode, { conflictFreeze: cfg.conflictFreeze.enabled }),
     user: dedupPrompt,

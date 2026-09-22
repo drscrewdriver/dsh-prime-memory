@@ -6,6 +6,7 @@
  * ② 裁决侧:`listConflictPairs` 的视图带双方三轴,且渲染出对比;
  * ③ 零漂移:三轴判定条款仅在 conflictFreeze 开启时注入,关闭态 base 逐字不变。
  */
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   formatBatchConflictPrompt,
@@ -56,13 +57,36 @@ describe('检测侧:候选池透传三轴(conflict-3axis)', () => {
     },
   ];
 
-  it('formatBatchConflictPrompt 的候选池含 valid_from_ms / valid_to_ms / persistence', () => {
-    const prompt = formatBatchConflictPrompt(matches);
-    expect(prompt).toContain('"valid_from_ms"');
-    expect(prompt).toContain('"valid_to_ms"');
-    expect(prompt).toContain('"persistence"');
+  /**
+   * golden 锚(task_a.5):关闭态 user prompt 的 sha1 常量,取自**升级前**
+   * `445c89f:src/prompts/l1-dedup.ts` 在同一夹具上的实跑输出(长度 513)。
+   * 这是「关闭态零漂移」的机械护栏——三轴键若漏了门控,此断言必红。
+   */
+  const CLOSED_STATE_SHA1 = '249236e45a55be1c1c1c9cc553d5a85aa6872c4b';
+  /** 开启态候选池的 sha1(同一夹具):与关闭态必须不同,防「门控写反/恒开」。 */
+  const ENABLED_STATE_SHA1 = '179e2c477a39e32b8082e6564b0d3aba148f5f96';
+  const sha1 = (s: string) => createHash('sha1').update(s, 'utf8').digest('hex');
+
+  it('关闭态候选池不含三轴键:user prompt 与改动前逐字节相同', () => {
+    const off = formatBatchConflictPrompt(matches);
+    expect(off).not.toContain('"valid_from_ms"');
+    expect(off).not.toContain('"valid_to_ms"');
+    expect(off).not.toContain('"persistence"');
+    // 三轴取值本身也不得泄漏进关闭态 prompt
+    expect(off).not.toContain(String(T + 1000));
+    expect(sha1(off)).toBe(CLOSED_STATE_SHA1);
+    // 显式 false 与省略 opts 等价(调用点按开关取值,两种写法都须零漂移)
+    expect(sha1(formatBatchConflictPrompt(matches, { conflictFreeze: false }))).toBe(CLOSED_STATE_SHA1);
+  });
+
+  it('开启态候选池含三轴键且值正确透传', () => {
+    const on = formatBatchConflictPrompt(matches, { conflictFreeze: true });
+    expect(on).toContain('"valid_from_ms"');
+    expect(on).toContain('"valid_to_ms"');
+    expect(on).toContain('"persistence"');
     // 候选记录带的值被正确透传
-    expect(prompt).toContain(String(T + 1000));
+    expect(on).toContain(String(T + 1000));
+    expect(sha1(on)).toBe(ENABLED_STATE_SHA1);
   });
 
   it('关闭态 prompt 文案逐字不变(零漂移):不含三轴条款', () => {
