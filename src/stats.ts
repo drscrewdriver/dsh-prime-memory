@@ -917,7 +917,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const pairId = typeof p.pairId === 'string' ? p.pairId.trim() : '';
       const outcome = typeof p.outcome === 'string' ? p.outcome.trim() : '';
       if (!pairId) throw new Error('需要 pairId(待裁决对的 pair_id)');
-      if (!outcome) throw new Error('需要 outcome(winner | loser | both)');
+      if (!outcome) throw new Error('需要 outcome(winner | loser | both | defer)');
       return await resolveConflictPair(
         { l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true },
         pairId,

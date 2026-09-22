@@ -9,7 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import { callLLM, parseJsonLogged, resolveLayerTokens } from '../llm.js';
 import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipts.js';
-import { buildConflictPair, conflictRejectId, validateConflictPair } from '../store/conflicts.js';
+import { buildConflictPair, conflictRejectId, DEFER_MAX, validateConflictPair } from '../store/conflicts.js';
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
@@ -144,7 +144,9 @@ anchorMap) {
     if (freezeEnabled && timeoutDays > 0) {
         const cutoff = new Date(Date.now() - timeoutDays * 86_400_000).toISOString();
         try {
-            const stale = store.listConflictPending({ createdBefore: cutoff });
+            // R1(task_2.3):超时扫描**排除钉子户**(复看已达上限的对不再被静默 auto)。
+            // 未 defer 过的行走 `COALESCE` 退化路径 ⇒ 行为与升级前等价。
+            const stale = store.listConflictPending({ createdBefore: cutoff, excludeDeferExhausted: true });
             for (const p of stale) {
                 if (store.resolveConflictPending(p.pairId, 'auto', new Date().toISOString()) > 0) {
                     autoLosers.add(p.loserId);
@@ -329,6 +331,16 @@ anchorMap) {
                 // 判据含 frozen 中本轮已停放的未裁决数,否则同一轮内多条冲突会一起越界。
                 const pendingNow = store.countConflictPendingUnresolved() + frozen.filter((p) => p.resolvedAt === '').length;
                 if (pendingNow >= maxPending) {
+                    // fail-loud(审计 S10):队列满时若存在「钉子户」(复看已达上限、不会再被超时了结),
+                    // 必须**说出来**——它们持续占额度,新冲突因此全部回落自动了结。
+                    // 静默回落等于「冻结」在这一路径上实质失效,而库里看不出任何异常。
+                    const exhausted = store
+                        .listConflictPending({ limit: 1000 })
+                        .filter((p) => (p.deferCount ?? 0) >= DEFER_MAX).length;
+                    if (exhausted > 0) {
+                        logger.warn(`[memory] 矛盾冻结:队列已满(${pendingNow}/${maxPending}),其中 ${exhausted} 对复看已达上限(${DEFER_MAX})` +
+                            `——它们只能由人工裁决收口(winner / loser / both);新冲突将按 LLM 结论自动了结,请优先处理这些钉子户`);
+                    }
                     // 护栏(2026-09-18 随同批次冻结一起加):**败方是本轮新记忆时不做自动了结**。
                     // 自动了结 = `retire(loser)`,而本轮的 `added` 里刚把这条新记忆写入 ——
                     // 那等于"刚抽取出来的产出立刻退场",且没有任何人被告知。

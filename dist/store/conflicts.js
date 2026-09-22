@@ -40,6 +40,15 @@ export function conflictRejectId(runId, recordId, winner, loser) {
 }
 /** 未裁决时 `resolved_at` / `resolution` 的取值(空串,不用 NULL)。 */
 export const CONFLICT_UNRESOLVED = '';
+/**
+ * R1:复看次数上限(task_2.3)。
+ *
+ * 达上限的对**不再被超时自动了结**(见 `listConflictPending` 的 `excludeDeferExhausted`),
+ * 其唯一出口是人工裁决。这是 spec「有界性的降级声明」里那半个代价:
+ * 钉子户会持续占用 `maxPending` 额度,故**必须 fail-loud 呈现**(pipeline 的 warn +
+ * 读取面的 `review_state`)——静默回落等于冻结在这一路径上失效。
+ */
+export const DEFER_MAX = 3;
 /** 由输入构造一行待裁决冲突对(未裁决态)。纯函数,无 I/O。 */
 export function buildConflictPair(input) {
     return {

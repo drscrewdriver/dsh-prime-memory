@@ -230,7 +230,11 @@ export class L1Store {
   }
 
   /** §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。 */
-  listConflictPending(opts: { createdBefore?: string; limit?: number } = {}): ConflictPair[] {
+  listConflictPending(opts: {
+    createdBefore?: string;
+    limit?: number;
+    excludeDeferExhausted?: boolean;
+  } = {}): ConflictPair[] {
     return this.db.listConflictPending(opts);
   }
 

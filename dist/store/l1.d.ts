@@ -130,6 +130,7 @@ export declare class L1Store {
     listConflictPending(opts?: {
         createdBefore?: string;
         limit?: number;
+        excludeDeferExhausted?: boolean;
     }): ConflictPair[];
     /** §C 打上裁决结论(已裁决的不覆盖)。 */
     resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;

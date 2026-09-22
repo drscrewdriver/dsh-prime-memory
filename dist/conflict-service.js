@@ -1,4 +1,5 @@
-const OUTCOMES = ['winner', 'loser', 'both'];
+import { DEFER_MAX } from './store/conflicts.js';
+const OUTCOMES = ['winner', 'loser', 'both', 'defer'];
 function view(partial) {
     return { pair_id: '', outcome: '', resolved_at: '', removed_record_id: '', ...partial };
 }
@@ -19,7 +20,7 @@ export async function resolveConflictPair(deps, pairId, outcome) {
         return view({
             pair_id: pairId,
             outcome: clean,
-            notice: `outcome 必须是 ${OUTCOMES.join(' / ')} 之一:winner(LLM 建议的胜方为真)、loser(败方为真)、both(两者其实是各自独立的事实,都保留)。`,
+            notice: `outcome 必须是 ${OUTCOMES.join(' / ')} 之一:winner(LLM 建议的胜方为真)、loser(败方为真)、both(两者其实是各自独立的事实,都保留)、defer(看过但**暂不裁决**——不关闭冲突,该对仍在队列里,会重置超时计时并累计复看次数)。`,
         });
     }
     if (!deps.conflictFreezeEnabled) {
@@ -35,6 +36,27 @@ export async function resolveConflictPair(deps, pairId, outcome) {
             pair_id: pairId,
             outcome: clean,
             notice: '找不到该待裁决对:pair_id 有误,或它已被裁决(resolved_at 非空的不再接受二次裁决)。',
+        });
+    }
+    // ── R1 未决态(task_2.2):`defer` = 「看过、暂不裁决」──
+    // **它不是结论**:故不写 `resolved_at`/`resolution`,该对**留在待裁决队列**里;
+    // 只写 reviewed_at / deferred_at / defer_count,并由 task_2.3 把超时基准改为
+    // `deferred_at ?? created_at`(defer **重置**计时,而非豁免计时)。
+    // 返回体**必须带 notice**:否则 `renderConflictResolution` 的 label 三元式会把
+    // `defer` 落进 else,误显成"两者都保留"——那是对人说的假话(审计 S5)。
+    if (clean === 'defer') {
+        const reviewedAt = new Date().toISOString();
+        const nextCount = (pair.deferCount ?? 0) + 1;
+        if (deps.l1.markConflictReviewed(pairId, { reviewedAt, deferredAt: reviewedAt, deferCount: nextCount }) === 0) {
+            return view({ pair_id: pairId, outcome: clean, notice: '该对已被裁决,本次未生效(裁决不可覆盖)。' });
+        }
+        return view({
+            pair_id: pairId,
+            outcome: clean,
+            notice: `已复看,**未关闭**(第 ${nextCount} 次):该对仍在待裁决队列里。` +
+                (nextCount >= DEFER_MAX
+                    ? `复看已达上限(${DEFER_MAX})——此后它**不再被超时自动了结**,只能由人工给出结论(winner / loser / both)。`
+                    : '超时计时已从本次复看重新起算。'),
         });
     }
     const resolvedAt = new Date().toISOString();
@@ -68,7 +90,16 @@ export function renderConflictResolution(v) {
     if (v.notice)
         return v.notice;
     const outcome = v.outcome ?? '';
-    const label = outcome === 'winner' ? '判定 LLM 建议的胜方为真' : outcome === 'loser' ? '判定败方为真' : '两者都保留(判为各自独立的事实)';
+    // `defer` 必须**单列一支**:落进 else 会被渲染成"两者都保留"——那是对人的假话(审计 S5)。
+    // 正常情况下 `defer` 的返回体带 notice、在上面就短路返回了;这一支是**纵深防御**:
+    // 即便有人构造了不带 notice 的 view,渲染也不会说谎。
+    const label = outcome === 'winner'
+        ? '判定 LLM 建议的胜方为真'
+        : outcome === 'loser'
+            ? '判定败方为真'
+            : outcome === 'defer'
+                ? '已复看、**未关闭**(该对仍在待裁决队列里)'
+                : '两者都保留(判为各自独立的事实)';
     const removed = v.removed_record_id
         ? `\n退场记录:${v.removed_record_id}(已移出检索面,**可恢复**——记忆列表里能找回)`
         : '\n未移除任何记录。';
@@ -142,6 +173,10 @@ export function listConflictPairs(deps, opts = {}) {
             loser_valid_from_ms: l.validFrom,
             loser_valid_to_ms: l.validTo,
             loser_persistence: l.persistence,
+            // R1(task_2.4):派生「没看过 / 看过未决」——读取面必须能把这两件事分开,
+            // 否则"人看了没判"与"还没人看"在界面上长得一模一样(那正是 R1 要消灭的混淆)。
+            review_state: (p.reviewedAt ?? '') === '' ? 'unseen' : 'deferred',
+            defer_count: p.deferCount ?? 0,
         };
     });
     return { enabled: true, total: deps.l1.countConflictPendingUnresolved(), items };

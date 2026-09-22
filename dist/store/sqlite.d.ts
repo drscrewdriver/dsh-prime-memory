@@ -250,6 +250,13 @@ export declare class MemoryDb {
     listConflictPending(opts?: {
         createdBefore?: string;
         limit?: number;
+        /**
+         * R1(task_2.3):把已达复看上限(`DEFER_MAX`)的对**排除出超时扫描**。
+         * **显式可选、默认关**——哈希输入、队列列出与人工裁决查找**绝不**能受它影响:
+         * ① 否则快照哈希会随 `defer_count` 变化,旧 manifest 永久失配;
+         * ② 否则钉子户将无法被 `resolveConflictPair` 找到,而人工裁决是它们**唯一**的出口。
+         */
+        excludeDeferExhausted?: boolean;
     }): ConflictPair[];
     /**
      * §C Phase 2(task_2.0):写入「已复看」痕迹——**不写 `resolved_at`**。

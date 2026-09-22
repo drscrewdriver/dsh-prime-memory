@@ -75,11 +75,25 @@ export interface ConflictRejected {
  * - `auto`:**机器**按 LLM 给出的 winner/loser 自行了结(task_24 安全阀:
  *   队列满或超时)。刻意与人工取值分开——§C 存在的理由就是"机器不该替人裁决",
  *   若自动了结在人眼里与人工结论无从区分,那个行为会以"悄悄发生"的形式回来。
+ * - `defer`(R1,task_2.2):**不是结论**——"我看了,但判不了"。它不进本枚举的
+ *   "已裁决"语义:写的是 `reviewed_at`/`deferred_at`/`defer_count`,**不写** `resolved_at`,
+ *   该对**留在待裁决队列**里。放进 `resolution` 列会污染"已裁决"的判据
+ *   (`resolved_at = ''`),故它只作为**入参取值**存在。
  */
-export type ConflictResolution = 'winner' | 'loser' | 'both' | 'auto';
+export type ConflictResolution = 'winner' | 'loser' | 'both' | 'auto' | 'defer';
 
 /** 未裁决时 `resolved_at` / `resolution` 的取值(空串,不用 NULL)。 */
 export const CONFLICT_UNRESOLVED = '';
+
+/**
+ * R1:复看次数上限(task_2.3)。
+ *
+ * 达上限的对**不再被超时自动了结**(见 `listConflictPending` 的 `excludeDeferExhausted`),
+ * 其唯一出口是人工裁决。这是 spec「有界性的降级声明」里那半个代价:
+ * 钉子户会持续占用 `maxPending` 额度,故**必须 fail-loud 呈现**(pipeline 的 warn +
+ * 读取面的 `review_state`)——静默回落等于冻结在这一路径上失效。
+ */
+export const DEFER_MAX = 3;
 
 /** 一条待裁决冲突对(与 `conflict_pending` 表一行同形)。 */
 export interface ConflictPair {

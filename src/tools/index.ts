@@ -1014,10 +1014,14 @@ export function registerMemoryTools(
     defineTool({
       name: 'memory_resolve_conflict',
       description:
-        '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
+        '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)、defer(看过但**暂不裁决**——它不关闭冲突,该对仍在待裁决队列里,会重置超时计时并累计复看次数)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
       parameters: {
         pair_id: { type: 'string', description: '待裁决对的 pair_id(来自待裁决队列)' },
-        outcome: { type: 'string', description: '裁决结论:winner | loser | both' },
+        outcome: {
+          type: 'string',
+          description:
+            '裁决结论:winner | loser | both | defer。defer = **看过但暂不裁决**:不关闭冲突、重置超时计时、累计复看次数(达上限后不再被超时自动了结,只能人工收口)。',
+        },
       },
       output: {
         schema: {

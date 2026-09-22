@@ -55,6 +55,7 @@ import { GraphStore } from './graph-store.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
 import type { ConflictPair, ConflictRejected, ConflictResolution } from './conflicts.js';
+import { DEFER_MAX } from './conflicts.js';
 import { isRetired, readSupersedeMarker, stripSupersedeMarker, withSupersedeMarker, type SupersedeInfo } from './supersede.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
@@ -1341,14 +1342,31 @@ export class MemoryDb {
    * `createdBefore` 为**排他上界**(ISO 串):只取该时刻之前创建的,用于超时判定。
    * 定序 `created_at ASC, pair_id ASC`——先来先服务,且同一毫秒内仍**确定可复现**。
    */
-  listConflictPending(opts: { createdBefore?: string; limit?: number } = {}): ConflictPair[] {
+  listConflictPending(opts: {
+    createdBefore?: string;
+    limit?: number;
+    /**
+     * R1(task_2.3):把已达复看上限(`DEFER_MAX`)的对**排除出超时扫描**。
+     * **显式可选、默认关**——哈希输入、队列列出与人工裁决查找**绝不**能受它影响:
+     * ① 否则快照哈希会随 `defer_count` 变化,旧 manifest 永久失配;
+     * ② 否则钉子户将无法被 `resolveConflictPair` 找到,而人工裁决是它们**唯一**的出口。
+     */
+    excludeDeferExhausted?: boolean;
+  } = {}): ConflictPair[] {
     if (this.degraded) return [];
     const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.floor(opts.limit as number) : 500;
     const params: unknown[] = [];
     let where = `resolved_at = ''`;
     if (opts.createdBefore) {
-      where += ` AND created_at < ?`;
+      // R1(task_2.3):超时基准 = `deferred_at ?? created_at` —— **defer 重置计时**,
+      // 而不是豁免计时(豁免会让钉子户永久占额度,破坏 config.ts 的有界性契约)。
+      // `deferred_at` 为空串时 `COALESCE(NULLIF(...,''), created_at)` 退化为 `created_at`
+      // ⇒ 未 defer 过的行的行为与升级前**逐字等价**。
+      where += ` AND COALESCE(NULLIF(deferred_at, ''), created_at) < ?`;
       params.push(opts.createdBefore);
+    }
+    if (opts.excludeDeferExhausted) {
+      where += ` AND defer_count < ${DEFER_MAX}`;
     }
     const rows = this.db
       .prepare(

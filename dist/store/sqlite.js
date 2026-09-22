@@ -33,6 +33,7 @@ import { CostLedger } from './cost-ledger.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
+import { DEFER_MAX } from './conflicts.js';
 import { isRetired, readSupersedeMarker, stripSupersedeMarker, withSupersedeMarker } from './supersede.js';
 /** vec0 KNN 对遗留零向量的补偿缓冲。 */
 const ZERO_VEC_BUFFER = 10;
@@ -1190,8 +1191,15 @@ export class MemoryDb {
         const params = [];
         let where = `resolved_at = ''`;
         if (opts.createdBefore) {
-            where += ` AND created_at < ?`;
+            // R1(task_2.3):超时基准 = `deferred_at ?? created_at` —— **defer 重置计时**,
+            // 而不是豁免计时(豁免会让钉子户永久占额度,破坏 config.ts 的有界性契约)。
+            // `deferred_at` 为空串时 `COALESCE(NULLIF(...,''), created_at)` 退化为 `created_at`
+            // ⇒ 未 defer 过的行的行为与升级前**逐字等价**。
+            where += ` AND COALESCE(NULLIF(deferred_at, ''), created_at) < ?`;
             params.push(opts.createdBefore);
+        }
+        if (opts.excludeDeferExhausted) {
+            where += ` AND defer_count < ${DEFER_MAX}`;
         }
         const rows = this.db
             .prepare(`SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution,

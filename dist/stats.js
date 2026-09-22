@@ -754,7 +754,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
             if (!pairId)
                 throw new Error('需要 pairId(待裁决对的 pair_id)');
             if (!outcome)
-                throw new Error('需要 outcome(winner | loser | both)');
+                throw new Error('需要 outcome(winner | loser | both | defer)');
             return await resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true }, pairId, outcome);
         }
         case 'dsh-memory/records-delete': {

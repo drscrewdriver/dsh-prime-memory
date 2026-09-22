@@ -974,6 +974,13 @@ export interface ConflictPairView {
   loser_valid_from_ms?: number | null;
   loser_valid_to_ms?: number | null;
   loser_persistence?: string | null;
+  // R1 未决态(task_2.4):把「没人看过」与「看过但未裁决」在读取面分开。
+  // `unseen` = `reviewed_at` 为空;`deferred` = 有人复看过、但仍未给出结论。
+  // 派生字段(不存在独立列):该区分必须由读取面算出来,否则"人看了没判"这件事
+  // 在界面上与"还没人看"长得一模一样 —— 那正是 R1 要消灭的混淆。
+  review_state?: 'unseen' | 'deferred';
+  /** R1:复看次数(面板据此显示"已复看 N 次");达 `DEFER_MAX` 即钉子户。 */
+  defer_count?: number;
 }
 
 /** `dsh-memory/conflicts` 请求(读待裁决队列)。 */
