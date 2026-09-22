@@ -19,11 +19,10 @@ export const MODES: ModeDef[] = [
   { key: 'work', label: '工作', color: 'var(--dsh-mem-mode-work)' },
 ];
 
-/** 滑轨几何（px）。 */
+/** 滑轨几何（px）。TRACK_W 为默认宽度，调用方可传 `width` 覆盖以适配窄浮层。 */
 export const TRACK_W = 200;
 export const THUMB = 16;
 export const RAIL_H = 22; // 粗滑轨高度 > 圆球直径（圆球被滑轨包裹）
-export const INNER_W = TRACK_W - THUMB;
 
 /** 点阵粒子场档位参数（分档场强参考 DSH-Claude-Style-Reasoning-Slider，
  * 配色锁品牌蓝单色系）：density 越大点阵越密、alpha 亮度系数、wave 明暗水波纹、

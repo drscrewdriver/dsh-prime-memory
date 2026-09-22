@@ -1,84 +1,82 @@
 /**
- * 八边形域轮（hall 主题轴门面，Phase 2 多选 + 可拖动配额）。
+ * 八边形域轮（hall 主题轴门面，v6 换挡版）。
  *
- * 图形内：8 角 = 域（该域 N 条；0 条为空角态）+ 中心 = 智能档（自动判断过滤）。
- *   - **点角** = 会话级锁定：以该角为主题，其他角被抑制（召回硬过滤，手动挡）；
- *   - **拖角** = 调该域召回配额/权重（0 = 抑制 / 1 = 中性 / 1.5 = 上限），写回会话级，
- *     在智能档（中心）的软门禁上生效；
- *   - **点中心** = 回全域（智能档软门禁）。
- * 几何：多边形顶点与辐条**都由各角当前半径推导** → 拖动时相邻两条边与辐条同帧跟随
- *   （不存在"只有辐条动、边不动"的错位）；中性基线另画一圈虚线参考八边形。
- * 尺寸：容器边长压到 196px（原 236），适配窄栏输入栏浮层。
- * 图形外：会话关闭闸 / 注入三态 / 边界开关 / 强制单族覆写 / 未打标回填 / 权重复位。
+ * 几何：八边形为**固定规则正八边形**（顶点半径恒定，无鼓起/无连续半径形变）。
+ * 交互：拖动 = 在 8 个顶点间**离散换挡**（档位只能是整数 0-7，绝不停在边中）。
+ *   - 边正中 14° 死区 = 阻尼（档位被吸在原角，不抖动）；
+ *   - 越过中点后 target 切到邻角，弹簧 needle 从旧角弹入新角（类似换挡）。
+ * 语义：点角 / 拖动松手 = 以该角为主题（会话级域锁定），其余角由服务端硬过滤抑制；
+ *       点中心 = 回全域（智能档）。权重只与"停在哪个顶点"有关，不再做连续配额。
  *
- * 数据：角计数来自 dsh-memory/hall-overview（打开时拉取，词表单一事实源随之下发）。
+ * 数据：角计数来自 dsh-memory/hall-overview（打开时拉取一次）。
  * 层级：设置页全局闸 ⊃ 会话闸（图形外）⊃ 域范围（图形内）。
  */
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
-  type RefObject,
-} from 'react';
-import { Segmented, ActionButton } from '../ui/controls.js';
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { ActionButton, Segmented } from '../ui/controls.js';
 import type { RpcFn } from '../rpc.js';
 import type { HallOverviewResponse } from '../../../src/contract.js';
-import { HALL_WEIGHT_MAX, HALL_WEIGHT_NEUTRAL } from '../../../src/domain-gate.js';
 import { ensureThemeStyle } from '../theme.js';
-import { ModeSlider } from './ModeSlider.js';
 import { SessionInfoArea } from './SessionInfoArea.js';
 
-/** 轮盘几何（px）：容器边长 / 中心 / 半径区间（权重 0 → MAX 的映射端点）。 */
+/** 轮盘几何（px）：容器边长 / 中心 / 固定半径。 */
 const SIZE = 196;
 const CENTER = SIZE / 2;
-const R_MIN = 28;
-const R_MAX = 74;
-/** 拖动判定阈值（px）：位移小于它算点击（切主题），否则算拖动（调配额）。 */
-const DRAG_SLOP = 4;
+const R = 64; // 八边形顶点到中心（无鼓起、连续形变）
+const DRAG_SLOP = 4; // 位移小于它算点击（切换锁定），否则算拖动（换挡）
+const DEAD = 14 * (Math.PI / 180); // 边中点阻尼死区（度数 → 弧度）
+const DEG = Math.PI / 180;
+const TAU = Math.PI * 2;
 
-/** 第 i 角的坐标（i=0 从正上开始，顺时针与 HALL_CATALOG 词表序一致）。 */
-function cornerPos(i: number, radius: number): { left: number; top: number } {
-  const a = ((-90 + i * 45) * Math.PI) / 180;
-  return { left: CENTER + radius * Math.cos(a), top: CENTER + radius * Math.sin(a) };
+/** 第 i 角的角度（i=0 从正上开始，顺时针与 HALL_CATALOG 词表序一致）。 */
+function cornerAngle(i: number): number {
+  return (-90 + i * 45) * DEG;
 }
 
-/** 权重 → 半径（clamp 到 [0, MAX]）。 */
-function radiusOfWeight(w: number): number {
-  const c = Math.max(0, Math.min(HALL_WEIGHT_MAX, w));
-  return R_MIN + (R_MAX - R_MIN) * (c / HALL_WEIGHT_MAX);
+/** 第 i 角的坐标。 */
+function cornerPos(i: number): { left: number; top: number } {
+  const a = cornerAngle(i);
+  return { left: CENTER + R * Math.cos(a), top: CENTER + R * Math.sin(a) };
 }
 
-/** 半径 → 权重（clamp 到 [0, MAX]，量化到 0.05 步长，避免写盘抖出一堆小数）。 */
-function weightOfRadius(r: number): number {
-  const raw = ((r - R_MIN) / (R_MAX - R_MIN)) * HALL_WEIGHT_MAX;
-  return Math.round(Math.max(0, Math.min(HALL_WEIGHT_MAX, raw)) * 20) / 20;
+/** 把任意角归一化到 [-π, π)。 */
+function normAngle(a: number): number {
+  while (a < -Math.PI) a += TAU;
+  while (a >= Math.PI) a -= TAU;
+  return a;
 }
 
-/** 权重标记（中性不显）：加权 ▲ / 减权 ▼ / 抑制 ⊘。 */
-function weightMark(w: number): string {
-  if (Math.abs(w - HALL_WEIGHT_NEUTRAL) < 0.02) return '';
-  if (w <= 0) return '⊘';
-  return w > HALL_WEIGHT_NEUTRAL ? '▲' : '▼';
+/** 指针角度 → 最近角索引（结果永远是整数 0-7）。 */
+function angleIndex(a: number): number {
+  let t = a + 90 * DEG;
+  while (t < 0) t += TAU;
+  while (t >= TAU) t -= TAU;
+  return Math.round(t / (45 * DEG)) % 8;
+}
+
+/** 带边中点阻尼的换挡 snap。当前停在 cur，指针角度 p；
+ *  越过中点但未出死区时保持 cur（阻尼），过死区后 snap 到邻角。 */
+function snapIndex(p: number, cur: number): number {
+  const cand = angleIndex(p);
+  if (cand === cur) return cur;
+  const curA = cornerAngle(cur);
+  const candA = cornerAngle(cand);
+  const dir = Math.sign(normAngle(candA - curA)) || 1;
+  const edge = curA + dir * (22.5 * DEG);
+  // 死区覆盖边中点：指针在边中点 ±DEAD 内时保持原角（阻尼大）
+  if (Math.abs(normAngle(p - edge)) < DEAD) return cur;
+  return cand;
 }
 
 export function HallWheel(props: {
   mode: string;
-  /** 会话级域锁定（多选）：空数组 = 中心（智能档）；非空 = 以这些角为主题、抑制其余。 */
+  /** 会话级域锁定（单选语义）：空数组 = 中心（智能档）；[id] = 以该角为主题。 */
   halls: string[];
   hallIncludeUnlabeled: boolean;
   hallIncludeGeneral: boolean;
-  /** 会话级域权重（角 id → 权重；未拖过的角不落键 = 中性）。 */
-  hallWeights: Record<string, number>;
   onCommit(key: string): void;
-  /** 锁定提交：角 id 数组 = 多选锁定；null = 回中心（清除全部锁定）。 */
+  /** 锁定提交：[id] = 以该角为主题；null = 回中心（清除锁定）。 */
   onCommitHall(halls: string[] | null): void;
   onCommitHallBoundaries(patch: { includeUnlabeled?: boolean; includeGeneral?: boolean }): void;
-  /** 权重提交（全量替换；空对象 = 全部复位中性）。 */
-  onCommitHallWeights(weights: Record<string, number>): void;
   /** 会话级注入覆盖（复用既有控件）：缺省 = 浮层不渲染注入行。 */
   recall?: boolean | null;
   onCommitRecall?(next: boolean | null): void;
@@ -91,7 +89,7 @@ export function HallWheel(props: {
   const [overview, setOverview] = useState<HallOverviewResponse | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  // 回填后的轮询计时器（卸载时统一清除，避免对已卸载组件 setState）
+  // 回填后的轮询计时器（卸载时统一清除）
   const timersRef = useRef<number[]>([]);
   useEffect(
     () => () => {
@@ -100,7 +98,7 @@ export function HallWheel(props: {
     [],
   );
 
-  // 角计数与词表随打开拉取一次（非热路径端点；失败降级为只画角不显计数）
+  // 角计数与词表随打开拉取一次
   useEffect(() => {
     let alive = true;
     props
@@ -121,8 +119,7 @@ export function HallWheel(props: {
     return overview.corners.find((c) => c.id === id)?.count ?? 0;
   };
 
-  /** 一键回填（task_15）：从"未打标 M"入口触发存量 null 记录的批量打标（后台任务）。
-   *  端点立即返回；启动后轮询 hall-overview 让角计数与"未打标 M"渐进更新。 */
+  /** 一键回填：对存量未打标记忆批量补打 hall 标签。 */
   const backfill = () => {
     if (backfillBusy || !overview || overview.unlabeled === 0) return;
     setBackfillBusy(true);
@@ -136,7 +133,6 @@ export function HallWheel(props: {
         .then((r) => {
           const v = r && r.ok ? r.value : null;
           if (v) setOverview(v);
-          // 结束条件：未打标清零，或轮询次数用尽（后台任务单飞，端点不暴露进度）
           if ((v && v.unlabeled === 0) || polls >= 20) finish();
           else {
             const t = window.setTimeout(tick, 3000);
@@ -153,7 +149,6 @@ export function HallWheel(props: {
           finish();
           return;
         }
-        // 端点立即返回（单飞后台任务），"回填中…"由轮询负责收尾
         timersRef.current.push(window.setTimeout(tick, 3000));
       })
       .catch((e: unknown) => {
@@ -162,121 +157,145 @@ export function HallWheel(props: {
       });
   };
 
-  // ── 拖动状态：拖动中的角用本地值渲染，松手才提交（避免每帧打 RPC） ──
-  const [drag, setDrag] = useState<{ i: number; w: number } | null>(null);
+  // ── 离散换挡：档位永远是整数角，弹簧 needle 负责视觉弹入 ──
   const boxRef = useRef<HTMLDivElement | null>(null);
-  const movedRef = useRef(false);
   const startRef = useRef<{ x: number; y: number } | null>(null);
-  const weights = props.hallWeights ?? {};
+  const movedRef = useRef(false);
+  const downIndexRef = useRef<number | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
-  const weightAt = (id: string | undefined, i: number): number => {
-    if (drag && drag.i === i) return drag.w;
-    if (!id) return HALL_WEIGHT_NEUTRAL;
-    return weights[id] ?? HALL_WEIGHT_NEUTRAL;
-  };
-  const radiusAt = (i: number, id?: string): number => radiusOfWeight(weightAt(id, i));
-  const commitWeight = (id: string, w: number) => {
-    props.onCommitHallWeights({ ...weights, [id]: Math.round(w * 20) / 20 });
-  };
+  const lockedIndex =
+    props.halls.length === 1
+      ? (overview?.corners.findIndex((c) => c.id === props.halls[0]) ?? null)
+      : null;
+  const activeIndex = dragIndex ?? lockedIndex ?? null;
 
-  const onCornerDown =
-    (i: number, id: string | undefined) => (e: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!id || isOff) return;
-      movedRef.current = false;
-      startRef.current = { x: e.clientX, y: e.clientY };
-      e.currentTarget.setPointerCapture?.(e.pointerId);
-      setDrag({ i, w: weightAt(id, i) });
+  // 弹簧 needle：target 随 activeIndex 切角，过中点后弹向新角
+  const needleRef = useRef(activeIndex != null ? cornerAngle(activeIndex) : -Math.PI / 2);
+  const targetRef = useRef(needleRef.current);
+  const velRef = useRef(0);
+  const [needle, setNeedle] = useState(needleRef.current);
+  useEffect(() => {
+    targetRef.current = activeIndex != null ? cornerAngle(activeIndex) : -Math.PI / 2;
+  }, [activeIndex]);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      const cur = needleRef.current;
+      const tgt = targetRef.current;
+      const diff = Math.atan2(Math.sin(tgt - cur), Math.cos(tgt - cur));
+      velRef.current += diff * 0.12; // 弹簧刚度
+      velRef.current *= 0.78; // 阻尼
+      needleRef.current += velRef.current;
+      if (Math.abs(diff) > 0.002 || Math.abs(velRef.current) > 0.002) {
+        setNeedle(needleRef.current);
+      } else if (Math.abs(diff) > 0.0001) {
+        needleRef.current = tgt;
+        setNeedle(tgt);
+      }
+      raf = window.requestAnimationFrame(loop);
     };
-  const onCornerMove = (i: number) => (e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!drag || drag.i !== i) return;
+    raf = window.requestAnimationFrame(loop);
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
+
+  const pointAngle = (clientX: number, clientY: number) => {
     const box = boxRef.current;
-    if (!box) return;
-    const s = startRef.current;
-    if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > DRAG_SLOP) movedRef.current = true;
-    if (!movedRef.current) return;
+    if (!box) return { angle: 0, dist: 0 };
     const r = box.getBoundingClientRect();
-    // 浮层可能被 transform 平移/缩放：按 rect 尺寸换算回布局坐标
     const scale = r.width / SIZE || 1;
-    const dx = (e.clientX - (r.left + CENTER * scale)) / scale;
-    const dy = (e.clientY - (r.top + CENTER * scale)) / scale;
-    setDrag({ i, w: weightOfRadius(Math.hypot(dx, dy)) });
+    const dx = (clientX - (r.left + CENTER * scale)) / scale;
+    const dy = (clientY - (r.top + CENTER * scale)) / scale;
+    return { angle: Math.atan2(dy, dx), dist: Math.hypot(dx, dy) };
   };
-  const onCornerUp =
-    (i: number, id: string | undefined) => (e: ReactPointerEvent<HTMLButtonElement>) => {
-      const d = drag;
-      if (!d || d.i !== i) return;
-      e.currentTarget.releasePointerCapture?.(e.pointerId);
-      setDrag(null);
-      startRef.current = null;
-      if (!id) return;
-      if (movedRef.current) commitWeight(id, d.w);
-      else {
-        // 未越过阈值 = 点击：切换该角的主题锁定（多选；清空 = 回中心）
-        const active = props.halls.includes(id);
-        const next = active ? props.halls.filter((x) => x !== id) : [...props.halls, id];
-        props.onCommitHall(next.length > 0 ? next : null);
-      }
-    };
-  /** 键盘可达：↑/↓ 调权重（±0.1），Home 回中性。 */
-  const onCornerKey =
-    (id: string | undefined, i: number) => (e: ReactKeyboardEvent<HTMLButtonElement>) => {
-      if (!id || isOff) return;
-      const cur = weightAt(id, i);
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        commitWeight(
-          id,
-          Math.max(0, Math.min(HALL_WEIGHT_MAX, cur + (e.key === 'ArrowUp' ? 0.1 : -0.1))),
-        );
-      } else if (e.key === 'Home') {
-        e.preventDefault();
-        commitWeight(id, HALL_WEIGHT_NEUTRAL);
-      }
-    };
 
-  // 骨架：实时多边形（顶点 = 各角当前半径）+ 中性基线虚线参考八边形
-  const polyPoints = [0, 1, 2, 3, 4, 5, 6, 7]
-    .map((i) => {
-      const p = cornerPos(i, radiusAt(i, overview?.corners[i]?.id));
-      return `${p.left},${p.top}`;
-    })
-    .join(' ');
-  const neutralPoints = [0, 1, 2, 3, 4, 5, 6, 7]
-    .map((i) => {
-      const p = cornerPos(i, radiusOfWeight(HALL_WEIGHT_NEUTRAL));
-      return `${p.left},${p.top}`;
-    })
-    .join(' ');
+  const onBoxDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isOff) return;
+    const { angle, dist } = pointAngle(e.clientX, e.clientY);
+    if (dist < 24) return; // 中心区由中心按钮处理
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    movedRef.current = false;
+    startRef.current = { x: e.clientX, y: e.clientY };
+    const idx = angleIndex(angle);
+    downIndexRef.current = idx;
+    setDragIndex(idx);
+  };
+  const onBoxMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!startRef.current) return;
+    const s = startRef.current;
+    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > DRAG_SLOP) movedRef.current = true;
+    if (!movedRef.current) return;
+    const { angle } = pointAngle(e.clientX, e.clientY);
+    const cur = dragIndex ?? lockedIndex ?? 0;
+    const cand = snapIndex(angle, cur);
+    if (cand !== dragIndex) setDragIndex(cand);
+  };
+  const onBoxUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!startRef.current) return;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    const moved = movedRef.current;
+    const di = downIndexRef.current;
+    startRef.current = null;
+    downIndexRef.current = null;
+    setDragIndex(null);
+    const id = di != null ? overview?.corners[di]?.id : undefined;
+    if (!id) return;
+    if (!moved) {
+      // 点击：切换该角锁定
+      const active = props.halls.includes(id);
+      props.onCommitHall(active ? null : [id]);
+    } else {
+      // 拖动换挡：以最终档位为主题
+      if (!props.halls.includes(id)) props.onCommitHall([id]);
+    }
+  };
+
+  // 固定正八边形顶点
+  const polyPoints = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+    const p = cornerPos(i);
+    return `${p.left},${p.top}`;
+  }).join(' ');
 
   const grayStyle: CSSProperties = isOff
     ? { opacity: 0.45, pointerEvents: 'none' as const }
     : {};
-  // 主题锁定态：非主题的角整体淡化（"以该角为主题、抑制其他角"的可视表达）
-  const themed = props.halls.length > 0;
 
   return (
     <div style={{ width: SIZE }}>
-      {/* ── 图形内：八边形 ── */}
-      <div ref={boxRef} style={{ position: 'relative', width: SIZE, height: SIZE, ...grayStyle }}>
+      {/* ── 图形内：固定正八边形 + 弹簧 needle ── */}
+      <div
+        ref={boxRef}
+        style={{ position: 'relative', width: SIZE, height: SIZE, ...grayStyle }}
+        onPointerDown={onBoxDown}
+        onPointerMove={onBoxMove}
+        onPointerUp={onBoxUp}
+        onPointerCancel={onBoxUp}
+      >
         <svg
           width={SIZE}
           height={SIZE}
           style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
           aria-hidden="true"
         >
-          {/* 中性基线（权重 1 的参考八边形）：看得出某角是加权还是减权 */}
+          {/* 中性基线参考八边形（虚线） */}
           <polygon
-            points={neutralPoints}
+            points={polyPoints}
             fill="none"
             stroke="var(--dsh-mem-hall-line)"
             strokeWidth="1"
             strokeDasharray="3 3"
-            opacity={0.5}
+            opacity={0.45}
           />
-          {/* 实时多边形：顶点随拖动半径走 → 相邻两条边同步形变 */}
-          <polygon points={polyPoints} fill="none" stroke="var(--dsh-mem-hall-line)" strokeWidth="1" />
+          {/* 实线八边形 */}
+          <polygon
+            points={polyPoints}
+            fill="none"
+            stroke="var(--dsh-mem-hall-line)"
+            strokeWidth="1"
+          />
+          {/* 8 条固定辐条 */}
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-            const p = cornerPos(i, radiusAt(i, overview?.corners[i]?.id));
+            const p = cornerPos(i);
             return (
               <line
                 key={'spoke' + i}
@@ -289,8 +308,19 @@ export function HallWheel(props: {
               />
             );
           })}
+          {/* 弹簧 needle：过中点后从旧角弹入新角（类似换挡指针） */}
+          <line
+            x1={CENTER}
+            y1={CENTER}
+            x2={CENTER + R * Math.cos(needle)}
+            y2={CENTER + R * Math.sin(needle)}
+            stroke="var(--dsh-mem-hall-corner-on)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            opacity={activeIndex != null ? 0.9 : 0.25}
+          />
         </svg>
-        {/* 中心 = 智能档：点击回中心 = 全域（清除会话级域锁定） */}
+        {/* 中心 = 智能档：点击回中心 = 全域 */}
         <button
           type="button"
           title="智能档：自动判断召回各域（回中心 = 全域）"
@@ -319,33 +349,24 @@ export function HallWheel(props: {
         >
           智能
         </button>
-        {/* 8 角 = 域：点击锁定（主题）/ 拖动调配额；权重 0 = 抑制 */}
+        {/* 8 角 = 域：视觉层，pointerEvents none（命中统一由 box 处理） */}
         {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
           const corner = overview?.corners[i];
           const id = corner?.id;
           const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
           const count = id ? cornerCount(id) : null;
-          const w = weightAt(id, i);
-          const active = id !== undefined && props.halls.includes(id);
-          const suppressed = w <= 0;
+          const active = activeIndex === i;
+          const dim = activeIndex != null && !active;
           const empty = count === 0;
-          const dim = themed && !active;
-          const p = cornerPos(i, radiusAt(i, id));
+          const p = cornerPos(i);
           return (
-            <button
+            <div
               key={id ?? i}
-              type="button"
               title={
                 id
-                  ? `「${label}」${count ?? 0} 条 · 权重 ×${w.toFixed(2)}${suppressed ? '（已抑制：本会话不召回）' : ''}\n点按=以该角为主题（抑制其他角）／拖动=调配额／↑↓ 微调`
+                  ? `「${label}」${count ?? 0} 条\n点按/拖动 = 以该角为主题（抑制其他角）`
                   : '词表加载中'
               }
-              disabled={!id}
-              onPointerDown={onCornerDown(i, id)}
-              onPointerMove={onCornerMove(i)}
-              onPointerUp={onCornerUp(i, id)}
-              onPointerCancel={onCornerUp(i, id)}
-              onKeyDown={onCornerKey(id, i)}
               style={{
                 position: 'absolute',
                 left: p.left,
@@ -359,50 +380,41 @@ export function HallWheel(props: {
                 borderRadius: 8,
                 border: active
                   ? '1.5px solid var(--dsh-mem-hall-corner-on)'
-                  : suppressed
-                    ? '1px dashed var(--dsh-mem-hall-empty)'
-                    : '1px solid transparent',
+                  : '1px solid transparent',
                 background: active ? 'var(--dsh-mem-accent-weak)' : 'transparent',
                 color: active
                   ? 'var(--dsh-mem-hall-corner-on)'
-                  : empty || suppressed
+                  : empty
                     ? 'var(--dsh-mem-hall-empty)'
                     : 'var(--dsh-mem-hall-corner)',
                 fontSize: 9.5,
                 lineHeight: '12px',
                 fontWeight: active ? 600 : 400,
-                cursor: id ? (drag && drag.i === i ? 'grabbing' : 'grab') : 'default',
                 whiteSpace: 'nowrap',
-                touchAction: 'none',
-                maxWidth: 60,
-                opacity: dim ? 0.42 : 1,
+                maxWidth: 58,
+                opacity: dim ? 0.45 : 1,
+                pointerEvents: 'none',
               }}
             >
-              <span>
-                {label}
-                {weightMark(w) ? (
-                  <span style={{ fontSize: 8, opacity: 0.9 }}> {weightMark(w)}</span>
-                ) : null}
-              </span>
-              {/* 空角诚实展示（R11）：不写"0 条"；抑制态优先标"抑制" */}
+              <span>{label}</span>
+              {/* 空角诚实展示：不写"0 条" */}
               <span style={{ fontSize: 8, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
-                {count === null ? ' ' : suppressed ? '抑制' : empty ? '空角' : `${count} 条`}
+                {count === null ? ' ' : empty ? '空角' : `${count} 条`}
               </span>
-            </button>
+            </div>
           );
         })}
       </div>
 
-      {/* ── 图形外：会话闸 + 边界开关 + 覆写滑轨 ── */}
+      {/* ── 图形外：垂直堆叠以收敛宽度 ── */}
       {/* 锁角时的边界开关（D1）：未打标默认包含 / 跨域 general 默认不含；off 时禁用 */}
       {props.halls.length > 0 ? (
         <div
           style={{
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 8,
+            flexDirection: 'column',
+            gap: 6,
+            marginTop: 10,
             opacity: isOff ? 0.45 : undefined,
             pointerEvents: isOff ? 'none' : undefined,
           }}
@@ -413,11 +425,11 @@ export function HallWheel(props: {
           >
             {overview ? `另有 ${overview.unlabeled} 条未打标` : '未打标'}
           </span>
-          <span style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <Segmented
               value={props.hallIncludeUnlabeled ? 'in' : 'ex'}
               options={[
-                { key: 'in', label: '含未打标', title: '未打标记忆默认包含（默认排除会静默丢掉一半语料）' },
+                { key: 'in', label: '含未打标', title: '未打标记忆默认包含' },
                 { key: 'ex', label: '不含', title: '锁定域时排除未打标记忆' },
               ]}
               onChange={(key) => props.onCommitHallBoundaries({ includeUnlabeled: key === 'in' })}
@@ -426,25 +438,16 @@ export function HallWheel(props: {
               value={props.hallIncludeGeneral ? 'in' : 'ex'}
               options={[
                 { key: 'in', label: '含跨域', title: '跨域（general）兜底记忆也参与召回' },
-                { key: 'ex', label: '不含', title: '跨域与单主题相悖，默认不含（可切换）' },
+                { key: 'ex', label: '不含', title: '跨域与单主题相悖，默认不含' },
               ]}
               onChange={(key) => props.onCommitHallBoundaries({ includeGeneral: key === 'in' })}
             />
-          </span>
+          </div>
         </div>
       ) : null}
 
-      {/* 会话闸（图形外，复用既有语义）：off = 本会话完全隐身（不捕获/不蒸馏/不注入，数据保留） */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 8,
-          marginTop: 10,
-        }}
-      >
-        <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>会话</span>
+      {/* 会话闸：off = 本会话完全隐身 */}
+      <Row label="会话">
         <Segmented
           value={isOff ? 'off' : 'on'}
           options={[
@@ -452,24 +455,16 @@ export function HallWheel(props: {
             {
               key: 'off',
               label: '关闭',
-              title: '本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留，不改全局）',
+              title: '本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）',
             },
           ]}
           onChange={(key) => props.onCommit(key === 'off' ? 'off' : 'auto')}
         />
-      </div>
-      {/* 是否注入三态（复用既有会话覆盖控件；off 档禁用——完全隐身包含注入） */}
+      </Row>
+
+      {/* 是否注入三态（off 档禁用） */}
       {props.recall !== undefined && props.onCommitRecall ? (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 8,
-          }}
-        >
-          <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>注入</span>
+        <Row label="注入">
           <Segmented
             value={props.recall === null ? 'follow' : props.recall ? 'on' : 'off'}
             disabled={isOff}
@@ -480,31 +475,10 @@ export function HallWheel(props: {
             ]}
             onChange={(key) => props.onCommitRecall!(key === 'on' ? true : key === 'off' ? false : null)}
           />
-        </div>
+        </Row>
       ) : null}
-      {/* 强制单族覆写（档位降级后的覆写面板；off 档整体置灰禁用） */}
-      <div
-        style={{
-          borderTop: '1px solid var(--dsh-mem-border)',
-          marginTop: 10,
-          paddingTop: 10,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 8,
-          opacity: isOff ? 0.45 : undefined,
-          pointerEvents: isOff ? 'none' : undefined,
-        }}
-      >
-        <span
-          style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}
-          title="覆写蒸馏族判定；默认跟随智能档"
-        >
-          强制单族
-        </span>
-        <ModeSlider mode={props.mode === 'off' ? 'auto' : props.mode} onCommit={props.onCommit} />
-      </div>
-      {/* 未打标 M + 一键回填入口（task_15 接线；空角/存量不回填则门面立着显空） */}
+
+      {/* 未打标回填 */}
       <div
         style={{
           display: 'flex',
@@ -514,56 +488,42 @@ export function HallWheel(props: {
           marginTop: 10,
         }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            color: 'var(--dsh-mem-text-3)',
-            flex: 1,
-            minWidth: 0,
-            marginRight: 8,
-          }}
-        >
-          {overview
-            ? `未打标 ${overview.unlabeled} 条（存量待回填）`
-            : '未打标计数加载中'}
+        <span style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
+          {overview ? `未打标 ${overview.unlabeled} 条` : '未打标计数加载中'}
         </span>
-        {/* 动作而非选择：Segmented 对已选中项有 `!on` 守卫（点不动），故用 ActionButton */}
         <ActionButton
-          label={backfillBusy ? '回填中…' : '一键回填'}
-          title="对存量未打标记忆批量补打 hall 标签（复用抽取打标路径）"
+          label={backfillBusy ? '回填中…' : '回填'}
+          title="对存量未打标记忆批量补打 hall 标签"
           disabled={!overview || overview.unlabeled === 0 || backfillBusy}
           onClick={() => backfill()}
         />
       </div>
-      {/* 权重复位：拖过才出现（回中性 = 全部交还给智能档自动判定） */}
-      {Object.keys(weights).length > 0 ? (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 8,
-          }}
-        >
-          <span style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
-            已手动调整 {Object.keys(weights).length} 个域配额
-          </span>
-          <ActionButton
-            label="权重复位"
-            title="清除本会话的全部域配额偏置，交还智能档自动判定"
-            disabled={isOff}
-            onClick={() => props.onCommitHallWeights({})}
-          />
-        </div>
-      ) : null}
+
       {props.error || localError ? (
         <div style={{ fontSize: 11, color: 'var(--dsh-mem-danger)', marginTop: 8 }}>
           {props.error || localError}
         </div>
       ) : null}
-      {/* 会话信息区（session-stats 热路径端点；宿主不支持时整体不渲染） */}
+
+      {/* 会话信息区 */}
       <SessionInfoArea rpc={props.rpc} sessionId={props.sessionId} />
+    </div>
+  );
+}
+
+/** label 在上、控件在下的紧凑行（宽度收敛用）。 */
+function Row(props: { label: string; children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        marginTop: 10,
+      }}
+    >
+      <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{props.label}</span>
+      {props.children}
     </div>
   );
 }
@@ -575,7 +535,7 @@ const LABEL_FALLBACK = ['工作', '人际', '学习', '创作娱乐', '居家', 
 export function useViewportClamp(popRef: RefObject<HTMLDivElement | null>): number {
   const shiftRef = useRef(0);
   const [shiftX, setShiftX] = useState(0);
-  useLayoutEffect(() => {
+  useEffect(() => {
     const clamp = () => {
       const el = popRef.current;
       if (!el) return;

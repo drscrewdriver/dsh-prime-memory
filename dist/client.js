@@ -835,10 +835,10 @@ var __defProp = Object.defineProperty;
 		  const W = 600;
 		  const H = 200;
 		  const L = 46;
-		  const R = 10;
+		  const R2 = 10;
 		  const T = 10;
 		  const B = 26;
-		  const iw = W - L - R;
+		  const iw = W - L - R2;
 		  const ih = H - T - B;
 		  const n = buckets.length;
 		  const x = (i) => L + (n <= 1 ? iw / 2 : i / (n - 1) * iw);
@@ -846,7 +846,7 @@ var __defProp = Object.defineProperty;
 		  const yTicks = [0, maxY / 2, maxY];
 		  const xIdx = n > 2 ? [0, Math.floor((n - 1) / 2), n - 1] : n === 2 ? [0, 1] : [0];
 		  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("svg", { viewBox: "0 0 " + W + " " + H, style: { width: "100%", height: "auto", display: "block" }, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("line", { x1: L, y1: y(0), x2: W - R, y2: y(0), stroke: "var(--dsh-mem-border)", strokeWidth: 1 }),
+		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("line", { x1: L, y1: y(0), x2: W - R2, y2: y(0), stroke: "var(--dsh-mem-border)", strokeWidth: 1 }),
 		    yTicks.map((v) => {
 		      return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("text", { x: L - 6, y: y(v) + 4, textAnchor: "end", fontSize: 10, fill: "var(--dsh-mem-text-3)", children: fmtInt(v) }, "yt" + v);
 		    }),
@@ -1155,22 +1155,6 @@ var __defProp = Object.defineProperty;
 		  { key: "auto", label: "智能", color: "var(--dsh-mem-mode-auto)" },
 		  { key: "work", label: "工作", color: "var(--dsh-mem-mode-work)" }
 		];
-		var TRACK_W = 200;
-		var THUMB = 16;
-		var RAIL_H = 22;
-		var INNER_W = TRACK_W - THUMB;
-		var FIELD_TIERS = [
-		  { density: 0.34, alpha: 0.5, wave: 0, tempo: 1 },
-		  // 日常：稀疏微光
-		  { density: 0.72, alpha: 1, wave: 1, tempo: 1.3 },
-		  // 智能：满场最活跃
-		  { density: 0.55, alpha: 0.78, wave: 1, tempo: 1.15 }
-		  // 工作：中强 + 水波纹
-		];
-		function smStep(a, b, x) {
-		  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-		  return t * t * (3 - 2 * t);
-		}
 		function modeInfo(key) {
 		  for (let i = 0; i < MODES.length; i++) if (MODES[i].key === key) return MODES[i];
 		  return MODES[1];
@@ -1180,10 +1164,6 @@ var __defProp = Object.defineProperty;
 		  if (key === "chat") return "日常（个人）";
 		  if (key === "work") return "工作（团队）";
 		  return "关闭";
-		}
-		function modeIndex(key) {
-		  for (let i = 0; i < MODES.length; i++) if (MODES[i].key === key) return i;
-		  return 1;
 		}
 		
 		// client/src/tabs/DistillSettings.tsx
@@ -3652,7 +3632,7 @@ var __defProp = Object.defineProperty;
 		}
 		
 		// client/src/pill/MemoryModePill.tsx
-		var import_react21 = require("react");
+		var import_react20 = require("react");
 		
 		// src/util/context-occupancy.ts
 		var CONTEXT_METER_CIRCUMFERENCE = 34.55751918948772;
@@ -3968,303 +3948,23 @@ var __defProp = Object.defineProperty;
 		}
 		
 		// client/src/pill/HallWheel.tsx
-		var import_react20 = require("react");
-		
-		// src/types.ts
-		var HALL_CATALOG = [
-		  { id: "work", label: "工作" },
-		  { id: "relationships", label: "人际" },
-		  { id: "learning", label: "学习" },
-		  { id: "creative", label: "创作娱乐" },
-		  // 居家在健康之前(八边形顺时针序,用户 2026-09-23 对调)
-		  { id: "home", label: "居家" },
-		  { id: "health", label: "健康" },
-		  { id: "finance", label: "财务" },
-		  { id: "journey", label: "出行" }
-		];
-		var HALL_DEFAULT_ENABLED = HALL_CATALOG.map((h) => h.id);
-		
-		// src/domain-gate.ts
-		var HALL_WEIGHT_MAX = 1.5;
-		var HALL_WEIGHT_NEUTRAL = 1;
-		
-		// client/src/pill/ModeSlider.tsx
-		var import_react18 = require("react");
-		var import_jsx_runtime18 = require("react/jsx-runtime");
-		function ModeSlider(props) {
-		  const trackRef = (0, import_react18.useRef)(null);
-		  const [drag, setDrag] = (0, import_react18.useState)(null);
-		  const canvasRef = (0, import_react18.useRef)(null);
-		  const geoRef = (0, import_react18.useRef)(null);
-		  const clampX = (x) => {
-		    if (x < 0) return 0;
-		    if (x > INNER_W) return INNER_W;
-		    return x;
-		  };
-		  const xFromClientX = (clientX) => {
-		    const rect = trackRef.current.getBoundingClientRect();
-		    return clampX(clientX - rect.left - THUMB / 2);
-		  };
-		  const onPointerDown = (e) => {
-		    e.preventDefault();
-		    e.currentTarget.setPointerCapture(e.pointerId);
-		    setDrag({ x: xFromClientX(e.clientX), lastX: e.clientX, t: e.timeStamp, v: 0 });
-		  };
-		  const onPointerMove = (e) => {
-		    if (drag === null) return;
-		    const dt = e.timeStamp - drag.t;
-		    const instV = dt > 0 ? (e.clientX - drag.lastX) / dt : drag.v;
-		    setDrag({
-		      x: xFromClientX(e.clientX),
-		      lastX: e.clientX,
-		      t: e.timeStamp,
-		      v: drag.v * 0.7 + instV * 0.3
-		      // EMA：瞬时抖动不放大，松手投影用
-		    });
-		  };
-		  const onPointerUp = (e) => {
-		    if (drag === null) return;
-		    const projected = xFromClientX(e.clientX) + Math.max(-30, Math.min(30, drag.v * 120));
-		    const idx = Math.round(clampX(projected) / INNER_W * (MODES.length - 1));
-		    setDrag(null);
-		    props.onCommit(MODES[idx].key);
-		  };
-		  const thumbLeft = drag !== null ? drag.x : modeIndex(props.mode) / (MODES.length - 1) * INNER_W;
-		  const activeIdx = Math.min(MODES.length - 1, Math.max(0, Math.round(thumbLeft / INNER_W * (MODES.length - 1))));
-		  const info = MODES[activeIdx];
-		  geoRef.current = {
-		    origin: thumbLeft + THUMB / 2,
-		    // 密度/亮度中心 = 圆球中心
-		    rightEdge: thumbLeft + THUMB,
-		    // 粒子活动区右界 = 填充右缘（不越过圆球）
-		    tier: activeIdx,
-		    // 场强档位（与填充同源；拖拽预览即时升降级）
-		    dragging: drag !== null
-		  };
-		  (0, import_react18.useEffect)(() => {
-		    const canvas = canvasRef.current;
-		    if (!canvas) return void 0;
-		    const ctx = canvas.getContext && canvas.getContext("2d");
-		    if (!ctx) return void 0;
-		    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-		    let width = 1;
-		    let height = 1;
-		    let frame = 0;
-		    let grid = [];
-		    let cell = 5;
-		    const gap = 1.1;
-		    let fieldOn = false;
-		    let fieldStart = 0;
-		    let lastDrawn = 0;
-		    const resize = () => {
-		      const b = canvas.getBoundingClientRect();
-		      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-		      width = Math.max(1, b.width);
-		      height = Math.max(1, b.height);
-		      canvas.width = Math.max(1, Math.round(width * ratio));
-		      canvas.height = Math.max(1, Math.round(height * ratio));
-		      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-		      cell = width < 280 ? 5 : 6;
-		      grid = [];
-		      for (let row2 = 0; row2 * cell < height; row2++) {
-		        for (let column = 0; column * cell < width; column++) {
-		          grid.push({
-		            x: column * cell,
-		            y: row2 * cell,
-		            base: Math.abs(Math.sin(column * 12.9898 + row2 * 78.233) * 43758.5453) % 1,
-		            tempo: Math.abs(Math.sin(column * 7.13 + row2 * 19.41) * 19341.731) % 1,
-		            phase: Math.abs(Math.sin(column * 31.17 + row2 * 11.93) * 28437.123) % 1
-		          });
-		        }
-		      }
-		    };
-		    const draw = (time) => {
-		      const st = geoRef.current || { origin: 0, rightEdge: 0, tier: 1, dragging: false };
-		      ctx.clearRect(0, 0, width, height);
-		      if (st.rightEdge <= 0) {
-		        fieldOn = false;
-		        return;
-		      }
-		      if (!fieldOn) {
-		        fieldOn = true;
-		        fieldStart = time;
-		      }
-		      const dark = document.body.hasAttribute("data-ds-dark-theme");
-		      const tier = FIELD_TIERS[st.tier] || FIELD_TIERS[1];
-		      const elapsed = Math.max(0, time - fieldStart);
-		      const reveal = reduced.matches ? 1 : smStep(0, 1, elapsed / 900);
-		      const ripplePhase = elapsed % 1200 / 1200;
-		      const tempo = tier.tempo * (st.dragging ? 2 : 1);
-		      const dim = dark ? [124, 144, 250] : [61, 91, 224];
-		      const hot = dark ? [214, 224, 255] : [126, 148, 250];
-		      ctx.save();
-		      ctx.beginPath();
-		      if (ctx.roundRect) ctx.roundRect(0, 0, st.rightEdge, height, height / 2);
-		      else ctx.rect(0, 0, st.rightEdge, height);
-		      ctx.clip();
-		      for (let i = 0; i < grid.length; i++) {
-		        const c = grid[i];
-		        const dx = Math.abs(c.x + cell * 0.5 - st.origin) / Math.max(1, st.rightEdge * 0.5);
-		        if (dx > 1) continue;
-		        const near = Math.min(1, Math.max(0, 1 - dx * 1.1));
-		        if (c.base > tier.density - near * 0.3) continue;
-		        const flicker = 0.5 + 0.5 * Math.sin(elapsed * 0.012 * tempo + c.tempo * 6.283 + c.phase * 6.283);
-		        const wave = tier.wave ? 0.5 + 0.5 * Math.sin((dx * 2 - ripplePhase) * 6.283) : 0.62;
-		        const revealA = smStep(0, 1, reveal * (1 - dx * 0.85) + dx * 0.15);
-		        const alpha = Math.min(1, (0.26 + 0.44 * flicker + near * 0.28) * (0.28 + 0.72 * wave) * revealA * tier.alpha);
-		        if (alpha < 0.02) continue;
-		        const glowMix = Math.max(0, flicker * wave - 0.45) * 1.6;
-		        ctx.fillStyle = "rgba(" + Math.round(dim[0] + (hot[0] - dim[0]) * glowMix) + "," + Math.round(dim[1] + (hot[1] - dim[1]) * glowMix) + "," + Math.round(dim[2] + (hot[2] - dim[2]) * glowMix) + "," + alpha.toFixed(3) + ")";
-		        ctx.fillRect(c.x + gap * 0.5, c.y + gap * 0.5, cell - gap, cell - gap);
-		      }
-		      ctx.restore();
-		    };
-		    const loop = (time) => {
-		      if (time - lastDrawn >= 33) {
-		        lastDrawn = time;
-		        draw(time);
-		      }
-		      frame = window.requestAnimationFrame(loop);
-		    };
-		    const redrawStatic = () => {
-		      if (reduced.matches) draw(performance.now());
-		    };
-		    const ro = new ResizeObserver(() => {
-		      resize();
-		      redrawStatic();
-		    });
-		    const themeObs = new MutationObserver(() => {
-		      redrawStatic();
-		    });
-		    ro.observe(canvas);
-		    themeObs.observe(document.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
-		    resize();
-		    draw(performance.now());
-		    if (!reduced.matches) frame = window.requestAnimationFrame(loop);
-		    return () => {
-		      window.cancelAnimationFrame(frame);
-		      ro.disconnect();
-		      themeObs.disconnect();
-		    };
-		  }, []);
-		  const stops = [];
-		  for (let i = 0; i < MODES.length; i++) {
-		    const stopLeft = i / (MODES.length - 1) * INNER_W + THUMB / 2;
-		    stops.push(
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
-		        "div",
-		        {
-		          style: {
-		            position: "absolute",
-		            left: stopLeft - 3,
-		            top: (RAIL_H - 6) / 2,
-		            width: 6,
-		            height: 6,
-		            borderRadius: "50%",
-		            background: "var(--dsh-mem-dot)",
-		            zIndex: 2,
-		            pointerEvents: "none"
-		          }
-		        },
-		        "stop" + i
-		      )
-		    );
-		  }
-		  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
-		    "div",
-		    {
-		      ref: trackRef,
-		      className: "dsh-mem-hitband",
-		      style: {
-		        position: "relative",
-		        // 容器宽 = thumb 活动范围（0..INNER_W + THUMB），点击映射与视觉两端严格对齐
-		        width: TRACK_W,
-		        height: RAIL_H,
-		        borderRadius: 999,
-		        background: "var(--dsh-mem-track)",
-		        touchAction: "none",
-		        cursor: drag === null ? "pointer" : "grabbing"
-		      },
-		      onPointerDown,
-		      onPointerMove,
-		      onPointerUp,
-		      onPointerCancel: onPointerUp,
-		      children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
-		          "div",
-		          {
-		            style: {
-		              position: "absolute",
-		              left: 0,
-		              top: 0,
-		              bottom: 0,
-		              width: thumbLeft + THUMB,
-		              borderRadius: 999,
-		              background: "linear-gradient(90deg, var(--dsh-mem-fill-1), var(--dsh-mem-fill-2))",
-		              pointerEvents: "none",
-		              zIndex: 1,
-		              transition: drag === null ? "width 120ms ease" : "none"
-		            }
-		          }
-		        ),
-		        stops,
-		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
-		          "canvas",
-		          {
-		            ref: canvasRef,
-		            className: "dsh-mem-particles",
-		            style: {
-		              position: "absolute",
-		              left: 0,
-		              top: 0,
-		              width: "100%",
-		              height: "100%",
-		              pointerEvents: "none",
-		              zIndex: 2,
-		              filter: drag !== null ? "saturate(1.45) brightness(1.28) contrast(1.06)" : "none"
-		            }
-		          }
-		        ),
-		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
-		          "div",
-		          {
-		            style: {
-		              position: "absolute",
-		              left: thumbLeft,
-		              top: (RAIL_H - THUMB) / 2,
-		              width: THUMB,
-		              height: THUMB,
-		              borderRadius: "50%",
-		              background: "var(--dsh-mem-thumb)",
-		              border: "1px solid var(--dsh-mem-accent)",
-		              boxShadow: drag !== null ? "0 2px 8px rgba(0,0,0,0.35)" : "0 1px 4px rgba(0,0,0,0.25)",
-		              pointerEvents: "none",
-		              transition: drag === null ? "left 120ms ease" : "none",
-		              zIndex: 3
-		            }
-		          }
-		        ),
-		        drag !== null ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-bubble", style: { left: thumbLeft + THUMB / 2, zIndex: 4 }, children: info.label }) : null
-		      ]
-		    }
-		  );
-		}
+		var import_react19 = require("react");
 		
 		// client/src/pill/SessionInfoArea.tsx
-		var import_react19 = require("react");
-		var import_jsx_runtime19 = require("react/jsx-runtime");
+		var import_react18 = require("react");
+		var import_jsx_runtime18 = require("react/jsx-runtime");
 		function sinfoCell(val, label, title) {
-		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { title: title || void 0, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-val", children: val }),
-		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-label", children: label })
+		  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { title: title || void 0, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-val", children: val }),
+		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-label", children: label })
 		  ] });
 		}
 		function SessionInfoArea(props) {
 		  const rpc = props.rpc;
 		  const sessionId = props.sessionId;
-		  const [stats, setStats] = (0, import_react19.useState)(void 0);
-		  const busyRef = (0, import_react19.useRef)(false);
-		  (0, import_react19.useEffect)(() => {
+		  const [stats, setStats] = (0, import_react18.useState)(void 0);
+		  const busyRef = (0, import_react18.useRef)(false);
+		  (0, import_react18.useEffect)(() => {
 		    if (!rpc || !sessionId) return void 0;
 		    let alive = true;
 		    let timer = null;
@@ -4297,7 +3997,7 @@ var __defProp = Object.defineProperty;
 		  }, [rpc, sessionId]);
 		  if (stats === null) return null;
 		  if (stats === void 0) {
-		    return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
+		    return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo", children: /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
 		      sinfoCell("…", "召回命中"),
 		      sinfoCell("…", "攒批进度"),
 		      sinfoCell("…", "本会话记忆"),
@@ -4346,57 +4046,70 @@ var __defProp = Object.defineProperty;
 		    else if (stats.retrieval === "none") note = "检索不可用（FTS 与向量均失效）";
 		  }
 		  const ago = fmtAgo(gl.lastExtractAt);
-		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dsh-mem-sinfo", children: [
-		    warn ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-warn", children: warn }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
+		  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dsh-mem-sinfo", children: [
+		    warn ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-warn", children: warn }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
 		      sinfoCell(rcVal, rcLabel, rcTitle),
 		      sinfoCell(dVal, dLabel, dTitle),
 		      sinfoCell(String(di.producedRecords || 0), "本会话记忆", pTitle),
 		      sinfoCell(stats.l0Count != null ? String(stats.l0Count) : "…", "会话消息")
 		    ] }),
-		    note ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-note", children: note }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-sinfo-sum", children: "待蒸馏 " + (gl.pendingTotal || 0) + " · 上次蒸馏 " + (ago || "尚未蒸馏") })
+		    note ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-note", children: note }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "dsh-mem-sinfo-sum", children: "待蒸馏 " + (gl.pendingTotal || 0) + " · 上次蒸馏 " + (ago || "尚未蒸馏") })
 		  ] });
 		}
 		
 		// client/src/pill/HallWheel.tsx
-		var import_jsx_runtime20 = require("react/jsx-runtime");
+		var import_jsx_runtime19 = require("react/jsx-runtime");
 		var SIZE = 196;
 		var CENTER = SIZE / 2;
-		var R_MIN = 28;
-		var R_MAX = 74;
+		var R = 64;
 		var DRAG_SLOP = 4;
-		function cornerPos(i, radius) {
-		  const a = (-90 + i * 45) * Math.PI / 180;
-		  return { left: CENTER + radius * Math.cos(a), top: CENTER + radius * Math.sin(a) };
+		var DEAD = 14 * (Math.PI / 180);
+		var DEG = Math.PI / 180;
+		var TAU = Math.PI * 2;
+		function cornerAngle(i) {
+		  return (-90 + i * 45) * DEG;
 		}
-		function radiusOfWeight(w) {
-		  const c = Math.max(0, Math.min(HALL_WEIGHT_MAX, w));
-		  return R_MIN + (R_MAX - R_MIN) * (c / HALL_WEIGHT_MAX);
+		function cornerPos(i) {
+		  const a = cornerAngle(i);
+		  return { left: CENTER + R * Math.cos(a), top: CENTER + R * Math.sin(a) };
 		}
-		function weightOfRadius(r) {
-		  const raw = (r - R_MIN) / (R_MAX - R_MIN) * HALL_WEIGHT_MAX;
-		  return Math.round(Math.max(0, Math.min(HALL_WEIGHT_MAX, raw)) * 20) / 20;
+		function normAngle(a) {
+		  while (a < -Math.PI) a += TAU;
+		  while (a >= Math.PI) a -= TAU;
+		  return a;
 		}
-		function weightMark(w) {
-		  if (Math.abs(w - HALL_WEIGHT_NEUTRAL) < 0.02) return "";
-		  if (w <= 0) return "⊘";
-		  return w > HALL_WEIGHT_NEUTRAL ? "▲" : "▼";
+		function angleIndex(a) {
+		  let t = a + 90 * DEG;
+		  while (t < 0) t += TAU;
+		  while (t >= TAU) t -= TAU;
+		  return Math.round(t / (45 * DEG)) % 8;
+		}
+		function snapIndex(p, cur) {
+		  const cand = angleIndex(p);
+		  if (cand === cur) return cur;
+		  const curA = cornerAngle(cur);
+		  const candA = cornerAngle(cand);
+		  const dir = Math.sign(normAngle(candA - curA)) || 1;
+		  const edge = curA + dir * (22.5 * DEG);
+		  if (Math.abs(normAngle(p - edge)) < DEAD) return cur;
+		  return cand;
 		}
 		function HallWheel(props) {
 		  ensureThemeStyle();
 		  const isOff = props.mode === "off";
-		  const [overview, setOverview] = (0, import_react20.useState)(null);
-		  const [backfillBusy, setBackfillBusy] = (0, import_react20.useState)(false);
-		  const [localError, setLocalError] = (0, import_react20.useState)(null);
-		  const timersRef = (0, import_react20.useRef)([]);
-		  (0, import_react20.useEffect)(
+		  const [overview, setOverview] = (0, import_react19.useState)(null);
+		  const [backfillBusy, setBackfillBusy] = (0, import_react19.useState)(false);
+		  const [localError, setLocalError] = (0, import_react19.useState)(null);
+		  const timersRef = (0, import_react19.useRef)([]);
+		  (0, import_react19.useEffect)(
 		    () => () => {
 		      for (const t of timersRef.current) window.clearTimeout(t);
 		    },
 		    []
 		  );
-		  (0, import_react20.useEffect)(() => {
+		  (0, import_react19.useEffect)(() => {
 		    let alive = true;
 		    props.rpc("dsh-memory/hall-overview", {}).then((r) => {
 		      if (!alive) return;
@@ -4442,217 +4155,246 @@ var __defProp = Object.defineProperty;
 		      finish();
 		    });
 		  };
-		  const [drag, setDrag] = (0, import_react20.useState)(null);
-		  const boxRef = (0, import_react20.useRef)(null);
-		  const movedRef = (0, import_react20.useRef)(false);
-		  const startRef = (0, import_react20.useRef)(null);
-		  const weights = props.hallWeights ?? {};
-		  const weightAt = (id, i) => {
-		    if (drag && drag.i === i) return drag.w;
-		    if (!id) return HALL_WEIGHT_NEUTRAL;
-		    return weights[id] ?? HALL_WEIGHT_NEUTRAL;
-		  };
-		  const radiusAt = (i, id) => radiusOfWeight(weightAt(id, i));
-		  const commitWeight = (id, w) => {
-		    props.onCommitHallWeights({ ...weights, [id]: Math.round(w * 20) / 20 });
-		  };
-		  const onCornerDown = (i, id) => (e) => {
-		    if (!id || isOff) return;
-		    movedRef.current = false;
-		    startRef.current = { x: e.clientX, y: e.clientY };
-		    e.currentTarget.setPointerCapture?.(e.pointerId);
-		    setDrag({ i, w: weightAt(id, i) });
-		  };
-		  const onCornerMove = (i) => (e) => {
-		    if (!drag || drag.i !== i) return;
+		  const boxRef = (0, import_react19.useRef)(null);
+		  const startRef = (0, import_react19.useRef)(null);
+		  const movedRef = (0, import_react19.useRef)(false);
+		  const downIndexRef = (0, import_react19.useRef)(null);
+		  const [dragIndex, setDragIndex] = (0, import_react19.useState)(null);
+		  const lockedIndex = props.halls.length === 1 ? overview?.corners.findIndex((c) => c.id === props.halls[0]) ?? null : null;
+		  const activeIndex = dragIndex ?? lockedIndex ?? null;
+		  const needleRef = (0, import_react19.useRef)(activeIndex != null ? cornerAngle(activeIndex) : -Math.PI / 2);
+		  const targetRef = (0, import_react19.useRef)(needleRef.current);
+		  const velRef = (0, import_react19.useRef)(0);
+		  const [needle, setNeedle] = (0, import_react19.useState)(needleRef.current);
+		  (0, import_react19.useEffect)(() => {
+		    targetRef.current = activeIndex != null ? cornerAngle(activeIndex) : -Math.PI / 2;
+		  }, [activeIndex]);
+		  (0, import_react19.useEffect)(() => {
+		    let raf = 0;
+		    const loop = () => {
+		      const cur = needleRef.current;
+		      const tgt = targetRef.current;
+		      const diff = Math.atan2(Math.sin(tgt - cur), Math.cos(tgt - cur));
+		      velRef.current += diff * 0.12;
+		      velRef.current *= 0.78;
+		      needleRef.current += velRef.current;
+		      if (Math.abs(diff) > 2e-3 || Math.abs(velRef.current) > 2e-3) {
+		        setNeedle(needleRef.current);
+		      } else if (Math.abs(diff) > 1e-4) {
+		        needleRef.current = tgt;
+		        setNeedle(tgt);
+		      }
+		      raf = window.requestAnimationFrame(loop);
+		    };
+		    raf = window.requestAnimationFrame(loop);
+		    return () => window.cancelAnimationFrame(raf);
+		  }, []);
+		  const pointAngle = (clientX, clientY) => {
 		    const box = boxRef.current;
-		    if (!box) return;
-		    const s = startRef.current;
-		    if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > DRAG_SLOP) movedRef.current = true;
-		    if (!movedRef.current) return;
+		    if (!box) return { angle: 0, dist: 0 };
 		    const r = box.getBoundingClientRect();
 		    const scale = r.width / SIZE || 1;
-		    const dx = (e.clientX - (r.left + CENTER * scale)) / scale;
-		    const dy = (e.clientY - (r.top + CENTER * scale)) / scale;
-		    setDrag({ i, w: weightOfRadius(Math.hypot(dx, dy)) });
+		    const dx = (clientX - (r.left + CENTER * scale)) / scale;
+		    const dy = (clientY - (r.top + CENTER * scale)) / scale;
+		    return { angle: Math.atan2(dy, dx), dist: Math.hypot(dx, dy) };
 		  };
-		  const onCornerUp = (i, id) => (e) => {
-		    const d = drag;
-		    if (!d || d.i !== i) return;
+		  const onBoxDown = (e) => {
+		    if (isOff) return;
+		    const { angle, dist } = pointAngle(e.clientX, e.clientY);
+		    if (dist < 24) return;
+		    e.currentTarget.setPointerCapture?.(e.pointerId);
+		    movedRef.current = false;
+		    startRef.current = { x: e.clientX, y: e.clientY };
+		    const idx = angleIndex(angle);
+		    downIndexRef.current = idx;
+		    setDragIndex(idx);
+		  };
+		  const onBoxMove = (e) => {
+		    if (!startRef.current) return;
+		    const s = startRef.current;
+		    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > DRAG_SLOP) movedRef.current = true;
+		    if (!movedRef.current) return;
+		    const { angle } = pointAngle(e.clientX, e.clientY);
+		    const cur = dragIndex ?? lockedIndex ?? 0;
+		    const cand = snapIndex(angle, cur);
+		    if (cand !== dragIndex) setDragIndex(cand);
+		  };
+		  const onBoxUp = (e) => {
+		    if (!startRef.current) return;
 		    e.currentTarget.releasePointerCapture?.(e.pointerId);
-		    setDrag(null);
+		    const moved = movedRef.current;
+		    const di = downIndexRef.current;
 		    startRef.current = null;
+		    downIndexRef.current = null;
+		    setDragIndex(null);
+		    const id = di != null ? overview?.corners[di]?.id : void 0;
 		    if (!id) return;
-		    if (movedRef.current) commitWeight(id, d.w);
-		    else {
+		    if (!moved) {
 		      const active = props.halls.includes(id);
-		      const next = active ? props.halls.filter((x) => x !== id) : [...props.halls, id];
-		      props.onCommitHall(next.length > 0 ? next : null);
-		    }
-		  };
-		  const onCornerKey = (id, i) => (e) => {
-		    if (!id || isOff) return;
-		    const cur = weightAt(id, i);
-		    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-		      e.preventDefault();
-		      commitWeight(
-		        id,
-		        Math.max(0, Math.min(HALL_WEIGHT_MAX, cur + (e.key === "ArrowUp" ? 0.1 : -0.1)))
-		      );
-		    } else if (e.key === "Home") {
-		      e.preventDefault();
-		      commitWeight(id, HALL_WEIGHT_NEUTRAL);
+		      props.onCommitHall(active ? null : [id]);
+		    } else {
+		      if (!props.halls.includes(id)) props.onCommitHall([id]);
 		    }
 		  };
 		  const polyPoints = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-		    const p = cornerPos(i, radiusAt(i, overview?.corners[i]?.id));
-		    return `${p.left},${p.top}`;
-		  }).join(" ");
-		  const neutralPoints = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-		    const p = cornerPos(i, radiusOfWeight(HALL_WEIGHT_NEUTRAL));
+		    const p = cornerPos(i);
 		    return `${p.left},${p.top}`;
 		  }).join(" ");
 		  const grayStyle = isOff ? { opacity: 0.45, pointerEvents: "none" } : {};
-		  const themed = props.halls.length > 0;
-		  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: { width: SIZE }, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { ref: boxRef, style: { position: "relative", width: SIZE, height: SIZE, ...grayStyle }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
-		        "svg",
-		        {
-		          width: SIZE,
-		          height: SIZE,
-		          style: { position: "absolute", inset: 0, pointerEvents: "none" },
-		          "aria-hidden": "true",
-		          children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		              "polygon",
+		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { style: { width: SIZE }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		      "div",
+		      {
+		        ref: boxRef,
+		        style: { position: "relative", width: SIZE, height: SIZE, ...grayStyle },
+		        onPointerDown: onBoxDown,
+		        onPointerMove: onBoxMove,
+		        onPointerUp: onBoxUp,
+		        onPointerCancel: onBoxUp,
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		            "svg",
+		            {
+		              width: SIZE,
+		              height: SIZE,
+		              style: { position: "absolute", inset: 0, pointerEvents: "none" },
+		              "aria-hidden": "true",
+		              children: [
+		                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		                  "polygon",
+		                  {
+		                    points: polyPoints,
+		                    fill: "none",
+		                    stroke: "var(--dsh-mem-hall-line)",
+		                    strokeWidth: "1",
+		                    strokeDasharray: "3 3",
+		                    opacity: 0.45
+		                  }
+		                ),
+		                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		                  "polygon",
+		                  {
+		                    points: polyPoints,
+		                    fill: "none",
+		                    stroke: "var(--dsh-mem-hall-line)",
+		                    strokeWidth: "1"
+		                  }
+		                ),
+		                [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+		                  const p = cornerPos(i);
+		                  return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		                    "line",
+		                    {
+		                      x1: CENTER,
+		                      y1: CENTER,
+		                      x2: p.left,
+		                      y2: p.top,
+		                      stroke: "var(--dsh-mem-hall-line)",
+		                      strokeWidth: "1"
+		                    },
+		                    "spoke" + i
+		                  );
+		                }),
+		                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		                  "line",
+		                  {
+		                    x1: CENTER,
+		                    y1: CENTER,
+		                    x2: CENTER + R * Math.cos(needle),
+		                    y2: CENTER + R * Math.sin(needle),
+		                    stroke: "var(--dsh-mem-hall-corner-on)",
+		                    strokeWidth: "2.5",
+		                    strokeLinecap: "round",
+		                    opacity: activeIndex != null ? 0.9 : 0.25
+		                  }
+		                )
+		              ]
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		            "button",
+		            {
+		              type: "button",
+		              title: "智能档：自动判断召回各域（回中心 = 全域）",
+		              onClick: () => props.onCommitHall(null),
+		              style: {
+		                position: "absolute",
+		                left: CENTER,
+		                top: CENTER,
+		                transform: "translate(-50%, -50%)",
+		                width: 46,
+		                height: 46,
+		                borderRadius: "50%",
+		                border: props.halls.length === 0 ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid var(--dsh-mem-hall-line)",
+		                background: "var(--dsh-mem-bg-card)",
+		                color: props.halls.length === 0 ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
+		                fontSize: 11,
+		                fontWeight: 600,
+		                cursor: "pointer"
+		              },
+		              children: "智能"
+		            }
+		          ),
+		          [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+		            const corner = overview?.corners[i];
+		            const id = corner?.id;
+		            const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
+		            const count = id ? cornerCount(id) : null;
+		            const active = activeIndex === i;
+		            const dim = activeIndex != null && !active;
+		            const empty = count === 0;
+		            const p = cornerPos(i);
+		            return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		              "div",
 		              {
-		                points: neutralPoints,
-		                fill: "none",
-		                stroke: "var(--dsh-mem-hall-line)",
-		                strokeWidth: "1",
-		                strokeDasharray: "3 3",
-		                opacity: 0.5
-		              }
-		            ),
-		            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("polygon", { points: polyPoints, fill: "none", stroke: "var(--dsh-mem-hall-line)", strokeWidth: "1" }),
-		            [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-		              const p = cornerPos(i, radiusAt(i, overview?.corners[i]?.id));
-		              return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		                "line",
-		                {
-		                  x1: CENTER,
-		                  y1: CENTER,
-		                  x2: p.left,
-		                  y2: p.top,
-		                  stroke: "var(--dsh-mem-hall-line)",
-		                  strokeWidth: "1"
+		                title: id ? `「${label}」${count ?? 0} 条
+		点按/拖动 = 以该角为主题（抑制其他角）` : "词表加载中",
+		                style: {
+		                  position: "absolute",
+		                  left: p.left,
+		                  top: p.top,
+		                  transform: "translate(-50%, -50%)",
+		                  display: "flex",
+		                  flexDirection: "column",
+		                  alignItems: "center",
+		                  gap: 0,
+		                  padding: "1px 4px",
+		                  borderRadius: 8,
+		                  border: active ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid transparent",
+		                  background: active ? "var(--dsh-mem-accent-weak)" : "transparent",
+		                  color: active ? "var(--dsh-mem-hall-corner-on)" : empty ? "var(--dsh-mem-hall-empty)" : "var(--dsh-mem-hall-corner)",
+		                  fontSize: 9.5,
+		                  lineHeight: "12px",
+		                  fontWeight: active ? 600 : 400,
+		                  whiteSpace: "nowrap",
+		                  maxWidth: 58,
+		                  opacity: dim ? 0.45 : 1,
+		                  pointerEvents: "none"
 		                },
-		                "spoke" + i
-		              );
-		            })
-		          ]
-		        }
-		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		        "button",
-		        {
-		          type: "button",
-		          title: "智能档：自动判断召回各域（回中心 = 全域）",
-		          onClick: () => props.onCommitHall(null),
-		          style: {
-		            position: "absolute",
-		            left: CENTER,
-		            top: CENTER,
-		            transform: "translate(-50%, -50%)",
-		            width: 46,
-		            height: 46,
-		            borderRadius: "50%",
-		            border: props.halls.length === 0 ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid var(--dsh-mem-hall-line)",
-		            background: "var(--dsh-mem-bg-card)",
-		            color: props.halls.length === 0 ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
-		            fontSize: 11,
-		            fontWeight: 600,
-		            cursor: "pointer"
-		          },
-		          children: "智能"
-		        }
-		      ),
-		      [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
-		        const corner = overview?.corners[i];
-		        const id = corner?.id;
-		        const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
-		        const count = id ? cornerCount(id) : null;
-		        const w = weightAt(id, i);
-		        const active = id !== void 0 && props.halls.includes(id);
-		        const suppressed = w <= 0;
-		        const empty = count === 0;
-		        const dim = themed && !active;
-		        const p = cornerPos(i, radiusAt(i, id));
-		        return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
-		          "button",
-		          {
-		            type: "button",
-		            title: id ? `「${label}」${count ?? 0} 条 · 权重 ×${w.toFixed(2)}${suppressed ? "（已抑制：本会话不召回）" : ""}
-		点按=以该角为主题（抑制其他角）／拖动=调配额／↑↓ 微调` : "词表加载中",
-		            disabled: !id,
-		            onPointerDown: onCornerDown(i, id),
-		            onPointerMove: onCornerMove(i),
-		            onPointerUp: onCornerUp(i, id),
-		            onPointerCancel: onCornerUp(i, id),
-		            onKeyDown: onCornerKey(id, i),
-		            style: {
-		              position: "absolute",
-		              left: p.left,
-		              top: p.top,
-		              transform: "translate(-50%, -50%)",
-		              display: "flex",
-		              flexDirection: "column",
-		              alignItems: "center",
-		              gap: 0,
-		              padding: "1px 4px",
-		              borderRadius: 8,
-		              border: active ? "1.5px solid var(--dsh-mem-hall-corner-on)" : suppressed ? "1px dashed var(--dsh-mem-hall-empty)" : "1px solid transparent",
-		              background: active ? "var(--dsh-mem-accent-weak)" : "transparent",
-		              color: active ? "var(--dsh-mem-hall-corner-on)" : empty || suppressed ? "var(--dsh-mem-hall-empty)" : "var(--dsh-mem-hall-corner)",
-		              fontSize: 9.5,
-		              lineHeight: "12px",
-		              fontWeight: active ? 600 : 400,
-		              cursor: id ? drag && drag.i === i ? "grabbing" : "grab" : "default",
-		              whiteSpace: "nowrap",
-		              touchAction: "none",
-		              maxWidth: 60,
-		              opacity: dim ? 0.42 : 1
-		            },
-		            children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("span", { children: [
-		                label,
-		                weightMark(w) ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("span", { style: { fontSize: 8, opacity: 0.9 }, children: [
-		                  " ",
-		                  weightMark(w)
-		                ] }) : null
-		              ] }),
-		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 8, opacity: 0.75, fontVariantNumeric: "tabular-nums" }, children: count === null ? " " : suppressed ? "抑制" : empty ? "空角" : `${count} 条` })
-		            ]
-		          },
-		          id ?? i
-		        );
-		      })
-		    ] }),
-		    props.halls.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+		                children: [
+		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: label }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 8, opacity: 0.75, fontVariantNumeric: "tabular-nums" }, children: count === null ? " " : empty ? "空角" : `${count} 条` })
+		                ]
+		              },
+		              id ?? i
+		            );
+		          })
+		        ]
+		      }
+		    ),
+		    props.halls.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
 		      "div",
 		      {
 		        style: {
 		          display: "flex",
-		          justifyContent: "space-between",
-		          alignItems: "center",
-		          gap: 8,
-		          marginTop: 8,
+		          flexDirection: "column",
+		          gap: 6,
+		          marginTop: 10,
 		          opacity: isOff ? 0.45 : void 0,
 		          pointerEvents: isOff ? "none" : void 0
 		        },
 		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
 		            "span",
 		            {
 		              style: { fontSize: 11, color: "var(--dsh-mem-text-3)" },
@@ -4660,25 +4402,25 @@ var __defProp = Object.defineProperty;
 		              children: overview ? `另有 ${overview.unlabeled} 条未打标` : "未打标"
 		            }
 		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("span", { style: { display: "flex", gap: 8 }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
 		              Segmented,
 		              {
 		                value: props.hallIncludeUnlabeled ? "in" : "ex",
 		                options: [
-		                  { key: "in", label: "含未打标", title: "未打标记忆默认包含（默认排除会静默丢掉一半语料）" },
+		                  { key: "in", label: "含未打标", title: "未打标记忆默认包含" },
 		                  { key: "ex", label: "不含", title: "锁定域时排除未打标记忆" }
 		                ],
 		                onChange: (key) => props.onCommitHallBoundaries({ includeUnlabeled: key === "in" })
 		              }
 		            ),
-		            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
 		              Segmented,
 		              {
 		                value: props.hallIncludeGeneral ? "in" : "ex",
 		                options: [
 		                  { key: "in", label: "含跨域", title: "跨域（general）兜底记忆也参与召回" },
-		                  { key: "ex", label: "不含", title: "跨域与单主题相悖，默认不含（可切换）" }
+		                  { key: "ex", label: "不含", title: "跨域与单主题相悖，默认不含" }
 		                ],
 		                onChange: (key) => props.onCommitHallBoundaries({ includeGeneral: key === "in" })
 		              }
@@ -4687,7 +4429,35 @@ var __defProp = Object.defineProperty;
 		        ]
 		      }
 		    ) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Row, { label: "会话", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		      Segmented,
+		      {
+		        value: isOff ? "off" : "on",
+		        options: [
+		          { key: "on", label: "启用", title: "本会话正常捕获/蒸馏/注入记忆" },
+		          {
+		            key: "off",
+		            label: "关闭",
+		            title: "本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）"
+		          }
+		        ],
+		        onChange: (key) => props.onCommit(key === "off" ? "off" : "auto")
+		      }
+		    ) }),
+		    props.recall !== void 0 && props.onCommitRecall ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Row, { label: "注入", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		      Segmented,
+		      {
+		        value: props.recall === null ? "follow" : props.recall ? "on" : "off",
+		        disabled: isOff,
+		        options: [
+		          { key: "follow", label: "跟随全局", title: "清除本会话覆盖，跟随全局召回开关" },
+		          { key: "on", label: "开", title: "本会话强制注入记忆" },
+		          { key: "off", label: "关", title: "只写：记忆照常沉淀，但不注入本会话" }
+		        ],
+		        onChange: (key) => props.onCommitRecall(key === "on" ? true : key === "off" ? false : null)
+		      }
+		    ) }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
 		      "div",
 		      {
 		        style: {
@@ -4698,109 +4468,12 @@ var __defProp = Object.defineProperty;
 		          marginTop: 10
 		        },
 		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "会话" }),
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		            Segmented,
-		            {
-		              value: isOff ? "off" : "on",
-		              options: [
-		                { key: "on", label: "启用", title: "本会话正常捕获/蒸馏/注入记忆" },
-		                {
-		                  key: "off",
-		                  label: "关闭",
-		                  title: "本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留，不改全局）"
-		                }
-		              ],
-		              onChange: (key) => props.onCommit(key === "off" ? "off" : "auto")
-		            }
-		          )
-		        ]
-		      }
-		    ),
-		    props.recall !== void 0 && props.onCommitRecall ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
-		      "div",
-		      {
-		        style: {
-		          display: "flex",
-		          justifyContent: "space-between",
-		          alignItems: "center",
-		          gap: 8,
-		          marginTop: 8
-		        },
-		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "注入" }),
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		            Segmented,
-		            {
-		              value: props.recall === null ? "follow" : props.recall ? "on" : "off",
-		              disabled: isOff,
-		              options: [
-		                { key: "follow", label: "跟随全局", title: "清除本会话覆盖，跟随全局召回开关" },
-		                { key: "on", label: "开", title: "本会话强制注入记忆" },
-		                { key: "off", label: "关", title: "只写：记忆照常沉淀，但不注入本会话" }
-		              ],
-		              onChange: (key) => props.onCommitRecall(key === "on" ? true : key === "off" ? false : null)
-		            }
-		          )
-		        ]
-		      }
-		    ) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
-		      "div",
-		      {
-		        style: {
-		          borderTop: "1px solid var(--dsh-mem-border)",
-		          marginTop: 10,
-		          paddingTop: 10,
-		          display: "flex",
-		          justifyContent: "space-between",
-		          alignItems: "center",
-		          gap: 8,
-		          opacity: isOff ? 0.45 : void 0,
-		          pointerEvents: isOff ? "none" : void 0
-		        },
-		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		            "span",
-		            {
-		              style: { fontSize: 12, color: "var(--dsh-mem-text-3)" },
-		              title: "覆写蒸馏族判定；默认跟随智能档",
-		              children: "强制单族"
-		            }
-		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(ModeSlider, { mode: props.mode === "off" ? "auto" : props.mode, onCommit: props.onCommit })
-		        ]
-		      }
-		    ),
-		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
-		      "div",
-		      {
-		        style: {
-		          display: "flex",
-		          justifyContent: "space-between",
-		          alignItems: "center",
-		          gap: 8,
-		          marginTop: 10
-		        },
-		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		            "span",
-		            {
-		              style: {
-		                fontSize: 11,
-		                color: "var(--dsh-mem-text-3)",
-		                flex: 1,
-		                minWidth: 0,
-		                marginRight: 8
-		              },
-		              children: overview ? `未打标 ${overview.unlabeled} 条（存量待回填）` : "未打标计数加载中"
-		            }
-		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: overview ? `未打标 ${overview.unlabeled} 条` : "未打标计数加载中" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
 		            ActionButton,
 		            {
-		              label: backfillBusy ? "回填中…" : "一键回填",
-		              title: "对存量未打标记忆批量补打 hall 标签（复用抽取打标路径）",
+		              label: backfillBusy ? "回填中…" : "回填",
+		              title: "对存量未打标记忆批量补打 hall 标签",
 		              disabled: !overview || overview.unlabeled === 0 || backfillBusy,
 		              onClick: () => backfill()
 		            }
@@ -4808,43 +4481,32 @@ var __defProp = Object.defineProperty;
 		        ]
 		      }
 		    ),
-		    Object.keys(weights).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
-		      "div",
-		      {
-		        style: {
-		          display: "flex",
-		          justifyContent: "space-between",
-		          alignItems: "center",
-		          gap: 8,
-		          marginTop: 8
-		        },
-		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
-		            "已手动调整 ",
-		            Object.keys(weights).length,
-		            " 个域配额"
-		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		            ActionButton,
-		            {
-		              label: "权重复位",
-		              title: "清除本会话的全部域配额偏置，交还智能档自动判定",
-		              disabled: isOff,
-		              onClick: () => props.onCommitHallWeights({})
-		            }
-		          )
-		        ]
-		      }
-		    ) : null,
-		    props.error || localError ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-danger)", marginTop: 8 }, children: props.error || localError }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(SessionInfoArea, { rpc: props.rpc, sessionId: props.sessionId })
+		    props.error || localError ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-danger)", marginTop: 8 }, children: props.error || localError }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SessionInfoArea, { rpc: props.rpc, sessionId: props.sessionId })
 		  ] });
+		}
+		function Row(props) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		    "div",
+		    {
+		      style: {
+		        display: "flex",
+		        flexDirection: "column",
+		        gap: 6,
+		        marginTop: 10
+		      },
+		      children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: props.label }),
+		        props.children
+		      ]
+		    }
+		  );
 		}
 		var LABEL_FALLBACK = ["工作", "人际", "学习", "创作娱乐", "居家", "健康", "财务", "出行"];
 		function useViewportClamp(popRef) {
-		  const shiftRef = (0, import_react20.useRef)(0);
-		  const [shiftX, setShiftX] = (0, import_react20.useState)(0);
-		  (0, import_react20.useLayoutEffect)(() => {
+		  const shiftRef = (0, import_react19.useRef)(0);
+		  const [shiftX, setShiftX] = (0, import_react19.useState)(0);
+		  (0, import_react19.useEffect)(() => {
 		    const clamp = () => {
 		      const el = popRef.current;
 		      if (!el) return;
@@ -4874,25 +4536,24 @@ var __defProp = Object.defineProperty;
 		}
 		
 		// client/src/pill/MemoryModePill.tsx
-		var import_jsx_runtime21 = require("react/jsx-runtime");
+		var import_jsx_runtime20 = require("react/jsx-runtime");
 		function MemoryModePill(props) {
 		  const rpc = props.rpc;
 		  const sessionId = props.sessionId || props.session && props.session.sessionId;
-		  const [mode, setMode] = (0, import_react21.useState)(null);
-		  const [recall, setRecall] = (0, import_react21.useState)(null);
-		  const [recallResolved, setRecallResolved] = (0, import_react21.useState)(true);
-		  const [halls, setHalls] = (0, import_react21.useState)([]);
-		  const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = (0, import_react21.useState)(true);
-		  const [hallIncludeGeneral, setHallIncludeGeneral] = (0, import_react21.useState)(false);
-		  const [hallWeights, setHallWeights] = (0, import_react21.useState)({});
-		  const [hallLabels, setHallLabels] = (0, import_react21.useState)({});
-		  const [error, setError] = (0, import_react21.useState)(null);
-		  const [open, setOpen] = (0, import_react21.useState)(false);
-		  const wrapRef = (0, import_react21.useRef)(null);
-		  const popRef = (0, import_react21.useRef)(null);
+		  const [mode, setMode] = (0, import_react20.useState)(null);
+		  const [recall, setRecall] = (0, import_react20.useState)(null);
+		  const [recallResolved, setRecallResolved] = (0, import_react20.useState)(true);
+		  const [halls, setHalls] = (0, import_react20.useState)([]);
+		  const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = (0, import_react20.useState)(true);
+		  const [hallIncludeGeneral, setHallIncludeGeneral] = (0, import_react20.useState)(false);
+		  const [hallLabels, setHallLabels] = (0, import_react20.useState)({});
+		  const [error, setError] = (0, import_react20.useState)(null);
+		  const [open, setOpen] = (0, import_react20.useState)(false);
+		  const wrapRef = (0, import_react20.useRef)(null);
+		  const popRef = (0, import_react20.useRef)(null);
 		  const shiftX = useViewportClamp(popRef);
-		  const seqRef = (0, import_react21.useRef)(0);
-		  const load = (0, import_react21.useCallback)(() => {
+		  const seqRef = (0, import_react20.useRef)(0);
+		  const load = (0, import_react20.useCallback)(() => {
 		    if (!sessionId || !rpc) return;
 		    const token = ++seqRef.current;
 		    setError(null);
@@ -4905,7 +4566,6 @@ var __defProp = Object.defineProperty;
 		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
 		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
 		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
-		        setHallWeights(r.value.hallWeights ?? {});
 		      } else setError(r && !r.ok ? r.error.message : "RPC error");
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
@@ -4918,13 +4578,13 @@ var __defProp = Object.defineProperty;
 		    }).catch(() => {
 		    });
 		  }, [sessionId, rpc]);
-		  (0, import_react21.useEffect)(() => {
+		  (0, import_react20.useEffect)(() => {
 		    load();
 		  }, [load]);
-		  (0, import_react21.useEffect)(() => {
+		  (0, import_react20.useEffect)(() => {
 		    watchSidebarIcon();
 		  }, []);
-		  (0, import_react21.useEffect)(() => {
+		  (0, import_react20.useEffect)(() => {
 		    initOccupancyIndicator(
 		      (endpoint, payload) => rpc(endpoint, payload)
 		    );
@@ -4932,7 +4592,7 @@ var __defProp = Object.defineProperty;
 		    watchContextMeter();
 		    noteOccupancySession(sessionId ?? null);
 		  }, [sessionId, rpc]);
-		  (0, import_react21.useEffect)(() => {
+		  (0, import_react20.useEffect)(() => {
 		    if (!open) return;
 		    const onDown = (e) => {
 		      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
@@ -5043,26 +4703,6 @@ var __defProp = Object.defineProperty;
 		      setError("域设置失败：" + String(e && e.message || e));
 		    });
 		  };
-		  const commitHallWeights = (next) => {
-		    if (!rpc || !sessionId || mode === null) return;
-		    const prev = hallWeights;
-		    const token = seqRef.current;
-		    setHallWeights(next);
-		    setError(null);
-		    rpc("dsh-memory/session-mode-set", { sessionId, mode, hallWeights: next }).then((r) => {
-		      if (token !== seqRef.current) return;
-		      if (!r || !r.ok) {
-		        setHallWeights(prev);
-		        setError(r && r.error ? "域配额设置失败：" + r.error.message : "域配额设置失败");
-		      } else {
-		        setHallWeights(r.value.hallWeights ?? {});
-		      }
-		    }).catch((e) => {
-		      if (token !== seqRef.current) return;
-		      setHallWeights(prev);
-		      setError("域配额设置失败：" + String(e && e.message || e));
-		    });
-		  };
 		  if (!sessionId || !rpc) return null;
 		  const info = modeInfo(mode);
 		  const loaded = mode !== null;
@@ -5092,8 +4732,8 @@ var __defProp = Object.defineProperty;
 		    pillStyle.boxShadow = "0 0 12px color-mix(in srgb, " + info.color + " 30%, transparent)";
 		    pillStyle["--dsh-mem-pill-tint"] = info.color;
 		  }
-		  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { ref: wrapRef, style: { position: "relative", display: "inline-flex" }, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
+		  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { ref: wrapRef, style: { position: "relative", display: "inline-flex" }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
 		      "button",
 		      {
 		        type: "button",
@@ -5106,11 +4746,11 @@ var __defProp = Object.defineProperty;
 		        style: pillStyle,
 		        children: [
 		          "记忆 · ",
-		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { children: faceLabel })
+		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: faceLabel })
 		        ]
 		      }
 		    ),
-		    open ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		    open ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		      "div",
 		      {
 		        ref: popRef,
@@ -5121,23 +4761,21 @@ var __defProp = Object.defineProperty;
 		          transform: "translateX(calc(-50% + " + shiftX + "px))",
 		          zIndex: 1e3
 		        },
-		        children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		        children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		          "div",
 		          {
 		            className: "dsh-mem-popover",
 		            style: { position: "relative", padding: "10px 12px" },
-		            children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		            children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		              HallWheel,
 		              {
 		                mode: mode || "auto",
 		                halls,
 		                hallIncludeUnlabeled,
 		                hallIncludeGeneral,
-		                hallWeights,
 		                onCommit: commit,
 		                onCommitHall: commitHall,
 		                onCommitHallBoundaries: commitHallBoundaries,
-		                onCommitHallWeights: commitHallWeights,
 		                recall: loaded ? recall : void 0,
 		                onCommitRecall: commitRecall,
 		                error,
