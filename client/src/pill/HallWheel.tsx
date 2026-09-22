@@ -4,7 +4,7 @@
  * 几何：八边形为**固定规则正八边形**（顶点半径恒定，无鼓起/无连续半径形变）。
  * 交互：拖动 = 在 8 个顶点间**离散换挡**（档位只能是整数 0-7，绝不停在边中）。
  *   - 边正中 14° 死区 = 阻尼（档位被吸在原角，不抖动）；
- *   - 越过中点后 target 切到邻角，蓝色激活块以弹性滑块手感滑入新角（类似换挡）。
+ *   - 越过中点后 target 切到邻角，蓝色激活块以纯阻尼缓动滑入新角（无弹动/无过冲）。
  * 语义：点角 / 拖动松手 = 以该角为主题（会话级域锁定），其余角由服务端硬过滤抑制；
  *       点中心 = 回全域（智能档）。权重只与"停在哪个顶点"有关，不再做连续配额。
  *
@@ -163,7 +163,7 @@ export function HallWheel(props: {
       });
   };
 
-  // ── 离散换挡：档位永远是整数角，蓝色激活块负责视觉弹入 ──
+  // ── 离散换挡：档位永远是整数角，蓝色激活块负责视觉缓动滑入 ──
   const boxRef = useRef<HTMLDivElement | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
@@ -176,12 +176,11 @@ export function HallWheel(props: {
       : null;
   const activeIndex = dragIndex ?? lockedIndex ?? null;
 
-  // ── 弹性滑块：蓝色激活块在顶点间滑动（位置弹簧，非辐条） ──
+  // ── 阻尼滑块：蓝色激活块在顶点间缓动滑动（纯阻尼，无弹动/无过冲） ──
   const blockPosRef = useRef<{ x: number; y: number }>(
     activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER },
   );
   const blockTargetRef = useRef<{ x: number; y: number }>(blockPosRef.current);
-  const blockVelRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [blockPos, setBlockPos] = useState(blockPosRef.current);
   useEffect(() => {
     blockTargetRef.current =
@@ -194,18 +193,13 @@ export function HallWheel(props: {
       const tgt = blockTargetRef.current;
       const dx = tgt.x - cur.x;
       const dy = tgt.y - cur.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > 0.05) {
-        blockVelRef.current.x = (blockVelRef.current.x + dx * 0.2) * 0.74; // 弹簧刚度 / 阻尼
-        blockVelRef.current.y = (blockVelRef.current.y + dy * 0.2) * 0.74;
-        blockPosRef.current = {
-          x: cur.x + blockVelRef.current.x,
-          y: cur.y + blockVelRef.current.y,
-        };
-        setBlockPos(blockPosRef.current);
-      } else if (blockVelRef.current.x !== 0 || blockVelRef.current.y !== 0) {
+      if (Math.hypot(dx, dy) > 0.05) {
+        // 指数逼近：位置按比例一次性靠近目标，无速度累积 → 不会过冲/回弹
+        const next = { x: cur.x + dx * 0.18, y: cur.y + dy * 0.18 };
+        blockPosRef.current = next;
+        setBlockPos(next);
+      } else if (cur.x !== tgt.x || cur.y !== tgt.y) {
         blockPosRef.current = tgt;
-        blockVelRef.current = { x: 0, y: 0 };
         setBlockPos(tgt);
       }
       raf = window.requestAnimationFrame(loop);
@@ -324,8 +318,8 @@ export function HallWheel(props: {
             );
           })}
         </svg>
-        {/* 蓝色激活块：弹性滑块，在顶点间滑动（非辐条）。位于八边形之上、
-            角标之下；切角时以弹簧缓动滑入新顶点。 */}
+        {/* 蓝色激活块：阻尼滑块（无弹动），在顶点间滑动（非辐条）。位于八边形之上、
+            角标之下；切角时以纯阻尼缓动滑入新顶点。 */}
         <div
           aria-hidden="true"
           style={{

@@ -4170,7 +4170,6 @@ var __defProp = Object.defineProperty;
 		    activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER }
 		  );
 		  const blockTargetRef = (0, import_react19.useRef)(blockPosRef.current);
-		  const blockVelRef = (0, import_react19.useRef)({ x: 0, y: 0 });
 		  const [blockPos, setBlockPos] = (0, import_react19.useState)(blockPosRef.current);
 		  (0, import_react19.useEffect)(() => {
 		    blockTargetRef.current = activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER };
@@ -4182,18 +4181,12 @@ var __defProp = Object.defineProperty;
 		      const tgt = blockTargetRef.current;
 		      const dx = tgt.x - cur.x;
 		      const dy = tgt.y - cur.y;
-		      const dist = Math.hypot(dx, dy);
-		      if (dist > 0.05) {
-		        blockVelRef.current.x = (blockVelRef.current.x + dx * 0.2) * 0.74;
-		        blockVelRef.current.y = (blockVelRef.current.y + dy * 0.2) * 0.74;
-		        blockPosRef.current = {
-		          x: cur.x + blockVelRef.current.x,
-		          y: cur.y + blockVelRef.current.y
-		        };
-		        setBlockPos(blockPosRef.current);
-		      } else if (blockVelRef.current.x !== 0 || blockVelRef.current.y !== 0) {
+		      if (Math.hypot(dx, dy) > 0.05) {
+		        const next = { x: cur.x + dx * 0.18, y: cur.y + dy * 0.18 };
+		        blockPosRef.current = next;
+		        setBlockPos(next);
+		      } else if (cur.x !== tgt.x || cur.y !== tgt.y) {
 		        blockPosRef.current = tgt;
-		        blockVelRef.current = { x: 0, y: 0 };
 		        setBlockPos(tgt);
 		      }
 		      raf = window.requestAnimationFrame(loop);
