@@ -4075,6 +4075,10 @@ var __defProp = Object.defineProperty;
 		  const a = cornerAngle(i);
 		  return { left: CENTER + R * Math.cos(a), top: CENTER + R * Math.sin(a) };
 		}
+		function cornerXY(i) {
+		  const p = cornerPos(i);
+		  return { x: p.left, y: p.top };
+		}
 		function normAngle(a) {
 		  while (a < -Math.PI) a += TAU;
 		  while (a >= Math.PI) a -= TAU;
@@ -4162,27 +4166,35 @@ var __defProp = Object.defineProperty;
 		  const [dragIndex, setDragIndex] = (0, import_react19.useState)(null);
 		  const lockedIndex = props.halls.length === 1 ? overview?.corners.findIndex((c) => c.id === props.halls[0]) ?? null : null;
 		  const activeIndex = dragIndex ?? lockedIndex ?? null;
-		  const needleRef = (0, import_react19.useRef)(activeIndex != null ? cornerAngle(activeIndex) : -Math.PI / 2);
-		  const targetRef = (0, import_react19.useRef)(needleRef.current);
-		  const velRef = (0, import_react19.useRef)(0);
-		  const [needle, setNeedle] = (0, import_react19.useState)(needleRef.current);
+		  const blockPosRef = (0, import_react19.useRef)(
+		    activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER }
+		  );
+		  const blockTargetRef = (0, import_react19.useRef)(blockPosRef.current);
+		  const blockVelRef = (0, import_react19.useRef)({ x: 0, y: 0 });
+		  const [blockPos, setBlockPos] = (0, import_react19.useState)(blockPosRef.current);
 		  (0, import_react19.useEffect)(() => {
-		    targetRef.current = activeIndex != null ? cornerAngle(activeIndex) : -Math.PI / 2;
+		    blockTargetRef.current = activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER };
 		  }, [activeIndex]);
 		  (0, import_react19.useEffect)(() => {
 		    let raf = 0;
 		    const loop = () => {
-		      const cur = needleRef.current;
-		      const tgt = targetRef.current;
-		      const diff = Math.atan2(Math.sin(tgt - cur), Math.cos(tgt - cur));
-		      velRef.current += diff * 0.12;
-		      velRef.current *= 0.78;
-		      needleRef.current += velRef.current;
-		      if (Math.abs(diff) > 2e-3 || Math.abs(velRef.current) > 2e-3) {
-		        setNeedle(needleRef.current);
-		      } else if (Math.abs(diff) > 1e-4) {
-		        needleRef.current = tgt;
-		        setNeedle(tgt);
+		      const cur = blockPosRef.current;
+		      const tgt = blockTargetRef.current;
+		      const dx = tgt.x - cur.x;
+		      const dy = tgt.y - cur.y;
+		      const dist = Math.hypot(dx, dy);
+		      if (dist > 0.05) {
+		        blockVelRef.current.x = (blockVelRef.current.x + dx * 0.2) * 0.74;
+		        blockVelRef.current.y = (blockVelRef.current.y + dy * 0.2) * 0.74;
+		        blockPosRef.current = {
+		          x: cur.x + blockVelRef.current.x,
+		          y: cur.y + blockVelRef.current.y
+		        };
+		        setBlockPos(blockPosRef.current);
+		      } else if (blockVelRef.current.x !== 0 || blockVelRef.current.y !== 0) {
+		        blockPosRef.current = tgt;
+		        blockVelRef.current = { x: 0, y: 0 };
+		        setBlockPos(tgt);
 		      }
 		      raf = window.requestAnimationFrame(loop);
 		    };
@@ -4294,21 +4306,29 @@ var __defProp = Object.defineProperty;
 		                    },
 		                    "spoke" + i
 		                  );
-		                }),
-		                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                  "line",
-		                  {
-		                    x1: CENTER,
-		                    y1: CENTER,
-		                    x2: CENTER + R * Math.cos(needle),
-		                    y2: CENTER + R * Math.sin(needle),
-		                    stroke: "var(--dsh-mem-hall-corner-on)",
-		                    strokeWidth: "2.5",
-		                    strokeLinecap: "round",
-		                    opacity: activeIndex != null ? 0.9 : 0.25
-		                  }
-		                )
+		                })
 		              ]
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		            "div",
+		            {
+		              "aria-hidden": "true",
+		              style: {
+		                position: "absolute",
+		                left: blockPos.x,
+		                top: blockPos.y,
+		                transform: "translate(-50%, -50%)",
+		                width: 52,
+		                height: 30,
+		                borderRadius: 10,
+		                border: "1.5px solid var(--dsh-mem-accent)",
+		                background: "var(--dsh-mem-accent-weak)",
+		                opacity: activeIndex != null ? 1 : 0,
+		                transition: "opacity .15s ease",
+		                pointerEvents: "none",
+		                zIndex: 1
+		              }
 		            }
 		          ),
 		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
@@ -4360,8 +4380,8 @@ var __defProp = Object.defineProperty;
 		                  gap: 0,
 		                  padding: "1px 4px",
 		                  borderRadius: 8,
-		                  border: active ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid transparent",
-		                  background: active ? "var(--dsh-mem-accent-weak)" : "transparent",
+		                  border: "1px solid transparent",
+		                  background: "transparent",
 		                  color: active ? "var(--dsh-mem-hall-corner-on)" : empty ? "var(--dsh-mem-hall-empty)" : "var(--dsh-mem-hall-corner)",
 		                  fontSize: 9.5,
 		                  lineHeight: "12px",

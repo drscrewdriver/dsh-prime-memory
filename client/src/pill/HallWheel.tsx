@@ -4,7 +4,7 @@
  * 几何：八边形为**固定规则正八边形**（顶点半径恒定，无鼓起/无连续半径形变）。
  * 交互：拖动 = 在 8 个顶点间**离散换挡**（档位只能是整数 0-7，绝不停在边中）。
  *   - 边正中 14° 死区 = 阻尼（档位被吸在原角，不抖动）；
- *   - 越过中点后 target 切到邻角，弹簧 needle 从旧角弹入新角（类似换挡）。
+ *   - 越过中点后 target 切到邻角，蓝色激活块以弹性滑块手感滑入新角（类似换挡）。
  * 语义：点角 / 拖动松手 = 以该角为主题（会话级域锁定），其余角由服务端硬过滤抑制；
  *       点中心 = 回全域（智能档）。权重只与"停在哪个顶点"有关，不再做连续配额。
  *
@@ -36,6 +36,12 @@ function cornerAngle(i: number): number {
 function cornerPos(i: number): { left: number; top: number } {
   const a = cornerAngle(i);
   return { left: CENTER + R * Math.cos(a), top: CENTER + R * Math.sin(a) };
+}
+
+/** 第 i 角坐标（x/y 形态，供激活块弹簧使用）。 */
+function cornerXY(i: number): { x: number; y: number } {
+  const p = cornerPos(i);
+  return { x: p.left, y: p.top };
 }
 
 /** 把任意角归一化到 [-π, π)。 */
@@ -157,7 +163,7 @@ export function HallWheel(props: {
       });
   };
 
-  // ── 离散换挡：档位永远是整数角，弹簧 needle 负责视觉弹入 ──
+  // ── 离散换挡：档位永远是整数角，蓝色激活块负责视觉弹入 ──
   const boxRef = useRef<HTMLDivElement | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
@@ -170,28 +176,37 @@ export function HallWheel(props: {
       : null;
   const activeIndex = dragIndex ?? lockedIndex ?? null;
 
-  // 弹簧 needle：target 随 activeIndex 切角，过中点后弹向新角
-  const needleRef = useRef(activeIndex != null ? cornerAngle(activeIndex) : -Math.PI / 2);
-  const targetRef = useRef(needleRef.current);
-  const velRef = useRef(0);
-  const [needle, setNeedle] = useState(needleRef.current);
+  // ── 弹性滑块：蓝色激活块在顶点间滑动（位置弹簧，非辐条） ──
+  const blockPosRef = useRef<{ x: number; y: number }>(
+    activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER },
+  );
+  const blockTargetRef = useRef<{ x: number; y: number }>(blockPosRef.current);
+  const blockVelRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [blockPos, setBlockPos] = useState(blockPosRef.current);
   useEffect(() => {
-    targetRef.current = activeIndex != null ? cornerAngle(activeIndex) : -Math.PI / 2;
+    blockTargetRef.current =
+      activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER };
   }, [activeIndex]);
   useEffect(() => {
     let raf = 0;
     const loop = () => {
-      const cur = needleRef.current;
-      const tgt = targetRef.current;
-      const diff = Math.atan2(Math.sin(tgt - cur), Math.cos(tgt - cur));
-      velRef.current += diff * 0.12; // 弹簧刚度
-      velRef.current *= 0.78; // 阻尼
-      needleRef.current += velRef.current;
-      if (Math.abs(diff) > 0.002 || Math.abs(velRef.current) > 0.002) {
-        setNeedle(needleRef.current);
-      } else if (Math.abs(diff) > 0.0001) {
-        needleRef.current = tgt;
-        setNeedle(tgt);
+      const cur = blockPosRef.current;
+      const tgt = blockTargetRef.current;
+      const dx = tgt.x - cur.x;
+      const dy = tgt.y - cur.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.05) {
+        blockVelRef.current.x = (blockVelRef.current.x + dx * 0.2) * 0.74; // 弹簧刚度 / 阻尼
+        blockVelRef.current.y = (blockVelRef.current.y + dy * 0.2) * 0.74;
+        blockPosRef.current = {
+          x: cur.x + blockVelRef.current.x,
+          y: cur.y + blockVelRef.current.y,
+        };
+        setBlockPos(blockPosRef.current);
+      } else if (blockVelRef.current.x !== 0 || blockVelRef.current.y !== 0) {
+        blockPosRef.current = tgt;
+        blockVelRef.current = { x: 0, y: 0 };
+        setBlockPos(tgt);
       }
       raf = window.requestAnimationFrame(loop);
     };
@@ -293,7 +308,7 @@ export function HallWheel(props: {
             stroke="var(--dsh-mem-hall-line)"
             strokeWidth="1"
           />
-          {/* 8 条固定辐条 */}
+          {/* 8 条固定辐条：中性参考线，不强调颜色、不参与动画 */}
           {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
             const p = cornerPos(i);
             return (
@@ -308,18 +323,27 @@ export function HallWheel(props: {
               />
             );
           })}
-          {/* 弹簧 needle：过中点后从旧角弹入新角（类似换挡指针） */}
-          <line
-            x1={CENTER}
-            y1={CENTER}
-            x2={CENTER + R * Math.cos(needle)}
-            y2={CENTER + R * Math.sin(needle)}
-            stroke="var(--dsh-mem-hall-corner-on)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            opacity={activeIndex != null ? 0.9 : 0.25}
-          />
         </svg>
+        {/* 蓝色激活块：弹性滑块，在顶点间滑动（非辐条）。位于八边形之上、
+            角标之下；切角时以弹簧缓动滑入新顶点。 */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: blockPos.x,
+            top: blockPos.y,
+            transform: 'translate(-50%, -50%)',
+            width: 52,
+            height: 30,
+            borderRadius: 10,
+            border: '1.5px solid var(--dsh-mem-accent)',
+            background: 'var(--dsh-mem-accent-weak)',
+            opacity: activeIndex != null ? 1 : 0,
+            transition: 'opacity .15s ease',
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        />
         {/* 中心 = 智能档：点击回中心 = 全域 */}
         <button
           type="button"
@@ -378,10 +402,8 @@ export function HallWheel(props: {
                 gap: 0,
                 padding: '1px 4px',
                 borderRadius: 8,
-                border: active
-                  ? '1.5px solid var(--dsh-mem-hall-corner-on)'
-                  : '1px solid transparent',
-                background: active ? 'var(--dsh-mem-accent-weak)' : 'transparent',
+                border: '1px solid transparent',
+                background: 'transparent',
                 color: active
                   ? 'var(--dsh-mem-hall-corner-on)'
                   : empty
