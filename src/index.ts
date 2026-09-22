@@ -37,7 +37,11 @@ import { MemoryDb, type StoreInitResult } from './store/sqlite.js';
 import { SceneStore } from './store/scenes.js';
 import { SessionModeStore } from './store/session-modes.js';
 import { StateStore } from './store/state.js';
+import { SlotStore } from './store/slots.js';
 import { registerMemoryTools } from './tools/index.js';
+import { registerSlotTools } from './tools/slots.js';
+import { registerSlotRecall } from './hooks/slot-recall.js';
+import { registerSlotsProjection } from './projection/slots.js';
 import type { MemoryLogger } from './types.js';
 import { errDetail, withFileLog } from './util/filelog.js';
 import { buildRouteChain, resolveModelRoute, invalidateEffortCache } from './llm.js';
@@ -178,6 +182,16 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       work: new PersonaStore(dataDir, 'work', logger),
     },
     state: new StateStore(StateStore.pathFor(dataDir)),
+    // 激活槽位(active slot):独立 slots.json,高频小改不拖累 checkpoint 原子写
+    slots: new SlotStore(
+      SlotStore.pathFor(dataDir),
+      logger,
+      {
+        maxSlots: config.slots.maxSlots,
+        maxBodyChars: config.slots.maxBodyChars,
+        maxTitleChars: 60,
+      },
+    ),
     // 图谱存储(MemoryDb 内自治:初始化失败仅图谱 no-op,不影响主链路)
     graph: db.graphStore,
   };
@@ -190,6 +204,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
         stores.scenes.work.init(),
         stores.persona.chat.init(),
         stores.persona.work.init(),
+        stores.slots.load(),
       ]);
     } catch (err) {
       storageOk = false;
@@ -358,6 +373,11 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir);
   runner.setAfterRun(recall.invalidateProfile);
   registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate);
+  // 激活槽位(active slot):工具面 + 常驻注入 + 服务端投影(均走 ctx.effect,可撤销)
+  registerSlotTools(ctx, config, stores.slots, logger, modes, live);
+  const slotRecall = registerSlotRecall(ctx, config, stores.slots, logger, live);
+  registerSlotsProjection(ctx, stores.slots);
+  void slotRecall;
   registerMemoryRpc(
     ctx,
     config,

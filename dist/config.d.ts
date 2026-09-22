@@ -169,6 +169,19 @@ export interface MemoryConfig {
         /** token_cost 明细保留天数;写入时滚动清理更早行。0 = 永久保留。 */
         retentionDays: number;
     };
+    /** 激活槽位(active slot):可跨会话持久的结构化提示,pinned 的 open 槽位常驻注入每轮对话上下文。 */
+    slots: {
+        /** 总开关:读/注入是否开启(写仍由 live.memoryMutate 门控)。默认开。 */
+        enabled: boolean;
+        /** 常驻注入开关:pinned 槽位是否进 agent/pre-step 上下文。默认开。 */
+        inject: boolean;
+        /** 槽位数量上限(条)。 */
+        maxSlots: number;
+        /** 常驻注入字节预算(UTF-8)。 */
+        maxAlwaysOnBytes: number;
+        /** 槽位正文最大字符数。 */
+        maxBodyChars: number;
+    };
     /** 是否注册模型可调用的记忆工具。 */
     tools: boolean;
     /** 注册 bench 控制服务(dsh-memory-bench,进程内 rebuild 触发面)。
@@ -444,6 +457,19 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
     }>, Schemastery.ObjectT<{
         retentionDays: Schema<number, number>;
     }>>;
+    slots: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+        inject: Schema<boolean, boolean>;
+        maxSlots: Schema<number, number>;
+        maxAlwaysOnBytes: Schema<number, number>;
+        maxBodyChars: Schema<number, number>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
+        inject: Schema<boolean, boolean>;
+        maxSlots: Schema<number, number>;
+        maxAlwaysOnBytes: Schema<number, number>;
+        maxBodyChars: Schema<number, number>;
+    }>>;
     tools: Schema<boolean, boolean>;
     benchControl: Schema<boolean, boolean>;
 }>, Schemastery.ObjectT<{
@@ -714,6 +740,19 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
         retentionDays: Schema<number, number>;
     }>, Schemastery.ObjectT<{
         retentionDays: Schema<number, number>;
+    }>>;
+    slots: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+        inject: Schema<boolean, boolean>;
+        maxSlots: Schema<number, number>;
+        maxAlwaysOnBytes: Schema<number, number>;
+        maxBodyChars: Schema<number, number>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
+        inject: Schema<boolean, boolean>;
+        maxSlots: Schema<number, number>;
+        maxAlwaysOnBytes: Schema<number, number>;
+        maxBodyChars: Schema<number, number>;
     }>>;
     tools: Schema<boolean, boolean>;
     benchControl: Schema<boolean, boolean>;
