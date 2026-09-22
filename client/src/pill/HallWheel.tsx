@@ -2,11 +2,13 @@
  * 八边形域轮（hall 主题轴门面，v6 换挡版）。
  *
  * 几何：八边形为**固定规则正八边形**（顶点半径恒定，无鼓起/无连续半径形变）。
- * 交互：拖动 = 在 8 个顶点间**离散换挡**（档位只能是整数 0-7，绝不停在边中）。
+ * 交互：拖动 = 在 8 个顶点间**离散换挡**（档位只能是整数 0-7，绝不停在边中），
+ *       并可沿辐条**径向滑回中心**（智能档）——顶点 ↔ 中心互切。
  *   - 边正中 14° 死区 = 阻尼（档位被吸在原角，不抖动）；
- *   - 越过中点后 target 切到邻角，蓝色激活块以纯阻尼缓动滑入新角（无弹动/无过冲）。
+ *   - 越过中点后 target 切到邻角；拖进中心圈（半径 INNER）则切到中心(智能)；
+ *   - 蓝色激活块以纯阻尼缓动在「顶点 ↔ 中心」间滑动（无弹动/无过冲）。
  * 语义：点角 / 拖动松手 = 以该角为主题（会话级域锁定），其余角由服务端硬过滤抑制；
- *       点中心 = 回全域（智能档）。权重只与"停在哪个顶点"有关，不再做连续配额。
+ *       点中心 / 向中心拖 = 回全域（智能档）。权重只与"停在哪个档位"有关。
  *
  * 数据：角计数来自 dsh-memory/hall-overview（打开时拉取一次）。
  * 层级：设置页全局闸 ⊃ 会话闸（图形外）⊃ 域范围（图形内）。
@@ -163,29 +165,34 @@ export function HallWheel(props: {
       });
   };
 
-  // ── 离散换挡：档位永远是整数角，蓝色激活块负责视觉缓动滑入 ──
+  // ── 离散换挡：档位永远是整数角；中心(智能)同样是可停档位，沿辐条径向滑入 ──
   const boxRef = useRef<HTMLDivElement | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
-  const downIndexRef = useRef<number | null>(null);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const downIndexRef = useRef<number | null>(null); // 按下时的角（点击切换用）
+  const dragTargetRef = useRef<number | null>(null); // 拖动当前目标（null = 智能/中心）
+  // drag: null = 未拖动；{ index } = 拖动中（index=null 表示已滑到中心 = 智能）
+  const [drag, setDrag] = useState<{ index: number | null } | null>(null);
 
-  const lockedIndex =
-    props.halls.length === 1
-      ? (overview?.corners.findIndex((c) => c.id === props.halls[0]) ?? null)
-      : null;
-  const activeIndex = dragIndex ?? lockedIndex ?? null;
+  const lockedIndex = (() => {
+    if (props.halls.length !== 1 || !overview) return null;
+    const i = overview.corners.findIndex((c) => c.id === props.halls[0]);
+    return i >= 0 ? i : null;
+  })();
+  /** 当前指示的角；null = 智能/中心（蓝块停在中心）。 */
+  const activeCorner = drag ? drag.index : lockedIndex;
 
-  // ── 阻尼滑块：蓝色激活块在顶点间缓动滑动（纯阻尼，无弹动/无过冲） ──
+  // ── 阻尼滑块：蓝色激活块沿辐条在「顶点 ↔ 中心(智能)」间缓动滑动
+  //    （纯阻尼指数逼近，无弹动/无过冲） ──
   const blockPosRef = useRef<{ x: number; y: number }>(
-    activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER },
+    activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER },
   );
   const blockTargetRef = useRef<{ x: number; y: number }>(blockPosRef.current);
   const [blockPos, setBlockPos] = useState(blockPosRef.current);
   useEffect(() => {
     blockTargetRef.current =
-      activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER };
-  }, [activeIndex]);
+      activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER };
+  }, [activeCorner]);
   useEffect(() => {
     let raf = 0;
     const loop = () => {
@@ -195,7 +202,7 @@ export function HallWheel(props: {
       const dy = tgt.y - cur.y;
       if (Math.hypot(dx, dy) > 0.05) {
         // 指数逼近：位置按比例一次性靠近目标，无速度累积 → 不会过冲/回弹
-        const next = { x: cur.x + dx * 0.18, y: cur.y + dy * 0.18 };
+        const next = { x: cur.x + dx * 0.2, y: cur.y + dy * 0.2 };
         blockPosRef.current = next;
         setBlockPos(next);
       } else if (cur.x !== tgt.x || cur.y !== tgt.y) {
@@ -218,44 +225,58 @@ export function HallWheel(props: {
     return { angle: Math.atan2(dy, dx), dist: Math.hypot(dx, dy) };
   };
 
+  const INNER = 34; // 中心区半径：拖进此圈 = 智能档（沿辐条向内滑）
+
   const onBoxDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isOff) return;
     const { angle, dist } = pointAngle(e.clientX, e.clientY);
-    if (dist < 24) return; // 中心区由中心按钮处理
+    if (dist < 24) return; // 中心按钮自管点击
     e.currentTarget.setPointerCapture?.(e.pointerId);
     movedRef.current = false;
     startRef.current = { x: e.clientX, y: e.clientY };
     const idx = angleIndex(angle);
     downIndexRef.current = idx;
-    setDragIndex(idx);
+    dragTargetRef.current = idx;
+    setDrag({ index: idx });
   };
   const onBoxMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!startRef.current) return;
     const s = startRef.current;
     if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > DRAG_SLOP) movedRef.current = true;
     if (!movedRef.current) return;
-    const { angle } = pointAngle(e.clientX, e.clientY);
-    const cur = dragIndex ?? lockedIndex ?? 0;
-    const cand = snapIndex(angle, cur);
-    if (cand !== dragIndex) setDragIndex(cand);
+    const { angle, dist } = pointAngle(e.clientX, e.clientY);
+    const cur = dragTargetRef.current;
+    // 径向二分：进中心圈 = 智能（沿辐条向内）；出圈 = 落到最近角
+    //（从中心出来时没有"原角"，直接取最近角，不走死区）
+    const cand: number | null =
+      dist < INNER ? null : cur == null ? angleIndex(angle) : snapIndex(angle, cur);
+    if (cand !== cur) {
+      dragTargetRef.current = cand;
+      setDrag({ index: cand });
+    }
   };
   const onBoxUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!startRef.current) return;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
     const moved = movedRef.current;
     const di = downIndexRef.current;
+    const dt = dragTargetRef.current;
     startRef.current = null;
     downIndexRef.current = null;
-    setDragIndex(null);
-    const id = di != null ? overview?.corners[di]?.id : undefined;
-    if (!id) return;
+    dragTargetRef.current = null;
+    setDrag(null);
     if (!moved) {
-      // 点击：切换该角锁定
-      const active = props.halls.includes(id);
-      props.onCommitHall(active ? null : [id]);
+      // 点击某角：切换该角锁定
+      const id = di != null ? overview?.corners[di]?.id : undefined;
+      if (!id) return;
+      props.onCommitHall(props.halls.includes(id) ? null : [id]);
+    } else if (dt == null) {
+      // 拖到中心：回智能档（全域）
+      if (props.halls.length !== 0) props.onCommitHall(null);
     } else {
-      // 拖动换挡：以最终档位为主题
-      if (!props.halls.includes(id)) props.onCommitHall([id]);
+      // 拖到某角：以该角为主题
+      const id = overview?.corners[dt]?.id;
+      if (id && !props.halls.includes(id)) props.onCommitHall([id]);
     }
   };
 
@@ -271,7 +292,7 @@ export function HallWheel(props: {
 
   return (
     <div style={{ width: SIZE }}>
-      {/* ── 图形内：固定正八边形 + 弹簧 needle ── */}
+      {/* ── 图形内：固定正八边形 + 阻尼滑块（蓝色激活块） ── */}
       <div
         ref={boxRef}
         style={{ position: 'relative', width: SIZE, height: SIZE, ...grayStyle }}
@@ -318,8 +339,8 @@ export function HallWheel(props: {
             );
           })}
         </svg>
-        {/* 蓝色激活块：阻尼滑块（无弹动），在顶点间滑动（非辐条）。位于八边形之上、
-            角标之下；切角时以纯阻尼缓动滑入新顶点。 */}
+        {/* 蓝色激活块：阻尼滑块（无弹动），沿辐条在「顶点 ↔ 中心(智能)」间滑动
+            （非辐条）。位于八边形之上、角标/中心钮之下；切档时以纯阻尼缓动滑入。 */}
         <div
           aria-hidden="true"
           style={{
@@ -332,37 +353,33 @@ export function HallWheel(props: {
             borderRadius: 10,
             border: '1.5px solid var(--dsh-mem-accent)',
             background: 'var(--dsh-mem-accent-weak)',
-            opacity: activeIndex != null ? 1 : 0,
-            transition: 'opacity .15s ease',
             pointerEvents: 'none',
             zIndex: 1,
           }}
         />
-        {/* 中心 = 智能档：点击回中心 = 全域 */}
+        {/* 中心 = 智能档：点击回中心 = 全域。视觉与角标同尺寸，蓝块滑到此处即智能 */}
         <button
           type="button"
-          title="智能档：自动判断召回各域（回中心 = 全域）"
+          title="智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）"
           onClick={() => props.onCommitHall(null)}
           style={{
             position: 'absolute',
             left: CENTER,
             top: CENTER,
             transform: 'translate(-50%, -50%)',
-            width: 46,
-            height: 46,
-            borderRadius: '50%',
-            border:
-              props.halls.length === 0
-                ? '1.5px solid var(--dsh-mem-hall-corner-on)'
-                : '1px solid var(--dsh-mem-hall-line)',
-            background: 'var(--dsh-mem-bg-card)',
+            width: 52,
+            height: 30,
+            borderRadius: 10,
+            border: 'none',
+            background: 'transparent',
             color:
-              props.halls.length === 0
+              activeCorner == null
                 ? 'var(--dsh-mem-hall-corner-on)'
                 : 'var(--dsh-mem-hall-corner)',
             fontSize: 11,
             fontWeight: 600,
             cursor: 'pointer',
+            zIndex: 2,
           }}
         >
           智能
@@ -373,8 +390,8 @@ export function HallWheel(props: {
           const id = corner?.id;
           const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
           const count = id ? cornerCount(id) : null;
-          const active = activeIndex === i;
-          const dim = activeIndex != null && !active;
+          const active = activeCorner === i;
+          const dim = activeCorner != null && !active;
           const empty = count === 0;
           const p = cornerPos(i);
           return (
@@ -410,6 +427,7 @@ export function HallWheel(props: {
                 maxWidth: 58,
                 opacity: dim ? 0.45 : 1,
                 pointerEvents: 'none',
+                zIndex: 2,
               }}
             >
               <span>{label}</span>

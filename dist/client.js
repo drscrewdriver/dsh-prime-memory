@@ -4163,17 +4163,22 @@ var __defProp = Object.defineProperty;
 		  const startRef = (0, import_react19.useRef)(null);
 		  const movedRef = (0, import_react19.useRef)(false);
 		  const downIndexRef = (0, import_react19.useRef)(null);
-		  const [dragIndex, setDragIndex] = (0, import_react19.useState)(null);
-		  const lockedIndex = props.halls.length === 1 ? overview?.corners.findIndex((c) => c.id === props.halls[0]) ?? null : null;
-		  const activeIndex = dragIndex ?? lockedIndex ?? null;
+		  const dragTargetRef = (0, import_react19.useRef)(null);
+		  const [drag, setDrag] = (0, import_react19.useState)(null);
+		  const lockedIndex = (() => {
+		    if (props.halls.length !== 1 || !overview) return null;
+		    const i = overview.corners.findIndex((c) => c.id === props.halls[0]);
+		    return i >= 0 ? i : null;
+		  })();
+		  const activeCorner = drag ? drag.index : lockedIndex;
 		  const blockPosRef = (0, import_react19.useRef)(
-		    activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER }
+		    activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER }
 		  );
 		  const blockTargetRef = (0, import_react19.useRef)(blockPosRef.current);
 		  const [blockPos, setBlockPos] = (0, import_react19.useState)(blockPosRef.current);
 		  (0, import_react19.useEffect)(() => {
-		    blockTargetRef.current = activeIndex != null ? cornerXY(activeIndex) : { x: CENTER, y: CENTER };
-		  }, [activeIndex]);
+		    blockTargetRef.current = activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER };
+		  }, [activeCorner]);
 		  (0, import_react19.useEffect)(() => {
 		    let raf = 0;
 		    const loop = () => {
@@ -4182,7 +4187,7 @@ var __defProp = Object.defineProperty;
 		      const dx = tgt.x - cur.x;
 		      const dy = tgt.y - cur.y;
 		      if (Math.hypot(dx, dy) > 0.05) {
-		        const next = { x: cur.x + dx * 0.18, y: cur.y + dy * 0.18 };
+		        const next = { x: cur.x + dx * 0.2, y: cur.y + dy * 0.2 };
 		        blockPosRef.current = next;
 		        setBlockPos(next);
 		      } else if (cur.x !== tgt.x || cur.y !== tgt.y) {
@@ -4203,6 +4208,7 @@ var __defProp = Object.defineProperty;
 		    const dy = (clientY - (r.top + CENTER * scale)) / scale;
 		    return { angle: Math.atan2(dy, dx), dist: Math.hypot(dx, dy) };
 		  };
+		  const INNER = 34;
 		  const onBoxDown = (e) => {
 		    if (isOff) return;
 		    const { angle, dist } = pointAngle(e.clientX, e.clientY);
@@ -4212,33 +4218,41 @@ var __defProp = Object.defineProperty;
 		    startRef.current = { x: e.clientX, y: e.clientY };
 		    const idx = angleIndex(angle);
 		    downIndexRef.current = idx;
-		    setDragIndex(idx);
+		    dragTargetRef.current = idx;
+		    setDrag({ index: idx });
 		  };
 		  const onBoxMove = (e) => {
 		    if (!startRef.current) return;
 		    const s = startRef.current;
 		    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > DRAG_SLOP) movedRef.current = true;
 		    if (!movedRef.current) return;
-		    const { angle } = pointAngle(e.clientX, e.clientY);
-		    const cur = dragIndex ?? lockedIndex ?? 0;
-		    const cand = snapIndex(angle, cur);
-		    if (cand !== dragIndex) setDragIndex(cand);
+		    const { angle, dist } = pointAngle(e.clientX, e.clientY);
+		    const cur = dragTargetRef.current;
+		    const cand = dist < INNER ? null : cur == null ? angleIndex(angle) : snapIndex(angle, cur);
+		    if (cand !== cur) {
+		      dragTargetRef.current = cand;
+		      setDrag({ index: cand });
+		    }
 		  };
 		  const onBoxUp = (e) => {
 		    if (!startRef.current) return;
 		    e.currentTarget.releasePointerCapture?.(e.pointerId);
 		    const moved = movedRef.current;
 		    const di = downIndexRef.current;
+		    const dt = dragTargetRef.current;
 		    startRef.current = null;
 		    downIndexRef.current = null;
-		    setDragIndex(null);
-		    const id = di != null ? overview?.corners[di]?.id : void 0;
-		    if (!id) return;
+		    dragTargetRef.current = null;
+		    setDrag(null);
 		    if (!moved) {
-		      const active = props.halls.includes(id);
-		      props.onCommitHall(active ? null : [id]);
+		      const id = di != null ? overview?.corners[di]?.id : void 0;
+		      if (!id) return;
+		      props.onCommitHall(props.halls.includes(id) ? null : [id]);
+		    } else if (dt == null) {
+		      if (props.halls.length !== 0) props.onCommitHall(null);
 		    } else {
-		      if (!props.halls.includes(id)) props.onCommitHall([id]);
+		      const id = overview?.corners[dt]?.id;
+		      if (id && !props.halls.includes(id)) props.onCommitHall([id]);
 		    }
 		  };
 		  const polyPoints = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
@@ -4317,8 +4331,6 @@ var __defProp = Object.defineProperty;
 		                borderRadius: 10,
 		                border: "1.5px solid var(--dsh-mem-accent)",
 		                background: "var(--dsh-mem-accent-weak)",
-		                opacity: activeIndex != null ? 1 : 0,
-		                transition: "opacity .15s ease",
 		                pointerEvents: "none",
 		                zIndex: 1
 		              }
@@ -4328,22 +4340,23 @@ var __defProp = Object.defineProperty;
 		            "button",
 		            {
 		              type: "button",
-		              title: "智能档：自动判断召回各域（回中心 = 全域）",
+		              title: "智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）",
 		              onClick: () => props.onCommitHall(null),
 		              style: {
 		                position: "absolute",
 		                left: CENTER,
 		                top: CENTER,
 		                transform: "translate(-50%, -50%)",
-		                width: 46,
-		                height: 46,
-		                borderRadius: "50%",
-		                border: props.halls.length === 0 ? "1.5px solid var(--dsh-mem-hall-corner-on)" : "1px solid var(--dsh-mem-hall-line)",
-		                background: "var(--dsh-mem-bg-card)",
-		                color: props.halls.length === 0 ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
+		                width: 52,
+		                height: 30,
+		                borderRadius: 10,
+		                border: "none",
+		                background: "transparent",
+		                color: activeCorner == null ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
 		                fontSize: 11,
 		                fontWeight: 600,
-		                cursor: "pointer"
+		                cursor: "pointer",
+		                zIndex: 2
 		              },
 		              children: "智能"
 		            }
@@ -4353,8 +4366,8 @@ var __defProp = Object.defineProperty;
 		            const id = corner?.id;
 		            const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
 		            const count = id ? cornerCount(id) : null;
-		            const active = activeIndex === i;
-		            const dim = activeIndex != null && !active;
+		            const active = activeCorner === i;
+		            const dim = activeCorner != null && !active;
 		            const empty = count === 0;
 		            const p = cornerPos(i);
 		            return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
@@ -4382,7 +4395,8 @@ var __defProp = Object.defineProperty;
 		                  whiteSpace: "nowrap",
 		                  maxWidth: 58,
 		                  opacity: dim ? 0.45 : 1,
-		                  pointerEvents: "none"
+		                  pointerEvents: "none",
+		                  zIndex: 2
 		                },
 		                children: [
 		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: label }),
