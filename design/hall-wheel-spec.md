@@ -72,8 +72,8 @@
 ## 无障碍与动效
 
 - 角与中心均为真实 `<button>`，`title` 说明语义（"锁定 X 域：本会话只召回该域"）。
-- 蓝色激活块的位移是 **JS rAF（inline `left`/`top`）**，样式表媒体查询物理上管不到 →
-  `prefers-reduced-motion` 下**当前不做静帧降级**（与 global-spec"已知限制"第 1 条同类）。
+- `prefers-reduced-motion: reduce` → 蓝色激活块**不做缓动**，直接吸附目标顶点（静帧）；
+  组件内读 `matchMedia` 并监听变化。
 - 置灰用 `opacity 0.45` + `pointer-events: none`（边界开关另加 `grayscale(1)` 表达"不适用"）。
 - 键盘：按钮原生焦点；浮层 Esc 收起、外点收起（与 pill 既有行为一致）。
 

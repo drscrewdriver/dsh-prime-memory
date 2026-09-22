@@ -146,7 +146,7 @@ smoke 第 21 节机械断言：inline `borderRadius` 与 CSS `border-radius` 只
 | 按压反馈 | `transform .08s ease`（`.dsh-mem-btn` 自有 transition） | 同上（reduced-motion 块末置压制） |
 | 流光 | `dshMemFlow 3s linear infinite`（`@property --dsh-mem-angle` 注册角度插值） | 同上 → `animation: none` |
 | 开关旋钮 | inline `left .15s` | inline 优先级高于样式表媒体查询，无法被压制（已知限制） |
-| 域轮激活块 | HallWheel 蓝块位置走 JS rAF 指数逼近（`*0.2`，无速度项、不过冲不弹动） | 同上（JS 动画不受样式表媒体查询控制） |
+| 域轮激活块 | HallWheel 蓝块位置走 JS rAF 指数逼近（`*0.2`，无速度项、不过冲不弹动） | `prefers-reduced-motion` → 组件读 `matchMedia` 直接吸附终点（静帧） |
 | 重建进度 | `.dsh-mem-rb-fill` `width .4s ease` | `prefers-reduced-motion` → `none` |
 | 场景卡折叠箭头 | `.dsh-mem-scene-chev` `transform .15s ease`（展开态 rotate(90deg)） | 同上（兜底块名单内） |
 | 下拉触发钮箭头 | `.dsh-mem-sel-chev` `transform .12s ease`（展开态 rotate(225deg)；CSS 描边画法，无位图/SVG 资产） | 同上（兜底块名单内） |
@@ -166,10 +166,10 @@ smoke 第 21 节机械断言：inline `borderRadius` 与 CSS `border-radius` 只
 
 ## 已知限制（改动前必读）
 
-1. **inline / JS 动画不受 reduced-motion 压制**：开关旋钮（`S.knob`）的 transition 是
-   React inline style；域轮蓝色激活块的位移是 JS rAF（inline `left`/`top`）——样式表
-   媒体查询物理上盖不过行内优先级与 JS。修复需要组件侧读 `matchMedia`，当前接受
-   （位移动画幅度小、时长短）。
+1. **inline transition 不受 reduced-motion 压制**：开关旋钮（`S.knob`）的 transition 是
+   React inline style，样式表媒体查询物理上盖不过行内优先级。域轮激活块已修
+   （组件读 `matchMedia`，reduce 下静帧吸附终点）；旋钮要修同样需要组件侧读
+   `matchMedia`，当前接受（位移动画幅度小、时长短）。
 2. **浅色三级灰 `#6e7781` 余量薄**（4.547:1）：GitHub 标准灰，当前合规；
    宿主背景若比纯白略暗需复核。
 3. **dsw 令牌缺失时 fallback 自负**：中性色链 dsw 是"信任宿主"设计；宿主未定义
