@@ -284,6 +284,19 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
     }>, Schemastery.ObjectT<{
         retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
     }>>;
+    slots: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        inject: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        maxSlots: import("@deepseek-ai/schemastery").default<number, number>;
+        maxAlwaysOnBytes: import("@deepseek-ai/schemastery").default<number, number>;
+        maxBodyChars: import("@deepseek-ai/schemastery").default<number, number>;
+    }>, Schemastery.ObjectT<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        inject: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        maxSlots: import("@deepseek-ai/schemastery").default<number, number>;
+        maxAlwaysOnBytes: import("@deepseek-ai/schemastery").default<number, number>;
+        maxBodyChars: import("@deepseek-ai/schemastery").default<number, number>;
+    }>>;
     tools: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     benchControl: import("@deepseek-ai/schemastery").default<boolean, boolean>;
 }>, Schemastery.ObjectT<{
@@ -554,6 +567,19 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
     }>, Schemastery.ObjectT<{
         retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+    }>>;
+    slots: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        inject: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        maxSlots: import("@deepseek-ai/schemastery").default<number, number>;
+        maxAlwaysOnBytes: import("@deepseek-ai/schemastery").default<number, number>;
+        maxBodyChars: import("@deepseek-ai/schemastery").default<number, number>;
+    }>, Schemastery.ObjectT<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        inject: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        maxSlots: import("@deepseek-ai/schemastery").default<number, number>;
+        maxAlwaysOnBytes: import("@deepseek-ai/schemastery").default<number, number>;
+        maxBodyChars: import("@deepseek-ai/schemastery").default<number, number>;
     }>>;
     tools: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     benchControl: import("@deepseek-ai/schemastery").default<boolean, boolean>;

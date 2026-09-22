@@ -1,0 +1,235 @@
+/**
+ * 激活槽位工具面单元测试(task_23):三工具注册 / memoryMutate 写门控两态 /
+ * 会话档位读门控 / 参数边界 / 上限错误透出。
+ */
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
+import { registerSlotTools } from '../src/tools/slots.js';
+import { SlotStore } from '../src/store/slots.js';
+import { SessionModeStore } from '../src/store/session-modes.js';
+import type { LiveSettingsHandle } from '../src/settings.js';
+import type { MemoryConfig } from '../src/config.js';
+import type { MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryLogger } from '../src/types.js';
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
+
+let dir: string;
+async function tmp(): Promise<string> {
+  if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-slots-tools-'));
+  return dir;
+}
+afterAll(async () => {
+  if (dir) await rm(dir, { recursive: true, force: true });
+});
+
+const noopLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as unknown as MemoryLogger;
+
+interface RegisteredTool {
+  name: string;
+  execute: (args: Record<string, unknown>, exec?: { agent?: { id?: string } }) => Promise<unknown>;
+  output?: { render?: (args: Record<string, unknown>, value: never) => { type: string; text: string }[] };
+}
+
+interface Harness {
+  registered: RegisteredTool[];
+  store: SlotStore;
+  call: (name: string, args: Record<string, unknown>, sessionId?: string) => Promise<unknown>;
+  text: (name: string, args: Record<string, unknown>, value: unknown) => string;
+}
+
+async function harness(opts: { mutate?: boolean; globalRecall?: boolean; tools?: boolean; maxSlots?: number } = {}): Promise<Harness> {
+  const dataDir = join(await tmp(), `t-${Math.random().toString(36).slice(2)}`);
+  const store = new SlotStore(SlotStore.pathFor(dataDir), noopLogger, {
+    maxSlots: opts.maxSlots ?? 8,
+    maxBodyChars: 512,
+    maxTitleChars: 60,
+  });
+  await store.load();
+
+  const live: MemoryLiveSettings = {
+    enabled: true,
+    capture: true,
+    distill: true,
+    recall: opts.globalRecall ?? true,
+    memoryMutate: opts.mutate ?? false,
+  } as unknown as MemoryLiveSettings;
+  const liveHandle: LiveSettingsHandle = { supported: true, get: () => live, update: async () => {} };
+
+  const modes = new SessionModeStore('/nonexistent', 'auto');
+  const entries = (modes as unknown as { entries: Map<string, unknown> }).entries;
+  entries.set('work-sess', { mode: 'work', recall: undefined, updatedAt: 0 });
+  entries.set('off-sess', { mode: 'off', recall: undefined, updatedAt: 0 });
+  entries.set('wo-sess', { mode: 'chat', recall: false, updatedAt: 0 });
+
+  const registered: RegisteredTool[] = [];
+  const ctx = {
+    tools: { register: (t: ToolDefinition) => registered.push(t as unknown as RegisteredTool) },
+  } as unknown as Parameters<typeof registerSlotTools>[0];
+
+  const cfg = { tools: opts.tools ?? true } as unknown as MemoryConfig;
+  registerSlotTools(ctx, cfg, store, noopLogger, modes, liveHandle);
+
+  const find = (name: string): RegisteredTool => {
+    const tool = registered.find((t) => t.name === name);
+    if (!tool) throw new Error(`未注册工具:${name}`);
+    return tool;
+  };
+  return {
+    registered,
+    store,
+    call: (name, args, sessionId = 'work-sess') =>
+      find(name).execute(args, sessionId ? { agent: { id: sessionId } } : undefined),
+    text: (name, args, value) => {
+      const parts = find(name).output?.render?.(args, value as never) ?? [];
+      return parts.map((p) => p.text).join('\n');
+    },
+  };
+}
+
+describe('槽位工具注册面', () => {
+  it('恰好注册三个工具(F4);cfg.tools=false 时零注册', async () => {
+    const h = await harness();
+    expect(h.registered.map((t) => t.name).sort()).toEqual([
+      'memory_slot_close',
+      'memory_slot_list',
+      'memory_slot_write',
+    ]);
+    const off = await harness({ tools: false });
+    expect(off.registered).toEqual([]);
+  });
+});
+
+describe('memory_slot_write / close 的 memoryMutate 门控(F5)', () => {
+  it('mutate=false:写入被拒并返回明确 notice,store 不变', async () => {
+    const h = await harness({ mutate: false });
+    const res = (await h.call('memory_slot_write', { title: '网络规则' })) as { id?: string; notice?: string };
+    expect(res.id).toBeUndefined();
+    expect(res.notice).toMatch(/高权限/);
+    expect(h.store.count()).toBe(0);
+    expect(await h.call('memory_slot_close', { id: 'slot_x' })).toEqual(expect.objectContaining({ ok: false }));
+    expect(h.store.revision()).toBe(0); // 未发生任何写盘
+  });
+
+  it('mutate=true:写入成功并可被 list 读回', async () => {
+    const h = await harness({ mutate: true });
+    const res = (await h.call('memory_slot_write', {
+      title: '网络:上行官方 + SSH,下行走国内镜像',
+      kind: 'rule',
+      pinned: true,
+      priority: 95,
+      body: '所有下载走镜像,禁止叠加代理',
+      refs: 'design/network-policy.md, r-123',
+    })) as { id?: string };
+    expect(res.id).toMatch(/^slot_/);
+    expect(h.store.count()).toBe(1);
+    const listed = (await h.call('memory_slot_list', {})) as { slots: { title: string; refs: string[] }[] };
+    expect(listed.slots).toHaveLength(1);
+    expect(listed.slots[0]?.refs).toEqual(['design/network-policy.md', 'r-123']);
+  });
+
+  it('close:命中置 done,未命中返回 ok=false', async () => {
+    const h = await harness({ mutate: true });
+    const created = (await h.call('memory_slot_write', { title: 'A', pinned: true })) as { id: string };
+    expect(await h.call('memory_slot_close', { id: created.id, status: 'done' })).toEqual({ ok: true });
+    expect(h.store.list()[0]?.status).toBe('done');
+    expect(await h.call('memory_slot_close', { id: 'slot_missing' })).toEqual({ ok: false });
+    expect(await h.call('memory_slot_close', { id: '  ' })).toEqual(
+      expect.objectContaining({ ok: false, notice: 'id 为空' }),
+    );
+    expect(h.store.list()[0]?.status).toBe('done');
+  });
+
+  it('渲染面:notice 与槽位清单直达模型', async () => {
+    const denied = await harness({ mutate: false });
+    const notice = (await denied.call('memory_slot_write', { title: 'A' })) as never;
+    expect(denied.text('memory_slot_write', {}, notice)).toMatch(/高权限/);
+
+    const allowed = await harness({ mutate: true });
+    await allowed.call('memory_slot_write', { title: '网络规则', pinned: true, kind: 'rule' });
+    const listValue = (await allowed.call('memory_slot_list', {})) as never;
+    expect(allowed.text('memory_slot_list', {}, listValue)).toContain('网络规则');
+    const closeValue = (await allowed.call('memory_slot_close', { id: 'slot_missing' })) as never;
+    expect(allowed.text('memory_slot_close', {}, closeValue)).toMatch(/不存在|失败/);
+  });
+});
+
+describe('memory_slot_list 的会话档位门控(task_19)', () => {
+  it('off 档拒读;注入覆盖=关拒读;正常档返回槽位', async () => {
+    const h = await harness({ mutate: true });
+    await h.call('memory_slot_write', { title: 'A', pinned: true });
+
+    const off = (await h.call('memory_slot_list', {}, 'off-sess')) as { slots: unknown[]; notice?: string };
+    expect(off.slots).toEqual([]);
+    expect(off.notice).toMatch(/关闭/);
+
+    const override = (await h.call('memory_slot_list', {}, 'wo-sess')) as { slots: unknown[]; notice?: string };
+    expect(override.slots).toEqual([]);
+    expect(override.notice).toMatch(/召回已关闭/);
+
+    const ok = (await h.call('memory_slot_list', {}, 'work-sess')) as { slots: unknown[]; notice?: string };
+    expect(ok.slots).toHaveLength(1);
+    expect(ok.notice).toBeUndefined();
+  });
+
+  it('全局召回关闭时拒读;缺 agent 标识时 fail-open', async () => {
+    const closed = await harness({ mutate: true, globalRecall: false });
+    await closed.call('memory_slot_write', { title: 'A' });
+    const res = (await closed.call('memory_slot_list', {}, 'work-sess')) as { slots: unknown[]; notice?: string };
+    expect(res.notice).toMatch(/召回已关闭/);
+
+    const open = await harness({ mutate: true });
+    await open.call('memory_slot_write', { title: 'A' });
+    const noAgent = (await open.call('memory_slot_list', {}, '')) as { slots: unknown[] };
+    expect(noAgent.slots).toHaveLength(1);
+  });
+  it('status 过滤', async () => {
+    const h = await harness({ mutate: true });
+    const a = (await h.call('memory_slot_write', { title: 'A' })) as { id: string };
+    await h.call('memory_slot_write', { title: 'B' });
+    await h.call('memory_slot_close', { id: a.id });
+    const done = (await h.call('memory_slot_list', { status: 'done' })) as { slots: { title: string }[] };
+    expect(done.slots.map((s) => s.title)).toEqual(['A']);
+    const all = (await h.call('memory_slot_list', { status: '  ' })) as { slots: unknown[] };
+    expect(all.slots).toHaveLength(2);
+  });
+});
+
+describe('write 参数边界', () => {
+  it('空标题 → notice 且不写;超上限 → 错误消息透出不抛', async () => {
+    const h = await harness({ mutate: true, maxSlots: 1 });
+    const empty = (await h.call('memory_slot_write', { title: '   ' })) as { notice?: string };
+    expect(empty.notice).toMatch(/title/);
+    expect(h.store.count()).toBe(0);
+
+    await h.call('memory_slot_write', { title: 'A' });
+    const over = (await h.call('memory_slot_write', { title: 'B' })) as { notice?: string; id?: string };
+    expect(over.id).toBeUndefined();
+    expect(over.notice).toMatch(/上限/);
+    expect(h.store.count()).toBe(1);
+  });
+
+  it('非法 kind/priority/status 被规范化,不抛错', async () => {
+    const h = await harness({ mutate: true });
+    await h.call('memory_slot_write', {
+      title: 'X',
+      kind: 'nonsense',
+      priority: -5,
+      status: 'nonsense',
+      validUntil: '   ',
+    });
+    const slot = h.store.list()[0]!;
+    expect(slot.kind).toBe('rule');
+    expect(slot.priority).toBe(0);
+    expect(slot.status).toBe('open');
+    expect(slot.validUntil).toBeUndefined();
+  });
+
+  it('类型层由宿主 defineTool 先拦:非布尔 pinned 不会到达插件', async () => {
+    const h = await harness({ mutate: true });
+    // 边界事实:defineTool 按 parameters 做参数校验,类型不符的实参在插件 execute 之前即被拒。
+    await expect(h.call('memory_slot_write', { title: 'X', pinned: 'true' })).rejects.toThrow(/pinned/);
+    expect(h.store.count()).toBe(0);
+  });
+});

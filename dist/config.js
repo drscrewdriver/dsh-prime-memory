@@ -135,6 +135,16 @@ export const memorySchema = Schema.object({
     tokenCost: Schema.object({
         retentionDays: Schema.number().min(0).max(3650).default(365),
     }),
+    // 激活槽位(active slot):默认开(读/注入),但写路径受 live.memoryMutate 门控。
+    // 全部 boolean/number,禁用 union —— 对齐 ADR-0008 条 4(解析失败不阻断启动);
+    // 非法值不抛错(实测 Schema.union 对非法值抛错,会拖垮整棵插件树)。
+    slots: Schema.object({
+        enabled: Schema.boolean().default(true),
+        inject: Schema.boolean().default(true),
+        maxSlots: Schema.number().min(1).max(32).default(8),
+        maxAlwaysOnBytes: Schema.number().min(128).max(16_384).default(2048),
+        maxBodyChars: Schema.number().min(32).max(2048).default(512),
+    }),
     tools: Schema.boolean().default(true),
     benchControl: Schema.boolean().default(false),
 });

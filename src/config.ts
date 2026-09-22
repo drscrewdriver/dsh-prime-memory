@@ -167,6 +167,19 @@ export interface MemoryConfig {
     /** token_cost 明细保留天数;写入时滚动清理更早行。0 = 永久保留。 */
     retentionDays: number;
   };
+  /** 激活槽位(active slot):可跨会话持久的结构化提示,pinned 的 open 槽位常驻注入每轮对话上下文。 */
+  slots: {
+    /** 总开关:读/注入是否开启(写仍由 live.memoryMutate 门控)。默认开。 */
+    enabled: boolean;
+    /** 常驻注入开关:pinned 槽位是否进 agent/pre-step 上下文。默认开。 */
+    inject: boolean;
+    /** 槽位数量上限(条)。 */
+    maxSlots: number;
+    /** 常驻注入字节预算(UTF-8)。 */
+    maxAlwaysOnBytes: number;
+    /** 槽位正文最大字符数。 */
+    maxBodyChars: number;
+  };
   /** 是否注册模型可调用的记忆工具。 */
   tools: boolean;
   /** 注册 bench 控制服务(dsh-memory-bench,进程内 rebuild 触发面)。
@@ -295,6 +308,16 @@ export const memorySchema = Schema.object({
   // token_cost 明细保留期(写入时滚动清理;0 = 永久保留)。成本看板「近 N 天」窗口上限同源
   tokenCost: Schema.object({
     retentionDays: Schema.number().min(0).max(3650).default(365),
+  }),
+  // 激活槽位(active slot):默认开(读/注入),但写路径受 live.memoryMutate 门控。
+  // 全部 boolean/number,禁用 union —— 对齐 ADR-0008 条 4(解析失败不阻断启动);
+  // 非法值不抛错(实测 Schema.union 对非法值抛错,会拖垮整棵插件树)。
+  slots: Schema.object({
+    enabled: Schema.boolean().default(true),
+    inject: Schema.boolean().default(true),
+    maxSlots: Schema.number().min(1).max(32).default(8),
+    maxAlwaysOnBytes: Schema.number().min(128).max(16_384).default(2048),
+    maxBodyChars: Schema.number().min(32).max(2048).default(512),
   }),
   tools: Schema.boolean().default(true),
   benchControl: Schema.boolean().default(false),

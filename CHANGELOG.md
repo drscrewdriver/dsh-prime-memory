@@ -10,6 +10,13 @@
 
 ### 新增
 
+- **激活槽位（Active Slot）——把「每次都该生效的约定」从语义召回里拿出来，变成可跨会话持久的常驻上下文。** 起因是一次真实失效：网络访问总则（上传走官方、下载走镜像）已写进记忆，下一轮对话里却**没有被召回**，于是旧的错误习惯继续生效。语义召回是概率性的，而这类规则需要的恰恰是确定性——所以给它们一条机械通道。
+  - **存储**：`<dataDir>/slots.json`，独立于 `state.json`（槽位是高频小改，不能把 checkpoint 的原子写拖着变频），复用 `util/io.ts` 的 `atomicWriteJson`；内存态只原地改，`list()/open()/alwaysOn()` 一律返回副本（对齐 `StateStore.reset()` 的活引用教训）。
+  - **工具面三件**：`memory_slot_write` / `memory_slot_list` / `memory_slot_close`。写入与关闭受既有的高权限门控 `live.memoryMutate`（默认关）——状态变更强风控；读取受会话档位门控，与 `memory_search` 同语义。新 registrar 独立成文件，`tools/index.ts`（1156 行）零侵入。
+  - **常驻注入**：`hooks/slot-recall.ts` 独立注册 `agent/pre-step`（waterfall prepend），与既有 `recall.ts` 可组合（两段注入顺序有测试钉住）。`pinned && open` 槽位按 priority 降序、按字节预算截断；超预算的以 `… 另有 N 个` 明示并给出找回路径——**截断不静默**。`validUntil` 由注入前的一次机械清算转 `expired`（纯时间戳比较，不引入任何 LLM），否则「有效期」只是装饰。
+  - **服务端投影 `memorySlots`**：经 `ctx.inject(['sessionProjections'])` 注册——宿主没有该服务时**静默不注册**，而不是让整行 profile 加载失败。`apply` 闭包 `SlotStore` 并以 `revision()` 判脏：**只在 `tool/result`（settled、非 error）且 rev 变化时重建**（`tool/call` 提交在 `execute()` 变更 store 之前，按 call 折会读到 stale），无关事件返回**同引用**；`view` 用 `WeakMap` 保引用稳定，且**不含 body**（判定与生成正交，正文按需再取）。本轮不含任何 client 代码：展示留给下一轮 brief。
+  - **schema 零新依赖**：`stateSchema` / `viewSchema` 自实现 `parse`（注册表运行时只调这一个方法），合法态**原样返回同一引用**、非法态抛错；不引 zod（`package.json` 与锁文件不在本轮改动白名单内）。
+  - 上限：≤8 槽（可配）/ 常驻 ≤2048 字节 / body ≤512 / title ≤60。
 - **来源锚点（R7）——记忆现在能追回会话里的**真实位置**。** 在此之前溯源链是断的：L1 带着 `source_message_ids`，但那些是 **L0 消息 id**（`msg_<epoch_ms>_<hex>`），而 L0 表没有 `turn`/`step` 列；且该 id 列表**根本没写进检索库**（写入侧只取 `metadata`，字段被静默丢弃）。结果是**任何一条记忆都无法定位到原文**。
   - `l0_conversations` 补 `turn`/`step` 两列（幂等 `ALTER TABLE`；旧行保持 NULL = 无锚点，**绝不猜测回填**），并新增 `(session_id, turn)` 索引。
   - 捕获侧新增 `step/start` fold：`user/message` 在内核负载里**不带** `step`，靠同轮 `step/start` 推出；`assistant/message` 用事件自带的 `{turn, step}`。**首个 `step/start` 之前的消息 step 留空**——缺坐标时不编坐标，这是红线。
