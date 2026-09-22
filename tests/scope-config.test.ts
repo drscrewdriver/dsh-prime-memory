@@ -115,11 +115,23 @@ describe('task_27 §E 四象限：显式覆盖必须能赢过默认', () => {
 });
 
 describe('task_28 §E 工作区标识：纯字符串归一，不碰文件系统', () => {
+  /**
+   * fixture 必须用**当前平台**的路径拼写。原因：`normalizeWorkspacePath(raw, platform)` 的
+   * `platform` 参数只决定**大小写折叠**，吃 `..` 与尾分隔符的是 `path.resolve`——后者恒用
+   * **进程平台**的规则。在 Linux runner 上 `path.resolve('E:\\proj\\a')` 会把整串当成一个
+   * 相对文件名拼上 cwd，`..` 也不折叠（`/cwd/E:\proj\a\..\a`），于是"两种拼写归一"在跨平台
+   * fixture 下恒假——CI 自 §E 落地起就红在这一行。
+   */
+  const IS_WIN = process.platform === 'win32';
+  const DIR = IS_WIN ? 'E:\\proj\\a' : '/proj/a';
+  const DIR_DOTDOT = IS_WIN ? 'E:\\proj\\a\\..\\a' : '/proj/a/../a';
+  const DIR_SLASH = IS_WIN ? 'E:/proj/a/' : '/proj/a/';
+
   it('同一目录的两种拼写归一到同一标识（否则同一工作区的记忆会被劈成两份）', () => {
-    const plain = normalizeWorkspacePath('E:\\proj\\a');
-    expect(normalizeWorkspacePath('E:\\proj\\a\\..\\a')).toBe(plain);
-    expect(normalizeWorkspacePath('E:/proj/a/')).toBe(plain);
-    expect(normalizeWorkspacePath('  E:\\proj\\a  ')).toBe(plain);
+    const plain = normalizeWorkspacePath(DIR);
+    expect(normalizeWorkspacePath(DIR_DOTDOT)).toBe(plain);
+    expect(normalizeWorkspacePath(DIR_SLASH)).toBe(plain);
+    expect(normalizeWorkspacePath(`  ${DIR}  `)).toBe(plain);
   });
 
   it('win32 归一小写（E:\\Proj 与 e:\\proj 是同一目录）', () => {
