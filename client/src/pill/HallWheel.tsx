@@ -193,21 +193,40 @@ export function HallWheel(props: {
     blockTargetRef.current =
       activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER };
   }, [activeCorner]);
+  // reduced-motion：用户要求减少动态效果 → 蓝块不做缓动，直接吸附终点（静帧）
+  const reducedMotionRef = useRef(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const apply = () => {
+      reducedMotionRef.current = mq.matches;
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
   useEffect(() => {
     let raf = 0;
     const loop = () => {
       const cur = blockPosRef.current;
       const tgt = blockTargetRef.current;
-      const dx = tgt.x - cur.x;
-      const dy = tgt.y - cur.y;
-      if (Math.hypot(dx, dy) > 0.05) {
-        // 指数逼近：位置按比例一次性靠近目标，无速度累积 → 不会过冲/回弹
-        const next = { x: cur.x + dx * 0.2, y: cur.y + dy * 0.2 };
-        blockPosRef.current = next;
-        setBlockPos(next);
-      } else if (cur.x !== tgt.x || cur.y !== tgt.y) {
-        blockPosRef.current = tgt;
-        setBlockPos(tgt);
+      if (reducedMotionRef.current) {
+        // 静帧：直接落位，不插值
+        if (cur.x !== tgt.x || cur.y !== tgt.y) {
+          blockPosRef.current = tgt;
+          setBlockPos(tgt);
+        }
+      } else {
+        const dx = tgt.x - cur.x;
+        const dy = tgt.y - cur.y;
+        if (Math.hypot(dx, dy) > 0.05) {
+          // 指数逼近：位置按比例一次性靠近目标，无速度累积 → 不会过冲/回弹
+          const next = { x: cur.x + dx * 0.2, y: cur.y + dy * 0.2 };
+          blockPosRef.current = next;
+          setBlockPos(next);
+        } else if (cur.x !== tgt.x || cur.y !== tgt.y) {
+          blockPosRef.current = tgt;
+          setBlockPos(tgt);
+        }
       }
       raf = window.requestAnimationFrame(loop);
     };
