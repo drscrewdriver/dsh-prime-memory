@@ -33,14 +33,14 @@ export const HALL_ANCHORS = [
         keywords: ['摄影', '拍照', '写作', '电影', '剧', '音乐', '游戏', '动漫', '兴趣', '娱乐'],
     },
     {
-        id: 'health',
-        anchor: '饮食控制、运动健身、身体状况、睡眠作息、就医问诊、体检与用药',
-        keywords: ['健康', '运动', '健身', '睡眠', '体检', '医生', '医院', '药', '饮食', '减肥', '跑步'],
-    },
-    {
         id: 'home',
         anchor: '居住与居家生活、宠物、日用品采购、证件办理、预约缴费、家政维修',
         keywords: ['房子', '租房', '物业', '宠物', '猫', '狗', '家具', '水电', '证件', '缴费', '快递', '维修'],
+    },
+    {
+        id: 'health',
+        anchor: '饮食控制、运动健身、身体状况、睡眠作息、就医问诊、体检与用药',
+        keywords: ['健康', '运动', '健身', '睡眠', '体检', '医生', '医院', '药', '饮食', '减肥', '跑步'],
     },
     {
         id: 'finance',
@@ -57,6 +57,17 @@ export const HALL_ANCHORS = [
 export const HALL_GATE_WEIGHT_FLOOR = 0.4;
 /** 无偏置权重(降级到头/无信号时全域恒 1,零干预)。 */
 export const HALL_GATE_NEUTRAL = 1;
+/**
+ * 会话级域权重(拖动角点的产物)的取值范围:
+ * - `0` = **该域被抑制**(用户把角拖到最内圈 = 本会话不要这个域的记忆);
+ * - `1` = 中性(完全跟随智能档的域相关度判定);
+ * - `MAX` = 加权上限(把角拖到最外圈 = 该域配额加倍)。
+ * 与软门禁的 `HALL_GATE_WEIGHT_FLOOR`(0.4,降权不消失)是两件事:那条是**自动**判定的
+ * 下界,这条是**用户显式**拖动,拖到 0 就是要求排除,不该再被 floor 兜回来。
+ */
+export const HALL_WEIGHT_MIN = 0;
+export const HALL_WEIGHT_MAX = 1.5;
+export const HALL_WEIGHT_NEUTRAL = 1;
 /** 余弦相似度(向量长度不等/零向量 → 0)。 */
 export function cosine(a, b) {
     if (a.length !== b.length || a.length === 0)
@@ -126,6 +137,37 @@ export function domainOfHall(hall) {
 /** 权重的可读日志形态(每次召回可解释:8 个域权重逐个读出)。 */
 export function formatWeights(weights) {
     return HALL_ANCHORS.map(({ id }) => `${id}=${(weights[id] ?? HALL_GATE_NEUTRAL).toFixed(2)}`).join(' ');
+}
+/** 归一化会话级域权重(拖动角点的写入面):只认 8 角 id,数值 clamp 到 [0, MAX],
+ *  非数字/非法 id 一律丢弃;结果为空对象时返回 undefined(= 无用户偏置,不写盘)。 */
+export function normalizeHallWeights(raw) {
+    if (!raw || typeof raw !== 'object')
+        return undefined;
+    const out = {};
+    for (const [id, v] of Object.entries(raw)) {
+        if (!HALL_ANCHORS.some((a) => a.id === id))
+            continue;
+        if (typeof v !== 'number' || !Number.isFinite(v))
+            continue;
+        out[id] = Math.max(HALL_WEIGHT_MIN, Math.min(HALL_WEIGHT_MAX, v));
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+/** 把会话级权重叠到软门禁权重上(相乘):未拖过的角 = 中性 1(判定结果原样保留);
+ *  拖到 0 的角 = 0(该域被抑制)。返回新的权重表,不改入参。 */
+export function applyHallWeights(weights, user) {
+    if (!user)
+        return { ...weights };
+    return { ...weights, ...Object.fromEntries(HALL_ANCHORS.map(({ id }) => [id, (weights[id] ?? HALL_GATE_NEUTRAL) * (user[id] ?? HALL_WEIGHT_NEUTRAL)])) };
+}
+/** 权重生效后的过滤 + 排序(纯函数,回归锚点):权重 0 的域**整条剔除**(用户拖到底
+ *  = 显式抑制,不是降权),其余按"域相关度权重 × 用户权重"降序(同权重按 score)。 */
+export function gateByDomainWeights(hits, hallOf, weights) {
+    const weightOf = (id) => {
+        const w = weights[domainOfHall(hallOf(id)) ?? ''];
+        return typeof w === 'number' ? w : HALL_GATE_NEUTRAL;
+    };
+    return sortByDomainWeight(hits.filter((h) => weightOf(h.id) > 0), hallOf, weights);
 }
 /** 手动挡硬过滤(纯函数,回归锚点):锁定集(多选,命中任一)= 只留锁定域;
  *  未打标/跨域按边界开关放行。验证口径:单主题咨询下其他域记忆零注入。 */

@@ -16,6 +16,10 @@ import {
   weightsFromKeywords,
   HALL_ANCHORS,
   HALL_GATE_WEIGHT_FLOOR,
+  HALL_WEIGHT_MAX,
+  applyHallWeights,
+  gateByDomainWeights,
+  normalizeHallWeights,
 } from '../src/domain-gate.js';
 import { isHallCorner, SessionModeStore } from '../src/store/session-modes.js';
 
@@ -164,5 +168,59 @@ describe('session hall lock storage (task_18①: 同存储/写穿/正交/跨切�
     expect(store.getHall('s2')).toBe('work');
     store.setHall('s2', []);
     expect(store.getHalls('s2')).toEqual([]);
+  });
+});
+
+describe('hall 角序与拖动配额(2026-09-23)', () => {
+  it('居家在健康之前(用户要求对调)', () => {
+    const ids = HALL_CATALOG.map((h) => h.id);
+    expect(ids.indexOf('home')).toBeLessThan(ids.indexOf('health'));
+  });
+
+  it('normalizeHallWeights 只认 8 角、clamp 到 [0,1.5]、全非法返回 undefined', () => {
+    expect(normalizeHallWeights({ work: 1.2, 健康: 0.5, general: 3 })).toEqual({ work: 1.2 });
+    expect(normalizeHallWeights({ work: 9, home: -1 })).toEqual({ work: HALL_WEIGHT_MAX, home: 0 });
+    expect(normalizeHallWeights({})).toBeUndefined();
+    expect(normalizeHallWeights('x')).toBeUndefined();
+  });
+
+  it('applyHallWeights 相乘叠加,未拖过的角保持中性', () => {
+    const gate = { work: 0.8, home: 0.4, health: 1 };
+    expect(applyHallWeights(gate, null)).toEqual(gate);
+    const merged = applyHallWeights(gate, { work: 0, health: 1.5 });
+    expect(merged.work).toBe(0); // 拖到底 = 抑制
+    expect(merged.home).toBe(0.4); // 没拖过 = 自动判定原样
+    expect(merged.health).toBeCloseTo(1.5, 5);
+  });
+
+  it('gateByDomainWeights:权重 0 的域整条剔除,其余按权重降序', () => {
+    const hits = [
+      { id: 'a', score: 0.9 },
+      { id: 'b', score: 0.9 },
+      { id: 'c', score: 0.1 },
+    ];
+    const hallOf = (id: string) => ({ a: 'work', b: 'home', c: 'health' })[id];
+    const out = gateByDomainWeights(hits, hallOf, { work: 0, home: 1.5, health: 0.4 });
+    expect(out.map((h) => h.id)).toEqual(['b', 'c']); // a(work) 被抑制剔除
+  });
+
+  it('域权重:写穿 + 与锁域/档位正交 + 跨切档保留', async () => {
+    const { mkdtemp } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-hallw-'));
+    const store = new SessionModeStore(dir, 'auto');
+    store.setHallWeights('s1', { finance: 0, work: 1.4, 非法域: 2 });
+    store.setHall('s1', ['work']); // 锁域不动权重(正交)
+    store.set('s1', 'work'); // 切档不动权重
+    await store.flush();
+    expect(store.getHallWeights('s1')).toEqual({ finance: 0, work: 1.4 });
+    expect(store.getHalls('s1')).toEqual(['work']);
+    const reloaded = new SessionModeStore(dir, 'auto');
+    await reloaded.init();
+    expect(reloaded.getHallWeights('s1')).toEqual({ finance: 0, work: 1.4 });
+    // 复位:空对象 = 清除偏置
+    store.setHallWeights('s1', {});
+    expect(store.getHallWeights('s1')).toEqual({});
   });
 });

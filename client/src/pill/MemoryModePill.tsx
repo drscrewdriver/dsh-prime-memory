@@ -24,6 +24,8 @@ export function MemoryModePill(props: {
   const [halls, setHalls] = useState<string[]>([]);
   const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = useState(true);
   const [hallIncludeGeneral, setHallIncludeGeneral] = useState(false);
+  // 会话级域权重(拖动角点产物):角 id → 0(抑制)~1.5(加权上限),未拖过的角不落键
+  const [hallWeights, setHallWeights] = useState<Record<string, number>>({});
   // 面文域显示名（hall-overview 下发，词表单一事实源在服务端）
   const [hallLabels, setHallLabels] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function MemoryModePill(props: {
           setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
           setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
           setHallIncludeGeneral(r.value.hallIncludeGeneral);
+          setHallWeights(r.value.hallWeights ?? {});
         } else setError(r && !r.ok ? r.error.message : 'RPC error');
       })
       .catch((e: unknown) => {
@@ -219,6 +222,31 @@ export function MemoryModePill(props: {
       });
   };
 
+  /** 域权重提交(拖动角点;全量替换,空对象 = 复位中性)。
+   *  与锁域正交:只写权重,不动 halls/mode/recall。乐观更新 + 失败回滚。 */
+  const commitHallWeights = (next: Record<string, number>) => {
+    if (!rpc || !sessionId || mode === null) return;
+    const prev = hallWeights;
+    const token = seqRef.current;
+    setHallWeights(next);
+    setError(null);
+    rpc('dsh-memory/session-mode-set', { sessionId, mode: mode as 'auto', hallWeights: next })
+      .then((r) => {
+        if (token !== seqRef.current) return;
+        if (!r || !r.ok) {
+          setHallWeights(prev);
+          setError(r && r.error ? '域配额设置失败：' + r.error.message : '域配额设置失败');
+        } else {
+          setHallWeights(r.value.hallWeights ?? {});
+        }
+      })
+      .catch((e: unknown) => {
+        if (token !== seqRef.current) return;
+        setHallWeights(prev);
+        setError('域配额设置失败：' + String((e && (e as Error).message) || e));
+      });
+  };
+
   if (!sessionId || !rpc) return null;
   const info = modeInfo(mode);
   const loaded = mode !== null;
@@ -299,16 +327,19 @@ export function MemoryModePill(props: {
           <div
             // dsh 原生菜单同配方浮层：不透明实底 + inverted 描边 + lv3 阴影
             className="dsh-mem-popover"
-            style={{ position: 'relative', padding: '14px 16px' }}
+            // padding 收窄(14/16 → 10/12):八边形容器压到 196px 后,整体宽度进窄栏
+            style={{ position: 'relative', padding: '10px 12px' }}
           >
             <HallWheel
               mode={mode || 'auto'}
               halls={halls}
               hallIncludeUnlabeled={hallIncludeUnlabeled}
               hallIncludeGeneral={hallIncludeGeneral}
+              hallWeights={hallWeights}
               onCommit={commit}
               onCommitHall={commitHall}
               onCommitHallBoundaries={commitHallBoundaries}
+              onCommitHallWeights={commitHallWeights}
               recall={loaded ? recall : undefined}
               onCommitRecall={commitRecall}
               error={error}

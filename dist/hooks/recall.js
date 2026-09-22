@@ -6,7 +6,7 @@ import { applyRecallBudget, raceRecallTimeout, RECALL_EMBED_CAP_MS } from '../ut
 import { clearProfileShare, emptyOccupancyLedger, estimateInjectedMessageTokens, estimateStableSectionTokens, recordProfileShare, recordRecallInjection, resetForCompaction, } from '../util/context-occupancy.js';
 import { errDetail } from '../util/filelog.js';
 import { blocksToText } from '../util/text.js';
-import { domainGate, formatWeights, hardFilterByHallLock, sortByDomainWeight, HALL_ANCHORS } from '../domain-gate.js';
+import { domainGate, formatWeights, hardFilterByHallLock, applyHallWeights, gateByDomainWeights, HALL_ANCHORS } from '../domain-gate.js';
 const PROFILE_TTL = 60_000;
 /** 存储回填缓存上限(超过即按插入序淘汰最旧;查看会话数为百级,500 足够)。 */
 const STORED_ESTIMATE_CACHE_CAP = 500;
@@ -228,10 +228,15 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                         ? await stores.l1.embedText(query, RECALL_EMBED_CAP_MS)
                         : undefined;
                     const gate = domainGate(query, { queryVec, anchorVecs: anchorVecsReady ?? undefined });
-                    if (gate.source !== 'none' && scoped.length > 1) {
+                    // 会话级域权重(拖动角点):与自动判定的相关度权重相乘;拖到 0 = 该域抑制
+                    // (整条剔除,不是降权)。未拖过的角缺省中性 1,自动判定结果原样保留。
+                    const userWeights = modes.getHallWeights(payload.agent.id);
+                    const effWeights = applyHallWeights(gate.weights, userWeights);
+                    const hasUserBias = Object.keys(userWeights).length > 0;
+                    if ((gate.source !== 'none' || hasUserBias) && scoped.length > 1) {
                         const hallById = hallByIdOf(scoped);
-                        scoped = sortByDomainWeight(scoped, (id) => hallById.get(id), gate.weights);
-                        logger.info(`[memory] 域软门禁(source=${gate.source}) ${formatWeights(gate.weights)} agent=${payload.agent.id}`);
+                        scoped = gateByDomainWeights(scoped, (id) => hallById.get(id), effWeights);
+                        logger.info(`[memory] 域软门禁(source=${gate.source}${hasUserBias ? '+user' : ''}) ${formatWeights(effWeights)} agent=${payload.agent.id}`);
                     }
                 }
                 // 召回去重:同会话已注入过的记录不再重复注入(模型上下文已持有,省 token)。

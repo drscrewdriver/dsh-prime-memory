@@ -112,8 +112,9 @@ describe('hall catalog', () => {
       'relationships',
       'learning',
       'creative',
-      'health',
+      // 居家在健康之前(2026-09-23 用户要求对调,三处断言同步)
       'home',
+      'health',
       'finance',
       'journey',
     ]);
@@ -127,8 +128,9 @@ describe('hall catalog', () => {
       'relationships',
       'learning',
       'creative',
-      'health',
+      // 居家在健康之前(2026-09-23 用户要求对调,三处断言同步)
       'home',
+      'health',
       'finance',
       'journey',
     ]);
@@ -208,8 +210,9 @@ describe('memory live settings key registry', () => {
       'relationships',
       'learning',
       'creative',
-      'health',
+      // 居家在健康之前(2026-09-23 用户要求对调,三处断言同步)
       'home',
+      'health',
       'finance',
       'journey',
     ]);

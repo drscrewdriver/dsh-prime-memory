@@ -438,6 +438,9 @@ export interface SessionModeGetResponse {
     hallIncludeUnlabeled: boolean;
     /** 锁定域边界开关:跨域兜底 general 是否参与召回(默认不含)。 */
     hallIncludeGeneral: boolean;
+    /** 会话级域权重(拖动角点产物,智能档软门禁的用户偏置):角 id → 权重
+     *  (0 = 抑制 / 1 = 中性 / 1.5 = 上限)。未拖过的角不出现(缺省中性)。 */
+    hallWeights: Record<string, number>;
 }
 export interface SessionModeSetRequest {
     sessionId: string;
@@ -453,6 +456,10 @@ export interface SessionModeSetRequest {
     /** 锁定域边界开关(缺省 = 不动)。 */
     hallIncludeUnlabeled?: boolean;
     hallIncludeGeneral?: boolean;
+    /** 会话级域权重(拖动角点产物):**全量替换**;显式 null/空对象 = 清除偏置回中性;
+     *  缺省 = 不动。只认 8 角 id,数值 clamp 到 [0, 1.5],非法 id 丢弃(不整体拒绝)。
+     *  与锁域正交:锁角时走硬过滤,权重留待回中心后生效。 */
+    hallWeights?: Record<string, number> | null;
 }
 export interface SessionModeSetResponse {
     sessionId: string;
@@ -466,6 +473,8 @@ export interface SessionModeSetResponse {
     halls: string[];
     hallIncludeUnlabeled: boolean;
     hallIncludeGeneral: boolean;
+    /** 设置后的域权重(角 id → 权重;空对象 = 已清除偏置,全中性)。 */
+    hallWeights: Record<string, number>;
 }
 /** dsh-memory/hall-overview(八边形角计数;HallWheel 打开时拉取,非热路径)。 */
 export interface HallOverviewResponse {

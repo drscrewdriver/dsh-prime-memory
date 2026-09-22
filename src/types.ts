@@ -30,8 +30,9 @@ export const HALL_CATALOG: HallDef[] = [
   { id: 'relationships', label: '人际' },
   { id: 'learning', label: '学习' },
   { id: 'creative', label: '创作娱乐' },
-  { id: 'health', label: '健康' },
+  // 居家在健康之前(八边形顺时针序,用户 2026-09-23 对调)
   { id: 'home', label: '居家' },
+  { id: 'health', label: '健康' },
   { id: 'finance', label: '财务' },
   { id: 'journey', label: '出行' },
 ];

@@ -7,6 +7,7 @@
 import * as path from 'node:path';
 import type { MemoryLogger, MemoryMode } from '../types.js';
 import { HALL_CATALOG } from '../types.js';
+import { normalizeHallWeights } from '../domain-gate.js';
 import { errDetail } from '../util/filelog.js';
 import { atomicWriteJson, ensureDir, readJsonIfExists } from '../util/io.js';
 
@@ -31,6 +32,10 @@ interface ModeEntry {
   hallIncludeUnlabeled?: boolean;
   /** 锁定域时跨域兜底 `general` 是否参与召回(默认不含——跨域与单主题相悖)。 */
   hallIncludeGeneral?: boolean;
+  /** 会话级域权重(拖动角点产物,智能档软门禁的用户偏置):角 id → 权重
+   *  (0 = 该域抑制 / 1 = 中性 / 1.5 = 加权上限)。未拖过的角不落键(缺省中性)。
+   *  与锁域正交:锁角走硬过滤,权重只在中心(智能档)生效。跨切档/切注入保留。 */
+  hallWeights?: Record<string, number>;
   updatedAt: number;
 }
 
@@ -89,9 +94,11 @@ export class SessionModeStore {
             : undefined,
         hallIncludeUnlabeled:
           typeof entry.hallIncludeUnlabeled === 'boolean' ? entry.hallIncludeUnlabeled : undefined,
-        hallIncludeGeneral:
-          typeof entry.hallIncludeGeneral === 'boolean' ? entry.hallIncludeGeneral : undefined,
-        updatedAt: entry.updatedAt ?? now,
+      hallIncludeGeneral:
+        typeof entry.hallIncludeGeneral === 'boolean' ? entry.hallIncludeGeneral : undefined,
+      // 域权重只认 8 角 id 且 clamp 到 [0,1.5];全非法/空 → undefined(无用户偏置)
+      hallWeights: normalizeHallWeights(entry.hallWeights),
+      updatedAt: entry.updatedAt ?? now,
       });
       count++;
     }
@@ -139,6 +146,8 @@ export class SessionModeStore {
       halls: entry?.halls,
       hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: entry?.hallIncludeGeneral,
+      // 域权重与注入/档位正交:设置注入或切档都不动权重(照抄"切档不动覆盖"模板)
+      hallWeights: entry?.hallWeights,
       updatedAt: Date.now(),
     });
     this.writeChain = this.writeChain.then(() => this.persist());
@@ -165,6 +174,29 @@ export class SessionModeStore {
     };
   }
 
+  /** 会话级域权重(拖动角点产物):角 id → 权重。未拖过任何角 = 空对象(无偏置)。 */
+  getHallWeights(sessionId: string): Record<string, number> {
+    return { ...(this.entries.get(sessionId)?.hallWeights ?? {}) };
+  }
+
+  /** 设置会话级域权重(全量替换;null/空 = 清除偏置回中性。写穿持久化)。
+   *  与锁域/注入/档位正交:此处不动 hall/halls/recall/mode。 */
+  setHallWeights(sessionId: string, weights: Record<string, number> | null | undefined): void {
+    const entry = this.entries.get(sessionId);
+    this.entries.set(sessionId, {
+      mode: entry?.mode ?? this.loaded,
+      recall: entry?.recall,
+      hall: entry?.hall,
+      halls: entry?.halls,
+      hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
+      hallIncludeGeneral: entry?.hallIncludeGeneral,
+      // 全量替换:null/空/全非法 → undefined(回中性,不写盘)
+      hallWeights: normalizeHallWeights(weights) ?? undefined,
+      updatedAt: Date.now(),
+    });
+    this.writeChain = this.writeChain.then(() => this.persist());
+  }
+
   /** 设置会话级域锁定(多选:角 id 数组;空数组/undefined = 回中心清除锁定。写穿持久化)。
    *  单角时镜像写 `hall` 兼容键,多角时置空(旧读者按无锁域读)。 */
   setHall(
@@ -181,6 +213,8 @@ export class SessionModeStore {
       halls: locked.length > 0 ? locked : undefined,
       hallIncludeUnlabeled: boundaries?.includeUnlabeled ?? entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: boundaries?.includeGeneral ?? entry?.hallIncludeGeneral,
+      // 锁域与权重正交:锁角走硬过滤,权重留着(回中心后继续生效)
+      hallWeights: entry?.hallWeights,
       updatedAt: Date.now(),
     });
     this.writeChain = this.writeChain.then(() => this.persist());
@@ -204,6 +238,8 @@ export class SessionModeStore {
       halls: entry?.halls,
       hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: entry?.hallIncludeGeneral,
+      // 域权重与注入/档位正交:设置注入或切档都不动权重(照抄"切档不动覆盖"模板)
+      hallWeights: entry?.hallWeights,
       updatedAt: Date.now(),
     });
     this.writeChain = this.writeChain.then(() => this.persist());
