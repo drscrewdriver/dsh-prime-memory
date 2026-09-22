@@ -36,6 +36,12 @@
   - **裁决侧**:`ConflictPairView` 新增可选的 `winner_*` / `loser_*` 三轴字段(向后兼容);待裁决列表与渲染为每条对附上「有效期起/止、持续性」对比,帮人一眼看出谁更新、谁已过期。
   - 机器**仍不自动裁决**:三轴只是辅助事实,最终结论仍由人工(或安全阀超时/满队列自动了结)写——`ConflictResolution` 取值不变。
 
+- **§C 三类冲突 + claim 分组 + 丢弃留痕（Phase 3-4）。** 冲突不再只有一种"硬矛盾"——LLM 现在能判定 `hard`（事实互斥）、`conditional`（前提不同才矛盾）、`supersession`（新旧取代）三类。面板按三类分段显示，每段有独立标题与说明；`defer` 按钮支持"看过但暂不裁决"（重置超时、累计复看次数）。`claim_key` 列允许标记同一主题的多对冲突，面板据此分组。被丢弃的不合法冲突决策可通过 `memory_conflicts_rejected` 工具与 `dsh-memory/conflicts-rejected` 端点查询。
+  - `conflict_pending` 新增 `conflict_type` / `claim_key` 两列（幂等 `ALTER TABLE` 迁移）。
+  - 额度计数只计 `hard`：`pendingHardTotal` 按类型过滤；`conditional` / `supersession` 不占额度。
+  - 投影哈希冻结：7 字段列投影 `projectConflictsForHash` 不含新列，存量快照校验不变。
+  - 面板：`ConflictsTab` 三类分段 + defer 按钮 + 三轴文案 + 复看次数 + claim 键显示。
+
 ### 修复
 
 - **关闭态 prompt 曾悄悄多出三轴字段(默认关闭的部署受影响)。** 首版把 `valid_from_ms` / `valid_to_ms` / `persistence` **无条件**注入候选池,而这条 LLM 调用只对 system prompt 读了开关 ⇒ `conflictFreeze=false`(部署默认)时,模型每条候选多看 3 个**没有任何条款解释**的键:既费 token,又改变了输入。现已把三键纳入 `conflictFreeze` 门控,关闭态 user prompt 与升级前**逐字节相同**;判据同时从「不含某子串」升级为 **sha1 golden 锚 + 反向验证**(改坏门控该用例必红)。

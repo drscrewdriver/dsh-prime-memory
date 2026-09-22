@@ -63,6 +63,55 @@
    `conflict_type` / `claim_key` 键体系（Phase 3）**尚未启动**；三轴的"辅助判据版"
    **不**替代它们——本 ADR 只覆盖已交付的三轴注入与门控。
 
+---
+
+## Phase 3 补充：三类冲突 + claim_key + 丢弃留痕（2026-09-22）
+
+Phase 0 普查暴露一个缺口：LLM 判定的 `conflict` / `update` / `merge` 三分类
+**只在蒸馏管线内流转**，读取面与裁决侧完全看不到——人无法区分"硬矛盾"
+与"条件冲突"，额度计数也把所有类型混在一起。
+
+决定：
+
+8. **新增 `conflict_type` 列（hard / conditional / supersession）**。
+   - `conflict_pending` 表新增 `conflict_type TEXT NOT NULL DEFAULT 'hard'`，通过
+     `PRAGMA table_info` 存在性检查 + `ALTER TABLE` 幂等迁移。
+   - 额度计数 **只计 hard**：`pendingHardTotal` 按 `conflict_type = 'hard'` 过滤；
+     conditional / supersession 不占额度，但仍在队列中等待人工裁决。
+   - `occupiesConflictQuota(type)` 纯函数决定是否占额度（当前 hard = 占，其余 = 不占）。
+
+9. **新增 `claim_key` 列（自由标识符，空串 = 未分组）**。
+   - 同一张表新增 `claim_key TEXT NOT NULL DEFAULT ''`，同样幂等迁移。
+   - `claim_key` 是任意字符串（不做 enum 门控），用于标记"同一 claim 的多对冲突"
+     以便面板分组显示。
+   - 读取面通过 `listConflictGroupedByClaim` 按 claim_key 排序分组。
+
+10. **投影哈希冻结**：快照兼容通过 7 字段列投影 `projectConflictsForHash` 实现，
+    新增的 `conflict_type` / `claim_key` **不进入哈希输入**——冻结旧哈希不变，
+    防止存量快照校验失败。
+
+11. **`defer` 机制（R1 复看）**：`ConflictResolution` 新增 `defer` 取值
+    （仅作入参，不写 `resolved_at`），写 `reviewed_at` / `defer_count`。
+    - `defer` 不是结论——该对**留在待裁决队列**，重置超时计时。
+    - `defer_count >= DEFER_MAX`（当前 3）后不再被超时自动了结，只能人工收口。
+    - 面板通过 `review_state`（`unseen` / `deferred`）区分"没人看过"与"看过未决"。
+
+12. **丢弃留痕表 `conflict_rejected`**：LLM 输出不满足 pair 格式时记入此表
+    （`INSERT OR IGNORE`），可通过 `memory_conflicts_rejected` 工具与
+    `dsh-memory/conflicts-rejected` RPC 端点查询。
+
+组合关系更新：
+
+- 与 ADR-0010 的关系：本条是 0010 条 1「零漂移是构造性的」的**判据扩容**——
+  0010 把它落在 system prompt 一路；本条补上 **user prompt 一路**，并把"构造性"从
+  "常量没动"收紧为"**函数签名门控 + sha1 golden 锚 + 反向验证**"。
+  Phase 3 进一步把判据从"三轴时间"扩容到"三类冲突 + claim 分组 + 丢弃留痕"。
+  0010 的其余结论（opt-in、默认关闭、安全阀、"不自动裁决"、裁决出口）**全部不变**。
+- 与 ADR-0006（§B 凭证链）无关：三轴与三类不进 `l1_receipts`，凭证形状不变。
+- 数据布局：`conflict_pending` 新增 2 列（`conflict_type` / `claim_key`），通过
+  `ALTER TABLE` 幂等迁移；`conflict_rejected` 为新建表。`CONFLICT_FORMAT` 不 bump。
+- `maxPending` / `timeoutDays` / `conflictFreeze.enabled` 默认值不变。
+
 组合关系：
 
 - 与 ADR-0010 的关系：本条是 0010 条 1「零漂移是构造性的」的**判据扩容**——
