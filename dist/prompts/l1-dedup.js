@@ -244,6 +244,36 @@ export const CONFLICT_ACTION_CLAUSE = `## 矛盾冻结动作（"conflict"）
 
 conflict 只留给"两边都像是对的、机器判不了"的情况——它消耗人的注意力,不可滥用。`;
 /**
+ * §C Phase 3(task_3.1):conflict 决策的「类型」与「claim 键」两条追加字段。
+ *
+ * 与 {@link CONFLICT_ACTION_CLAUSE} **同款门控**(仅 `opts.conflictFreeze` 为真时追加),
+ * 且**只追加、不改写**:上面那块(首行 `- "conflict"：`、`winner`/`loser` 必须不同、
+ * `不覆盖|不合并`)的措辞逐字不变——关闭态零漂移的判据因此不受本块影响。
+ *
+ * 分工:类型决定这条冲突**占不占**人的注意力额度(task_3.4),claim 键把"同一事实的
+ * 多对冲突"归并成一组(task_3.3)。两条都只是**辅助事实**,不改变"机器不自动裁决"。
+ * 措辞里刻意点明"拿不准填 hard / 空键":畸形或不填**不影响配对**——把它们写成
+ * 硬条件,模型一旦漏字段就会整条 conflict 决策被丢弃,那是拿辅助轴破坏主轴的可用性。
+ */
+export const CONFLICT_TYPE_CLAUSE = `## conflict 的类型与 claim 键（conflict-3axis 第 2/3 轴）
+
+在用 "conflict" 时，上面那个输出块**之外**再补两个：
+
+{
+  "conflict_type": "hard | conditional | supersession",
+  "claim_key": "这两条记忆共同指向的那个事实/工作对象的稳定短标识（拿不准就留空串）"
+}
+
+- "conflict_type"：这条矛盾属于哪一类。
+  - "hard"：**事实层面直接互斥**，两边不可能同时为真。**拿不准一律填 "hard"**（缺字段、填错取值都按 "hard" 处理）。
+  - "conditional"：**各自的前提不同**才显得矛盾（如不同环境 / 不同配置 / 不同工作区），在本前提下两边可以各自成立。
+  - "supersession"：**新旧取代**——按线索看新的那条更可信、旧的那条应当让位，但你仍不自行裁决。
+- "claim_key"：若这两条记忆描述的是**同一个事实、事件或工作对象**，给出一个**稳定的短标识**（建议点分小写，如 "deploy.port" / "proj-x.ci.provider"），使同一主题的多对冲突在待裁决区能被归并到一组看；**拿不准就留空串**。
+- 这两条字段**不影响这条决策是否成立**：缺字段、非字符串、取值不在枚举里，一律按 "hard" + 空键处理，冲突照样停放。它们只决定**归类**与**额度**。
+- 额度：只有 "hard" 占待裁决队列的上限；"conditional" / "supersession" 照常停放、**不占**额度——它们消耗的是存储，不是人的注意力。
+
+三轴（时间）判过之后仍拿不准的，用 conflict；类型与键是**给这份拿不准加标签**，不是让你改用别的动作。`;
+/**
  * 把注入词表后的 prompt 交给调用方。
  *
  * 关闭态直接返回 base（逐字不变）；开启态先换掉 action 枚举行、再追加条款。
@@ -261,7 +291,7 @@ export function getConflictDetectionSystemPrompt(mode, opts) {
     const withEnum = base.includes(ACTION_ENUM_BASE)
         ? base.replace(ACTION_ENUM_BASE, ACTION_ENUM_FROZEN)
         : base;
-    return `${withEnum}\n\n${CONFLICT_ACTION_CLAUSE}`;
+    return `${withEnum}\n\n${CONFLICT_ACTION_CLAUSE}\n\n${CONFLICT_TYPE_CLAUSE}`;
 }
 /**
  * 格式化批量冲突检测 prompt（统一候选池）。

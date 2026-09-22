@@ -119,11 +119,14 @@ export async function resolveConflictPair(
     // **软删**(退场),不是物理删除:主表行保留 + `valid_to` 闭合 + 写取代标记,
     // FTS/向量行撤掉使其退出检索面。于是"判错了"可以再恢复,而不必去
     // `records/*.jsonl` 事实源里手工捞——那是本功能上线前唯一的后悔药。
+    // Phase 3(task_3.6):退场标记**带上类型轴**——否则事后只能看出"判了谁赢",
+    // 看不出"判的是哪一类矛盾"(conditional / supersession 的裁决依据完全不同)。
     deps.l1.retire([removedId], {
       at: resolvedAt,
       reason: 'conflict',
       verdict: clean,
       pairId,
+      ...(pair.conflictType ? { conflictType: pair.conflictType } : {}),
     });
   }
 
@@ -244,6 +247,10 @@ export function listConflictPairs(deps: ConflictListDeps, opts: { limit?: number
       // 否则"人看了没判"与"还没人看"在界面上长得一模一样(那正是 R1 要消灭的混淆)。
       review_state: (p.reviewedAt ?? '') === '' ? 'unseen' : 'deferred',
       defer_count: p.deferCount ?? 0,
+      // Phase 3(task_3.5):轴 2/3 一并给出。兜底值刻意与库里两列的默认值一致
+      // ('hard' / ''),使"旧行经 ALTER 回填"与"读取面兜底"呈现同一个形状。
+      conflict_type: p.conflictType ?? 'hard',
+      claim_key: p.claimKey ?? '',
     };
   });
 
@@ -275,8 +282,12 @@ export function renderConflicts(v: ConflictsView): string {
     const l = p.loser_content || '(该记录已不在检索库)';
     const wAxis = axisLine(p, 'winner');
     const lAxis = axisLine(p, 'loser');
+    // Phase 3(task_3.5):类型与 claim 键印在抬头——人要先知道"这是哪一类矛盾、
+    // 和哪几对属于同一主题",才知道该按什么标准裁。
+    const type = p.conflict_type ?? 'hard';
+    const key = p.claim_key ? ` · claim ${p.claim_key}` : '';
     return (
-      `${i + 1}. pair_id ${p.pair_id}  (${p.created_at})\n` +
+      `${i + 1}. pair_id ${p.pair_id}  (${p.created_at}) · 类型 ${type}${key}\n` +
       `   LLM 建议胜方 ${p.winner_id}:${w}${wAxis ? '\n' + wAxis : ''}\n` +
       `   LLM 建议败方 ${p.loser_id}:${l}${lAxis ? '\n' + lAxis : ''}`
     );

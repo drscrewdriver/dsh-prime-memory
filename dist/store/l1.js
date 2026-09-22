@@ -149,9 +149,16 @@ export class L1Store {
     syncGraphDisputed(disputedRecordIds) {
         return this.db.syncGraphDisputed(disputedRecordIds);
     }
-    /** §C 待裁决队列的未裁决条数(task_24 队列上限判据)。 */
-    countConflictPendingUnresolved() {
-        return this.db.countConflictPendingUnresolved();
+    /**
+     * §C 待裁决队列的未裁决条数(task_24 队列上限判据)。
+     * Phase 3(task_3.4):`conflictType` 可选过滤,只有额度判据传 `{ conflictType: 'hard' }`。
+     */
+    countConflictPendingUnresolved(opts = {}) {
+        return this.db.countConflictPendingUnresolved(opts);
+    }
+    /** §C Phase 3(task_3.3):未裁决对按 `claim_key` 归并(薄包装)。 */
+    listConflictGroupedByClaim(opts = {}) {
+        return this.db.listConflictGroupedByClaim(opts);
     }
     /** §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。 */
     listConflictPending(opts = {}) {

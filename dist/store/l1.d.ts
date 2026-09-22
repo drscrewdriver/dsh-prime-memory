@@ -1,7 +1,7 @@
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
-import type { ConflictPair, ConflictRejected, ConflictResolution } from './conflicts.js';
+import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
 import { type SupersedeInfo } from './supersede.js';
 import { type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { type EmbeddingService } from './embedding.js';
@@ -124,8 +124,17 @@ export declare class L1Store {
         marked: number;
         cleared: number;
     };
-    /** §C 待裁决队列的未裁决条数(task_24 队列上限判据)。 */
-    countConflictPendingUnresolved(): number;
+    /**
+     * §C 待裁决队列的未裁决条数(task_24 队列上限判据)。
+     * Phase 3(task_3.4):`conflictType` 可选过滤,只有额度判据传 `{ conflictType: 'hard' }`。
+     */
+    countConflictPendingUnresolved(opts?: {
+        conflictType?: ConflictType;
+    }): number;
+    /** §C Phase 3(task_3.3):未裁决对按 `claim_key` 归并(薄包装)。 */
+    listConflictGroupedByClaim(opts?: {
+        limit?: number;
+    }): ConflictClaimGroup[];
     /** §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。 */
     listConflictPending(opts?: {
         createdBefore?: string;

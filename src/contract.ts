@@ -981,6 +981,12 @@ export interface ConflictPairView {
   review_state?: 'unseen' | 'deferred';
   /** R1:复看次数(面板据此显示"已复看 N 次");达 `DEFER_MAX` 即钉子户。 */
   defer_count?: number;
+  // Phase 3(task_3.5):轴 2/3 在读取面可见 —— 三类冲突必须能区分,
+  // 否则"额度只按 hard 计"这件事在界面上无从解释(人只会看到"有些对没占额度")。
+  // 可选且带兜底:旧客户端忽略新字段不报错;读取面缺值时按 'hard' / '' 呈现。
+  conflict_type?: 'hard' | 'conditional' | 'supersession';
+  /** Phase 3:同一 claim 的多对冲突共用的稳定标识;空串 = 未分组。 */
+  claim_key?: string;
 }
 
 /** `dsh-memory/conflicts` 请求(读待裁决队列)。 */

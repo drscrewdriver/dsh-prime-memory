@@ -95,6 +95,113 @@ export const CONFLICT_UNRESOLVED = '';
  */
 export const DEFER_MAX = 3;
 
+/**
+ * §C Phase 3(task_3.2):冲突的**类型**轴(第 2 轴)。
+ *
+ * - `hard`:事实层面直接互斥(默认,拿不准一律落这里);
+ * - `conditional`:各自前提不同才显得矛盾(环境 / 配置 / 工作区);
+ * - `supersession`:新旧取代(旧的在更强证据下让位,但**仍不自动裁决**)。
+ *
+ * 语义上只有 `hard` 占待裁决队列的额度(task_3.4):另外两类消耗的是存储,
+ * 不是人的注意力预算。
+ */
+export type ConflictType = 'hard' | 'conditional' | 'supersession';
+
+/** 三枚举的**唯一**清单:校验、SQL 过滤、测试断言共用一份,防止三处各写各的。 */
+export const CONFLICT_TYPES: readonly ConflictType[] = ['hard', 'conditional', 'supersession'];
+
+/** 归一失败时的落点(也是列默认值与旧库回填值)。 */
+export const DEFAULT_CONFLICT_TYPE: ConflictType = 'hard';
+
+/**
+ * fail-closed 归一 `conflict_type`(task_3.2)。
+ *
+ * 非字符串 / 缺失 / 空白 / 不在三枚举内 → `'hard'`。**绝不抛错、也绝不因此丢弃
+ * 整条 conflict 决策**:类型是辅助轴,让它有权否决主轴(配对)是本末倒置。
+ */
+export function normalizeConflictType(v: unknown): ConflictType {
+  if (typeof v !== 'string') return DEFAULT_CONFLICT_TYPE;
+  const s = v.trim();
+  return (CONFLICT_TYPES as readonly string[]).includes(s) ? (s as ConflictType) : DEFAULT_CONFLICT_TYPE;
+}
+
+/**
+ * fail-closed 归一 `claim_key`(第 3 轴)。
+ *
+ * 非字符串 / 缺失 → `''`(空键 = 未分组),并 `trim`。**空键不阻断配对**:
+ * 「同一主题的多对冲突归并成一组」是读取面的便利,不是裁决的前提。
+ */
+export function normalizeClaimKey(v: unknown): string {
+  return typeof v === 'string' ? v.trim() : '';
+}
+
+/**
+ * Phase 3(task_3.4):这条冲突**占不占**待裁决队列的额度。
+ *
+ * 只有 `hard` 占:另外两类是「前提不同」与「新旧取代」,消耗的是存储而不是人的
+ * 注意力预算(见 config.ts 的有界性契约)。
+ *
+ * 抽成纯函数**只为可测**:这条判据原本是 `runExtraction` 里的一个复合条件,而管线
+ * 端到端需要可注入 LLM 的夹具(本项目没有),藏在分支里就等于没有护栏。
+ */
+export function occupiesConflictQuota(conflictType: ConflictType): boolean {
+  return conflictType === DEFAULT_CONFLICT_TYPE;
+}
+
+/**
+ * Phase 3(task_3.4):本轮为止的 **hard** 未裁决数 = 库内 hard 未裁决数 + 本轮已停放
+ * 且**未被自动了结**的 hard 对数。
+ *
+ * 为什么必须带上"本轮已停放"这一半:同一轮里多条冲突连续停放时,只数库内的值会让
+ * 它们一起越过上限(既有注释里的 `frozen` 项就是这个意思)。
+ * 未裁决判据用 `resolvedAt === ''`:被自动了结的对写的是 `resolution='auto'` +
+ * 非空 `resolved_at`,它们不进队列额度。
+ */
+export function pendingHardTotal(dbHardUnresolved: number, frozenThisRound: readonly ConflictPair[]): number {
+  return (
+    dbHardUnresolved +
+    frozenThisRound.filter((p) => p.resolvedAt === '' && occupiesConflictQuota(normalizeConflictType(p.conflictType)))
+      .length
+  );
+}
+
+/** 按 `claim_key` 归并后的一组(task_3.3)。 */
+export interface ConflictClaimGroup {
+  /** 该组的 `claim_key`;**空串代表"未分组"那一组**(恒排在最后)。 */
+  claimKey: string;
+  /** 组内成员,按 `pair_id` 升序且**已按 pair_id 去重**。 */
+  pairs: ConflictPair[];
+}
+
+/**
+ * 按 `claim_key` 把待裁决对归并成组(task_3.3)。
+ *
+ * 纯函数、无 I/O:分组是**读取面的便利**,不是新的状态——故它不进库、不进快照哈希,
+ * 只从既有行派生。定序刻意确定:组间按 key 升序、空键那组**排最后**
+ * (人先看有主题的),组内按 `pair_id` 升序。
+ */
+export function groupConflictPairsByClaim(pairs: readonly ConflictPair[]): ConflictClaimGroup[] {
+  const byKey = new Map<string, ConflictPair[]>();
+  for (const p of pairs) {
+    const key = normalizeClaimKey(p.claimKey);
+    const list = byKey.get(key) ?? [];
+    // 组内按 pair_id 去重:同一条对若从两条读取路径汇进来,不得让"这一组"虚胖
+    if (!list.some((x) => x.pairId === p.pairId)) list.push(p);
+    byKey.set(key, list);
+  }
+  return [...byKey.entries()]
+    .sort(([a], [b]) => {
+      if (a === b) return 0;
+      if (a === '') return 1;
+      if (b === '') return -1;
+      return a < b ? -1 : 1;
+    })
+    .map(([claimKey, list]) => ({
+      claimKey,
+      pairs: [...list].sort((x, y) => (x.pairId < y.pairId ? -1 : x.pairId > y.pairId ? 1 : 0)),
+    }));
+}
+
 /** 一条待裁决冲突对(与 `conflict_pending` 表一行同形)。 */
 export interface ConflictPair {
   pairId: string;
@@ -121,6 +228,14 @@ export interface ConflictPair {
   deferredAt?: string;
   /** R1:复看次数。达上限(task_2.3 取 3)后不再被 `auto` 了结,改为 fail-loud 呈现。 */
   deferCount?: number;
+  /**
+   * Phase 3(task_3.2/3.3):类型轴(第 2 轴)与 claim 键(第 3 轴)。
+   *
+   * 两个都**可选**:三处测试工厂手搓的对、以及旧快照反序列化出的对象都没有它们
+   * (与审计 N4 同理由——必填会破 `typecheck`),读取面一律按 `?? 'hard'` / `?? ''` 兜底。
+   */
+  conflictType?: ConflictType;
+  claimKey?: string;
 }
 
 /** 构建冻结对所需的输入。 */
@@ -129,11 +244,14 @@ export interface ConflictPairInput {
   winnerId: string;
   loserId: string;
   createdAt: string;
+  /** Phase 3:类型轴与 claim 键;省略时**不写键**(与 Phase 2 三列同样的审慎)。 */
+  conflictType?: ConflictType;
+  claimKey?: string;
 }
 
 /** 由输入构造一行待裁决冲突对(未裁决态)。纯函数,无 I/O。 */
 export function buildConflictPair(input: ConflictPairInput): ConflictPair {
-  return {
+  const pair: ConflictPair = {
     pairId: conflictPairId(input.runId, input.winnerId, input.loserId),
     runId: input.runId,
     winnerId: input.winnerId,
@@ -142,6 +260,12 @@ export function buildConflictPair(input: ConflictPairInput): ConflictPair {
     resolvedAt: CONFLICT_UNRESOLVED,
     resolution: CONFLICT_UNRESOLVED,
   };
+  // Phase 3(task_3.2):两轴**只在有值时写键**。无条件写 `conflictType:'hard'` 会让
+  // 三处测试工厂的精确断言凭空多出字段(与 N4 同类);库里那两列的默认值本就是
+  // 'hard' / '',"没传"与"传了默认值"在磁盘上是同一行,差异只该活在这一层。
+  if (input.conflictType !== undefined) pair.conflictType = input.conflictType;
+  if (input.claimKey !== undefined) pair.claimKey = input.claimKey;
+  return pair;
 }
 
 /**

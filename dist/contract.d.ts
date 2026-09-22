@@ -964,6 +964,9 @@ export interface ConflictPairView {
     review_state?: 'unseen' | 'deferred';
     /** R1:复看次数(面板据此显示"已复看 N 次");达 `DEFER_MAX` 即钉子户。 */
     defer_count?: number;
+    conflict_type?: 'hard' | 'conditional' | 'supersession';
+    /** Phase 3:同一 claim 的多对冲突共用的稳定标识;空串 = 未分组。 */
+    claim_key?: string;
 }
 /** `dsh-memory/conflicts` 请求(读待裁决队列)。 */
 export interface ConflictsRequest {

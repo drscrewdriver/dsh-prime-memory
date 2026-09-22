@@ -54,8 +54,8 @@ import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
-import type { ConflictPair, ConflictRejected, ConflictResolution } from './conflicts.js';
-import { DEFER_MAX } from './conflicts.js';
+import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
+import { DEFER_MAX, groupConflictPairsByClaim, normalizeClaimKey, normalizeConflictType } from './conflicts.js';
 import { isRetired, readSupersedeMarker, stripSupersedeMarker, withSupersedeMarker, type SupersedeInfo } from './supersede.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
@@ -411,7 +411,9 @@ export class MemoryDb {
         loser_id TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT '',
         resolved_at TEXT NOT NULL DEFAULT '',
-        resolution TEXT NOT NULL DEFAULT ''
+        resolution TEXT NOT NULL DEFAULT '',
+        conflict_type TEXT NOT NULL DEFAULT 'hard',
+        claim_key TEXT NOT NULL DEFAULT ''
       )
     `);
     // 未裁决索引:队列上限(task_24,取最旧的未裁决行)与裁决工具(task_25,取单条未裁决对)
@@ -459,6 +461,17 @@ export class MemoryDb {
     }
     if (!conflictCols.has('defer_count')) {
       this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN defer_count INTEGER NOT NULL DEFAULT 0`);
+    }
+    // ── §C Phase 3(task_3.3):类型轴与 claim 键两列 ──
+    // 同款存在性判据:`CREATE TABLE IF NOT EXISTS` 对**已存在**的表不补列,故必须 ALTER;
+    // 而 ALTER 重复执行会报错 ⇒ 先 `PRAGMA table_info` 判存在,迁移可重复执行。
+    // 两列的默认值刻意与读取面兜底一致('hard' / ''):旧行回填后即"未分类的硬冲突",
+    // 不需要任何一次性数据迁移。
+    if (!conflictCols.has('conflict_type')) {
+      this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN conflict_type TEXT NOT NULL DEFAULT 'hard'`);
+    }
+    if (!conflictCols.has('claim_key')) {
+      this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN claim_key TEXT NOT NULL DEFAULT ''`);
     }
 
     this.stmtUpsertL1 = this.db.prepare(`
@@ -1306,13 +1319,25 @@ export class MemoryDb {
     if (this.degraded || rows.length === 0) return 0;
     const stmt = this.db.prepare(
       `INSERT OR IGNORE INTO conflict_pending
-         (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution, conflict_type, claim_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let n = 0;
     for (const r of rows) {
       n += Number(
-        stmt.run(r.pairId, r.runId, r.winnerId, r.loserId, r.createdAt, r.resolvedAt, r.resolution).changes,
+        stmt.run(
+          r.pairId,
+          r.runId,
+          r.winnerId,
+          r.loserId,
+          r.createdAt,
+          r.resolvedAt,
+          r.resolution,
+          // Phase 3(task_3.3):两轴在这里归一后落库——**写侧也 fail-closed**,
+          // 不指望调用方都记得传(normalizeConflictType 对畸形输入返回 'hard')。
+          normalizeConflictType(r.conflictType),
+          normalizeClaimKey(r.claimKey),
+        ).changes,
       );
     }
     return n;
@@ -1327,10 +1352,20 @@ export class MemoryDb {
   /**
    * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
    * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+   *
+   * Phase 3(task_3.4):`conflictType` 可选过滤——**默认不带**(返回全部未裁决数),
+   * 只有队列上限判据传 `{ conflictType: 'hard' }`(额度只按 hard 计)。
+   * 刻意用**选项对象**而非位置参数:位置参数会被下一个调用点无声漏传,
+   * 而"漏传 ⇒ 额度把非 hard 也算进去"正是这条轴要修的病。
    */
-  countConflictPendingUnresolved(): number {
+  countConflictPendingUnresolved(opts: { conflictType?: ConflictType } = {}): number {
     if (this.degraded) return 0;
-    const row = this.db.prepare(`SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = ''`).get() as
+    const type = opts.conflictType;
+    const sql =
+      type === undefined
+        ? `SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = ''`
+        : `SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = '' AND conflict_type = ?`;
+    const row = (type === undefined ? this.db.prepare(sql).get() : this.db.prepare(sql).get(type)) as
       | { n: number }
       | undefined;
     return Number(row?.n ?? 0);
@@ -1371,12 +1406,23 @@ export class MemoryDb {
     const rows = this.db
       .prepare(
         `SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution,
-                reviewed_at, deferred_at, defer_count
+                reviewed_at, deferred_at, defer_count, conflict_type, claim_key
            FROM conflict_pending WHERE ${where}
           ORDER BY created_at ASC, pair_id ASC LIMIT ?`,
       )
       .all(...(params as never[]), limit) as Array<Record<string, unknown>>;
     return rows.map(toConflictPair);
+  }
+
+  /**
+   * §C Phase 3(task_3.3):把未裁决对**按 `claim_key` 归并**后返回。
+   *
+   * 分组是**读取面的派生**,不是新状态:故它不从库外引入任何字段、不进快照哈希,
+   * 只把 {@link listConflictPending} 的结果按轴归并(空键那组恒排最后)。
+   * 归并逻辑在 `conflicts.ts` 的纯函数里(可单测、无 I/O),这里只负责取行。
+   */
+  listConflictGroupedByClaim(opts: { limit?: number } = {}): ConflictClaimGroup[] {
+    return groupConflictPairsByClaim(this.listConflictPending(opts));
   }
 
   /**
@@ -2311,6 +2357,11 @@ function toConflictPair(r: Record<string, unknown>): ConflictPair {
     reviewedAt: String(r.reviewed_at ?? ''),
     deferredAt: String(r.deferred_at ?? ''),
     deferCount: Number(r.defer_count ?? 0),
+    // Phase 3 新增列(task_3.2/3.3):同样**只做读取投影,不进快照哈希**。
+    // 读侧再归一一次:旧行经 ALTER 回填的是默认值,手工改过库的脏值也会被收敛到
+    // 三枚举内 —— 读取面不该把库里的任意字符串当契约往外抛。
+    conflictType: normalizeConflictType(r.conflict_type),
+    claimKey: normalizeClaimKey(r.claim_key),
   };
 }
 

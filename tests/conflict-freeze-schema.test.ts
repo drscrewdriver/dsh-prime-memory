@@ -41,12 +41,15 @@ describe('task_21 conflict_pending 表结构（磁盘契约）', () => {
         name: string;
         pk: number;
       }>;
-      // 磁盘契约:Phase 2(task_2.1)加了三列承载 R1 未决态。
+      // 磁盘契约:Phase 2(task_2.1)加了三列承载 R1 未决态,Phase 3(task_3.3)加了
+      // 两列承载类型轴与 claim 键。
       // 本断言是**精确列集合**(审计 S8 点名的"加列必破"处),故新增列必须同批补全——
       // 保留精确性是有意的:这是磁盘契约测试,子集断言会放过"列被悄悄改名"。
       // 注意:新增列**不进快照哈希**(哈希走 l1-snapshot 的 7 字段列投影,见 task_2.8)。
       expect(cols.map((c) => c.name).sort()).toEqual(
         [
+          'claim_key',
+          'conflict_type',
           'created_at',
           'defer_count',
           'deferred_at',

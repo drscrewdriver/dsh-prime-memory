@@ -9,7 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import { callLLM, parseJsonLogged, resolveLayerTokens } from '../llm.js';
 import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipts.js';
-import { buildConflictPair, conflictRejectId, DEFER_MAX, validateConflictPair } from '../store/conflicts.js';
+import { buildConflictPair, conflictRejectId, DEFER_MAX, normalizeClaimKey, normalizeConflictType, occupiesConflictQuota, pendingHardTotal, validateConflictPair, } from '../store/conflicts.js';
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
@@ -321,16 +321,27 @@ anchorMap) {
                 : null;
             if (pair) {
                 added.push(toStoreRecord(m, now, ts, anchorMap));
+                // Phase 3(task_3.2):两轴**先归一后落库**。畸形输入(非字符串 / 空 / 不在枚举内)
+                // 一律落 'hard' + 空键 —— **绝不**因此回落 store:类型与键是辅助轴,
+                // 它们没有权力否决主轴(这条 conflict 决策是否成立)。
+                const conflictType = normalizeConflictType(decision.conflict_type);
+                const claimKey = normalizeClaimKey(decision.claim_key);
                 const built = buildConflictPair({
                     runId,
                     winnerId: pair.winnerId,
                     loserId: pair.loserId,
                     createdAt: new Date(now).toISOString(),
+                    conflictType,
+                    claimKey,
                 });
                 // 队列上限:达上限即**不再停放**,改为当场按 LLM 的 winner/loser 了结。
                 // 判据含 frozen 中本轮已停放的未裁决数,否则同一轮内多条冲突会一起越界。
-                const pendingNow = store.countConflictPendingUnresolved() + frozen.filter((p) => p.resolvedAt === '').length;
-                if (pendingNow >= maxPending) {
+                // Phase 3(task_3.4):额度**只按 'hard' 计** —— conditional / supersession 是
+                // 「前提不同」与「新旧取代」两类,不消耗人的注意力预算,故不走上限分支。
+                // 两条判据(占不占额度 / 已占多少)都抽在 conflicts.ts 的纯函数里:管线端到端
+                // 需要可注入 LLM 的夹具(本项目没有),藏在分支里的条件等于没有护栏。
+                const pendingHard = pendingHardTotal(store.countConflictPendingUnresolved({ conflictType: 'hard' }), frozen);
+                if (occupiesConflictQuota(conflictType) && pendingHard >= maxPending) {
                     // fail-loud(审计 S10):队列满时若存在「钉子户」(复看已达上限、不会再被超时了结),
                     // 必须**说出来**——它们持续占额度,新冲突因此全部回落自动了结。
                     // 静默回落等于「冻结」在这一路径上实质失效,而库里看不出任何异常。
@@ -338,7 +349,7 @@ anchorMap) {
                         .listConflictPending({ limit: 1000 })
                         .filter((p) => (p.deferCount ?? 0) >= DEFER_MAX).length;
                     if (exhausted > 0) {
-                        logger.warn(`[memory] 矛盾冻结:队列已满(${pendingNow}/${maxPending}),其中 ${exhausted} 对复看已达上限(${DEFER_MAX})` +
+                        logger.warn(`[memory] 矛盾冻结:队列已满(${pendingHard}/${maxPending}),其中 ${exhausted} 对复看已达上限(${DEFER_MAX})` +
                             `——它们只能由人工裁决收口(winner / loser / both);新冲突将按 LLM 结论自动了结,请优先处理这些钉子户`);
                     }
                     // 护栏(2026-09-18 随同批次冻结一起加):**败方是本轮新记忆时不做自动了结**。
@@ -347,14 +358,27 @@ anchorMap) {
                     // 改为不停放这一对(该条已在上方 added 中照常入库,记忆不丢),
                     // 只放弃这条裁决请求;队列有界性因此仍然成立。
                     if (batchIds.has(built.loserId)) {
-                        logger.warn(`[memory] 矛盾冻结:队列已满(${pendingNow}/${maxPending}),且该对的败方是本轮新记忆` +
+                        logger.warn(`[memory] 矛盾冻结:队列已满(${pendingHard}/${maxPending}),且该对的败方是本轮新记忆` +
                             `(${built.loserId})——不做自动了结(避免新记忆立即退场),改为不停放、照常入库`);
                         continue;
                     }
                     built.resolvedAt = new Date(now).toISOString();
                     built.resolution = 'auto';
                     autoLosers.add(pair.loserId);
-                    logger.warn(`[memory] 矛盾冻结:待裁决队列已满(${pendingNow}/${maxPending}),第 ${m.record_id} 条改为自动了结`);
+                    logger.warn(`[memory] 矛盾冻结:待裁决队列已满(${pendingHard}/${maxPending}),第 ${m.record_id} 条改为自动了结`);
+                }
+                else if (conflictType !== 'hard') {
+                    // Phase 3(task_3.4)fail-loud 兜底:非 hard **不占额度** ⇒ 它们不触发上面那段
+                    // 有界性逻辑(既不被自动了结、也不 retire 任何一方——那两件事都必须留给人)。
+                    // 代价是它们可以把**总数**推过 `maxPending` 而不被任何机制收口,故一旦越界
+                    // 就必须**说出来**:静默越界等于"队列有界"这一条在这一路径上失效,
+                    // 而库里只看得到"队列很长",看不出是哪种冲突堆的(与 S10 同类)。
+                    const totalNow = store.countConflictPendingUnresolved() + frozen.filter((p) => p.resolvedAt === '').length;
+                    if (totalNow >= maxPending) {
+                        logger.warn(`[memory] 矛盾冻结:非 hard 冲突(${conflictType})不占额度,未裁决总数已达` +
+                            `${totalNow}/${maxPending}——这类对不会被超时之外的机制自动了结,也不会退场任何一方,` +
+                            `只能人工收口(winner / loser / both)`);
+                    }
                 }
                 frozen.push(built);
             }
