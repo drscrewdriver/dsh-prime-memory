@@ -780,6 +780,29 @@ var __defProp = Object.defineProperty;
 		    ] })
 		  ] });
 		}
+		function ActionButton(props) {
+		  const disabled = !!props.disabled;
+		  return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+		    "button",
+		    {
+		      type: "button",
+		      title: props.disabled ? "" : props.title || "",
+		      "aria-disabled": disabled,
+		      onClick: () => {
+		        if (!disabled && props.onClick) props.onClick();
+		      },
+		      style: {
+		        ...S.seg,
+		        ...S.segBtn,
+		        fontFamily: "inherit",
+		        border: "1px solid var(--dsh-mem-border)",
+		        cursor: disabled ? "not-allowed" : "pointer",
+		        ...disabled ? S.switchDisabled : null
+		      },
+		      children: props.label
+		    }
+		  );
+		}
 		function Segmented(props) {
 		  const value = props.value;
 		  const disabled = !!props.disabled;
@@ -4363,24 +4386,30 @@ var __defProp = Object.defineProperty;
 		    setBackfillBusy(true);
 		    setLocalError(null);
 		    let polls = 0;
+		    const finish = () => setBackfillBusy(false);
 		    const tick = () => {
 		      polls++;
 		      props.rpc("dsh-memory/hall-overview", {}).then((r) => {
-		        if (r && r.ok) setOverview(r.value);
-		        if (polls < 20) {
+		        const v = r && r.ok ? r.value : null;
+		        if (v) setOverview(v);
+		        if (v && v.unlabeled === 0 || polls >= 20) finish();
+		        else {
 		          const t = window.setTimeout(tick, 3e3);
 		          timersRef.current.push(t);
 		        }
-		      }).catch(() => {
-		      });
+		      }).catch(() => finish());
 		    };
 		    props.rpc("dsh-memory/hall-backfill", {}).then((r) => {
 		      if (!r || !r.ok) {
 		        setLocalError(r && r.error ? "回填失败：" + r.error.message : "回填失败");
+		        finish();
 		        return;
 		      }
 		      timersRef.current.push(window.setTimeout(tick, 3e3));
-		    }).catch((e) => setLocalError("回填失败：" + String(e && e.message || e))).finally(() => setBackfillBusy(false));
+		    }).catch((e) => {
+		      setLocalError("回填失败：" + String(e && e.message || e));
+		      finish();
+		    });
 		  };
 		  const polyPoints = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
 		    const p = cornerPos(i, R_POLY);
@@ -4489,7 +4518,7 @@ var __defProp = Object.defineProperty;
 		            },
 		            children: [
 		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { children: label }),
-		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 9, opacity: 0.75, fontVariantNumeric: "tabular-nums" }, children: count === null ? " " : `${count} 条` })
+		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 9, opacity: 0.75, fontVariantNumeric: "tabular-nums" }, children: count === null ? " " : empty ? "空角" : `${count} 条` })
 		            ]
 		          },
 		          id ?? i
@@ -4590,12 +4619,12 @@ var __defProp = Object.defineProperty;
 		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: overview ? `未打标 ${overview.unlabeled} 条（抽取只跑新消息，存量需回填）` : "未打标计数加载中" }),
 		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		        Segmented,
+		        ActionButton,
 		        {
-		          value: "go",
+		          label: backfillBusy ? "回填中…" : "一键回填",
+		          title: "对存量未打标记忆批量补打 hall 标签（复用抽取打标路径）",
 		          disabled: !overview || overview.unlabeled === 0 || backfillBusy,
-		          options: [{ key: "go", label: backfillBusy ? "回填中…" : "一键回填", title: "对存量未打标记忆批量补打 hall 标签（复用抽取打标路径）" }],
-		          onChange: () => backfill()
+		          onClick: () => backfill()
 		        }
 		      )
 		    ] }),

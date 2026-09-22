@@ -11,7 +11,7 @@
  * 层级：设置页全局闸 ⊃ 会话闸（图形外）⊃ 域范围（图形内）。
  */
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { Segmented } from '../ui/controls.js';
+import { Segmented, ActionButton } from '../ui/controls.js';
 import type { RpcFn } from '../rpc.js';
 import type { HallOverviewResponse } from '../../../src/contract.js';
 import { ensureThemeStyle } from '../theme.js';
@@ -91,30 +91,38 @@ export function HallWheel(props: {
     setBackfillBusy(true);
     setLocalError(null);
     let polls = 0;
+    const finish = () => setBackfillBusy(false);
     const tick = () => {
       polls++;
       props
         .rpc('dsh-memory/hall-overview', {})
         .then((r) => {
-          if (r && r.ok) setOverview(r.value);
-          if (polls < 20) {
+          const v = r && r.ok ? r.value : null;
+          if (v) setOverview(v);
+          // 结束条件：未打标清零，或轮询次数用尽（后台任务单飞，端点不暴露进度）
+          if ((v && v.unlabeled === 0) || polls >= 20) finish();
+          else {
             const t = window.setTimeout(tick, 3000);
             timersRef.current.push(t);
           }
         })
-        .catch(() => {});
+        .catch(() => finish());
     };
     props
       .rpc('dsh-memory/hall-backfill', {})
       .then((r) => {
         if (!r || !r.ok) {
           setLocalError(r && r.error ? '回填失败：' + r.error.message : '回填失败');
+          finish();
           return;
         }
+        // 端点立即返回（单飞后台任务），"回填中…"由轮询负责收尾
         timersRef.current.push(window.setTimeout(tick, 3000));
       })
-      .catch((e: unknown) => setLocalError('回填失败：' + String((e && (e as Error).message) || e)))
-      .finally(() => setBackfillBusy(false));
+      .catch((e: unknown) => {
+        setLocalError('回填失败：' + String((e && (e as Error).message) || e));
+        finish();
+      });
   };
 
   // 八边形骨架（连线 + 外框）：纯装饰层，pointer-events none 不挡角点按钮
@@ -234,8 +242,9 @@ export function HallWheel(props: {
               }}
             >
               <span>{label}</span>
+              {/* 空角诚实展示（R11）：不写"0 条"，直接标"空角"，避免与"有数据但未打标"混淆 */}
               <span style={{ fontSize: 9, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
-                {count === null ? ' ' : `${count} 条`}
+                {count === null ? ' ' : empty ? '空角' : `${count} 条`}
               </span>
             </button>
           );
@@ -332,11 +341,12 @@ export function HallWheel(props: {
         <span style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
           {overview ? `未打标 ${overview.unlabeled} 条（抽取只跑新消息，存量需回填）` : '未打标计数加载中'}
         </span>
-        <Segmented
-          value={'go'}
+        {/* 动作而非选择：Segmented 对已选中项有 `!on` 守卫（点不动），故用 ActionButton */}
+        <ActionButton
+          label={backfillBusy ? '回填中…' : '一键回填'}
+          title="对存量未打标记忆批量补打 hall 标签（复用抽取打标路径）"
           disabled={!overview || overview.unlabeled === 0 || backfillBusy}
-          options={[{ key: 'go', label: backfillBusy ? '回填中…' : '一键回填', title: '对存量未打标记忆批量补打 hall 标签（复用抽取打标路径）' }]}
-          onChange={() => backfill()}
+          onClick={() => backfill()}
         />
       </div>
       {(props.error || localError) ? (
