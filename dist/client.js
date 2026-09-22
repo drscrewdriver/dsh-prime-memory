@@ -603,6 +603,72 @@ var __defProp = Object.defineProperty;
 		  );
 		}
 		
+		// client/src/tabs/conflicts-view.ts
+		var CONFLICT_TYPE_SECTIONS = [
+		  {
+		    type: "hard",
+		    label: "硬冲突（占额度）",
+		    hint: "事实层面直接互斥——两边不可能同时为真，必须由人给出结论。"
+		  },
+		  {
+		    type: "conditional",
+		    label: "条件冲突（不占额度）",
+		    hint: "各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。"
+		  },
+		  {
+		    type: "supersession",
+		    label: "新旧取代（不占额度）",
+		    hint: "线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。"
+		  }
+		];
+		function conflictTypeOf(p) {
+		  const t = p.conflict_type;
+		  return t === "conditional" || t === "supersession" ? t : "hard";
+		}
+		function groupConflictsByType(items) {
+		  const buckets = /* @__PURE__ */ new Map();
+		  for (const sec of CONFLICT_TYPE_SECTIONS) {
+		    buckets.set(sec.type, []);
+		  }
+		  for (const p of items) {
+		    const type = conflictTypeOf(p);
+		    const arr = buckets.get(type);
+		    if (arr) arr.push(p);
+		  }
+		  const result = [];
+		  for (const sec of CONFLICT_TYPE_SECTIONS) {
+		    const arr = buckets.get(sec.type);
+		    if (arr && arr.length > 0) {
+		      result.push({ type: sec.type, label: sec.label, hint: sec.hint, items: arr });
+		    }
+		  }
+		  return result;
+		}
+		function reviewLabel(p) {
+		  if ((p.review_state ?? "unseen") === "unseen") return "";
+		  return `已复看 ${String(p.defer_count ?? 0)} 次`;
+		}
+		function isDeferred(p) {
+		  return (p.review_state ?? "unseen") === "deferred";
+		}
+		var D = (ms) => ms == null ? "" : new Date(ms).toISOString().slice(0, 10);
+		function axisText(p, side) {
+		  const vf = side === "winner" ? p.winner_valid_from_ms : p.loser_valid_from_ms;
+		  const vt = side === "winner" ? p.winner_valid_to_ms : p.loser_valid_to_ms;
+		  const ps = side === "winner" ? p.winner_persistence : p.loser_persistence;
+		  const parts = [];
+		  const vfS = D(vf);
+		  const vtS = D(vt);
+		  if (vfS) parts.push(`有效期起 ${vfS}`);
+		  if (vtS) parts.push(`有效期止 ${vtS}`);
+		  if (ps) parts.push(`持续性 ${ps}`);
+		  return parts.join(" / ");
+		}
+		function claimLabel(p) {
+		  const k = p.claim_key;
+		  return k ? `claim ${k}` : "";
+		}
+		
 		// client/src/tabs/ConflictsTab.tsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var POLL_MS = 1e4;
@@ -631,17 +697,19 @@ var __defProp = Object.defineProperty;
 		    };
 		  }, [load]);
 		  const resolve = (pair, outcome) => {
-		    const doomed = outcome === "winner" ? pair.loser_content || GONE : outcome === "loser" ? pair.winner_content || GONE : null;
-		    if (doomed !== null) {
-		      const ok = window.confirm(
-		        `裁决这一对？
+		    if (outcome !== "defer") {
+		      const doomed = outcome === "winner" ? pair.loser_content || GONE : outcome === "loser" ? pair.winner_content || GONE : null;
+		      if (doomed !== null) {
+		        const ok = window.confirm(
+		          `裁决这一对？
 		
 		将要退场的记忆：
 		「${doomed}」
 		
 		它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。裁决结论本身不可覆盖。`
-		      );
-		      if (!ok) return;
+		        );
+		        if (!ok) return;
+		      }
 		    }
 		    setBusy(pair.pair_id);
 		    setNote(null);
@@ -660,6 +728,7 @@ var __defProp = Object.defineProperty;
 		    });
 		  };
 		  const items = view?.items ?? [];
+		  const sections = groupConflictsByType(items);
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: S.muted, children: view === null ? "加载中…" : view.enabled ? `待裁决 ${view.total} 对` : "矛盾冻结未开启" }),
@@ -674,15 +743,29 @@ var __defProp = Object.defineProperty;
 		      "矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。"
 		    ] }) : null,
 		    view !== null && view.enabled && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { style: S.intro, children: "没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。" }) : null,
-		    items.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ConflictCard, { pair: p, busy: busy === p.pair_id, onResolve: resolve }, p.pair_id))
+		    sections.map((sec) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { marginBottom: 12 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: S.cardHead, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { ...S.muted, fontWeight: 600 }, children: sec.label }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { style: S.muted, children: [
+		          sec.items.length,
+		          " 条"
+		        ] })
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { ...S.muted, fontSize: 11, marginBottom: 6 }, children: sec.hint }),
+		      sec.items.map((p) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ConflictCard, { pair: p, busy: busy === p.pair_id, onResolve: resolve }, p.pair_id))
+		    ] }, sec.type))
 		  ] });
 		}
 		function ConflictCard(props) {
 		  const p = props.pair;
+		  const rl = reviewLabel(p);
+		  const cl = claimLabel(p);
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: S.cardHead, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: S.muted, children: "pair " + p.pair_id.slice(0, 12) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: S.muted, children: fmtTime(p.created_at) }),
+		      rl ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { ...S.muted, color: isDeferred(p) ? "var(--dsh-mem-accent-fill)" : void 0 }, children: rl }) : null,
+		      cl ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: S.muted, children: cl }) : null,
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: S.muted, title: "产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）", children: "run " + p.run_id.slice(0, 12) })
 		    ] }),
@@ -692,10 +775,12 @@ var __defProp = Object.defineProperty;
 		        label: "LLM 建议：胜方",
 		        accent: true,
 		        id: p.winner_id,
-		        content: p.winner_content
+		        content: p.winner_content,
+		        pair: p,
+		        side: "winner"
 		      }
 		    ),
-		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Side, { label: "LLM 建议：败方", id: p.loser_id, content: p.loser_content }),
+		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Side, { label: "LLM 建议：败方", id: p.loser_id, content: p.loser_content, pair: p, side: "loser" }),
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { ...S.flexRow, marginTop: 8 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
 		        NButton,
@@ -729,15 +814,28 @@ var __defProp = Object.defineProperty;
 		          },
 		          children: "两者都保留"
 		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+		        NButton,
+		        {
+		          disabled: props.busy,
+		          title: "看过但暂不裁决——该对仍在队列里，重置超时并累计复看次数",
+		          onClick: () => {
+		            props.onResolve(p, "defer");
+		          },
+		          children: "看过，暂不裁决"
+		        }
 		      )
 		    ] })
 		  ] });
 		}
 		function Side(props) {
+		  const axis = props.pair && props.side ? axisText(props.pair, props.side) : "";
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { marginTop: 6 }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { ...S.muted, fontWeight: props.accent ? 600 : void 0 }, children: props.label }),
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: S.content, children: props.content || GONE }),
-		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { ...S.muted, fontFamily: "ui-monospace, Consolas, monospace" }, children: props.id })
+		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { ...S.muted, fontFamily: "ui-monospace, Consolas, monospace" }, children: props.id }),
+		    axis ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { ...S.muted, marginTop: 2, fontSize: 11 }, children: axis }) : null
 		  ] });
 		}
 		

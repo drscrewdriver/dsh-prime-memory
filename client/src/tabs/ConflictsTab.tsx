@@ -16,11 +16,12 @@
  * 共用 `conflict-service.ts` 的同一份形状，所以**人在面板上看到的**与
  * **模型能裁决的**是同一个队列、同一批 id。
  *
- * ## 三种结论
+ * ## 四种结论
  *
  * - `winner`：判 LLM 建议的胜方为真，**败方从检索库退场**；
  * - `loser`：判败方为真，胜方退场；
- * - `both`：判两者其实是**各自独立的事实**（LLM 判错的情形），两条都保留。
+ * - `both`：判两者其实是**各自独立的事实**（LLM 判错的情形），两条都保留；
+ * - `defer`：看过但**暂不裁决**——不关闭冲突，该对仍在队列里，重置超时并累计复看次数。
  *
  * 前两者会删掉一条记忆，故走确认弹窗并把**将要退场的那条正文**摆出来 ——
  * 不让人对着 id 做不可逆决定。
@@ -31,6 +32,13 @@ import { fmtTime } from '../format.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
 import { NButton } from '../ui/primitives.js';
+import {
+  groupConflictsByType,
+  reviewLabel,
+  isDeferred,
+  axisText,
+  claimLabel,
+} from './conflicts-view.js';
 
 /** 队列轮询间隔：冲突只在蒸馏时新增，10s 足够快，也不至于把面板拖住。 */
 const POLL_MS = 10_000;
@@ -38,7 +46,7 @@ const POLL_MS = 10_000;
 /** 取不到正文时的占位。**与"内容为空"是两回事**，必须分开说。 */
 const GONE = '（该记录正文不可得：已不在主表，或被更早的清理清掉了）';
 
-type Outcome = 'winner' | 'loser' | 'both';
+type Outcome = 'winner' | 'loser' | 'both' | 'defer';
 
 export function ConflictsTab(props: { rpc: RpcFn }) {
   const rpc = props.rpc;
@@ -70,20 +78,23 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
   }, [load]);
 
   const resolve = (pair: ConflictPairView, outcome: Outcome) => {
-    // 退场哪一条：winner → 败方；loser → 胜方；both → 都不退场。
-    const doomed =
-      outcome === 'winner'
-        ? pair.loser_content || GONE
-        : outcome === 'loser'
-          ? pair.winner_content || GONE
-          : null;
-    if (doomed !== null) {
-      const ok = window.confirm(
-        `裁决这一对？\n\n将要退场的记忆：\n「${doomed}」\n\n` +
-          '它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。' +
-          '裁决结论本身不可覆盖。',
-      );
-      if (!ok) return;
+    // defer = "看过、暂不裁决"——不关闭冲突，该对仍在队列里，无需确认弹窗。
+    if (outcome !== 'defer') {
+      // 退场哪一条：winner → 败方；loser → 胜方；both → 都不退场。
+      const doomed =
+        outcome === 'winner'
+          ? pair.loser_content || GONE
+          : outcome === 'loser'
+            ? pair.winner_content || GONE
+            : null;
+      if (doomed !== null) {
+        const ok = window.confirm(
+          `裁决这一对？\n\n将要退场的记忆：\n「${doomed}」\n\n` +
+            '它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。' +
+            '裁决结论本身不可覆盖。',
+        );
+        if (!ok) return;
+      }
     }
     setBusy(pair.pair_id);
     setNote(null);
@@ -106,6 +117,7 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
   };
 
   const items = view?.items ?? [];
+  const sections = groupConflictsByType(items);
 
   return (
     <div>
@@ -134,21 +146,34 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
         <p style={S.intro}>没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。</p>
       ) : null}
 
-      {items.map((p) => (
-        <ConflictCard key={p.pair_id} pair={p} busy={busy === p.pair_id} onResolve={resolve} />
+      {sections.map((sec) => (
+        <div key={sec.type} style={{ marginBottom: 12 }}>
+          <div style={S.cardHead}>
+            <span style={{ ...S.muted, fontWeight: 600 }}>{sec.label}</span>
+            <span style={S.muted}>{sec.items.length} 条</span>
+          </div>
+          <div style={{ ...S.muted, fontSize: 11, marginBottom: 6 }}>{sec.hint}</div>
+          {sec.items.map((p) => (
+            <ConflictCard key={p.pair_id} pair={p} busy={busy === p.pair_id} onResolve={resolve} />
+          ))}
+        </div>
       ))}
     </div>
   );
 }
 
-/** 一对冲突：两侧正文并排 + 三种结论。 */
+/** 一对冲突：两侧正文并排 + 三轴 + 四种结论（含 defer）。 */
 function ConflictCard(props: { pair: ConflictPairView; busy: boolean; onResolve: (p: ConflictPairView, o: Outcome) => void }) {
   const p = props.pair;
+  const rl = reviewLabel(p);
+  const cl = claimLabel(p);
   return (
     <div className="dsh-mem-card" style={S.card}>
       <div style={S.cardHead}>
         <span style={S.muted}>{'pair ' + p.pair_id.slice(0, 12)}</span>
         <span style={S.muted}>{fmtTime(p.created_at)}</span>
+        {rl ? <span style={{ ...S.muted, color: isDeferred(p) ? 'var(--dsh-mem-accent-fill)' : undefined }}>{rl}</span> : null}
+        {cl ? <span style={S.muted}>{cl}</span> : null}
         <div style={S.grow} />
         <span style={S.muted} title={'产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）'}>
           {'run ' + p.run_id.slice(0, 12)}
@@ -160,8 +185,10 @@ function ConflictCard(props: { pair: ConflictPairView; busy: boolean; onResolve:
         accent
         id={p.winner_id}
         content={p.winner_content}
+        pair={p}
+        side="winner"
       />
-      <Side label="LLM 建议：败方" id={p.loser_id} content={p.loser_content} />
+      <Side label="LLM 建议：败方" id={p.loser_id} content={p.loser_content} pair={p} side="loser" />
 
       <div style={{ ...S.flexRow, marginTop: 8 }}>
         <NButton
@@ -191,18 +218,29 @@ function ConflictCard(props: { pair: ConflictPairView; busy: boolean; onResolve:
         >
           两者都保留
         </NButton>
+        <NButton
+          disabled={props.busy}
+          title="看过但暂不裁决——该对仍在队列里，重置超时并累计复看次数"
+          onClick={() => {
+            props.onResolve(p, 'defer');
+          }}
+        >
+          看过，暂不裁决
+        </NButton>
       </div>
     </div>
   );
 }
 
-/** 冲突的一侧：id + 正文（正文缺失时明确说是"记录不在库"，不冒充空内容）。 */
-function Side(props: { label: string; id: string; content: string; accent?: boolean }) {
+/** 冲突的一侧：id + 正文 + 三轴（正文缺失时明确说是"记录不在库"，不冒充空内容）。 */
+function Side(props: { label: string; id: string; content: string; accent?: boolean; pair?: ConflictPairView; side?: 'winner' | 'loser' }) {
+  const axis = props.pair && props.side ? axisText(props.pair, props.side) : '';
   return (
     <div style={{ marginTop: 6 }}>
       <div style={{ ...S.muted, fontWeight: props.accent ? 600 : undefined }}>{props.label}</div>
       <div style={S.content}>{props.content || GONE}</div>
       <div style={{ ...S.muted, fontFamily: 'ui-monospace, Consolas, monospace' }}>{props.id}</div>
+      {axis ? <div style={{ ...S.muted, marginTop: 2, fontSize: 11 }}>{axis}</div> : null}
     </div>
   );
 }

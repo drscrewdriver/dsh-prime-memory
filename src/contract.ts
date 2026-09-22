@@ -966,6 +966,27 @@ export interface ConflictPairView {
   loser_id: string;
   loser_content: string;
   created_at: string;
+  // §C 三轴(conflict-3axis):胜/败双方的有效期与持续性,供人工裁决时对比。
+  // 可选且向后兼容——旧面板/客户端忽略新字段不报错。
+  winner_valid_from_ms?: number | null;
+  winner_valid_to_ms?: number | null;
+  winner_persistence?: string | null;
+  loser_valid_from_ms?: number | null;
+  loser_valid_to_ms?: number | null;
+  loser_persistence?: string | null;
+  // R1 未决态(task_2.4):把「没人看过」与「看过但未裁决」在读取面分开。
+  // `unseen` = `reviewed_at` 为空;`deferred` = 有人复看过、但仍未给出结论。
+  // 派生字段(不存在独立列):该区分必须由读取面算出来,否则"人看了没判"这件事
+  // 在界面上与"还没人看"长得一模一样 —— 那正是 R1 要消灭的混淆。
+  review_state?: 'unseen' | 'deferred';
+  /** R1:复看次数(面板据此显示"已复看 N 次");达 `DEFER_MAX` 即钉子户。 */
+  defer_count?: number;
+  // Phase 3(task_3.5):轴 2/3 在读取面可见 —— 三类冲突必须能区分,
+  // 否则"额度只按 hard 计"这件事在界面上无从解释(人只会看到"有些对没占额度")。
+  // 可选且带兜底:旧客户端忽略新字段不报错;读取面缺值时按 'hard' / '' 呈现。
+  conflict_type?: 'hard' | 'conditional' | 'supersession';
+  /** Phase 3:同一 claim 的多对冲突共用的稳定标识;空串 = 未分组。 */
+  claim_key?: string;
 }
 
 /** `dsh-memory/conflicts` 请求(读待裁决队列)。 */
@@ -1002,6 +1023,33 @@ export interface ConflictResolveResponse {
   resolved_at: string;
   /** 因裁决从检索中退场的记录 id(无则空串)。 */
   removed_record_id: string;
+  notice?: string;
+}
+
+// ── §C 丢弃留痕 ──
+
+/** 一条被丢弃的冲突决策(task_1.1: LLM 输出不满足 pair 格式、已被记录为"不合法")。 */
+export interface ConflictRejectedView {
+  reject_id: string;
+  run_id: string;
+  record_id: string;
+  winner_raw: string;
+  loser_raw: string;
+  reason: string;
+  created_at: string;
+}
+
+/** `dsh-memory/conflicts-rejected` 请求。 */
+export interface ConflictRejectedRequest {
+  /** 最多返回多少条(默认 50,上限 200)。 */
+  limit?: number;
+  /** 排他上界:created_at < 此值的记录(ISO);不给则从最新开始。 */
+  created_before?: string;
+}
+
+/** `dsh-memory/conflicts-rejected` 响应。 */
+export interface ConflictRejectedResponse {
+  items: ConflictRejectedView[];
   notice?: string;
 }
 
@@ -1048,6 +1096,7 @@ export interface DshMemoryRequestMap {
   'dsh-memory/receipts': ReceiptsRequest;
   'dsh-memory/conflicts': ConflictsRequest;
   'dsh-memory/conflict-resolve': ConflictResolveRequest;
+  'dsh-memory/conflicts-rejected': ConflictRejectedRequest;
   'dsh-memory/graph-search': GraphSearchRequest;
   'dsh-memory/graph-node-get': GraphNodeGetRequest;
   'dsh-memory/scenes': Record<string, never>;
@@ -1089,6 +1138,7 @@ export interface DshMemoryResponseMap {
   'dsh-memory/receipts': ReceiptsResponse;
   'dsh-memory/conflicts': ConflictsResponse;
   'dsh-memory/conflict-resolve': ConflictResolveResponse;
+  'dsh-memory/conflicts-rejected': ConflictRejectedResponse;
   'dsh-memory/graph-search': GraphSearchResponse;
   'dsh-memory/graph-node-get': GraphNodeGetResponse;
   'dsh-memory/scenes': ScenesResponse;

@@ -42,6 +42,13 @@ export interface SupersedeInfo {
     verdict?: string;
     /** 产生该退场的待裁决对 id(仅 `reason='conflict'`,供交叉审计)。 */
     pairId?: string;
+    /**
+     * §C Phase 3(task_3.6):该对冲突的**类型轴**(`hard` / `conditional` / `supersession`)。
+     *
+     * 写在这里是为了让"退场"这一跳也带得走类型:否则人工裁决一条 `conditional`
+     * 冲突后,只剩 `verdict` 能看出"判了谁赢",看不出"判的是哪一类矛盾"。
+     */
+    conflictType?: string;
     /** **取代它的**新记录 id(仅 `reason='superseded'`)。 */
     by?: string;
 }

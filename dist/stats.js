@@ -52,6 +52,7 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/receipts',
     'dsh-memory/conflicts',
     'dsh-memory/conflict-resolve',
+    'dsh-memory/conflicts-rejected',
     'dsh-memory/graph-search',
     'dsh-memory/graph-node-get',
     'dsh-memory/scenes',
@@ -754,8 +755,27 @@ export async function handleEndpoint(endpoint, payload, deps) {
             if (!pairId)
                 throw new Error('需要 pairId(待裁决对的 pair_id)');
             if (!outcome)
-                throw new Error('需要 outcome(winner | loser | both)');
+                throw new Error('需要 outcome(winner | loser | both | defer)');
             return await resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true }, pairId, outcome);
+        }
+        // ── §C 丢弃留痕:被 LLM 输出不合法的冲突决策记录(task_1.1) ──
+        // 与 `dsh-memory/conflicts` 同模式:读方向,不涉及裁决。
+        case 'dsh-memory/conflicts-rejected': {
+            const p = (payload ?? {});
+            const limit = typeof p.limit === 'number' ? p.limit : undefined;
+            const createdBefore = typeof p.created_before === 'string' ? p.created_before : undefined;
+            const items = stores.l1.listConflictRejected({ limit, createdBefore });
+            return {
+                items: items.map((r) => ({
+                    reject_id: r.rejectId,
+                    run_id: r.runId,
+                    record_id: r.recordId,
+                    winner_raw: r.winnerRaw,
+                    loser_raw: r.loserRaw,
+                    reason: r.reason,
+                    created_at: r.createdAt,
+                })),
+            };
         }
         case 'dsh-memory/records-delete': {
             // 面板高权限删除指定记忆;写入删权限门(memoryMutate)防御。

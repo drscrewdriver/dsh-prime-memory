@@ -38,8 +38,20 @@
   - **面板**：记录页新增「已退场（可恢复）」区（默认折叠、展开时才拉取，不让它拖慢正常浏览）；删除确认文案改为明确"可恢复"。**物理清理刻意不做面板入口**——不可逆动作只留 RPC / 模型出口。
 - **§C 矛盾冻结：同批次矛盾现在也能冻结（修掉"模型唯一会说的话恰好被拒收"）。** 取证发现 `validateConflictPair` 的第③条硬性要求"另一方必须是候选池里的已知记录"，而**同批次新记忆的 id 不在其中**（它们是本轮刚生成的、尚未入库）。于是"本轮两条新记忆互相矛盾"这种最典型的"机器判不了"情形，模型即便正确 emit 了 `conflict`，也**必然被判不成对而回落 `store`**。证据：模型层 7/7 会 emit，但那一跳从未落库（`conflict_pending` 建库以来 0 行、`l1_receipts` 里 `conflict` 凭证 0 条，而 `store 381 / merge 204 / update 172 / skip 7`）。修法：`validateConflictPair` 新增可选 `batchIds`（缺省 = 旧行为），仍要求"恰有一方是本条记忆"以保证配对唯一；并补队列满护栏——**败方属本轮新记忆时不做自动了结**，否则刚抽取的产出会立刻退场且没有任何人被告知，改为不停放、照常入库。
 
+- **§C 矛盾冻结现在看得懂「三轴时间」——内容矛盾但时间上有先后的,不再一律塞给人工。** 记忆记录本就有三条互不替代的时间轴(记录时刻 `createdAt/updatedAt`、事实有效期 `validFrom/validTo`、持续性 `persistence`),但矛盾检测只用了记录时刻:检测器判 `conflict` 时看不到有效期与持续性,往往把「旧事实被新事实取代」误判成需要人裁决的对;裁决面板也只显示双方正文,人看不到有效期对比只能盲判。本轮把三轴接进冻结的两端:
+  - **检测侧**:统一候选池**在冻结开启时**向检测器透传每条记忆的 `valid_from_ms` / `valid_to_ms` / `persistence`;`conflict` 动作条款新增「三轴辅助判定」——内容矛盾时先比有效期/持续性,一方已过期或明显更晚的,引导走 `update`/`merge` 而非 `conflict`。**三键与条款一律受 `conflictFreeze` 门控**:关闭态 user prompt 与升级前**逐字节相同**(见下方「修复」与 [ADR-0012](./docs/adr/0012-conflict-3axis-advisory-time-axes.md))。
+  - **裁决侧**:`ConflictPairView` 新增可选的 `winner_*` / `loser_*` 三轴字段(向后兼容);待裁决列表与渲染为每条对附上「有效期起/止、持续性」对比,帮人一眼看出谁更新、谁已过期。
+  - 机器**仍不自动裁决**:三轴只是辅助事实,最终结论仍由人工(或安全阀超时/满队列自动了结)写——`ConflictResolution` 取值不变。
+
+- **§C 三类冲突 + claim 分组 + 丢弃留痕（Phase 3-4）。** 冲突不再只有一种"硬矛盾"——LLM 现在能判定 `hard`（事实互斥）、`conditional`（前提不同才矛盾）、`supersession`（新旧取代）三类。面板按三类分段显示，每段有独立标题与说明；`defer` 按钮支持"看过但暂不裁决"（重置超时、累计复看次数）。`claim_key` 列允许标记同一主题的多对冲突，面板据此分组。被丢弃的不合法冲突决策可通过 `memory_conflicts_rejected` 工具与 `dsh-memory/conflicts-rejected` 端点查询。
+  - `conflict_pending` 新增 `conflict_type` / `claim_key` 两列（幂等 `ALTER TABLE` 迁移）。
+  - 额度计数只计 `hard`：`pendingHardTotal` 按类型过滤；`conditional` / `supersession` 不占额度。
+  - 投影哈希冻结：7 字段列投影 `projectConflictsForHash` 不含新列，存量快照校验不变。
+  - 面板：`ConflictsTab` 三类分段 + defer 按钮 + 三轴文案 + 复看次数 + claim 键显示。
+
 ### 修复
 
+- **关闭态 prompt 曾悄悄多出三轴字段(默认关闭的部署受影响)。** 首版把 `valid_from_ms` / `valid_to_ms` / `persistence` **无条件**注入候选池,而这条 LLM 调用只对 system prompt 读了开关 ⇒ `conflictFreeze=false`(部署默认)时,模型每条候选多看 3 个**没有任何条款解释**的键:既费 token,又改变了输入。现已把三键纳入 `conflictFreeze` 门控,关闭态 user prompt 与升级前**逐字节相同**;判据同时从「不含某子串」升级为 **sha1 golden 锚 + 反向验证**(改坏门控该用例必红)。
 - **面板说"矛盾冻结未开启"，而开关明明是开的。** `conflicts` / `conflict-resolve` 端点读的是**部署静态配置** `cfg.conflictFreeze.enabled`，而面板写入的是**运行时设置**（live）。部署默认恒 `false`，于是开关已开、`settings.yaml` 已落 `true`，本页仍报未开启。改走 `effectiveCfg(cfg, live)`，与去重管线同一套解析——开关只有**一个**事实源，读端与写端必须看同一份状态，否则会出现"列表说开着、裁决说没开"的自相矛盾。
 - **`dsh-memory/embedding-reindex` 声明了却恒返 404。** 端点写在契约里，但既缺席 `MEMORY_ENDPOINTS` 白名单、也没有分发 `case`；同时 `startReindex()` 是**死代码**，设置页「向量索引」区块因此只有"取消"没有"开始"。补白名单 + `case` + 用例。
 - **`UiRecord.sourceMessageIds` 是死字段。** 它读的是 `l1_records` **从不存在的列**，永远回退 `[]`，于是记录面板的来源行**从未渲染过**。已替换为读真实数据的 `sourceAnchors`。

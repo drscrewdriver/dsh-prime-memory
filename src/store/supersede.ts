@@ -45,6 +45,13 @@ export interface SupersedeInfo {
   verdict?: string;
   /** 产生该退场的待裁决对 id(仅 `reason='conflict'`,供交叉审计)。 */
   pairId?: string;
+  /**
+   * §C Phase 3(task_3.6):该对冲突的**类型轴**(`hard` / `conditional` / `supersession`)。
+   *
+   * 写在这里是为了让"退场"这一跳也带得走类型:否则人工裁决一条 `conditional`
+   * 冲突后,只剩 `verdict` 能看出"判了谁赢",看不出"判的是哪一类矛盾"。
+   */
+  conflictType?: string;
   /** **取代它的**新记录 id(仅 `reason='superseded'`)。 */
   by?: string;
 }
@@ -66,6 +73,9 @@ export function withSupersedeMarker(
   // 可选字段缺省即不写键:空串会让"没有 pairId"与"pairId 是空串"无法区分
   if (info.verdict) marker.verdict = info.verdict;
   if (info.pairId) marker.pairId = info.pairId;
+  // Phase 3(task_3.6):「有值才写键」的既有语义照旧——无条件写键会破
+  // `tests/l1-retire.test.ts` 与 `tests/supersede-marker.test.ts` 的精确断言。
+  if (info.conflictType) marker.conflictType = info.conflictType;
   if (info.by) marker.by = info.by;
   return { ...base, [SUPERSEDE_METADATA_KEY]: marker };
 }
@@ -89,6 +99,9 @@ export function readSupersedeMarker(metadata: unknown): SupersedeInfo | undefine
   const info: SupersedeInfo = { at, reason: reason as RetireReason };
   if (typeof o.verdict === 'string' && o.verdict) info.verdict = o.verdict;
   if (typeof o.pairId === 'string' && o.pairId) info.pairId = o.pairId;
+  // Phase 3(task_3.6):读侧是**白名单投影**——漏了这一行,写侧新加的 conflictType
+  // 会被静默丢弃(写进去了、读不回来,而 round-trip 断言才会发现)。写读成对改。
+  if (typeof o.conflictType === 'string' && o.conflictType) info.conflictType = o.conflictType;
   if (typeof o.by === 'string' && o.by) info.by = o.by;
   return info;
 }

@@ -1,7 +1,7 @@
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
-import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
 import { type SupersedeInfo } from './supersede.js';
 import { type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { type EmbeddingService } from './embedding.js';
@@ -96,6 +96,26 @@ export declare class L1Store {
      */
     recordConflictPending(rows: readonly ConflictPair[]): number;
     /**
+     * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策(薄包装)。
+     * 与 `recordConflictPending` 同层同理由:管线已持有 L1Store,不新增构造参数;
+     * 同时它是「留痕写失败不得中断蒸馏」可注入的测试缝。
+     */
+    recordConflictRejected(rows: readonly ConflictRejected[]): number;
+    /** §C 读取丢弃留痕(为审计/诊断出口预留;薄包装)。 */
+    listConflictRejected(opts?: {
+        createdBefore?: string;
+        limit?: number;
+    }): ConflictRejected[];
+    /**
+     * §C Phase 2(task_2.0):写入「已复看」痕迹(薄包装)。
+     * **不写 `resolved_at`** —— `defer` 不是裁决结论,该对必须留在待裁决队列里。
+     */
+    markConflictReviewed(pairId: string, next: {
+        reviewedAt: string;
+        deferredAt: string;
+        deferCount: number;
+    }): number;
+    /**
      * §C 冻结的图谱侧同步:把 `disputed` 状态重算到给定冲突集(命中标记 / 不再命中复原)。
      * 经 store 而非直取 `db.graphStore`,与图谱路 provider 的注入式设计同一理由
      * (见本文件头部注释):图谱是**可选**的派生投影,开关关闭时必须是 no-op。
@@ -104,12 +124,22 @@ export declare class L1Store {
         marked: number;
         cleared: number;
     };
-    /** §C 待裁决队列的未裁决条数(task_24 队列上限判据)。 */
-    countConflictPendingUnresolved(): number;
+    /**
+     * §C 待裁决队列的未裁决条数(task_24 队列上限判据)。
+     * Phase 3(task_3.4):`conflictType` 可选过滤,只有额度判据传 `{ conflictType: 'hard' }`。
+     */
+    countConflictPendingUnresolved(opts?: {
+        conflictType?: ConflictType;
+    }): number;
+    /** §C Phase 3(task_3.3):未裁决对按 `claim_key` 归并(薄包装)。 */
+    listConflictGroupedByClaim(opts?: {
+        limit?: number;
+    }): ConflictClaimGroup[];
     /** §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。 */
     listConflictPending(opts?: {
         createdBefore?: string;
         limit?: number;
+        excludeDeferExhausted?: boolean;
     }): ConflictPair[];
     /** §C 打上裁决结论(已裁决的不覆盖)。 */
     resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;

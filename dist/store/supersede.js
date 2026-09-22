@@ -21,6 +21,10 @@ export function withSupersedeMarker(metadata, info) {
         marker.verdict = info.verdict;
     if (info.pairId)
         marker.pairId = info.pairId;
+    // Phase 3(task_3.6):「有值才写键」的既有语义照旧——无条件写键会破
+    // `tests/l1-retire.test.ts` 与 `tests/supersede-marker.test.ts` 的精确断言。
+    if (info.conflictType)
+        marker.conflictType = info.conflictType;
     if (info.by)
         marker.by = info.by;
     return { ...base, [SUPERSEDE_METADATA_KEY]: marker };
@@ -50,6 +54,10 @@ export function readSupersedeMarker(metadata) {
         info.verdict = o.verdict;
     if (typeof o.pairId === 'string' && o.pairId)
         info.pairId = o.pairId;
+    // Phase 3(task_3.6):读侧是**白名单投影**——漏了这一行,写侧新加的 conflictType
+    // 会被静默丢弃(写进去了、读不回来,而 round-trip 断言才会发现)。写读成对改。
+    if (typeof o.conflictType === 'string' && o.conflictType)
+        info.conflictType = o.conflictType;
     if (typeof o.by === 'string' && o.by)
         info.by = o.by;
     return info;

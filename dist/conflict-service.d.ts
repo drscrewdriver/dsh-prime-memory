@@ -12,7 +12,7 @@ import type { L1Store } from './store/l1.js';
 import type { ConflictPairView, ConflictsResponse as ConflictsView, ConflictResolveResponse as ConflictResolutionView } from './contract.js';
 export type { ConflictPairView, ConflictsView, ConflictResolutionView };
 export interface ConflictResolveDeps {
-    l1: Pick<L1Store, 'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed'>;
+    l1: Pick<L1Store, 'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed' | 'markConflictReviewed'>;
     /** `conflictFreeze.enabled`。未开启时队列恒空,直接给出提示而非静默无操作。 */
     conflictFreezeEnabled: boolean;
 }

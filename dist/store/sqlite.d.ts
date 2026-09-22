@@ -16,7 +16,7 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
-import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
 import { type SupersedeInfo } from './supersede.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
@@ -239,8 +239,15 @@ export declare class MemoryDb {
     /**
      * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
      * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+     *
+     * Phase 3(task_3.4):`conflictType` 可选过滤——**默认不带**(返回全部未裁决数),
+     * 只有队列上限判据传 `{ conflictType: 'hard' }`(额度只按 hard 计)。
+     * 刻意用**选项对象**而非位置参数:位置参数会被下一个调用点无声漏传,
+     * 而"漏传 ⇒ 额度把非 hard 也算进去"正是这条轴要修的病。
      */
-    countConflictPendingUnresolved(): number;
+    countConflictPendingUnresolved(opts?: {
+        conflictType?: ConflictType;
+    }): number;
     /**
      * §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。
      *
@@ -250,7 +257,41 @@ export declare class MemoryDb {
     listConflictPending(opts?: {
         createdBefore?: string;
         limit?: number;
+        /**
+         * R1(task_2.3):把已达复看上限(`DEFER_MAX`)的对**排除出超时扫描**。
+         * **显式可选、默认关**——哈希输入、队列列出与人工裁决查找**绝不**能受它影响:
+         * ① 否则快照哈希会随 `defer_count` 变化,旧 manifest 永久失配;
+         * ② 否则钉子户将无法被 `resolveConflictPair` 找到,而人工裁决是它们**唯一**的出口。
+         */
+        excludeDeferExhausted?: boolean;
     }): ConflictPair[];
+    /**
+     * §C Phase 3(task_3.3):把未裁决对**按 `claim_key` 归并**后返回。
+     *
+     * 分组是**读取面的派生**,不是新状态:故它不从库外引入任何字段、不进快照哈希,
+     * 只把 {@link listConflictPending} 的结果按轴归并(空键那组恒排最后)。
+     * 归并逻辑在 `conflicts.ts` 的纯函数里(可单测、无 I/O),这里只负责取行。
+     */
+    listConflictGroupedByClaim(opts?: {
+        limit?: number;
+    }): ConflictClaimGroup[];
+    /**
+     * §C Phase 2(task_2.0):写入「已复看」痕迹——**不写 `resolved_at`**。
+     *
+     * `defer`(看过、暂不裁决)不是裁决结论,故它**不能**碰 `resolved_at` / `resolution`:
+     * 那两列一旦写上,该对就退出待裁决队列了,而 `defer` 的语义恰恰是
+     * 「还在队列里,只是我看过了」。这是 R1 与 R2 的分界(审计 N1)。
+     *
+     * `WHERE pair_id = ? AND resolved_at = ''` 保证**已裁决的对不被写回**
+     * ——与 {@link resolveConflictPending} 同款的单向性。
+     *
+     * @returns 受影响行数(0 = 该对已裁决或不存在)。
+     */
+    markConflictReviewed(pairId: string, next: {
+        reviewedAt: string;
+        deferredAt: string;
+        deferCount: number;
+    }): number;
     /**
      * §C 打上裁决结论。
      *
@@ -260,6 +301,25 @@ export declare class MemoryDb {
      * @returns 受影响行数(0 = 该对被裁决过或不存在)。
      */
     resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;
+    /**
+     * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策。
+     *
+     * `INSERT OR IGNORE` + 主键 `reject_id` ⇒ 同一决策重复登记只留一行
+     * (与 {@link recordConflictPending} 同款幂等,幂等来自主键而非调用方自觉)。
+     *
+     * @returns 实际新插入的行数。
+     */
+    recordConflictRejected(rows: readonly ConflictRejected[]): number;
+    /**
+     * §C 读取丢弃留痕(为审计/诊断出口预留)。
+     *
+     * `createdBefore` 为**排他上界**(ISO 串);定序 `created_at ASC, reject_id ASC`
+     * —— 先来先服务且同一毫秒内确定可复现(与 {@link listConflictPending} 同口径)。
+     */
+    listConflictRejected(opts?: {
+        createdBefore?: string;
+        limit?: number;
+    }): ConflictRejected[];
     /**
      * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
      * 返回被删除的行数。

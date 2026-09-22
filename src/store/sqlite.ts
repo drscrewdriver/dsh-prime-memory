@@ -54,7 +54,8 @@ import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
-import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
+import { DEFER_MAX, groupConflictPairsByClaim, normalizeClaimKey, normalizeConflictType } from './conflicts.js';
 import { isRetired, readSupersedeMarker, stripSupersedeMarker, withSupersedeMarker, type SupersedeInfo } from './supersede.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
@@ -410,7 +411,9 @@ export class MemoryDb {
         loser_id TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT '',
         resolved_at TEXT NOT NULL DEFAULT '',
-        resolution TEXT NOT NULL DEFAULT ''
+        resolution TEXT NOT NULL DEFAULT '',
+        conflict_type TEXT NOT NULL DEFAULT 'hard',
+        claim_key TEXT NOT NULL DEFAULT ''
       )
     `);
     // 未裁决索引:队列上限(task_24,取最旧的未裁决行)与裁决工具(task_25,取单条未裁决对)
@@ -419,6 +422,57 @@ export class MemoryDb {
       `CREATE INDEX IF NOT EXISTS idx_conflict_pending_unresolved
          ON conflict_pending(created_at) WHERE resolved_at = ''`,
     );
+
+    // ── §C 丢弃留痕(DDL 同为磁盘契约) ──
+    // 此前「conflict 决策配不成对」**完全静默**:既不停放也不落库,只在日志里留一行 warn,
+    // 于是"模型明确说了判不了、而这一跳没接住"在库里查不到(§C 的可审计性依赖能回看)。
+    // 本表**只追加、不改写**;不进 l1-snapshot 的哈希投影(见 task_2.8)。
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS conflict_rejected (
+        reject_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL DEFAULT '',
+        record_id TEXT NOT NULL DEFAULT '',
+        winner_raw TEXT NOT NULL DEFAULT '',
+        loser_raw TEXT NOT NULL DEFAULT '',
+        reason TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT ''
+      )
+    `);
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_conflict_rejected_created ON conflict_rejected(created_at)`,
+    );
+
+    // ── §C Phase 2(task_2.1):conflict_pending 加"未决态"三列 ──
+    // 三列承载 R1:`reviewed_at` 区分"没看"与"看了没判",`deferred_at` 是**超时基准的重置点**
+    // (见 task_2.3:超时看 `deferred_at ?? created_at`,`defer` 重置计时而非豁免计时),
+    // `defer_count` 是复看次数(上限 3,fail-loud)。
+    // 必须走 ALTER:`CREATE TABLE IF NOT EXISTS` 对**已存在**的表不会补列;
+    // 而 ALTER 重复执行会报错,故先用 `PRAGMA table_info` 判存在 ⇒ 迁移可重复执行。
+    const conflictCols = new Set(
+      (this.db.prepare('PRAGMA table_info(conflict_pending)').all() as Array<{ name?: unknown }>).map((r) =>
+        String(r.name ?? ''),
+      ),
+    );
+    if (!conflictCols.has('reviewed_at')) {
+      this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN reviewed_at TEXT NOT NULL DEFAULT ''`);
+    }
+    if (!conflictCols.has('deferred_at')) {
+      this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN deferred_at TEXT NOT NULL DEFAULT ''`);
+    }
+    if (!conflictCols.has('defer_count')) {
+      this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN defer_count INTEGER NOT NULL DEFAULT 0`);
+    }
+    // ── §C Phase 3(task_3.3):类型轴与 claim 键两列 ──
+    // 同款存在性判据:`CREATE TABLE IF NOT EXISTS` 对**已存在**的表不补列,故必须 ALTER;
+    // 而 ALTER 重复执行会报错 ⇒ 先 `PRAGMA table_info` 判存在,迁移可重复执行。
+    // 两列的默认值刻意与读取面兜底一致('hard' / ''):旧行回填后即"未分类的硬冲突",
+    // 不需要任何一次性数据迁移。
+    if (!conflictCols.has('conflict_type')) {
+      this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN conflict_type TEXT NOT NULL DEFAULT 'hard'`);
+    }
+    if (!conflictCols.has('claim_key')) {
+      this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN claim_key TEXT NOT NULL DEFAULT ''`);
+    }
 
     this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
@@ -1265,13 +1319,25 @@ export class MemoryDb {
     if (this.degraded || rows.length === 0) return 0;
     const stmt = this.db.prepare(
       `INSERT OR IGNORE INTO conflict_pending
-         (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution, conflict_type, claim_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     let n = 0;
     for (const r of rows) {
       n += Number(
-        stmt.run(r.pairId, r.runId, r.winnerId, r.loserId, r.createdAt, r.resolvedAt, r.resolution).changes,
+        stmt.run(
+          r.pairId,
+          r.runId,
+          r.winnerId,
+          r.loserId,
+          r.createdAt,
+          r.resolvedAt,
+          r.resolution,
+          // Phase 3(task_3.3):两轴在这里归一后落库——**写侧也 fail-closed**,
+          // 不指望调用方都记得传(normalizeConflictType 对畸形输入返回 'hard')。
+          normalizeConflictType(r.conflictType),
+          normalizeClaimKey(r.claimKey),
+        ).changes,
       );
     }
     return n;
@@ -1286,10 +1352,20 @@ export class MemoryDb {
   /**
    * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
    * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+   *
+   * Phase 3(task_3.4):`conflictType` 可选过滤——**默认不带**(返回全部未裁决数),
+   * 只有队列上限判据传 `{ conflictType: 'hard' }`(额度只按 hard 计)。
+   * 刻意用**选项对象**而非位置参数:位置参数会被下一个调用点无声漏传,
+   * 而"漏传 ⇒ 额度把非 hard 也算进去"正是这条轴要修的病。
    */
-  countConflictPendingUnresolved(): number {
+  countConflictPendingUnresolved(opts: { conflictType?: ConflictType } = {}): number {
     if (this.degraded) return 0;
-    const row = this.db.prepare(`SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = ''`).get() as
+    const type = opts.conflictType;
+    const sql =
+      type === undefined
+        ? `SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = ''`
+        : `SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = '' AND conflict_type = ?`;
+    const row = (type === undefined ? this.db.prepare(sql).get() : this.db.prepare(sql).get(type)) as
       | { n: number }
       | undefined;
     return Number(row?.n ?? 0);
@@ -1301,23 +1377,76 @@ export class MemoryDb {
    * `createdBefore` 为**排他上界**(ISO 串):只取该时刻之前创建的,用于超时判定。
    * 定序 `created_at ASC, pair_id ASC`——先来先服务,且同一毫秒内仍**确定可复现**。
    */
-  listConflictPending(opts: { createdBefore?: string; limit?: number } = {}): ConflictPair[] {
+  listConflictPending(opts: {
+    createdBefore?: string;
+    limit?: number;
+    /**
+     * R1(task_2.3):把已达复看上限(`DEFER_MAX`)的对**排除出超时扫描**。
+     * **显式可选、默认关**——哈希输入、队列列出与人工裁决查找**绝不**能受它影响:
+     * ① 否则快照哈希会随 `defer_count` 变化,旧 manifest 永久失配;
+     * ② 否则钉子户将无法被 `resolveConflictPair` 找到,而人工裁决是它们**唯一**的出口。
+     */
+    excludeDeferExhausted?: boolean;
+  } = {}): ConflictPair[] {
     if (this.degraded) return [];
     const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.floor(opts.limit as number) : 500;
     const params: unknown[] = [];
     let where = `resolved_at = ''`;
     if (opts.createdBefore) {
-      where += ` AND created_at < ?`;
+      // R1(task_2.3):超时基准 = `deferred_at ?? created_at` —— **defer 重置计时**,
+      // 而不是豁免计时(豁免会让钉子户永久占额度,破坏 config.ts 的有界性契约)。
+      // `deferred_at` 为空串时 `COALESCE(NULLIF(...,''), created_at)` 退化为 `created_at`
+      // ⇒ 未 defer 过的行的行为与升级前**逐字等价**。
+      where += ` AND COALESCE(NULLIF(deferred_at, ''), created_at) < ?`;
       params.push(opts.createdBefore);
+    }
+    if (opts.excludeDeferExhausted) {
+      where += ` AND defer_count < ${DEFER_MAX}`;
     }
     const rows = this.db
       .prepare(
-        `SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution
+        `SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution,
+                reviewed_at, deferred_at, defer_count, conflict_type, claim_key
            FROM conflict_pending WHERE ${where}
           ORDER BY created_at ASC, pair_id ASC LIMIT ?`,
       )
       .all(...(params as never[]), limit) as Array<Record<string, unknown>>;
     return rows.map(toConflictPair);
+  }
+
+  /**
+   * §C Phase 3(task_3.3):把未裁决对**按 `claim_key` 归并**后返回。
+   *
+   * 分组是**读取面的派生**,不是新状态:故它不从库外引入任何字段、不进快照哈希,
+   * 只把 {@link listConflictPending} 的结果按轴归并(空键那组恒排最后)。
+   * 归并逻辑在 `conflicts.ts` 的纯函数里(可单测、无 I/O),这里只负责取行。
+   */
+  listConflictGroupedByClaim(opts: { limit?: number } = {}): ConflictClaimGroup[] {
+    return groupConflictPairsByClaim(this.listConflictPending(opts));
+  }
+
+  /**
+   * §C Phase 2(task_2.0):写入「已复看」痕迹——**不写 `resolved_at`**。
+   *
+   * `defer`(看过、暂不裁决)不是裁决结论,故它**不能**碰 `resolved_at` / `resolution`:
+   * 那两列一旦写上,该对就退出待裁决队列了,而 `defer` 的语义恰恰是
+   * 「还在队列里,只是我看过了」。这是 R1 与 R2 的分界(审计 N1)。
+   *
+   * `WHERE pair_id = ? AND resolved_at = ''` 保证**已裁决的对不被写回**
+   * ——与 {@link resolveConflictPending} 同款的单向性。
+   *
+   * @returns 受影响行数(0 = 该对已裁决或不存在)。
+   */
+  markConflictReviewed(
+    pairId: string,
+    next: { reviewedAt: string; deferredAt: string; deferCount: number },
+  ): number {
+    if (this.degraded) return 0;
+    const stmt = this.db.prepare(
+      `UPDATE conflict_pending SET reviewed_at = ?, deferred_at = ?, defer_count = ?
+        WHERE pair_id = ? AND resolved_at = ''`,
+    );
+    return Number(stmt.run(next.reviewedAt, next.deferredAt, next.deferCount, pairId).changes);
   }
 
   /**
@@ -1335,6 +1464,55 @@ export class MemoryDb {
         WHERE pair_id = ? AND resolved_at = ''`,
     );
     return Number(stmt.run(resolvedAt, resolution, pairId).changes);
+  }
+
+  /**
+   * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策。
+   *
+   * `INSERT OR IGNORE` + 主键 `reject_id` ⇒ 同一决策重复登记只留一行
+   * (与 {@link recordConflictPending} 同款幂等,幂等来自主键而非调用方自觉)。
+   *
+   * @returns 实际新插入的行数。
+   */
+  recordConflictRejected(rows: readonly ConflictRejected[]): number {
+    if (this.degraded || rows.length === 0) return 0;
+    const stmt = this.db.prepare(
+      `INSERT OR IGNORE INTO conflict_rejected
+         (reject_id, run_id, record_id, winner_raw, loser_raw, reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    let n = 0;
+    for (const r of rows) {
+      n += Number(
+        stmt.run(r.rejectId, r.runId, r.recordId, r.winnerRaw, r.loserRaw, r.reason, r.createdAt).changes,
+      );
+    }
+    return n;
+  }
+
+  /**
+   * §C 读取丢弃留痕(为审计/诊断出口预留)。
+   *
+   * `createdBefore` 为**排他上界**(ISO 串);定序 `created_at ASC, reject_id ASC`
+   * —— 先来先服务且同一毫秒内确定可复现(与 {@link listConflictPending} 同口径)。
+   */
+  listConflictRejected(opts: { createdBefore?: string; limit?: number } = {}): ConflictRejected[] {
+    if (this.degraded) return [];
+    const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.floor(opts.limit as number) : 200;
+    const params: unknown[] = [];
+    let where = `1 = 1`;
+    if (opts.createdBefore) {
+      where += ` AND created_at < ?`;
+      params.push(opts.createdBefore);
+    }
+    const rows = this.db
+      .prepare(
+        `SELECT reject_id, run_id, record_id, winner_raw, loser_raw, reason, created_at
+           FROM conflict_rejected WHERE ${where}
+          ORDER BY created_at ASC, reject_id ASC LIMIT ?`,
+      )
+      .all(...(params as never[]), limit) as Array<Record<string, unknown>>;
+    return rows.map(toConflictRejected);
   }
 
   /**
@@ -2174,6 +2352,29 @@ function toConflictPair(r: Record<string, unknown>): ConflictPair {
     createdAt: String(r.created_at ?? ''),
     resolvedAt: String(r.resolved_at ?? ''),
     resolution: String(r.resolution ?? ''),
+    // Phase 2 新增列(task_2.0):**只做读取投影,不进快照哈希**
+    // (哈希走 l1-snapshot.ts 的 projectConflictsForHash 列投影,见 task_2.8)
+    reviewedAt: String(r.reviewed_at ?? ''),
+    deferredAt: String(r.deferred_at ?? ''),
+    deferCount: Number(r.defer_count ?? 0),
+    // Phase 3 新增列(task_3.2/3.3):同样**只做读取投影,不进快照哈希**。
+    // 读侧再归一一次:旧行经 ALTER 回填的是默认值,手工改过库的脏值也会被收敛到
+    // 三枚举内 —— 读取面不该把库里的任意字符串当契约往外抛。
+    conflictType: normalizeConflictType(r.conflict_type),
+    claimKey: normalizeClaimKey(r.claim_key),
+  };
+}
+
+/** `conflict_rejected` 行 → {@link ConflictRejected}(snake_case 只活在这一层)。 */
+function toConflictRejected(r: Record<string, unknown>): ConflictRejected {
+  return {
+    rejectId: String(r.reject_id ?? ''),
+    runId: String(r.run_id ?? ''),
+    recordId: String(r.record_id ?? ''),
+    winnerRaw: String(r.winner_raw ?? ''),
+    loserRaw: String(r.loser_raw ?? ''),
+    reason: (String(r.reason ?? '') || 'not-pair') as ConflictRejected['reason'],
+    createdAt: String(r.created_at ?? ''),
   };
 }
 

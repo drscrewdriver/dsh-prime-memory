@@ -895,16 +895,87 @@ ruminate) {
             return listConflictPairs({ l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true }, { limit: typeof args.limit === 'number' ? args.limit : undefined });
         },
     }));
+    // ── memory_conflicts_rejected: §C 丢弃留痕的读出口 ──
+    // LLM 输出不满足 pair 格式的冲突决策会被记入 `conflict_rejected` 表,
+    // 但此前只有写入没有读取——人无法知道"哪些冲突被判定为不合法"。
+    // 本工具补上读方向,与 `dsh-memory/conflicts-rejected` RPC 端点共用同一形状。
+    ctx.tools.register(defineTool({
+        name: 'memory_conflicts_rejected',
+        description: '列出被**丢弃**的冲突决策(§C 丢弃留痕)。LLM 输出不满足 pair 格式(缺 winner/loser id、无法配对等)时,该决策会被记入丢弃表而非停到待裁决队列。返回每条的 reject_id、原始正文、丢弃原因与所属蒸馏批次。可用 limit / created_before 分页。',
+        parameters: {
+            limit: { type: 'number', description: '最多返回多少条(默认 50,上限 200)' },
+            created_before: { type: 'string', description: '排他上界:created_at < 此值(ISO);不给则从最新开始' },
+        },
+        output: {
+            schema: {
+                type: 'object',
+                properties: {
+                    items: {
+                        type: 'array',
+                        description: '被丢弃的冲突决策',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                reject_id: { type: 'string' },
+                                run_id: { type: 'string', description: '所属蒸馏批次 id' },
+                                record_id: { type: 'string' },
+                                winner_raw: { type: 'string', description: 'LLM 原始输出的胜方正文' },
+                                loser_raw: { type: 'string', description: 'LLM 原始输出的败方正文' },
+                                reason: { type: 'string', description: '丢弃原因(如 not-pair)' },
+                                created_at: { type: 'string' },
+                            },
+                            additionalProperties: false,
+                        },
+                    },
+                    notice: { type: 'string', description: '非结果的状态提示' },
+                },
+                additionalProperties: false,
+            },
+            render: (_args, value) => {
+                const v = value;
+                if (v.notice)
+                    return [{ type: 'text', text: v.notice }];
+                const items = v.items ?? [];
+                if (items.length === 0)
+                    return [{ type: 'text', text: '没有被丢弃的冲突决策。' }];
+                const rows = items.map((r, i) => `${i + 1}. ${r.reject_id}  (${r.created_at}) · 原因 ${r.reason}`);
+                return [{ type: 'text', text: `被丢弃的冲突决策 ${items.length} 条\n\n${rows.join('\n')}` }];
+            },
+        },
+        execute: async (args, exec) => {
+            const family = familyOfCaller(exec);
+            if (family === null) {
+                return { items: [], notice: blockNoticeOf(exec) };
+            }
+            const limit = typeof args.limit === 'number' ? args.limit : undefined;
+            const createdBefore = typeof args.created_before === 'string' ? args.created_before : undefined;
+            const items = stores.l1.listConflictRejected({ limit, createdBefore });
+            return {
+                items: items.map((r) => ({
+                    reject_id: r.rejectId,
+                    run_id: r.runId,
+                    record_id: r.recordId,
+                    winner_raw: r.winnerRaw,
+                    loser_raw: r.loserRaw,
+                    reason: r.reason,
+                    created_at: r.createdAt,
+                })),
+            };
+        },
+    }));
     // ── memory_resolve_conflict: §C 矛盾冻结的人工裁决出口 ──
     // 冻结把裁决权交还给人,那么**必须**有一个"人能把结论说回去"的出口——
     // 否则待裁决队列是个只进不出的黑洞,安全阀(task_24)会成为唯一出路,
     // 那等于把 opt-in 的冻结悄悄退回成"超时后机器自己判"。
     ctx.tools.register(defineTool({
         name: 'memory_resolve_conflict',
-        description: '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
+        description: '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)、defer(看过但**暂不裁决**——它不关闭冲突,该对仍在待裁决队列里,会重置超时计时并累计复看次数)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
         parameters: {
             pair_id: { type: 'string', description: '待裁决对的 pair_id(来自待裁决队列)' },
-            outcome: { type: 'string', description: '裁决结论:winner | loser | both' },
+            outcome: {
+                type: 'string',
+                description: '裁决结论:winner | loser | both | defer。defer = **看过但暂不裁决**:不关闭冲突、重置超时计时、累计复看次数(达上限后不再被超时自动了结,只能人工收口)。',
+            },
         },
         output: {
             schema: {
