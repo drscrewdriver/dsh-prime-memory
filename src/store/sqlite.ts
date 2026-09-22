@@ -1600,7 +1600,7 @@ export class MemoryDb {
   }
 
   /** 浏览列表(UI 用):按更新时间倒序,支持类型/场景/族/Hall/可见范围过滤与分页。失败返回空。 */
-  listL1(opts: { type?: string; scene?: string; family?: string; hall?: string; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
+  listL1(opts: { type?: string; scene?: string; family?: string; hall?: string; halls?: readonly string[]; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
     if (this.degraded) return { items: [], total: 0 };
     try {
       const where: string[] = [];
@@ -1622,10 +1622,12 @@ export class MemoryDb {
         where.push("(scope = 'global' OR workspace_id = ?)");
         params.push(opts.workspaceId);
       }
-      if (opts.hall) {
-        // Hall 存于 metadata_json,用 json_extract 过滤(表小,逐行代价可接受)
-        where.push(`json_extract(metadata_json, '$.hall') = ?`);
-        params.push(opts.hall);
+      if (opts.hall || (opts.halls && opts.halls.length > 0)) {
+        // Hall 存于 metadata_json,用 json_extract 过滤(表小,逐行代价可接受);
+        // R13 多值:IN (?,?,…),命中任一即可
+        const values = opts.halls && opts.halls.length > 0 ? opts.halls : [opts.hall!];
+        where.push(`json_extract(metadata_json, '$.hall') IN (${values.map(() => '?').join(',')})`);
+        params.push(...values);
       }
       const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
       const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params) as { n: number };
@@ -1651,6 +1653,72 @@ export class MemoryDb {
       return rows.map((r) => r.scene_name).filter(Boolean);
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * 主表全量元数据扫描(单一所有者共享函数):对 l1_records **全表**(含 retired 行,
+   * 不加 valid_to 过滤——退场判定见 retireL1Batch,restore 后行仍须可解析)逐行回调
+   * metadata。并行计划的引用门禁(如 multimodal 的 image_refs 清理判据)必须复用本函数,
+   * 不得各写一份"活跃面扫描"——口径漂移会造成 restore 后死链。
+   * 返回扫描行数;存储降级返回 0。
+   */
+  scanL1Metadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number {
+    if (this.degraded) return 0;
+    try {
+      const rows = this.db
+        .prepare('SELECT record_id, metadata_json FROM l1_records')
+        .all() as Array<{ record_id: string; metadata_json: string | null }>;
+      for (const r of rows) {
+        let meta: Record<string, unknown> | null = null;
+        if (typeof r.metadata_json === 'string' && r.metadata_json !== '') {
+          try {
+            const parsed = JSON.parse(r.metadata_json);
+            if (parsed && typeof parsed === 'object') meta = parsed as Record<string, unknown>;
+          } catch {
+            meta = null; // 损坏行:回调 null,由调用方计入异常计数
+          }
+        }
+        cb(r.record_id, meta);
+      }
+      return rows.length;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** retired 行计数(退场判定与 listRetiredL1 同口径:valid_to 非空)。失败返回 0。 */
+  retiredL1Count(): number {
+    if (this.degraded) return 0;
+    try {
+      const row = this.db
+        .prepare("SELECT COUNT(*) AS n FROM l1_records WHERE COALESCE(valid_to, '') <> ''")
+        .get() as { n: number | bigint };
+      return Number(row?.n ?? 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
+  hallL1Counts(): { counts: Record<string, number>; unlabeled: number } {
+    if (this.degraded) return { counts: {}, unlabeled: 0 };
+    try {
+      const rows = this.db
+        .prepare(
+          "SELECT json_extract(metadata_json, '$.hall') AS hall, COUNT(*) AS n FROM l1_records GROUP BY hall",
+        )
+        .all() as Array<{ hall: string | null; n: number | bigint }>;
+      const counts: Record<string, number> = {};
+      let unlabeled = 0;
+      for (const r of rows) {
+        const n = Number(r.n);
+        if (typeof r.hall === 'string' && r.hall !== '') counts[r.hall] = n;
+        else unlabeled += n;
+      }
+      return { counts, unlabeled };
+    } catch {
+      return { counts: {}, unlabeled: 0 };
     }
   }
 

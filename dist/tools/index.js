@@ -1,7 +1,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from '../store/receipts.js';
 import { listConflictPairs, renderConflictResolution, renderConflicts, resolveConflictPair } from '../conflict-service.js';
-import { normPersistence, normScope, resolveRecordScope } from '../types.js';
+import { HALL_CATALOG, HALL_FALLBACK, normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
@@ -314,7 +314,10 @@ ruminate) {
             type: 'string',
             description: '记忆类型(persona/episodic/instruction/work_fact/work_task/work_method/work_artifact;缺省 episodic)',
         },
-        hall: { type: 'string', description: '可选的粗分类 Hall(work/relationships/general/finance/journey)' },
+        hall: {
+            type: 'string',
+            description: `可选的粗分类 Hall(${[...HALL_CATALOG.map((h) => h.id), HALL_FALLBACK].join('/')};general = 跨域兜底)`,
+        },
         persistence: {
             type: 'string',
             description: '持续性:t 无时间性(规则/偏好/恒真事实)、o 仍在持续、s 已结束的区间、p 时点事件;缺省=未判定',

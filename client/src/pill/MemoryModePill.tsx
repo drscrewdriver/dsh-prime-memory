@@ -1,11 +1,11 @@
-/** 输入栏 pill：点击展开滑动选择器；props 来自 conversation.input.left 的 zone 注入。 */
+/** 输入栏 pill：点击展开八边形域轮（HallWheel）；props 来自 conversation.input.left 的 zone 注入。 */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { currentMeterSnapshot, initOccupancyIndicator, noteOccupancySession, watchContextMeter } from '../meter/occupancy-indicator.js';
 import { initPanelSection } from '../meter/panel-section.js';
 import type { RpcFn } from '../rpc.js';
 import { watchSidebarIcon } from '../sidebar-icon.js';
 import { ensureThemeStyle } from '../theme.js';
-import { ModeSlider } from './ModeSlider.js';
+import { HallWheel, useViewportClamp } from './HallWheel.js';
 import { modeInfo } from './modes.js';
 
 export function MemoryModePill(props: {
@@ -20,9 +20,17 @@ export function MemoryModePill(props: {
   // 生效值（面文直接消费——client 不另知全局开关，解析权威在 host）
   const [recall, setRecall] = useState<boolean | null>(null);
   const [recallResolved, setRecallResolved] = useState(true);
+  // 会话级域锁定（hall 八边形手动挡，Phase 2 多选）：空数组 = 中心（智能档）
+  const [halls, setHalls] = useState<string[]>([]);
+  const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = useState(true);
+  const [hallIncludeGeneral, setHallIncludeGeneral] = useState(false);
+  // 面文域显示名（hall-overview 下发，词表单一事实源在服务端）
+  const [hallLabels, setHallLabels] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
+  const shiftX = useViewportClamp(popRef);
   // 请求序列号：快速切换会话时丢弃旧会话的过期响应（慢响应不得覆盖新会话档位）
   const seqRef = useRef(0);
 
@@ -37,12 +45,23 @@ export function MemoryModePill(props: {
           setMode(r.value.mode);
           setRecall(r.value.recall);
           setRecallResolved(r.value.recallResolved);
+          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+          setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+          setHallIncludeGeneral(r.value.hallIncludeGeneral);
         } else setError(r && !r.ok ? r.error.message : 'RPC error');
       })
       .catch((e: unknown) => {
         if (token !== seqRef.current) return;
         setError(String((e && (e as Error).message) || e));
       });
+    // 域显示名（角计数端点顺带下发词表；失败降级为角 id 原样显示）
+    rpc('dsh-memory/hall-overview', {})
+      .then((r) => {
+        if (r && r.ok && r.value) {
+          setHallLabels(Object.fromEntries(r.value.corners.map((c) => [c.id, c.label])));
+        }
+      })
+      .catch(() => {});
   }, [sessionId, rpc]);
 
   useEffect(() => {
@@ -138,16 +157,94 @@ export function MemoryModePill(props: {
       });
   };
 
+  /** 域锁定提交（R12 手动挡，Phase 2 多选）：角 id 数组 = 锁定集；null = 回中心。
+   *  mode 未加载时拒绝提交（请求必带 mode，同 commitRecall 的口径）。 */
+  const commitHall = (next: string[] | null) => {
+    if (!rpc || !sessionId || mode === null) return;
+    const norm = next ?? [];
+    if (JSON.stringify(norm) === JSON.stringify(halls)) return;
+    const prevHalls = halls;
+    const token = seqRef.current;
+    setHalls(norm);
+    setError(null);
+    rpc('dsh-memory/session-mode-set', { sessionId, mode: mode as 'auto', halls: next })
+      .then((r) => {
+        if (token !== seqRef.current) return;
+        if (!r || !r.ok) {
+          setHalls(prevHalls);
+          setError(r && r.error ? '域设置失败：' + r.error.message : '域设置失败');
+        } else {
+          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+        }
+      })
+      .catch((e: unknown) => {
+        if (token !== seqRef.current) return;
+        setHalls(prevHalls);
+        setError('域设置失败：' + String((e && (e as Error).message) || e));
+      });
+  };
+
+  /** 锁定域边界开关（未打标 / 跨域是否参与召回）。 */
+  const commitHallBoundaries = (patch: { includeUnlabeled?: boolean; includeGeneral?: boolean }) => {
+    if (!rpc || !sessionId || mode === null) return;
+    const prev = { unlabeled: hallIncludeUnlabeled, general: hallIncludeGeneral };
+    const token = seqRef.current;
+    if (patch.includeUnlabeled !== undefined) setHallIncludeUnlabeled(patch.includeUnlabeled);
+    if (patch.includeGeneral !== undefined) setHallIncludeGeneral(patch.includeGeneral);
+    setError(null);
+    rpc('dsh-memory/session-mode-set', {
+      sessionId,
+      mode: mode as 'auto',
+      halls: halls.length > 0 ? halls : null,
+      hallIncludeUnlabeled: patch.includeUnlabeled,
+      hallIncludeGeneral: patch.includeGeneral,
+    })
+      .then((r) => {
+        if (token !== seqRef.current) return;
+        if (!r || !r.ok) {
+          setHallIncludeUnlabeled(prev.unlabeled);
+          setHallIncludeGeneral(prev.general);
+          setError(r && r.error ? '域设置失败：' + r.error.message : '域设置失败');
+        } else {
+          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+          setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+          setHallIncludeGeneral(r.value.hallIncludeGeneral);
+        }
+      })
+      .catch((e: unknown) => {
+        if (token !== seqRef.current) return;
+        setHallIncludeUnlabeled(prev.unlabeled);
+        setHallIncludeGeneral(prev.general);
+        setError('域设置失败：' + String((e && (e as Error).message) || e));
+      });
+  };
+
   if (!sessionId || !rpc) return null;
   const info = modeInfo(mode);
   const loaded = mode !== null;
-  // 关闭档与其余三档二分：关闭 = dsh 透明按钮（无边框无底无光晕）；
-  // 日常/工作/智能 = 同款流光 + 光晕，档位区分靠蓝阶文字色与流光内底混色深度
+  // 关闭档与其余档二分：关闭 = dsh 透明按钮（无边框无底无光晕）；
+  // 其余 = 同款流光 + 光晕，区分靠蓝阶文字色与流光内底混色深度
   const isOff = loaded && mode === 'off';
   const isFlow = loaded && !isOff;
-  // 面文换字（#38 方案 A）：非 off 且注入生效值为否 → 面文整词换作「只写」，
-  // 族名收进菜单（注入态优先上脸）；off 档维持「关闭」灰态优先（完全隐身不含只写）
-  const faceLabel = !loaded ? (error ? '⚠' : '…') : isOff ? info.label : !recallResolved ? '只写' : info.label;
+  // 面文换字：off → 「关闭」；注入关 → 「只写」；锁域 → 「记忆 · <域>」（单选显域名，
+  // 多选显「N 域」；词表下发的显示名，未送达时原样显示角 id）；否则档位名。
+  const hallText =
+    halls.length === 1
+      ? hallLabels[halls[0]!] ?? halls[0]!
+      : halls.length > 1
+        ? `${halls.length} 域`
+        : null;
+  const faceLabel = !loaded
+    ? error
+      ? '⚠'
+      : '…'
+    : isOff
+      ? info.label
+      : !recallResolved
+        ? '只写'
+        : hallText
+          ? hallText
+          : info.label;
 
   ensureThemeStyle();
 
@@ -176,7 +273,7 @@ export function MemoryModePill(props: {
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
       <button
         type="button"
-        title={error ? '档位读取失败：' + error + '（点击重试）' : '本会话记忆档位（点击切换）'}
+        title={error ? '档位读取失败：' + error + '（点击重试）' : '本会话记忆域与档位（点击切换）'}
         onClick={() => {
           if (error) load();
           setOpen(!open);
@@ -187,15 +284,40 @@ export function MemoryModePill(props: {
         记忆 · <span>{faceLabel}</span>
       </button>
       {open ? (
-        <ModeSlider
-          mode={mode || 'auto'}
-          onCommit={commit}
-          recall={loaded ? recall : undefined}
-          onCommitRecall={commitRecall}
-          error={error}
-          rpc={rpc}
-          sessionId={sessionId}
-        />
+        <div
+          // 外壳只负责定位（带 transform 居中悬浮在按钮上方，水平中轴对齐 pill 中心）；
+          // shiftX = 水平视口夹持的贴边平移量（桌面恒 0）
+          ref={popRef}
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 8px)',
+            left: '50%',
+            transform: 'translateX(calc(-50% + ' + shiftX + 'px))',
+            zIndex: 1000,
+          }}
+        >
+          <div
+            // dsh 原生菜单同配方浮层：不透明实底 + inverted 描边 + lv3 阴影
+            className="dsh-mem-popover"
+            // padding 收窄(14/16 → 10/12):八边形容器压到 196px 后,整体宽度进窄栏
+            style={{ position: 'relative', padding: '10px 12px' }}
+          >
+            <HallWheel
+              mode={mode || 'auto'}
+              halls={halls}
+              hallIncludeUnlabeled={hallIncludeUnlabeled}
+              hallIncludeGeneral={hallIncludeGeneral}
+              onCommit={commit}
+              onCommitHall={commitHall}
+              onCommitHallBoundaries={commitHallBoundaries}
+              recall={loaded ? recall : undefined}
+              onCommitRecall={commitRecall}
+              error={error}
+              rpc={rpc}
+              sessionId={sessionId}
+            />
+          </div>
+        </div>
       ) : null}
     </div>
   );

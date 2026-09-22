@@ -614,13 +614,28 @@ export class L1Store {
   }
 
   /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall / 可见范围过滤。 */
-  list(opts: { type?: string; scene?: string; family?: string; hall?: string; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
+  list(opts: { type?: string; scene?: string; family?: string; hall?: string; halls?: readonly string[]; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
     return this.db.listL1(opts);
   }
 
   /** 场景名去重列表(UI 筛选器数据源)。 */
   distinctScenes(): string[] {
     return this.db.distinctL1Scenes();
+  }
+
+  /** Hall 域计数(八边形角上"该域 N 条 / 未打标 M"数据源):按 metadata.hall 分组计数。 */
+  hallCounts(): { counts: Record<string, number>; unlabeled: number } {
+    return this.db.hallL1Counts();
+  }
+
+  /** 主表全量元数据扫描(单一所有者共享函数,供并行计划引用门禁复用;见 MemoryDb.scanL1Metadata)。 */
+  scanAllMetadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number {
+    return this.db.scanL1Metadata(cb);
+  }
+
+  /** 查询向量(域软门禁用):复用既有嵌入源;失败/未就绪返回 undefined,调用方降级。 */
+  embedText(text: string, timeoutMs?: number): Promise<Float32Array | undefined> {
+    return this.helper.query(text, timeoutMs);
   }
 
   /**

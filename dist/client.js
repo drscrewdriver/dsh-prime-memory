@@ -251,12 +251,15 @@ var __defProp = Object.defineProperty;
 		    "  --dsh-mem-mode-chat: #5a69b0;",
 		    "  --dsh-mem-mode-work: #5263ca;",
 		    "  --dsh-mem-mode-auto: #3d5be0;",
-		    // 滑轨填充渐变（左浅右深）
-		    "  --dsh-mem-fill-1: #7b93ff;",
-		    "  --dsh-mem-fill-2: #3d5be0;",
+		    // 开关旋钮 / 进度条底（滑轨已随 ModeSlider 删除，填充渐变与停点令牌一并移除）
 		    "  --dsh-mem-thumb: #ffffff;",
 		    "  --dsh-mem-track: rgba(128,140,150,0.32);",
-		    "  --dsh-mem-dot: rgba(128,140,150,0.55);",
+		    // hall 八边形令牌（HallWheel）：连线 / 角默认 / 角选中 / 空角与未打标态；
+		    // 全部引用既有中性色与品牌蓝体系，双主题各自声明，无裸色溢出
+		    "  --dsh-mem-hall-line: rgba(128,140,150,0.35);",
+		    "  --dsh-mem-hall-corner: var(--dsh-mem-text-2);",
+		    "  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);",
+		    "  --dsh-mem-hall-empty: var(--dsh-mem-text-3);",
 		    "  --dsh-mem-shadow-card: var(--dsw-shadow-lv1, 0 2px 4px 0 rgba(0,0,0,0.05));",
 		    "  --dsh-mem-shadow-pop: var(--dsw-shadow-lv3, 0 0 1px 0 rgba(0,0,0,.2), 0 0 4px 0 rgba(0,0,0,.02), 0 12px 32px 0 rgba(0,0,0,0.08));",
 		    "}",
@@ -288,11 +291,12 @@ var __defProp = Object.defineProperty;
 		    "  --dsh-mem-mode-chat: #97a4ff;",
 		    "  --dsh-mem-mode-work: #8295ff;",
 		    "  --dsh-mem-mode-auto: #7b90ff;",
-		    "  --dsh-mem-fill-1: #8fa0ff;",
-		    "  --dsh-mem-fill-2: #465ce8;",
 		    "  --dsh-mem-thumb: #e8ebf5;",
 		    "  --dsh-mem-track: rgba(148,160,180,0.30);",
-		    "  --dsh-mem-dot: rgba(148,160,180,0.5);",
+		    "  --dsh-mem-hall-line: rgba(148,160,180,0.32);",
+		    "  --dsh-mem-hall-corner: var(--dsh-mem-text-2);",
+		    "  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);",
+		    "  --dsh-mem-hall-empty: var(--dsh-mem-text-3);",
 		    "  --dsh-mem-shadow-card: var(--dsw-shadow-lv1, 0 2px 4px 0 rgba(0,0,0,0.3));",
 		    "  --dsh-mem-shadow-pop: var(--dsw-shadow-lv3, 0 0 1px 0 rgba(0,0,0,.2), 0 0 4px 0 rgba(0,0,0,.02), 0 12px 32px 0 rgba(0,0,0,0.08));",
 		    "}",
@@ -422,14 +426,9 @@ var __defProp = Object.defineProperty;
 		    // 伪元素不参与布局（浮层/输入栏几何零变化），指针事件落在宿主元素上。
 		    // 全端统一不做 pointer:coarse 分端（桌面点中目标变大是纯收益）。
 		    // pill：视觉高 24px，::after 上下各外扩 10px；只上下不左右——左右是宿主输入栏
-		    // 邻位控件（模式选择器），外扩会制造误触重叠带。
-		    // 滑轨：视觉轨 22px，::before 上下各外扩 11px；touch-action:none 已随轨声明，
-		    // 伪元素区的触摸同样命中轨元素。两处 px 值改动须与注释口径同步 ──
+		    // 邻位控件（模式选择器），外扩会制造误触重叠带 ──
 		    ".dsh-mem-pill-hit::after {",
 		    "  content: ''; position: absolute; left: 0; right: 0; top: -10px; bottom: -10px;",
-		    "}",
-		    ".dsh-mem-hitband::before {",
-		    "  content: ''; position: absolute; left: 0; right: 0; top: -11px; bottom: -11px;",
 		    "}",
 		    // ── 浮层（dsh 原生菜单同配方：不透明实底 + inverted 描边（浅色不可见）+ lv3 阴影） ──
 		    ".dsh-mem-popover {",
@@ -439,34 +438,6 @@ var __defProp = Object.defineProperty;
 		    "  box-shadow: var(--dsh-mem-shadow-pop);",
 		    "  color: var(--dsh-mem-text-1);",
 		    "}",
-		    // ── 拖动气泡：拖拽时显示当前档位名，随圆球移动，倒三角尖角贴近圆球 ──
-		    // 底色走浮层同材质令牌（浅色白底深字 / 暗色深底浅字，随主题翻转；
-		    // tooltip-bg 令牌在浅色下仍是深色、不随材质走，已弃用）。
-		    // 悬停 8px（尖角尖端距圆球顶约 5px）；气泡 zIndex 4 高于浮层（同层叠上下文内
-		    // 数值比较），跨过浮层上缘时盖在其上；描边 + 投影避免同材质融合
-		    ".dsh-mem-bubble {",
-		    "  position: absolute; bottom: calc(100% + 8px); transform: translateX(-50%);",
-		    "  padding: 3px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; line-height: 18px;",
-		    "  border: 1px solid var(--dsh-mem-border);",
-		    "  background: var(--dsh-mem-bg-pop); color: var(--dsh-mem-text-1); white-space: nowrap;",
-		    "  box-shadow: 0 2px 8px rgba(0,0,0,0.18);",
-		    "}",
-		    // 尖角：clip-path 倒三角（旋转方块会露出上半截成菱形，实测视觉缺陷）。
-		    // 双三角叠画：外层描边色大一圈、内层填充色，压在浮层上缘也有轮廓可读
-		    ".dsh-mem-bubble::before {",
-		    "  content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px;",
-		    "  width: 12px; height: 7px;",
-		    "  clip-path: polygon(0 0, 100% 0, 50% 100%);",
-		    "  background: var(--dsh-mem-border);",
-		    "}",
-		    ".dsh-mem-bubble::after {",
-		    "  content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px;",
-		    "  width: 10px; height: 6px;",
-		    "  clip-path: polygon(0 0, 100% 0, 50% 100%);",
-		    "  background: var(--dsh-mem-bg-pop);",
-		    "}",
-		    // ── 粒子层（点阵场）：浅色 multiply 混合——深蓝点乘在浅蓝填充上沉显对比 ──
-		    "body:not([data-ds-dark-theme]) .dsh-mem-particles { mix-blend-mode: multiply; opacity: 0.82; }",
 		    // ── 重建面板 ──（模态本体走 NModal：原生 Modal 优先，回退 rb-overlay/rb-modal）
 		    ".dsh-mem-rb-card {",
 		    "  border: 1px solid var(--dsh-mem-border); border-radius: 10px; background: var(--dsh-mem-bg-card);",
@@ -485,7 +456,7 @@ var __defProp = Object.defineProperty;
 		    "body[data-ds-dark-theme] .dsh-mem-rb-modal { box-shadow: 0 16px 48px rgba(0,0,0,0.6); }",
 		    ".dsh-mem-rb-muted { font-size: 12px; color: var(--dsh-mem-text-3); }",
 		    // ── 会话信息区（悬浮卡下半部）：分隔线 + 2×2 指标 + 状态行；纯静态 DOM，
-		    // 不进粒子层 rAF 循环，轮询数据到达才触发本组件小树 re-render ──
+		    // 不挂 rAF 循环，轮询数据到达才触发本组件小树 re-render ──
 		    ".dsh-mem-sinfo { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--dsh-mem-border); }",
 		    ".dsh-mem-sinfo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }",
 		    ".dsh-mem-sinfo-val { font-size: 13px; font-weight: 600; color: var(--dsh-mem-text-1); line-height: 18px; font-variant-numeric: tabular-nums; }",
@@ -868,6 +839,29 @@ var __defProp = Object.defineProperty;
 		    ] })
 		  ] });
 		}
+		function ActionButton(props) {
+		  const disabled = !!props.disabled;
+		  return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+		    "button",
+		    {
+		      type: "button",
+		      title: props.disabled ? "" : props.title || "",
+		      "aria-disabled": disabled,
+		      onClick: () => {
+		        if (!disabled && props.onClick) props.onClick();
+		      },
+		      style: {
+		        ...S.seg,
+		        ...S.segBtn,
+		        fontFamily: "inherit",
+		        border: "1px solid var(--dsh-mem-border)",
+		        cursor: disabled ? "not-allowed" : "pointer",
+		        ...disabled ? S.switchDisabled : null
+		      },
+		      children: props.label
+		    }
+		  );
+		}
 		function Segmented(props) {
 		  const value = props.value;
 		  const disabled = !!props.disabled;
@@ -900,10 +894,10 @@ var __defProp = Object.defineProperty;
 		  const W = 600;
 		  const H = 200;
 		  const L = 46;
-		  const R = 10;
+		  const R2 = 10;
 		  const T = 10;
 		  const B = 26;
-		  const iw = W - L - R;
+		  const iw = W - L - R2;
 		  const ih = H - T - B;
 		  const n = buckets.length;
 		  const x = (i) => L + (n <= 1 ? iw / 2 : i / (n - 1) * iw);
@@ -911,7 +905,7 @@ var __defProp = Object.defineProperty;
 		  const yTicks = [0, maxY / 2, maxY];
 		  const xIdx = n > 2 ? [0, Math.floor((n - 1) / 2), n - 1] : n === 2 ? [0, 1] : [0];
 		  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("svg", { viewBox: "0 0 " + W + " " + H, style: { width: "100%", height: "auto", display: "block" }, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("line", { x1: L, y1: y(0), x2: W - R, y2: y(0), stroke: "var(--dsh-mem-border)", strokeWidth: 1 }),
+		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("line", { x1: L, y1: y(0), x2: W - R2, y2: y(0), stroke: "var(--dsh-mem-border)", strokeWidth: 1 }),
 		    yTicks.map((v) => {
 		      return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("text", { x: L - 6, y: y(v) + 4, textAnchor: "end", fontSize: 10, fill: "var(--dsh-mem-text-3)", children: fmtInt(v) }, "yt" + v);
 		    }),
@@ -1216,41 +1210,19 @@ var __defProp = Object.defineProperty;
 		
 		// client/src/pill/modes.ts
 		var MODES = [
-		  { key: "off", label: "关闭", color: "var(--dsh-mem-text-2)" },
 		  { key: "chat", label: "日常", color: "var(--dsh-mem-mode-chat)" },
-		  { key: "work", label: "工作", color: "var(--dsh-mem-mode-work)" },
-		  { key: "auto", label: "智能", color: "var(--dsh-mem-mode-auto)" }
+		  { key: "auto", label: "智能", color: "var(--dsh-mem-mode-auto)" },
+		  { key: "work", label: "工作", color: "var(--dsh-mem-mode-work)" }
 		];
-		var TRACK_W = 200;
-		var THUMB = 16;
-		var RAIL_H = 22;
-		var INNER_W = TRACK_W - THUMB;
-		var FIELD_TIERS = [
-		  { density: 0, alpha: 0, wave: 0, tempo: 1 },
-		  { density: 0.34, alpha: 0.5, wave: 0, tempo: 1 },
-		  // 日常：稀疏微光
-		  { density: 0.55, alpha: 0.78, wave: 1, tempo: 1.15 },
-		  // 工作：中强 + 水波纹
-		  { density: 0.72, alpha: 1, wave: 1, tempo: 1.3 }
-		  // 智能：满场最活跃
-		];
-		function smStep(a, b, x) {
-		  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-		  return t * t * (3 - 2 * t);
-		}
 		function modeInfo(key) {
 		  for (let i = 0; i < MODES.length; i++) if (MODES[i].key === key) return MODES[i];
-		  return MODES[3];
+		  return MODES[1];
 		}
 		function modeLabel(key) {
 		  if (key === "auto") return "智能（双族）";
 		  if (key === "chat") return "日常（个人）";
 		  if (key === "work") return "工作（团队）";
 		  return "关闭";
-		}
-		function modeIndex(key) {
-		  for (let i = 0; i < MODES.length; i++) if (MODES[i].key === key) return i;
-		  return 3;
 		}
 		
 		// client/src/tabs/DistillSettings.tsx
@@ -3208,14 +3180,6 @@ var __defProp = Object.defineProperty;
 		  "work_method",
 		  "work_artifact"
 		];
-		var HALL_CHOICES = [
-		  { id: "work", label: "工作" },
-		  { id: "relationships", label: "人际关系" },
-		  { id: "general", label: "通用" },
-		  { id: "finance", label: "财务" },
-		  { id: "journey", label: "旅程" }
-		];
-		var HALL_LABEL = Object.fromEntries(HALL_CHOICES.map((h) => [h.id, h.label]));
 		var DELETE_LIMIT = 200;
 		function RecordsTab(props) {
 		  const rpc = props.rpc;
@@ -3234,8 +3198,9 @@ var __defProp = Object.defineProperty;
 		  const [query, setQuery] = (0, import_react15.useState)("");
 		  const [typeFilter, setTypeFilter] = (0, import_react15.useState)("");
 		  const [sceneFilter, setSceneFilter] = (0, import_react15.useState)("");
-		  const [hallFilter, setHallFilter] = (0, import_react15.useState)("");
-		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", hall: "" });
+		  const [hallFilter, setHallFilter] = (0, import_react15.useState)([]);
+		  const [hallCatalog, setHallCatalog] = (0, import_react15.useState)(null);
+		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", halls: [] });
 		  const seqRef = (0, import_react15.useRef)(0);
 		  const fetchPage = (0, import_react15.useCallback)(
 		    (conds, offset, append) => {
@@ -3246,7 +3211,7 @@ var __defProp = Object.defineProperty;
 		      if (conds.query) payload.query = conds.query;
 		      if (conds.type) payload.type = conds.type;
 		      if (conds.scene) payload.scene = conds.scene;
-		      if (conds.hall) payload.hall = conds.hall;
+		      if (conds.halls.length > 0) payload.halls = conds.halls;
 		      rpc("dsh-memory/list-records", payload).then((r) => {
 		        if (token !== seqRef.current) return;
 		        setLoading(false);
@@ -3261,6 +3226,7 @@ var __defProp = Object.defineProperty;
 		        setTotal(v.total === void 0 || v.total === null ? null : v.total);
 		        setTruncated(!!v.truncated);
 		        if (v.scenes) setSceneOptions(v.scenes);
+		        if (v.hallCatalog) setHallCatalog(v.hallCatalog);
 		      }).catch((e) => {
 		        if (token !== seqRef.current) return;
 		        setLoading(false);
@@ -3270,12 +3236,12 @@ var __defProp = Object.defineProperty;
 		    [rpc]
 		  );
 		  const search = () => {
-		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, hall: hallFilter };
+		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter };
 		    setLast(conds);
 		    fetchPage(conds, 0, false);
 		  };
 		  (0, import_react15.useEffect)(() => {
-		    fetchPage({ query: "", type: "", scene: "", hall: "" }, 0, false);
+		    fetchPage({ query: "", type: "", scene: "", halls: [] }, 0, false);
 		  }, [fetchPage]);
 		  const loadHiPriv = (0, import_react15.useCallback)(() => {
 		    rpc("dsh-memory/settings-get", {}).then((r) => {
@@ -3421,15 +3387,10 @@ var __defProp = Object.defineProperty;
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
-		        NSel,
+		        HallMultiSelect,
 		        {
-		          style: { maxWidth: 150 },
-		          options: [{ id: "", label: "全部 Hall" }].concat(
-		            HALL_CHOICES.map((h) => {
-		              return { id: h.id, label: h.label };
-		            })
-		          ),
-		          value: hallFilter,
+		          options: hallCatalog ?? Array.from(new Set(items.map((m) => m.hall).filter((h) => !!h))).map((id) => ({ id, label: id })),
+		          selected: hallFilter,
 		          onChange: setHallFilter
 		        }
 		      ),
@@ -3512,7 +3473,7 @@ var __defProp = Object.defineProperty;
 		                }
 		              ),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + m.type, children: TYPE_LABELS[m.type] || m.type }),
-		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Hall · " + (HALL_LABEL[m.hall] || m.hall) }) : null,
+		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Hall · " + (hallCatalog?.find((h) => h.id === m.hall)?.label || m.hall) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "优先级 " + m.priority }),
 		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "相关度 " + Number(m.score).toFixed(2) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
@@ -3567,6 +3528,60 @@ var __defProp = Object.defineProperty;
 		          children: loading ? "加载中…" : "加载更多"
 		        }
 		      )
+		    ] }) : null
+		  ] });
+		}
+		function HallMultiSelect(props) {
+		  const [open, setOpen] = (0, import_react15.useState)(false);
+		  const wrapRef = (0, import_react15.useRef)(null);
+		  (0, import_react15.useEffect)(() => {
+		    if (!open) return;
+		    const onDown = (e) => {
+		      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+		    };
+		    const onKey = (e) => {
+		      if (e.key === "Escape") setOpen(false);
+		    };
+		    document.addEventListener("pointerdown", onDown);
+		    document.addEventListener("keydown", onKey);
+		    return () => {
+		      document.removeEventListener("pointerdown", onDown);
+		      document.removeEventListener("keydown", onKey);
+		    };
+		  }, [open]);
+		  const labelOf = (id) => props.options.find((o) => o.id === id)?.label ?? id;
+		  const summary = props.selected.length === 0 ? "全部 Hall" : props.selected.length <= 2 ? props.selected.map(labelOf).join(" + ") : `${labelOf(props.selected[0])} 等 ${props.selected.length} 域`;
+		  const toggle = (id) => {
+		    props.onChange(props.selected.includes(id) ? props.selected.filter((x) => x !== id) : [...props.selected, id]);
+		  };
+		  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { ref: wrapRef, style: { position: "relative", maxWidth: 150 }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
+		      "button",
+		      {
+		        type: "button",
+		        className: "dsh-mem-select",
+		        "aria-haspopup": "listbox",
+		        "aria-expanded": open,
+		        onClick: () => setOpen(!open),
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-select-label", title: summary, children: summary }),
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-sel-chev" + (open ? " dsh-mem-sel-chev-open" : "") })
+		        ]
+		      }
+		    ),
+		    open ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dsh-mem-pop", role: "listbox", style: { left: 0, right: "auto", minWidth: 150 }, children: [
+		      props.options.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-pop-empty", children: "暂无可筛 Hall" }) : null,
+		      props.options.map((o) => {
+		        const active = props.selected.includes(o.id);
+		        return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("button", { type: "button", className: "dsh-mem-pop-opt", onClick: () => toggle(o.id), "aria-selected": active, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-pop-check", children: active ? "✓" : "" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-pop-label", children: o.label })
+		        ] }, o.id);
+		      }),
+		      props.selected.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("button", { type: "button", className: "dsh-mem-pop-opt", onClick: () => props.onChange([]), children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-pop-check" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-pop-label", children: "清除筛选" })
+		      ] }) : null
 		    ] }) : null
 		  ] });
 		}
@@ -3991,7 +4006,7 @@ var __defProp = Object.defineProperty;
 		  return section;
 		}
 		
-		// client/src/pill/ModeSlider.tsx
+		// client/src/pill/HallWheel.tsx
 		var import_react19 = require("react");
 		
 		// client/src/pill/SessionInfoArea.tsx
@@ -4103,171 +4118,494 @@ var __defProp = Object.defineProperty;
 		  ] });
 		}
 		
-		// client/src/pill/ModeSlider.tsx
+		// client/src/pill/HallWheel.tsx
 		var import_jsx_runtime19 = require("react/jsx-runtime");
-		function ModeSlider(props) {
+		var SIZE = 196;
+		var CENTER = SIZE / 2;
+		var R = 64;
+		var DRAG_SLOP = 4;
+		var DEAD = 3 * (Math.PI / 180);
+		var DEG = Math.PI / 180;
+		var TAU = Math.PI * 2;
+		function cornerAngle(i) {
+		  return (-90 + i * 45) * DEG;
+		}
+		function cornerPos(i) {
+		  const a = cornerAngle(i);
+		  return { left: CENTER + R * Math.cos(a), top: CENTER + R * Math.sin(a) };
+		}
+		function cornerXY(i) {
+		  const p = cornerPos(i);
+		  return { x: p.left, y: p.top };
+		}
+		function normAngle(a) {
+		  while (a < -Math.PI) a += TAU;
+		  while (a >= Math.PI) a -= TAU;
+		  return a;
+		}
+		function angleIndex(a) {
+		  let t = a + 90 * DEG;
+		  while (t < 0) t += TAU;
+		  while (t >= TAU) t -= TAU;
+		  return Math.round(t / (45 * DEG)) % 8;
+		}
+		function snapIndex(p, cur) {
+		  const cand = angleIndex(p);
+		  if (cand === cur) return cur;
+		  const curA = cornerAngle(cur);
+		  const candA = cornerAngle(cand);
+		  const dir = Math.sign(normAngle(candA - curA)) || 1;
+		  const edge = curA + dir * (22.5 * DEG);
+		  if (Math.abs(normAngle(p - edge)) < DEAD) return cur;
+		  return cand;
+		}
+		function HallWheel(props) {
 		  ensureThemeStyle();
-		  const trackRef = (0, import_react19.useRef)(null);
-		  const [drag, setDrag] = (0, import_react19.useState)(null);
-		  const canvasRef = (0, import_react19.useRef)(null);
-		  const geoRef = (0, import_react19.useRef)(null);
-		  const clampX = (x) => {
-		    if (x < 0) return 0;
-		    if (x > INNER_W) return INNER_W;
-		    return x;
-		  };
-		  const xFromClientX = (clientX) => {
-		    const rect = trackRef.current.getBoundingClientRect();
-		    return clampX(clientX - rect.left - THUMB / 2);
-		  };
-		  const onPointerDown = (e) => {
-		    e.preventDefault();
-		    e.currentTarget.setPointerCapture(e.pointerId);
-		    setDrag({ x: xFromClientX(e.clientX), lastX: e.clientX, t: e.timeStamp, v: 0 });
-		  };
-		  const onPointerMove = (e) => {
-		    if (drag === null) return;
-		    const dt = e.timeStamp - drag.t;
-		    const instV = dt > 0 ? (e.clientX - drag.lastX) / dt : drag.v;
-		    setDrag({
-		      x: xFromClientX(e.clientX),
-		      lastX: e.clientX,
-		      t: e.timeStamp,
-		      v: drag.v * 0.7 + instV * 0.3
-		      // EMA：瞬时抖动不放大，松手投影用
-		    });
-		  };
-		  const onPointerUp = (e) => {
-		    if (drag === null) return;
-		    const projected = xFromClientX(e.clientX) + Math.max(-30, Math.min(30, drag.v * 120));
-		    const idx = Math.round(clampX(projected) / INNER_W * (MODES.length - 1));
-		    setDrag(null);
-		    props.onCommit(MODES[idx].key);
-		  };
-		  const thumbLeft = drag !== null ? drag.x : modeIndex(props.mode) / (MODES.length - 1) * INNER_W;
-		  const activeIdx = Math.min(MODES.length - 1, Math.max(0, Math.round(thumbLeft / INNER_W * (MODES.length - 1))));
-		  const info = MODES[activeIdx];
-		  geoRef.current = {
-		    origin: thumbLeft + THUMB / 2,
-		    // 密度/亮度中心 = 圆球中心
-		    rightEdge: thumbLeft + THUMB,
-		    // 粒子活动区右界 = 填充右缘（不越过圆球）
-		    tier: activeIdx,
-		    // 场强档位（与填充/气泡同源；拖拽预览即时升降级）
-		    show: activeIdx > 0 || drag !== null,
-		    // 与填充显隐同源
-		    dragging: drag !== null
-		  };
+		  const isOff = props.mode === "off";
+		  const [overview, setOverview] = (0, import_react19.useState)(null);
+		  const [backfillBusy, setBackfillBusy] = (0, import_react19.useState)(false);
+		  const [localError, setLocalError] = (0, import_react19.useState)(null);
+		  const timersRef = (0, import_react19.useRef)([]);
+		  (0, import_react19.useEffect)(
+		    () => () => {
+		      for (const t of timersRef.current) window.clearTimeout(t);
+		    },
+		    []
+		  );
 		  (0, import_react19.useEffect)(() => {
-		    const canvas = canvasRef.current;
-		    if (!canvas) return void 0;
-		    const ctx = canvas.getContext && canvas.getContext("2d");
-		    if (!ctx) return void 0;
-		    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
-		    let width = 1;
-		    let height = 1;
-		    let frame = 0;
-		    let grid = [];
-		    let cell = 5;
-		    const gap = 1.1;
-		    let fieldOn = false;
-		    let fieldStart = 0;
-		    let lastDrawn = 0;
-		    const resize = () => {
-		      const b = canvas.getBoundingClientRect();
-		      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-		      width = Math.max(1, b.width);
-		      height = Math.max(1, b.height);
-		      canvas.width = Math.max(1, Math.round(width * ratio));
-		      canvas.height = Math.max(1, Math.round(height * ratio));
-		      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-		      cell = width < 280 ? 5 : 6;
-		      grid = [];
-		      for (let row2 = 0; row2 * cell < height; row2++) {
-		        for (let column = 0; column * cell < width; column++) {
-		          grid.push({
-		            x: column * cell,
-		            y: row2 * cell,
-		            base: Math.abs(Math.sin(column * 12.9898 + row2 * 78.233) * 43758.5453) % 1,
-		            tempo: Math.abs(Math.sin(column * 7.13 + row2 * 19.41) * 19341.731) % 1,
-		            phase: Math.abs(Math.sin(column * 31.17 + row2 * 11.93) * 28437.123) % 1
-		          });
-		        }
-		      }
+		    let alive = true;
+		    props.rpc("dsh-memory/hall-overview", {}).then((r) => {
+		      if (!alive) return;
+		      if (r && r.ok) setOverview(r.value);
+		    }).catch(() => {
+		    });
+		    return () => {
+		      alive = false;
 		    };
-		    const draw = (time) => {
-		      const st = geoRef.current || { origin: 0, rightEdge: 0, tier: 0, show: false, dragging: false };
-		      ctx.clearRect(0, 0, width, height);
-		      if (!st.show || st.rightEdge <= 0) {
-		        fieldOn = false;
+		  }, [props.rpc]);
+		  const cornerCount = (id) => {
+		    if (!overview) return null;
+		    if (id === "general") return overview.general;
+		    return overview.corners.find((c) => c.id === id)?.count ?? 0;
+		  };
+		  const backfill = () => {
+		    if (backfillBusy || !overview || overview.unlabeled === 0) return;
+		    setBackfillBusy(true);
+		    setLocalError(null);
+		    let polls = 0;
+		    const finish = () => setBackfillBusy(false);
+		    const tick = () => {
+		      polls++;
+		      props.rpc("dsh-memory/hall-overview", {}).then((r) => {
+		        const v = r && r.ok ? r.value : null;
+		        if (v) setOverview(v);
+		        if (v && v.unlabeled === 0 || polls >= 20) finish();
+		        else {
+		          const t = window.setTimeout(tick, 3e3);
+		          timersRef.current.push(t);
+		        }
+		      }).catch(() => finish());
+		    };
+		    props.rpc("dsh-memory/hall-backfill", {}).then((r) => {
+		      if (!r || !r.ok) {
+		        setLocalError(r && r.error ? "回填失败：" + r.error.message : "回填失败");
+		        finish();
 		        return;
 		      }
-		      if (!fieldOn) {
-		        fieldOn = true;
-		        fieldStart = time;
-		      }
-		      const dark = document.body.hasAttribute("data-ds-dark-theme");
-		      const tier = FIELD_TIERS[st.tier] || FIELD_TIERS[1];
-		      const elapsed = Math.max(0, time - fieldStart);
-		      const reveal = reduced.matches ? 1 : smStep(0, 1, elapsed / 900);
-		      const ripplePhase = elapsed % 1200 / 1200;
-		      const tempo = tier.tempo * (st.dragging ? 2 : 1);
-		      const dim = dark ? [124, 144, 250] : [61, 91, 224];
-		      const hot = dark ? [214, 224, 255] : [126, 148, 250];
-		      ctx.save();
-		      ctx.beginPath();
-		      if (ctx.roundRect) ctx.roundRect(0, 0, st.rightEdge, height, height / 2);
-		      else ctx.rect(0, 0, st.rightEdge, height);
-		      ctx.clip();
-		      for (let i = 0; i < grid.length; i++) {
-		        const c = grid[i];
-		        const dx = Math.abs(c.x + cell * 0.5 - st.origin) / Math.max(1, st.rightEdge * 0.5);
-		        if (dx > 1) continue;
-		        const near = Math.min(1, Math.max(0, 1 - dx * 1.1));
-		        if (c.base > tier.density - near * 0.3) continue;
-		        const flicker = 0.5 + 0.5 * Math.sin(elapsed * 0.012 * tempo + c.tempo * 6.283 + c.phase * 6.283);
-		        const wave = tier.wave ? 0.5 + 0.5 * Math.sin((dx * 2 - ripplePhase) * 6.283) : 0.62;
-		        const revealA = smStep(0, 1, reveal * (1 - dx * 0.85) + dx * 0.15);
-		        const alpha = Math.min(1, (0.26 + 0.44 * flicker + near * 0.28) * (0.28 + 0.72 * wave) * revealA * tier.alpha);
-		        if (alpha < 0.02) continue;
-		        const glowMix = Math.max(0, flicker * wave - 0.45) * 1.6;
-		        ctx.fillStyle = "rgba(" + Math.round(dim[0] + (hot[0] - dim[0]) * glowMix) + "," + Math.round(dim[1] + (hot[1] - dim[1]) * glowMix) + "," + Math.round(dim[2] + (hot[2] - dim[2]) * glowMix) + "," + alpha.toFixed(3) + ")";
-		        ctx.fillRect(c.x + gap * 0.5, c.y + gap * 0.5, cell - gap, cell - gap);
-		      }
-		      ctx.restore();
-		    };
-		    const loop = (time) => {
-		      if (time - lastDrawn >= 33) {
-		        lastDrawn = time;
-		        draw(time);
-		      }
-		      frame = window.requestAnimationFrame(loop);
-		    };
-		    const redrawStatic = () => {
-		      if (reduced.matches) draw(performance.now());
-		    };
-		    const ro = new ResizeObserver(() => {
-		      resize();
-		      redrawStatic();
+		      timersRef.current.push(window.setTimeout(tick, 3e3));
+		    }).catch((e) => {
+		      setLocalError("回填失败：" + String(e && e.message || e));
+		      finish();
 		    });
-		    const themeObs = new MutationObserver(() => {
-		      redrawStatic();
-		    });
-		    ro.observe(canvas);
-		    themeObs.observe(document.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
-		    resize();
-		    draw(performance.now());
-		    if (!reduced.matches) frame = window.requestAnimationFrame(loop);
-		    return () => {
-		      window.cancelAnimationFrame(frame);
-		      ro.disconnect();
-		      themeObs.disconnect();
+		  };
+		  const boxRef = (0, import_react19.useRef)(null);
+		  const startRef = (0, import_react19.useRef)(null);
+		  const movedRef = (0, import_react19.useRef)(false);
+		  const downIndexRef = (0, import_react19.useRef)(null);
+		  const dragTargetRef = (0, import_react19.useRef)(null);
+		  const [drag, setDrag] = (0, import_react19.useState)(null);
+		  const lockedIndex = (() => {
+		    if (props.halls.length !== 1 || !overview) return null;
+		    const i = overview.corners.findIndex((c) => c.id === props.halls[0]);
+		    return i >= 0 ? i : null;
+		  })();
+		  const activeCorner = drag ? drag.index : lockedIndex;
+		  const blockPosRef = (0, import_react19.useRef)(
+		    activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER }
+		  );
+		  const blockTargetRef = (0, import_react19.useRef)(blockPosRef.current);
+		  const [blockPos, setBlockPos] = (0, import_react19.useState)(blockPosRef.current);
+		  (0, import_react19.useEffect)(() => {
+		    blockTargetRef.current = activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER };
+		  }, [activeCorner]);
+		  const reducedMotionRef = (0, import_react19.useRef)(false);
+		  (0, import_react19.useEffect)(() => {
+		    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+		    const apply2 = () => {
+		      reducedMotionRef.current = mq.matches;
 		    };
+		    apply2();
+		    mq.addEventListener("change", apply2);
+		    return () => mq.removeEventListener("change", apply2);
 		  }, []);
-		  const popRef = (0, import_react19.useRef)(null);
+		  (0, import_react19.useEffect)(() => {
+		    let raf = 0;
+		    const loop = () => {
+		      const cur = blockPosRef.current;
+		      const tgt = blockTargetRef.current;
+		      if (reducedMotionRef.current) {
+		        if (cur.x !== tgt.x || cur.y !== tgt.y) {
+		          blockPosRef.current = tgt;
+		          setBlockPos(tgt);
+		        }
+		      } else {
+		        const dx = tgt.x - cur.x;
+		        const dy = tgt.y - cur.y;
+		        if (Math.hypot(dx, dy) > 0.05) {
+		          const next = { x: cur.x + dx * 0.2, y: cur.y + dy * 0.2 };
+		          blockPosRef.current = next;
+		          setBlockPos(next);
+		        } else if (cur.x !== tgt.x || cur.y !== tgt.y) {
+		          blockPosRef.current = tgt;
+		          setBlockPos(tgt);
+		        }
+		      }
+		      raf = window.requestAnimationFrame(loop);
+		    };
+		    raf = window.requestAnimationFrame(loop);
+		    return () => window.cancelAnimationFrame(raf);
+		  }, []);
+		  const pointAngle = (clientX, clientY) => {
+		    const box = boxRef.current;
+		    if (!box) return { angle: 0, dist: 0 };
+		    const r = box.getBoundingClientRect();
+		    const scale = r.width / SIZE || 1;
+		    const dx = (clientX - (r.left + CENTER * scale)) / scale;
+		    const dy = (clientY - (r.top + CENTER * scale)) / scale;
+		    return { angle: Math.atan2(dy, dx), dist: Math.hypot(dx, dy) };
+		  };
+		  const INNER = 34;
+		  const onBoxDown = (e) => {
+		    if (isOff) return;
+		    const { angle, dist } = pointAngle(e.clientX, e.clientY);
+		    if (dist < 24) return;
+		    e.currentTarget.setPointerCapture?.(e.pointerId);
+		    movedRef.current = false;
+		    startRef.current = { x: e.clientX, y: e.clientY };
+		    const idx = angleIndex(angle);
+		    downIndexRef.current = idx;
+		    dragTargetRef.current = idx;
+		    setDrag({ index: idx });
+		  };
+		  const onBoxMove = (e) => {
+		    if (!startRef.current) return;
+		    const s = startRef.current;
+		    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > DRAG_SLOP) movedRef.current = true;
+		    if (!movedRef.current) return;
+		    const { angle, dist } = pointAngle(e.clientX, e.clientY);
+		    const cur = dragTargetRef.current;
+		    const cand = dist < INNER ? null : cur == null ? angleIndex(angle) : snapIndex(angle, cur);
+		    if (cand !== cur) {
+		      dragTargetRef.current = cand;
+		      setDrag({ index: cand });
+		    }
+		  };
+		  const onBoxUp = (e) => {
+		    if (!startRef.current) return;
+		    e.currentTarget.releasePointerCapture?.(e.pointerId);
+		    const moved = movedRef.current;
+		    const di = downIndexRef.current;
+		    const dt = dragTargetRef.current;
+		    startRef.current = null;
+		    downIndexRef.current = null;
+		    dragTargetRef.current = null;
+		    setDrag(null);
+		    if (!moved) {
+		      const id = di != null ? overview?.corners[di]?.id : void 0;
+		      if (!id) return;
+		      if (!props.halls.includes(id)) props.onCommitHall([id]);
+		    } else if (dt == null) {
+		      if (props.halls.length !== 0) props.onCommitHall(null);
+		    } else {
+		      const id = overview?.corners[dt]?.id;
+		      if (id && !props.halls.includes(id)) props.onCommitHall([id]);
+		    }
+		  };
+		  const polyPoints = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+		    const p = cornerPos(i);
+		    return `${p.left},${p.top}`;
+		  }).join(" ");
+		  const grayStyle = isOff ? { opacity: 0.45, pointerEvents: "none" } : {};
+		  const boundariesDisabled = props.halls.length === 0 || isOff;
+		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { style: { width: SIZE }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		      "div",
+		      {
+		        ref: boxRef,
+		        style: { position: "relative", width: SIZE, height: SIZE, ...grayStyle },
+		        onPointerDown: onBoxDown,
+		        onPointerMove: onBoxMove,
+		        onPointerUp: onBoxUp,
+		        onPointerCancel: onBoxUp,
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		            "svg",
+		            {
+		              width: SIZE,
+		              height: SIZE,
+		              style: { position: "absolute", inset: 0, pointerEvents: "none" },
+		              "aria-hidden": "true",
+		              children: [
+		                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		                  "polygon",
+		                  {
+		                    points: polyPoints,
+		                    fill: "none",
+		                    stroke: "var(--dsh-mem-hall-line)",
+		                    strokeWidth: "1",
+		                    strokeDasharray: "3 3",
+		                    opacity: 0.45
+		                  }
+		                ),
+		                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		                  "polygon",
+		                  {
+		                    points: polyPoints,
+		                    fill: "none",
+		                    stroke: "var(--dsh-mem-hall-line)",
+		                    strokeWidth: "1"
+		                  }
+		                ),
+		                [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+		                  const p = cornerPos(i);
+		                  return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		                    "line",
+		                    {
+		                      x1: CENTER,
+		                      y1: CENTER,
+		                      x2: p.left,
+		                      y2: p.top,
+		                      stroke: "var(--dsh-mem-hall-line)",
+		                      strokeWidth: "1"
+		                    },
+		                    "spoke" + i
+		                  );
+		                })
+		              ]
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		            "div",
+		            {
+		              "aria-hidden": "true",
+		              style: {
+		                position: "absolute",
+		                left: blockPos.x,
+		                top: blockPos.y,
+		                transform: "translate(-50%, -50%)",
+		                width: 52,
+		                height: 30,
+		                borderRadius: 10,
+		                border: "1.5px solid var(--dsh-mem-accent)",
+		                background: "var(--dsh-mem-accent-weak)",
+		                pointerEvents: "none",
+		                zIndex: 1
+		              }
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		            "button",
+		            {
+		              type: "button",
+		              title: "智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）",
+		              onClick: () => props.onCommitHall(null),
+		              style: {
+		                position: "absolute",
+		                left: CENTER,
+		                top: CENTER,
+		                transform: "translate(-50%, -50%)",
+		                width: 52,
+		                height: 30,
+		                borderRadius: 10,
+		                border: "none",
+		                background: "transparent",
+		                color: activeCorner == null ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
+		                fontSize: 11,
+		                fontWeight: 600,
+		                cursor: "pointer",
+		                zIndex: 2
+		              },
+		              children: "智能"
+		            }
+		          ),
+		          [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+		            const corner = overview?.corners[i];
+		            const id = corner?.id;
+		            const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
+		            const count = id ? cornerCount(id) : null;
+		            const active = activeCorner === i;
+		            const dim = activeCorner != null && !active;
+		            const empty = count === 0;
+		            const p = cornerPos(i);
+		            return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		              "div",
+		              {
+		                title: id ? `「${label}」${count ?? 0} 条
+		点按/拖动 = 以该角为主题（抑制其他角）` : "词表加载中",
+		                style: {
+		                  position: "absolute",
+		                  left: p.left,
+		                  top: p.top,
+		                  transform: "translate(-50%, -50%)",
+		                  display: "flex",
+		                  flexDirection: "column",
+		                  alignItems: "center",
+		                  gap: 0,
+		                  padding: "1px 4px",
+		                  borderRadius: 8,
+		                  border: "1px solid transparent",
+		                  background: "transparent",
+		                  color: active ? "var(--dsh-mem-hall-corner-on)" : empty ? "var(--dsh-mem-hall-empty)" : "var(--dsh-mem-hall-corner)",
+		                  fontSize: 9.5,
+		                  lineHeight: "12px",
+		                  fontWeight: active ? 600 : 400,
+		                  whiteSpace: "nowrap",
+		                  maxWidth: 58,
+		                  opacity: dim ? 0.45 : 1,
+		                  pointerEvents: "none",
+		                  zIndex: 2
+		                },
+		                children: [
+		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { children: label }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 8, opacity: 0.75, fontVariantNumeric: "tabular-nums" }, children: count === null ? " " : empty ? "空角" : `${count} 条` })
+		                ]
+		              },
+		              id ?? i
+		            );
+		          })
+		        ]
+		      }
+		    ),
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		      "div",
+		      {
+		        title: props.halls.length === 0 ? "选定某个角（单域）后，这两项才生效" : "锁定域时两类无角记忆是否参与召回",
+		        style: {
+		          display: "flex",
+		          flexDirection: "column",
+		          gap: 6,
+		          marginTop: 10,
+		          opacity: boundariesDisabled ? 0.45 : void 0,
+		          filter: boundariesDisabled ? "grayscale(1)" : void 0,
+		          pointerEvents: boundariesDisabled ? "none" : void 0
+		        },
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: overview ? `另有 ${overview.unlabeled} 条未打标` : "未打标" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		              Segmented,
+		              {
+		                value: props.hallIncludeUnlabeled ? "in" : "ex",
+		                options: [
+		                  { key: "in", label: "含未打标", title: "未打标记忆默认包含" },
+		                  { key: "ex", label: "不含", title: "锁定域时排除未打标记忆" }
+		                ],
+		                onChange: (key) => props.onCommitHallBoundaries({ includeUnlabeled: key === "in" })
+		              }
+		            ),
+		            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		              Segmented,
+		              {
+		                value: props.hallIncludeGeneral ? "in" : "ex",
+		                options: [
+		                  { key: "in", label: "含跨域", title: "跨域（general）兜底记忆也参与召回" },
+		                  { key: "ex", label: "不含", title: "跨域与单主题相悖，默认不含" }
+		                ],
+		                onChange: (key) => props.onCommitHallBoundaries({ includeGeneral: key === "in" })
+		              }
+		            )
+		          ] })
+		        ]
+		      }
+		    ),
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Row, { label: "会话", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		      Segmented,
+		      {
+		        value: isOff ? "off" : "on",
+		        options: [
+		          { key: "on", label: "启用", title: "本会话正常捕获/蒸馏/注入记忆" },
+		          {
+		            key: "off",
+		            label: "关闭",
+		            title: "本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）"
+		          }
+		        ],
+		        onChange: (key) => props.onCommit(key === "off" ? "off" : "auto")
+		      }
+		    ) }),
+		    props.recall !== void 0 && props.onCommitRecall ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Row, { label: "注入", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		      Segmented,
+		      {
+		        value: props.recall === null ? "follow" : props.recall ? "on" : "off",
+		        disabled: isOff,
+		        options: [
+		          { key: "follow", label: "跟随全局", title: "清除本会话覆盖，跟随全局召回开关" },
+		          { key: "on", label: "开", title: "本会话强制注入记忆" },
+		          { key: "off", label: "关", title: "只写：记忆照常沉淀，但不注入本会话" }
+		        ],
+		        onChange: (key) => props.onCommitRecall(key === "on" ? true : key === "off" ? false : null)
+		      }
+		    ) }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		      "div",
+		      {
+		        style: {
+		          display: "flex",
+		          justifyContent: "space-between",
+		          alignItems: "center",
+		          gap: 8,
+		          marginTop: 10
+		        },
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: overview ? `未打标 ${overview.unlabeled} 条` : "未打标计数加载中" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+		            ActionButton,
+		            {
+		              label: backfillBusy ? "回填中…" : "回填",
+		              title: "对存量未打标记忆批量补打 hall 标签",
+		              disabled: !overview || overview.unlabeled === 0 || backfillBusy,
+		              onClick: () => backfill()
+		            }
+		          )
+		        ]
+		      }
+		    ),
+		    props.error || localError ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-danger)", marginTop: 8 }, children: props.error || localError }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SessionInfoArea, { rpc: props.rpc, sessionId: props.sessionId })
+		  ] });
+		}
+		function Row(props) {
+		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		    "div",
+		    {
+		      style: {
+		        display: "flex",
+		        flexDirection: "column",
+		        gap: 6,
+		        marginTop: 10
+		      },
+		      children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: props.label }),
+		        props.children
+		      ]
+		    }
+		  );
+		}
+		var LABEL_FALLBACK = ["工作", "人际", "学习", "创作娱乐", "居家", "健康", "财务", "出行"];
+		function useViewportClamp(popRef) {
 		  const shiftRef = (0, import_react19.useRef)(0);
 		  const [shiftX, setShiftX] = (0, import_react19.useState)(0);
-		  (0, import_react19.useLayoutEffect)(() => {
+		  (0, import_react19.useEffect)(() => {
 		    const clamp = () => {
 		      const el = popRef.current;
 		      if (!el) return;
@@ -4292,162 +4630,8 @@ var __defProp = Object.defineProperty;
 		      window.removeEventListener("resize", clamp);
 		      window.clearInterval(iv);
 		    };
-		  }, []);
-		  const stops = [];
-		  for (let i = 0; i < MODES.length; i++) {
-		    const stopLeft = i / (MODES.length - 1) * INNER_W + THUMB / 2;
-		    stops.push(
-		      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		        "div",
-		        {
-		          style: {
-		            position: "absolute",
-		            left: stopLeft - 3,
-		            top: (RAIL_H - 6) / 2,
-		            width: 6,
-		            height: 6,
-		            borderRadius: "50%",
-		            background: "var(--dsh-mem-dot)",
-		            zIndex: 2,
-		            pointerEvents: "none"
-		          }
-		        },
-		        "stop" + i
-		      )
-		    );
-		  }
-		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		    "div",
-		    {
-		      ref: popRef,
-		      style: {
-		        position: "absolute",
-		        bottom: "calc(100% + 8px)",
-		        left: "50%",
-		        transform: "translateX(calc(-50% + " + shiftX + "px))",
-		        zIndex: 1e3
-		      },
-		      children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
-		        "div",
-		        {
-		          className: "dsh-mem-popover",
-		          style: { position: "relative", padding: "14px 16px" },
-		          children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
-		              "div",
-		              {
-		                ref: trackRef,
-		                className: "dsh-mem-hitband",
-		                style: {
-		                  position: "relative",
-		                  // 容器宽 = thumb 活动范围（0..INNER_W + THUMB），点击映射与视觉两端严格对齐
-		                  width: TRACK_W,
-		                  height: RAIL_H,
-		                  borderRadius: 999,
-		                  background: "var(--dsh-mem-track)",
-		                  touchAction: "none",
-		                  cursor: drag === null ? "pointer" : "grabbing"
-		                },
-		                onPointerDown,
-		                onPointerMove,
-		                onPointerUp,
-		                onPointerCancel: onPointerUp,
-		                children: [
-		                  activeIdx > 0 || drag !== null ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                    "div",
-		                    {
-		                      style: {
-		                        position: "absolute",
-		                        left: 0,
-		                        top: 0,
-		                        bottom: 0,
-		                        width: thumbLeft + THUMB,
-		                        borderRadius: 999,
-		                        background: "linear-gradient(90deg, var(--dsh-mem-fill-1), var(--dsh-mem-fill-2))",
-		                        pointerEvents: "none",
-		                        zIndex: 1,
-		                        transition: drag === null ? "width 120ms ease" : "none"
-		                      }
-		                    }
-		                  ) : null,
-		                  stops,
-		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                    "canvas",
-		                    {
-		                      ref: canvasRef,
-		                      className: "dsh-mem-particles",
-		                      style: {
-		                        position: "absolute",
-		                        left: 0,
-		                        top: 0,
-		                        width: "100%",
-		                        height: "100%",
-		                        pointerEvents: "none",
-		                        zIndex: 2,
-		                        filter: drag !== null ? "saturate(1.45) brightness(1.28) contrast(1.06)" : "none"
-		                      }
-		                    }
-		                  ),
-		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                    "div",
-		                    {
-		                      style: {
-		                        position: "absolute",
-		                        left: thumbLeft,
-		                        top: (RAIL_H - THUMB) / 2,
-		                        width: THUMB,
-		                        height: THUMB,
-		                        borderRadius: "50%",
-		                        background: "var(--dsh-mem-thumb)",
-		                        border: "1px solid var(--dsh-mem-accent)",
-		                        boxShadow: drag !== null ? "0 2px 8px rgba(0,0,0,0.35)" : "0 1px 4px rgba(0,0,0,0.25)",
-		                        pointerEvents: "none",
-		                        transition: drag === null ? "left 120ms ease" : "none",
-		                        zIndex: 3
-		                      }
-		                    }
-		                  ),
-		                  drag !== null ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "dsh-mem-bubble", style: { left: thumbLeft + THUMB / 2, zIndex: 4 }, children: info.label }) : null
-		                ]
-		              }
-		            ),
-		            props.error ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-danger)", marginTop: 10, whiteSpace: "nowrap" }, children: props.error }) : null,
-		            props.recall !== void 0 && props.onCommitRecall ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
-		              "div",
-		              {
-		                style: {
-		                  borderTop: "1px solid var(--dsh-mem-border)",
-		                  marginTop: 10,
-		                  paddingTop: 8,
-		                  display: "flex",
-		                  justifyContent: "space-between",
-		                  alignItems: "center",
-		                  gap: 8
-		                },
-		                children: [
-		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "注入" }),
-		                  /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		                    Segmented,
-		                    {
-		                      value: props.recall === null ? "follow" : props.recall ? "on" : "off",
-		                      disabled: props.mode === "off",
-		                      options: [
-		                        { key: "follow", label: "跟随全局", title: "清除本会话覆盖，跟随全局召回开关" },
-		                        { key: "on", label: "开", title: "本会话强制注入记忆" },
-		                        { key: "off", label: "关", title: "只写：记忆照常沉淀，但不注入本会话" }
-		                      ],
-		                      onChange: (key) => props.onCommitRecall(key === "on" ? true : key === "off" ? false : null)
-		                    }
-		                  )
-		                ]
-		              }
-		            ) : null,
-		            props.rpc && props.sessionId ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(SessionInfoArea, { rpc: props.rpc, sessionId: props.sessionId }) : null
-		          ]
-		        }
-		      )
-		    }
-		  );
+		  }, [popRef]);
+		  return shiftX;
 		}
 		
 		// client/src/pill/MemoryModePill.tsx
@@ -4458,9 +4642,15 @@ var __defProp = Object.defineProperty;
 		  const [mode, setMode] = (0, import_react20.useState)(null);
 		  const [recall, setRecall] = (0, import_react20.useState)(null);
 		  const [recallResolved, setRecallResolved] = (0, import_react20.useState)(true);
+		  const [halls, setHalls] = (0, import_react20.useState)([]);
+		  const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = (0, import_react20.useState)(true);
+		  const [hallIncludeGeneral, setHallIncludeGeneral] = (0, import_react20.useState)(false);
+		  const [hallLabels, setHallLabels] = (0, import_react20.useState)({});
 		  const [error, setError] = (0, import_react20.useState)(null);
 		  const [open, setOpen] = (0, import_react20.useState)(false);
 		  const wrapRef = (0, import_react20.useRef)(null);
+		  const popRef = (0, import_react20.useRef)(null);
+		  const shiftX = useViewportClamp(popRef);
 		  const seqRef = (0, import_react20.useRef)(0);
 		  const load = (0, import_react20.useCallback)(() => {
 		    if (!sessionId || !rpc) return;
@@ -4472,10 +4662,19 @@ var __defProp = Object.defineProperty;
 		        setMode(r.value.mode);
 		        setRecall(r.value.recall);
 		        setRecallResolved(r.value.recallResolved);
+		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
 		      } else setError(r && !r.ok ? r.error.message : "RPC error");
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
 		      setError(String(e && e.message || e));
+		    });
+		    rpc("dsh-memory/hall-overview", {}).then((r) => {
+		      if (r && r.ok && r.value) {
+		        setHallLabels(Object.fromEntries(r.value.corners.map((c) => [c.id, c.label])));
+		      }
+		    }).catch(() => {
 		    });
 		  }, [sessionId, rpc]);
 		  (0, import_react20.useEffect)(() => {
@@ -4550,12 +4749,66 @@ var __defProp = Object.defineProperty;
 		      setError("注入设置失败：" + String(e && e.message || e));
 		    });
 		  };
+		  const commitHall = (next) => {
+		    if (!rpc || !sessionId || mode === null) return;
+		    const norm = next ?? [];
+		    if (JSON.stringify(norm) === JSON.stringify(halls)) return;
+		    const prevHalls = halls;
+		    const token = seqRef.current;
+		    setHalls(norm);
+		    setError(null);
+		    rpc("dsh-memory/session-mode-set", { sessionId, mode, halls: next }).then((r) => {
+		      if (token !== seqRef.current) return;
+		      if (!r || !r.ok) {
+		        setHalls(prevHalls);
+		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
+		      } else {
+		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+		      }
+		    }).catch((e) => {
+		      if (token !== seqRef.current) return;
+		      setHalls(prevHalls);
+		      setError("域设置失败：" + String(e && e.message || e));
+		    });
+		  };
+		  const commitHallBoundaries = (patch) => {
+		    if (!rpc || !sessionId || mode === null) return;
+		    const prev = { unlabeled: hallIncludeUnlabeled, general: hallIncludeGeneral };
+		    const token = seqRef.current;
+		    if (patch.includeUnlabeled !== void 0) setHallIncludeUnlabeled(patch.includeUnlabeled);
+		    if (patch.includeGeneral !== void 0) setHallIncludeGeneral(patch.includeGeneral);
+		    setError(null);
+		    rpc("dsh-memory/session-mode-set", {
+		      sessionId,
+		      mode,
+		      halls: halls.length > 0 ? halls : null,
+		      hallIncludeUnlabeled: patch.includeUnlabeled,
+		      hallIncludeGeneral: patch.includeGeneral
+		    }).then((r) => {
+		      if (token !== seqRef.current) return;
+		      if (!r || !r.ok) {
+		        setHallIncludeUnlabeled(prev.unlabeled);
+		        setHallIncludeGeneral(prev.general);
+		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
+		      } else {
+		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
+		      }
+		    }).catch((e) => {
+		      if (token !== seqRef.current) return;
+		      setHallIncludeUnlabeled(prev.unlabeled);
+		      setHallIncludeGeneral(prev.general);
+		      setError("域设置失败：" + String(e && e.message || e));
+		    });
+		  };
 		  if (!sessionId || !rpc) return null;
 		  const info = modeInfo(mode);
 		  const loaded = mode !== null;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
-		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : info.label;
+		  const hallText = halls.length === 1 ? hallLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} 域` : null;
+		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : hallText ? hallText : info.label;
 		  ensureThemeStyle();
 		  const pillStyle = {
 		    position: "relative",
@@ -4583,7 +4836,7 @@ var __defProp = Object.defineProperty;
 		      "button",
 		      {
 		        type: "button",
-		        title: error ? "档位读取失败：" + error + "（点击重试）" : "本会话记忆档位（点击切换）",
+		        title: error ? "档位读取失败：" + error + "（点击重试）" : "本会话记忆域与档位（点击切换）",
 		        onClick: () => {
 		          if (error) load();
 		          setOpen(!open);
@@ -4597,15 +4850,40 @@ var __defProp = Object.defineProperty;
 		      }
 		    ),
 		    open ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		      ModeSlider,
+		      "div",
 		      {
-		        mode: mode || "auto",
-		        onCommit: commit,
-		        recall: loaded ? recall : void 0,
-		        onCommitRecall: commitRecall,
-		        error,
-		        rpc,
-		        sessionId
+		        ref: popRef,
+		        style: {
+		          position: "absolute",
+		          bottom: "calc(100% + 8px)",
+		          left: "50%",
+		          transform: "translateX(calc(-50% + " + shiftX + "px))",
+		          zIndex: 1e3
+		        },
+		        children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		          "div",
+		          {
+		            className: "dsh-mem-popover",
+		            style: { position: "relative", padding: "10px 12px" },
+		            children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		              HallWheel,
+		              {
+		                mode: mode || "auto",
+		                halls,
+		                hallIncludeUnlabeled,
+		                hallIncludeGeneral,
+		                onCommit: commit,
+		                onCommitHall: commitHall,
+		                onCommitHallBoundaries: commitHallBoundaries,
+		                recall: loaded ? recall : void 0,
+		                onCommitRecall: commitRecall,
+		                error,
+		                rpc,
+		                sessionId
+		              }
+		            )
+		          }
+		        )
 		      }
 		    ) : null
 		  ] });

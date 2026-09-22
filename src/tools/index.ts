@@ -27,7 +27,7 @@ import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryFamily, MemoryLogger, MemoryRecord, Persistence } from '../types.js';
-import { normPersistence, normScope, resolveRecordScope } from '../types.js';
+import { HALL_CATALOG, HALL_FALLBACK, normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 
@@ -387,7 +387,10 @@ export function registerMemoryTools(
       description:
         '记忆类型(persona/episodic/instruction/work_fact/work_task/work_method/work_artifact;缺省 episodic)',
     },
-    hall: { type: 'string', description: '可选的粗分类 Hall(work/relationships/general/finance/journey)' },
+    hall: {
+      type: 'string',
+      description: `可选的粗分类 Hall(${[...HALL_CATALOG.map((h) => h.id), HALL_FALLBACK].join('/')};general = 跨域兜底)`,
+    },
     persistence: {
       type: 'string',
       description:

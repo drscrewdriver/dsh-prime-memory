@@ -36,6 +36,40 @@ export function SwitchRow(props: {
   );
 }
 
+/** 动作按钮（点了就执行，没有"当前选中项"语义）。
+ *  与 `Segmented` 的分工：Segmented 的 onClick 带 `!on` 守卫（点击已选中项不触发），
+ *  用它承载一次性动作会得到一个永远点不动的死按钮（一键回填曾踩此坑）。
+ *  视觉沿用 seg 配方，保证与同排的分段控件观感一致。 */
+export function ActionButton(props: {
+  label: ReactNode;
+  /** 悬停提示（解释性文字进 tooltip 不占版面，#34 文案极简约定） */
+  title?: string;
+  disabled?: boolean;
+  onClick?(): void;
+}) {
+  const disabled = !!props.disabled;
+  return (
+    <button
+      type="button"
+      title={props.disabled ? '' : props.title || ''}
+      aria-disabled={disabled}
+      onClick={() => {
+        if (!disabled && props.onClick) props.onClick();
+      }}
+      style={{
+        ...S.seg,
+        ...S.segBtn,
+        fontFamily: 'inherit',
+        border: '1px solid var(--dsh-mem-border)',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        ...(disabled ? S.switchDisabled : null),
+      }}
+    >
+      {props.label}
+    </button>
+  );
+}
+
 export interface SegOption {
   key: string;
   label: ReactNode;
@@ -45,7 +79,9 @@ export interface SegOption {
   title?: string;
 }
 
-/** 分段选择器（支持逐项禁用：如远程档未配齐连接信息时置灰）。 */
+/** 分段选择器（支持逐项禁用：如远程档未配齐连接信息时置灰）。
+ *  语义限定：**选择器**——`value` 是当前选中项，点击"已选中项"不触发 onChange（`!on` 守卫）。
+ *  承载"点了就要执行"的动作（如一键回填）请用 `ActionButton`，否则会出现死按钮。 */
 export function Segmented(props: {
   value: string | null | undefined;
   options: SegOption[];

@@ -227,7 +227,16 @@ describe('rpc: session mode endpoints', () => {
   it('mode set with recall override; validation rejects bad mode/payload shape', async () => {
     const h = await harness({ live: liveHandle({ recall: true }) });
     const set = await h.call('dsh-memory/session-mode-set', { sessionId: 's1', mode: 'work', recall: false }) as { mode: string; recall: boolean | null; recallResolved: boolean };
-    expect(set).toEqual({ sessionId: 's1', mode: 'work', recall: false, recallResolved: false });
+    expect(set).toEqual({
+      sessionId: 's1',
+      mode: 'work',
+      recall: false,
+      recallResolved: false,
+      hall: null,
+      halls: [],
+      hallIncludeUnlabeled: true,
+      hallIncludeGeneral: false,
+    });
     // 显式 null 清除覆盖
     const cleared = await h.call('dsh-memory/session-mode-set', { sessionId: 's1', mode: 'auto', recall: null }) as { recall: null; recallResolved: boolean };
     expect(cleared.recall).toBeNull();
@@ -304,6 +313,23 @@ describe('rpc: list-records / records-delete', () => {
     expect(browse.items[0].hall).toBe('work');
     const search = await h.call('dsh-memory/list-records', { query: '咖啡 记忆', hall: 'work' }) as { items: Array<{ id: string }> };
     expect(search.items.map((i) => i.id)).toEqual(['h1']);
+    h.db.close();
+  });
+
+  it('list-records multi-value halls on browse path (R13: 无 query 的 list 分支)', async () => {
+    const h = await harness();
+    await seed(h);
+    const now = Date.now();
+    await h.stores.l1.appendNew([
+      { id: 'h3', content: '跨域记忆', type: 'episodic', priority: 60, scene_name: '日常', timestamps: [now], createdAt: now, updatedAt: now, metadata: { hall: 'general' } },
+    ]);
+    const both = await h.call('dsh-memory/list-records', { halls: ['work', 'general'] }) as { items: Array<{ id: string }> };
+    expect(both.items.map((i) => i.id)).toEqual(expect.arrayContaining(['h1']));
+    const single = await h.call('dsh-memory/list-records', { halls: ['general'] }) as { items: Array<{ id: string }> };
+    expect(single.items.map((i) => i.id)).not.toContain('h1');
+    // 单值 hall 与 halls 合并去重
+    const merged = await h.call('dsh-memory/list-records', { hall: 'work', halls: ['general'] }) as { items: Array<{ id: string }> };
+    expect(merged.items.map((i) => i.id)).toEqual(expect.arrayContaining(['h1']));
     h.db.close();
   });
 

@@ -16,30 +16,40 @@ export type ExtractMode = 'auto' | 'chat' | 'work';
 
 /**
  * Hall(粗分类属性通道,与 family/type 正交):给 L1 记忆加一个跨族的可检索标签。
- * 主线 3 个默认启用;finance/journey 为实验性(默认不进 hall.enabled,显式加入才参与
- * 自动打标)。细粒度归属由 prompt 语义判断,拿不准时省略 hall(不进 General 兜底,避免噪声)。
+ * 8 角全为主线(experimental 字段已退休);`general` 不占角,降为中心专属兜底值
+ * (HALL_FALLBACK:跨域/无法归类时由智能档产出)。细粒度归属由 prompt 语义判断,
+ * 跨域或实在无法归类时落 general(唯一允许的兜底)。
  */
 export interface HallDef {
   id: string;
   label: string;
-  /** 实验性(默认不进 hall.enabled,需用户显式开启才参与自动打标/过滤)。 */
-  experimental?: boolean;
 }
 
 export const HALL_CATALOG: HallDef[] = [
   { id: 'work', label: '工作' },
-  { id: 'relationships', label: '人际关系' },
-  { id: 'general', label: '通用' },
-  { id: 'finance', label: '财务', experimental: true },
-  { id: 'journey', label: '旅程', experimental: true },
+  { id: 'relationships', label: '人际' },
+  { id: 'learning', label: '学习' },
+  { id: 'creative', label: '创作娱乐' },
+  // 居家在健康之前(八边形顺时针序,用户 2026-09-23 对调)
+  { id: 'home', label: '居家' },
+  { id: 'health', label: '健康' },
+  { id: 'finance', label: '财务' },
+  { id: 'journey', label: '出行' },
 ];
 
-/** 默认启用的 Hall id(主线 3;实验性条目要用户写进 config hall.enabled 才生效)。 */
-export const HALL_DEFAULT_ENABLED = ['work', 'relationships', 'general'];
+/** 跨域兜底值:移出角集,仅作为"无法归入任何角"的中心专属产出(不再进角集/门面)。 */
+export const HALL_FALLBACK = 'general';
+
+/** 八边形角集 = 全目录(角集固定,不随 hall.enabled 开关改变形状;开关只把角画灰)。 */
+export const HALL_CORNERS: readonly HallDef[] = HALL_CATALOG;
+
+/** 默认启用的 Hall id(打标候选集,默认 8 角全集;归一化规则见 config.normHallEnabled)。 */
+export const HALL_DEFAULT_ENABLED = HALL_CATALOG.map((h) => h.id);
 
 export type HallId = (typeof HALL_CATALOG)[number]['id'];
 
 export function hallLabel(id: string): string {
+  if (id === HALL_FALLBACK) return '跨域';
   const h = HALL_CATALOG.find((x) => x.id === id);
   return h ? h.label : id;
 }

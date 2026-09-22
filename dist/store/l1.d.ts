@@ -272,6 +272,7 @@ export declare class L1Store {
         scene?: string;
         family?: string;
         hall?: string;
+        halls?: readonly string[];
         workspaceId?: string;
         limit: number;
         offset: number;
@@ -281,6 +282,15 @@ export declare class L1Store {
     };
     /** 场景名去重列表(UI 筛选器数据源)。 */
     distinctScenes(): string[];
+    /** Hall 域计数(八边形角上"该域 N 条 / 未打标 M"数据源):按 metadata.hall 分组计数。 */
+    hallCounts(): {
+        counts: Record<string, number>;
+        unlabeled: number;
+    };
+    /** 主表全量元数据扫描(单一所有者共享函数,供并行计划引用门禁复用;见 MemoryDb.scanL1Metadata)。 */
+    scanAllMetadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number;
+    /** 查询向量(域软门禁用):复用既有嵌入源;失败/未就绪返回 undefined,调用方降级。 */
+    embedText(text: string, timeoutMs?: number): Promise<Float32Array | undefined>;
     /**
      * 去重候选召回(官方 3 级):空库跳过 → 向量优先 → FTS 兜底。
      * 传入 family 时只在同族记录里召回(去重永不跨族);传入 workspaceId 时
