@@ -251,12 +251,9 @@ var __defProp = Object.defineProperty;
 		    "  --dsh-mem-mode-chat: #5a69b0;",
 		    "  --dsh-mem-mode-work: #5263ca;",
 		    "  --dsh-mem-mode-auto: #3d5be0;",
-		    // 滑轨填充渐变（左浅右深）
-		    "  --dsh-mem-fill-1: #7b93ff;",
-		    "  --dsh-mem-fill-2: #3d5be0;",
+		    // 开关旋钮 / 进度条底（滑轨已随 ModeSlider 删除，填充渐变与停点令牌一并移除）
 		    "  --dsh-mem-thumb: #ffffff;",
 		    "  --dsh-mem-track: rgba(128,140,150,0.32);",
-		    "  --dsh-mem-dot: rgba(128,140,150,0.55);",
 		    // hall 八边形令牌（HallWheel）：连线 / 角默认 / 角选中 / 空角与未打标态；
 		    // 全部引用既有中性色与品牌蓝体系，双主题各自声明，无裸色溢出
 		    "  --dsh-mem-hall-line: rgba(128,140,150,0.35);",
@@ -294,11 +291,8 @@ var __defProp = Object.defineProperty;
 		    "  --dsh-mem-mode-chat: #97a4ff;",
 		    "  --dsh-mem-mode-work: #8295ff;",
 		    "  --dsh-mem-mode-auto: #7b90ff;",
-		    "  --dsh-mem-fill-1: #8fa0ff;",
-		    "  --dsh-mem-fill-2: #465ce8;",
 		    "  --dsh-mem-thumb: #e8ebf5;",
 		    "  --dsh-mem-track: rgba(148,160,180,0.30);",
-		    "  --dsh-mem-dot: rgba(148,160,180,0.5);",
 		    "  --dsh-mem-hall-line: rgba(148,160,180,0.32);",
 		    "  --dsh-mem-hall-corner: var(--dsh-mem-text-2);",
 		    "  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);",
@@ -432,14 +426,9 @@ var __defProp = Object.defineProperty;
 		    // 伪元素不参与布局（浮层/输入栏几何零变化），指针事件落在宿主元素上。
 		    // 全端统一不做 pointer:coarse 分端（桌面点中目标变大是纯收益）。
 		    // pill：视觉高 24px，::after 上下各外扩 10px；只上下不左右——左右是宿主输入栏
-		    // 邻位控件（模式选择器），外扩会制造误触重叠带。
-		    // 滑轨：视觉轨 22px，::before 上下各外扩 11px；touch-action:none 已随轨声明，
-		    // 伪元素区的触摸同样命中轨元素。两处 px 值改动须与注释口径同步 ──
+		    // 邻位控件（模式选择器），外扩会制造误触重叠带 ──
 		    ".dsh-mem-pill-hit::after {",
 		    "  content: ''; position: absolute; left: 0; right: 0; top: -10px; bottom: -10px;",
-		    "}",
-		    ".dsh-mem-hitband::before {",
-		    "  content: ''; position: absolute; left: 0; right: 0; top: -11px; bottom: -11px;",
 		    "}",
 		    // ── 浮层（dsh 原生菜单同配方：不透明实底 + inverted 描边（浅色不可见）+ lv3 阴影） ──
 		    ".dsh-mem-popover {",
@@ -449,34 +438,6 @@ var __defProp = Object.defineProperty;
 		    "  box-shadow: var(--dsh-mem-shadow-pop);",
 		    "  color: var(--dsh-mem-text-1);",
 		    "}",
-		    // ── 拖动气泡：拖拽时显示当前档位名，随圆球移动，倒三角尖角贴近圆球 ──
-		    // 底色走浮层同材质令牌（浅色白底深字 / 暗色深底浅字，随主题翻转；
-		    // tooltip-bg 令牌在浅色下仍是深色、不随材质走，已弃用）。
-		    // 悬停 8px（尖角尖端距圆球顶约 5px）；气泡 zIndex 4 高于浮层（同层叠上下文内
-		    // 数值比较），跨过浮层上缘时盖在其上；描边 + 投影避免同材质融合
-		    ".dsh-mem-bubble {",
-		    "  position: absolute; bottom: calc(100% + 8px); transform: translateX(-50%);",
-		    "  padding: 3px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; line-height: 18px;",
-		    "  border: 1px solid var(--dsh-mem-border);",
-		    "  background: var(--dsh-mem-bg-pop); color: var(--dsh-mem-text-1); white-space: nowrap;",
-		    "  box-shadow: 0 2px 8px rgba(0,0,0,0.18);",
-		    "}",
-		    // 尖角：clip-path 倒三角（旋转方块会露出上半截成菱形，实测视觉缺陷）。
-		    // 双三角叠画：外层描边色大一圈、内层填充色，压在浮层上缘也有轮廓可读
-		    ".dsh-mem-bubble::before {",
-		    "  content: ''; position: absolute; top: 100%; left: 50%; margin-left: -6px;",
-		    "  width: 12px; height: 7px;",
-		    "  clip-path: polygon(0 0, 100% 0, 50% 100%);",
-		    "  background: var(--dsh-mem-border);",
-		    "}",
-		    ".dsh-mem-bubble::after {",
-		    "  content: ''; position: absolute; top: 100%; left: 50%; margin-left: -5px;",
-		    "  width: 10px; height: 6px;",
-		    "  clip-path: polygon(0 0, 100% 0, 50% 100%);",
-		    "  background: var(--dsh-mem-bg-pop);",
-		    "}",
-		    // ── 粒子层（点阵场）：浅色 multiply 混合——深蓝点乘在浅蓝填充上沉显对比 ──
-		    "body:not([data-ds-dark-theme]) .dsh-mem-particles { mix-blend-mode: multiply; opacity: 0.82; }",
 		    // ── 重建面板 ──（模态本体走 NModal：原生 Modal 优先，回退 rb-overlay/rb-modal）
 		    ".dsh-mem-rb-card {",
 		    "  border: 1px solid var(--dsh-mem-border); border-radius: 10px; background: var(--dsh-mem-bg-card);",
@@ -495,7 +456,7 @@ var __defProp = Object.defineProperty;
 		    "body[data-ds-dark-theme] .dsh-mem-rb-modal { box-shadow: 0 16px 48px rgba(0,0,0,0.6); }",
 		    ".dsh-mem-rb-muted { font-size: 12px; color: var(--dsh-mem-text-3); }",
 		    // ── 会话信息区（悬浮卡下半部）：分隔线 + 2×2 指标 + 状态行；纯静态 DOM，
-		    // 不进粒子层 rAF 循环，轮询数据到达才触发本组件小树 re-render ──
+		    // 不挂 rAF 循环，轮询数据到达才触发本组件小树 re-render ──
 		    ".dsh-mem-sinfo { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--dsh-mem-border); }",
 		    ".dsh-mem-sinfo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }",
 		    ".dsh-mem-sinfo-val { font-size: 13px; font-weight: 600; color: var(--dsh-mem-text-1); line-height: 18px; font-variant-numeric: tabular-nums; }",
