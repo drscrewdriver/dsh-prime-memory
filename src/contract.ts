@@ -966,6 +966,14 @@ export interface ConflictPairView {
   loser_id: string;
   loser_content: string;
   created_at: string;
+  // §C 三轴(conflict-3axis):胜/败双方的有效期与持续性,供人工裁决时对比。
+  // 可选且向后兼容——旧面板/客户端忽略新字段不报错。
+  winner_valid_from_ms?: number | null;
+  winner_valid_to_ms?: number | null;
+  winner_persistence?: string | null;
+  loser_valid_from_ms?: number | null;
+  loser_valid_to_ms?: number | null;
+  loser_persistence?: string | null;
 }
 
 /** `dsh-memory/conflicts` 请求(读待裁决队列)。 */

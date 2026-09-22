@@ -171,17 +171,38 @@ export function listConflictPairs(deps: ConflictListDeps, opts: { limit?: number
     ids.add(p.loserId);
   }
   const contentById = new Map<string, string>();
-  for (const r of deps.l1.getByIds([...ids])) contentById.set(r.id, r.content);
+  // §C 三轴(conflict-3axis):记忆记录自带有效期与持续性,取出来用于裁决视图对比。
+  const axisById = new Map<string, { validFrom: number | null; validTo: number | null; persistence: string | null }>();
+  for (const r of deps.l1.getByIds([...ids])) {
+    contentById.set(r.id, r.content);
+    axisById.set(r.id, {
+      validFrom: (r.validFrom ?? null) as number | null,
+      validTo: (r.validTo ?? null) as number | null,
+      persistence: (r.persistence ?? null) as string | null,
+    });
+  }
 
-  const items: ConflictPairView[] = pending.map((p) => ({
-    pair_id: p.pairId,
-    run_id: p.runId,
-    winner_id: p.winnerId,
-    winner_content: contentById.get(p.winnerId) ?? '',
-    loser_id: p.loserId,
-    loser_content: contentById.get(p.loserId) ?? '',
-    created_at: p.createdAt,
-  }));
+  const axisOf = (id: string) => axisById.get(id) ?? { validFrom: null, validTo: null, persistence: null };
+
+  const items: ConflictPairView[] = pending.map((p) => {
+    const w = axisOf(p.winnerId);
+    const l = axisOf(p.loserId);
+    return {
+      pair_id: p.pairId,
+      run_id: p.runId,
+      winner_id: p.winnerId,
+      winner_content: contentById.get(p.winnerId) ?? '',
+      loser_id: p.loserId,
+      loser_content: contentById.get(p.loserId) ?? '',
+      created_at: p.createdAt,
+      winner_valid_from_ms: w.validFrom,
+      winner_valid_to_ms: w.validTo,
+      winner_persistence: w.persistence,
+      loser_valid_from_ms: l.validFrom,
+      loser_valid_to_ms: l.validTo,
+      loser_persistence: l.persistence,
+    };
+  });
 
   return { enabled: true, total: deps.l1.countConflictPendingUnresolved(), items };
 }
@@ -191,13 +212,30 @@ export function renderConflicts(v: ConflictsView): string {
   if (!v.enabled) return v.notice ?? '矛盾冻结未开启:没有待裁决对。';
   if (v.items.length === 0) return '没有待裁决的冲突对(队列为空)。';
   const more = v.total > v.items.length ? `\n(共 ${v.total} 对,此处显示前 ${v.items.length} 对)` : '';
+  // §C 三轴(conflict-3axis):把有效期/持续性渲染成可读对比,帮人快速裁决。
+  const iso = (ms: number | null | undefined) => (ms == null ? '' : new Date(ms).toISOString().slice(0, 10));
+  const axisLine = (p: ConflictPairView, side: 'winner' | 'loser') => {
+    const vf = side === 'winner' ? p.winner_valid_from_ms : p.loser_valid_from_ms;
+    const vt = side === 'winner' ? p.winner_valid_to_ms : p.loser_valid_to_ms;
+    const ps = side === 'winner' ? p.winner_persistence : p.loser_persistence;
+    const parts: string[] = [];
+    const vfS = iso(vf);
+    const vtS = iso(vt);
+    if (vfS) parts.push(`有效期起 ${vfS}`);
+    if (vtS) parts.push(`有效期止 ${vtS}`);
+    if (ps) parts.push(`持续性 ${ps}`);
+    return parts.length ? `   三轴: ${parts.join(' / ')}` : '';
+  };
+
   const rows = v.items.map((p, i) => {
     const w = p.winner_content || '(该记录已不在检索库)';
     const l = p.loser_content || '(该记录已不在检索库)';
+    const wAxis = axisLine(p, 'winner');
+    const lAxis = axisLine(p, 'loser');
     return (
       `${i + 1}. pair_id ${p.pair_id}  (${p.created_at})\n` +
-      `   LLM 建议胜方 ${p.winner_id}:${w}\n` +
-      `   LLM 建议败方 ${p.loser_id}:${l}`
+      `   LLM 建议胜方 ${p.winner_id}:${w}${wAxis ? '\n' + wAxis : ''}\n` +
+      `   LLM 建议败方 ${p.loser_id}:${l}${lAxis ? '\n' + lAxis : ''}`
     );
   });
   return `待裁决冲突对 ${v.items.length} 条${more}\n\n${rows.join('\n\n')}\n\n` +
