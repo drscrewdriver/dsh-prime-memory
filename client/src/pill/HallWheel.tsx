@@ -4,8 +4,8 @@
  * 几何：八边形为**固定规则正八边形**（顶点半径恒定，无鼓起/无连续半径形变）。
  * 交互：拖动 = 在 8 个顶点间**离散换挡**（档位只能是整数 0-7，绝不停在边中），
  *       并可沿辐条**径向滑回中心**（智能档）——顶点 ↔ 中心互切。
- *   - 边正中 14° 死区 = 阻尼（档位被吸在原角，不抖动）；
- *   - 越过中点后 target 切到邻角；拖进中心圈（半径 INNER）则切到中心(智能)；
+ *   - 边中点仅留 3° 迟滞带（防边界抖动）；**过中点即换挡**（段落感）；
+ *   - 拖进中心圈（半径 INNER）则切到中心(智能)；
  *   - 蓝色激活块以纯阻尼缓动在「顶点 ↔ 中心」间滑动（无弹动/无过冲）。
  * 语义：点角 / 拖动松手 = 以该角为主题（会话级域锁定），其余角由服务端硬过滤抑制；
  *       点中心 / 向中心拖 = 回全域（智能档）。权重只与"停在哪个档位"有关。
@@ -25,7 +25,7 @@ const SIZE = 196;
 const CENTER = SIZE / 2;
 const R = 64; // 八边形顶点到中心（无鼓起、连续形变）
 const DRAG_SLOP = 4; // 位移小于它算点击（切换锁定），否则算拖动（换挡）
-const DEAD = 14 * (Math.PI / 180); // 边中点阻尼死区（度数 → 弧度）
+const DEAD = 3 * (Math.PI / 180); // 边中点迟滞带（只防边界抖动，须小——过大换挡会迟钝）
 const DEG = Math.PI / 180;
 const TAU = Math.PI * 2;
 
@@ -266,10 +266,11 @@ export function HallWheel(props: {
     dragTargetRef.current = null;
     setDrag(null);
     if (!moved) {
-      // 点击某角：切换该角锁定
+      // 点击某角：锁定该角。**不做反向取消**——点已选中的角原地保留，
+      // 回全域只走中心（避免"点一下松开又弹回去"的误触）。
       const id = di != null ? overview?.corners[di]?.id : undefined;
       if (!id) return;
-      props.onCommitHall(props.halls.includes(id) ? null : [id]);
+      if (!props.halls.includes(id)) props.onCommitHall([id]);
     } else if (dt == null) {
       // 拖到中心：回智能档（全域）
       if (props.halls.length !== 0) props.onCommitHall(null);
@@ -289,6 +290,10 @@ export function HallWheel(props: {
   const grayStyle: CSSProperties = isOff
     ? { opacity: 0.45, pointerEvents: 'none' as const }
     : {};
+
+  // 边界开关（未打标 / 跨域）在"智能档"下无意义（没有锁定的域）——**置灰而非卸载**：
+  // 卸载会改变浮层高度 → 切档时下方内容跳变（实测观感差）。置灰保留占位与高度。
+  const boundariesDisabled = props.halls.length === 0 || isOff;
 
   return (
     <div style={{ width: SIZE }}>
@@ -441,44 +446,44 @@ export function HallWheel(props: {
       </div>
 
       {/* ── 图形外：垂直堆叠以收敛宽度 ── */}
-      {/* 锁角时的边界开关（D1）：未打标默认包含 / 跨域 general 默认不含；off 时禁用 */}
-      {props.halls.length > 0 ? (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 6,
-            marginTop: 10,
-            opacity: isOff ? 0.45 : undefined,
-            pointerEvents: isOff ? 'none' : undefined,
-          }}
-        >
-          <span
-            style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}
-            title="锁定域时两类无角记忆是否参与召回"
-          >
-            {overview ? `另有 ${overview.unlabeled} 条未打标` : '未打标'}
-          </span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <Segmented
-              value={props.hallIncludeUnlabeled ? 'in' : 'ex'}
-              options={[
-                { key: 'in', label: '含未打标', title: '未打标记忆默认包含' },
-                { key: 'ex', label: '不含', title: '锁定域时排除未打标记忆' },
-              ]}
-              onChange={(key) => props.onCommitHallBoundaries({ includeUnlabeled: key === 'in' })}
-            />
-            <Segmented
-              value={props.hallIncludeGeneral ? 'in' : 'ex'}
-              options={[
-                { key: 'in', label: '含跨域', title: '跨域（general）兜底记忆也参与召回' },
-                { key: 'ex', label: '不含', title: '跨域与单主题相悖，默认不含' },
-              ]}
-              onChange={(key) => props.onCommitHallBoundaries({ includeGeneral: key === 'in' })}
-            />
-          </div>
+      {/* 锁角时的边界开关（D1）：未打标默认包含 / 跨域 general 默认不含。
+          智能档/off 时**置灰占位**（不卸载 → 浮层高度稳定、无跳变）。 */}
+      <div
+        title={
+          props.halls.length === 0 ? '选定某个角（单域）后，这两项才生效' : '锁定域时两类无角记忆是否参与召回'
+        }
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          marginTop: 10,
+          opacity: boundariesDisabled ? 0.45 : undefined,
+          filter: boundariesDisabled ? 'grayscale(1)' : undefined,
+          pointerEvents: boundariesDisabled ? 'none' : undefined,
+        }}
+      >
+        <span style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
+          {overview ? `另有 ${overview.unlabeled} 条未打标` : '未打标'}
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <Segmented
+            value={props.hallIncludeUnlabeled ? 'in' : 'ex'}
+            options={[
+              { key: 'in', label: '含未打标', title: '未打标记忆默认包含' },
+              { key: 'ex', label: '不含', title: '锁定域时排除未打标记忆' },
+            ]}
+            onChange={(key) => props.onCommitHallBoundaries({ includeUnlabeled: key === 'in' })}
+          />
+          <Segmented
+            value={props.hallIncludeGeneral ? 'in' : 'ex'}
+            options={[
+              { key: 'in', label: '含跨域', title: '跨域（general）兜底记忆也参与召回' },
+              { key: 'ex', label: '不含', title: '跨域与单主题相悖，默认不含' },
+            ]}
+            onChange={(key) => props.onCommitHallBoundaries({ includeGeneral: key === 'in' })}
+          />
         </div>
-      ) : null}
+      </div>
 
       {/* 会话闸：off = 本会话完全隐身 */}
       <Row label="会话">

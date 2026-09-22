@@ -4065,7 +4065,7 @@ var __defProp = Object.defineProperty;
 		var CENTER = SIZE / 2;
 		var R = 64;
 		var DRAG_SLOP = 4;
-		var DEAD = 14 * (Math.PI / 180);
+		var DEAD = 3 * (Math.PI / 180);
 		var DEG = Math.PI / 180;
 		var TAU = Math.PI * 2;
 		function cornerAngle(i) {
@@ -4247,7 +4247,7 @@ var __defProp = Object.defineProperty;
 		    if (!moved) {
 		      const id = di != null ? overview?.corners[di]?.id : void 0;
 		      if (!id) return;
-		      props.onCommitHall(props.halls.includes(id) ? null : [id]);
+		      if (!props.halls.includes(id)) props.onCommitHall([id]);
 		    } else if (dt == null) {
 		      if (props.halls.length !== 0) props.onCommitHall(null);
 		    } else {
@@ -4260,6 +4260,7 @@ var __defProp = Object.defineProperty;
 		    return `${p.left},${p.top}`;
 		  }).join(" ");
 		  const grayStyle = isOff ? { opacity: 0.45, pointerEvents: "none" } : {};
+		  const boundariesDisabled = props.halls.length === 0 || isOff;
 		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { style: { width: SIZE }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
 		      "div",
@@ -4409,26 +4410,21 @@ var __defProp = Object.defineProperty;
 		        ]
 		      }
 		    ),
-		    props.halls.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
 		      "div",
 		      {
+		        title: props.halls.length === 0 ? "选定某个角（单域）后，这两项才生效" : "锁定域时两类无角记忆是否参与召回",
 		        style: {
 		          display: "flex",
 		          flexDirection: "column",
 		          gap: 6,
 		          marginTop: 10,
-		          opacity: isOff ? 0.45 : void 0,
-		          pointerEvents: isOff ? "none" : void 0
+		          opacity: boundariesDisabled ? 0.45 : void 0,
+		          filter: boundariesDisabled ? "grayscale(1)" : void 0,
+		          pointerEvents: boundariesDisabled ? "none" : void 0
 		        },
 		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-		            "span",
-		            {
-		              style: { fontSize: 11, color: "var(--dsh-mem-text-3)" },
-		              title: "锁定域时两类无角记忆是否参与召回",
-		              children: overview ? `另有 ${overview.unlabeled} 条未打标` : "未打标"
-		            }
-		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: overview ? `另有 ${overview.unlabeled} 条未打标` : "未打标" }),
 		          /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
 		              Segmented,
@@ -4455,7 +4451,7 @@ var __defProp = Object.defineProperty;
 		          ] })
 		        ]
 		      }
-		    ) : null,
+		    ),
 		    /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(Row, { label: "会话", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
 		      Segmented,
 		      {
