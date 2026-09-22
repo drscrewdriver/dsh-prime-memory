@@ -55,7 +55,7 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'memoryMutate',
 ] as const;
 
-/** 端点全集(38 个;含 records-delete / 图谱两端点 / receipts / §C 冲突队列读写两端点 / ruminate 三端点 / 退场与快照五端点)。 */
+/** 端点全集(39 个;含 records-delete / 图谱两端点 / receipts / §C 冲突队列读写+丢弃留痕三端点 / ruminate 三端点 / 退场与快照五端点)。 */
 const ENDPOINTS = [
   'dsh-memory/stats',
   'dsh-memory/token-cost',
@@ -69,6 +69,7 @@ const ENDPOINTS = [
   'dsh-memory/receipts',
   'dsh-memory/conflicts',
   'dsh-memory/conflict-resolve',
+  'dsh-memory/conflicts-rejected',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
@@ -112,9 +113,9 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 38 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(38);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(38);
+  it('exposes exactly the 39 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(39);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(39);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {

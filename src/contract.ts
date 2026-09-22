@@ -1026,6 +1026,33 @@ export interface ConflictResolveResponse {
   notice?: string;
 }
 
+// ── §C 丢弃留痕 ──
+
+/** 一条被丢弃的冲突决策(task_1.1: LLM 输出不满足 pair 格式、已被记录为"不合法")。 */
+export interface ConflictRejectedView {
+  reject_id: string;
+  run_id: string;
+  record_id: string;
+  winner_raw: string;
+  loser_raw: string;
+  reason: string;
+  created_at: string;
+}
+
+/** `dsh-memory/conflicts-rejected` 请求。 */
+export interface ConflictRejectedRequest {
+  /** 最多返回多少条(默认 50,上限 200)。 */
+  limit?: number;
+  /** 排他上界:created_at < 此值的记录(ISO);不给则从最新开始。 */
+  created_before?: string;
+}
+
+/** `dsh-memory/conflicts-rejected` 响应。 */
+export interface ConflictRejectedResponse {
+  items: ConflictRejectedView[];
+  notice?: string;
+}
+
 // ── §B 决策凭证回溯 ──
 
 /** `dsh-memory/receipts` 请求(两维回溯,至少给一个)。 */
@@ -1069,6 +1096,7 @@ export interface DshMemoryRequestMap {
   'dsh-memory/receipts': ReceiptsRequest;
   'dsh-memory/conflicts': ConflictsRequest;
   'dsh-memory/conflict-resolve': ConflictResolveRequest;
+  'dsh-memory/conflicts-rejected': ConflictRejectedRequest;
   'dsh-memory/graph-search': GraphSearchRequest;
   'dsh-memory/graph-node-get': GraphNodeGetRequest;
   'dsh-memory/scenes': Record<string, never>;
@@ -1110,6 +1138,7 @@ export interface DshMemoryResponseMap {
   'dsh-memory/receipts': ReceiptsResponse;
   'dsh-memory/conflicts': ConflictsResponse;
   'dsh-memory/conflict-resolve': ConflictResolveResponse;
+  'dsh-memory/conflicts-rejected': ConflictRejectedResponse;
   'dsh-memory/graph-search': GraphSearchResponse;
   'dsh-memory/graph-node-get': GraphNodeGetResponse;
   'dsh-memory/scenes': ScenesResponse;

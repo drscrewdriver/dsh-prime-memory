@@ -112,7 +112,7 @@ describe('memory tools', () => {
     // 早就写着"待裁决对可用 memory_conflicts 查看",而那个工具**一直不存在** ——
     // 模型照着描述调用只会拿到"工具不存在"。本次补上读出口,故在此登记。
     expect(h.registered.map((t) => t.name).sort()).toEqual([
-      'conversation_search', 'memory_add', 'memory_conflicts', 'memory_delete', 'memory_expand_graph_node', 'memory_import', 'memory_read_scene', 'memory_receipts', 'memory_resolve_conflict', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
+      'conversation_search', 'memory_add', 'memory_conflicts', 'memory_conflicts_rejected', 'memory_delete', 'memory_expand_graph_node', 'memory_import', 'memory_read_scene', 'memory_receipts', 'memory_resolve_conflict', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
     ]);
     stores.db.close();
   });

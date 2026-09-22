@@ -79,6 +79,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/receipts',
   'dsh-memory/conflicts',
   'dsh-memory/conflict-resolve',
+  'dsh-memory/conflicts-rejected',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
@@ -923,6 +924,26 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         pairId,
         outcome,
       );
+    }
+
+    // ── §C 丢弃留痕:被 LLM 输出不合法的冲突决策记录(task_1.1) ──
+    // 与 `dsh-memory/conflicts` 同模式:读方向,不涉及裁决。
+    case 'dsh-memory/conflicts-rejected': {
+      const p = (payload ?? {}) as { limit?: unknown; created_before?: unknown };
+      const limit = typeof p.limit === 'number' ? p.limit : undefined;
+      const createdBefore = typeof p.created_before === 'string' ? p.created_before : undefined;
+      const items = stores.l1.listConflictRejected({ limit, createdBefore });
+      return {
+        items: items.map((r) => ({
+          reject_id: r.rejectId,
+          run_id: r.runId,
+          record_id: r.recordId,
+          winner_raw: r.winnerRaw,
+          loser_raw: r.loserRaw,
+          reason: r.reason,
+          created_at: r.createdAt,
+        })),
+      };
     }
 
     case 'dsh-memory/records-delete': {
