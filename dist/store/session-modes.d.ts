@@ -42,12 +42,9 @@ export declare class SessionModeStore {
         includeUnlabeled: boolean;
         includeGeneral: boolean;
     };
-    /** 会话级域权重(拖动角点产物):角 id → 权重。未拖过任何角 = 空对象(无偏置)。 */
-    getHallWeights(sessionId: string): Record<string, number>;
-    /** 设置会话级域权重(全量替换;null/空 = 清除偏置回中性。写穿持久化)。
-     *  与锁域/注入/档位正交:此处不动 hall/halls/recall/mode。 */
-    setHallWeights(sessionId: string, weights: Record<string, number> | null | undefined): void;
-    /** 设置会话级域锁定(多选:角 id 数组;空数组/undefined = 回中心清除锁定。写穿持久化)。
+    /** 设置会话级域锁定(多选:角 id 数组;`[]` = 明确回中心清除锁定。写穿持久化)。
+     *  **`undefined` = 本轮不动锁域**(例如只更新边界开关,见 stats.ts)——不再把"没传"
+     *  误当"回中心",否则只切边界开关会把已锁定的域悄悄清掉。
      *  单角时镜像写 `hall` 兼容键,多角时置空(旧读者按无锁域读)。 */
     setHall(sessionId: string, halls: readonly string[] | undefined, boundaries?: {
         includeUnlabeled?: boolean;

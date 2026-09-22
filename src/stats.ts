@@ -545,7 +545,6 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
         hallIncludeGeneral: bounds.includeGeneral,
-        hallWeights: modes.getHallWeights(sessionId),
       };
       return v;
     }
@@ -560,7 +559,6 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         halls?: readonly string[] | null;
         hallIncludeUnlabeled?: boolean;
         hallIncludeGeneral?: boolean;
-        hallWeights?: Record<string, number> | null;
       };
       const sessionId = expectSessionId(p.sessionId);
       const allowed: MemoryMode[] = ['auto', 'chat', 'work', 'off'];
@@ -596,25 +594,20 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         p.hallIncludeUnlabeled !== undefined ||
         p.hallIncludeGeneral !== undefined
       ) {
-        // 多选优先;单值 hall 归一成单元素数组;显式 null/空数组 = 回中心
+        // hall/halls 都没传 = 只改边界开关 → 传 undefined，由 store 保留现锁域
+        //（旧写法在这条分支算出 undefined 并在 store 侧被当"回中心"，会静默清掉锁定）
         const nextHalls =
-          p.halls === null || p.hall === null
-            ? []
-            : p.halls !== undefined
-              ? p.halls
-              : p.hall !== undefined
-                ? [p.hall]
-                : undefined;
+          p.hall === undefined && p.halls === undefined
+            ? undefined
+            : p.halls === null || p.hall === null
+              ? []
+              : p.halls !== undefined
+                ? p.halls
+                : [p.hall as string];
         modes.setHall(sessionId, nextHalls, {
           includeUnlabeled: p.hallIncludeUnlabeled,
           includeGeneral: p.hallIncludeGeneral,
         });
-      }
-      // 域权重(拖动角点)可选同车:全量替换;显式 null/空对象 = 清除偏置回中性;
-      // 缺省 = 不动。只认 8 角 id 且 clamp 到 [0,1.5](非法 id 由 store 侧丢弃,
-      // 不整体拒绝——拖动是高频交互,不该因一个脏键让整次提交失败)
-      if (p.hallWeights !== undefined) {
-        modes.setHallWeights(sessionId, p.hallWeights);
       }
       deps.logger.info(
         `[memory] 会话档位设置 session=${sessionId} mode=${p.mode} recall=${JSON.stringify(modes.getRecall(sessionId) ?? null)} hall=${JSON.stringify(modes.getHall(sessionId) ?? null)}`,
@@ -631,7 +624,6 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
         hallIncludeGeneral: bounds.includeGeneral,
-        hallWeights: modes.getHallWeights(sessionId),
       };
       return v;
     }

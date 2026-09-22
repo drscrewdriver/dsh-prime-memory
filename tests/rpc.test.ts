@@ -236,8 +236,6 @@ describe('rpc: session mode endpoints', () => {
       halls: [],
       hallIncludeUnlabeled: true,
       hallIncludeGeneral: false,
-      // 未拖过任何角 = 空权重表(无用户偏置)
-      hallWeights: {},
     });
     // 显式 null 清除覆盖
     const cleared = await h.call('dsh-memory/session-mode-set', { sessionId: 's1', mode: 'auto', recall: null }) as { recall: null; recallResolved: boolean };
