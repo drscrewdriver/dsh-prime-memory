@@ -30,8 +30,15 @@ let dir: string;
 let db: MemoryDb;
 let store: L1Store;
 
-const WS_A = 'e:\\proj\\a';
-const WS_B = 'e:\\proj\\b';
+/**
+ * 工作区 fixture 必须是**当前平台 `path.resolve` 语义下的绝对路径**：这两个 id 会被原样写进
+ * 库（`upsertL1Batch` 不做归一），而查询侧会经 `normalizeWorkspacePath` 归一（`path.resolve`
+ * 恒用进程平台规则）。在 Linux runner 上 `e:\proj\a` 不是绝对路径，会被拼成
+ * `/cwd/e:\proj\a`，与库里的原值失配——于是"本工作区记录可见"恒假，隔离用例全红。
+ */
+const IS_WIN = process.platform === 'win32';
+const WS_A = IS_WIN ? 'e:\\proj\\a' : '/proj/a';
+const WS_B = IS_WIN ? 'e:\\proj\\b' : '/proj/b';
 
 /** 四条记录覆盖 ③ 里需要的全部组合。内容同含 `alpha`，保证 FTS 都能命中。 */
 function rec(id: string, family: MemoryFamily, scope: MemoryScope, wsId: string): MemoryRecord {
