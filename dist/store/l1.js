@@ -123,6 +123,18 @@ export class L1Store {
         return this.db.recordConflictPending(rows);
     }
     /**
+     * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策(薄包装)。
+     * 与 `recordConflictPending` 同层同理由:管线已持有 L1Store,不新增构造参数;
+     * 同时它是「留痕写失败不得中断蒸馏」可注入的测试缝。
+     */
+    recordConflictRejected(rows) {
+        return this.db.recordConflictRejected(rows);
+    }
+    /** §C 读取丢弃留痕(为审计/诊断出口预留;薄包装)。 */
+    listConflictRejected(opts = {}) {
+        return this.db.listConflictRejected(opts);
+    }
+    /**
      * §C 冻结的图谱侧同步:把 `disputed` 状态重算到给定冲突集(命中标记 / 不再命中复原)。
      * 经 store 而非直取 `db.graphStore`,与图谱路 provider 的注入式设计同一理由
      * (见本文件头部注释):图谱是**可选**的派生投影,开关关闭时必须是 no-op。

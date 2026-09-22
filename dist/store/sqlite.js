@@ -359,6 +359,22 @@ export class MemoryDb {
         // 都只关心未裁决行——"查未裁决"须走索引。偏索引同时覆盖 created_at 排序。
         this.db.exec(`CREATE INDEX IF NOT EXISTS idx_conflict_pending_unresolved
          ON conflict_pending(created_at) WHERE resolved_at = ''`);
+        // ── §C 丢弃留痕(DDL 同为磁盘契约) ──
+        // 此前「conflict 决策配不成对」**完全静默**:既不停放也不落库,只在日志里留一行 warn,
+        // 于是"模型明确说了判不了、而这一跳没接住"在库里查不到(§C 的可审计性依赖能回看)。
+        // 本表**只追加、不改写**;不进 l1-snapshot 的哈希投影(见 task_2.8)。
+        this.db.exec(`
+      CREATE TABLE IF NOT EXISTS conflict_rejected (
+        reject_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL DEFAULT '',
+        record_id TEXT NOT NULL DEFAULT '',
+        winner_raw TEXT NOT NULL DEFAULT '',
+        loser_raw TEXT NOT NULL DEFAULT '',
+        reason TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT ''
+      )
+    `);
+        this.db.exec(`CREATE INDEX IF NOT EXISTS idx_conflict_rejected_created ON conflict_rejected(created_at)`);
         this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
         record_id, content, type, priority, scene_name, session_id, version,
@@ -1184,6 +1200,49 @@ export class MemoryDb {
         return Number(stmt.run(resolvedAt, resolution, pairId).changes);
     }
     /**
+     * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策。
+     *
+     * `INSERT OR IGNORE` + 主键 `reject_id` ⇒ 同一决策重复登记只留一行
+     * (与 {@link recordConflictPending} 同款幂等,幂等来自主键而非调用方自觉)。
+     *
+     * @returns 实际新插入的行数。
+     */
+    recordConflictRejected(rows) {
+        if (this.degraded || rows.length === 0)
+            return 0;
+        const stmt = this.db.prepare(`INSERT OR IGNORE INTO conflict_rejected
+         (reject_id, run_id, record_id, winner_raw, loser_raw, reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`);
+        let n = 0;
+        for (const r of rows) {
+            n += Number(stmt.run(r.rejectId, r.runId, r.recordId, r.winnerRaw, r.loserRaw, r.reason, r.createdAt).changes);
+        }
+        return n;
+    }
+    /**
+     * §C 读取丢弃留痕(为审计/诊断出口预留)。
+     *
+     * `createdBefore` 为**排他上界**(ISO 串);定序 `created_at ASC, reject_id ASC`
+     * —— 先来先服务且同一毫秒内确定可复现(与 {@link listConflictPending} 同口径)。
+     */
+    listConflictRejected(opts = {}) {
+        if (this.degraded)
+            return [];
+        const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.floor(opts.limit) : 200;
+        const params = [];
+        let where = `1 = 1`;
+        if (opts.createdBefore) {
+            where += ` AND created_at < ?`;
+            params.push(opts.createdBefore);
+        }
+        const rows = this.db
+            .prepare(`SELECT reject_id, run_id, record_id, winner_raw, loser_raw, reason, created_at
+           FROM conflict_rejected WHERE ${where}
+          ORDER BY created_at ASC, reject_id ASC LIMIT ?`)
+            .all(...params, limit);
+        return rows.map(toConflictRejected);
+    }
+    /**
      * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
      * 返回被删除的行数。
      *
@@ -1933,6 +1992,18 @@ function toConflictPair(r) {
         createdAt: String(r.created_at ?? ''),
         resolvedAt: String(r.resolved_at ?? ''),
         resolution: String(r.resolution ?? ''),
+    };
+}
+/** `conflict_rejected` 行 → {@link ConflictRejected}(snake_case 只活在这一层)。 */
+function toConflictRejected(r) {
+    return {
+        rejectId: String(r.reject_id ?? ''),
+        runId: String(r.run_id ?? ''),
+        recordId: String(r.record_id ?? ''),
+        winnerRaw: String(r.winner_raw ?? ''),
+        loserRaw: String(r.loser_raw ?? ''),
+        reason: (String(r.reason ?? '') || 'not-pair'),
+        createdAt: String(r.created_at ?? ''),
     };
 }
 /** epoch 数组 → {逗号连接 ISO, 首尾 ISO}(磁盘格式契约:逗号连接、升序、ISO)。 */ function timestampsToDb(ts) {

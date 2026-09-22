@@ -28,6 +28,45 @@ export function conflictPairId(runId: string, winnerId: string, loserId: string)
   return inputDigest([CONFLICT_FORMAT, runId, winnerId, loserId]);
 }
 
+/** 丢弃留痕的格式版本(进 `reject_id` 的摘要输入,算法演进时不静默混同新旧 id)。 */
+export const REJECT_FORMAT = 'c-conflict-rejected/v1';
+
+/**
+ * 丢弃原因。当前**只有**一种:`validateConflictPair` 返回 `null`(配不成对)。
+ *
+ * 曾并列的 `'freeze-off'` 已删除:关闭态**不落痕**(结构性不可达),该取值永不写入,
+ * 留着它就是一条会误导读者的死枚举(审计 S2)。
+ */
+export type ConflictRejectReason = 'not-pair';
+
+/**
+ * 丢弃留痕的稳定 id。
+ *
+ * 幂等来自**主键**而非调用方自觉(与 `conflictPairId` 同款手法、同一哈希)。
+ * 输入**刻意不含 `reason`**:同一条决策被丢的原因可能随代码演进改变,但
+ * 「哪一条决策被丢了」是同一件事——含 reason 会让同一条决策在演进后落成两行,
+ * 审计看到的是重复的债。
+ */
+export function conflictRejectId(runId: string, recordId: string, winner: unknown, loser: unknown): string {
+  return inputDigest([REJECT_FORMAT, runId, recordId, String(winner), String(loser)]);
+}
+
+/**
+ * 一条被丢弃的 conflict 决策(`conflict_rejected` 表一行)。
+ *
+ * 存的是 LLM 的**原始输出**(`winnerRaw` / `loserRaw`):被丢的决策往往正是
+ * 因为那两个值不合法,存规范化后的值会把「为什么被丢」这件事抹掉。
+ */
+export interface ConflictRejected {
+  rejectId: string;
+  runId: string;
+  recordId: string;
+  winnerRaw: string;
+  loserRaw: string;
+  reason: ConflictRejectReason;
+  createdAt: string;
+}
+
 /**
  * 裁决结论。
  * - `winner` / `loser`:人工判定哪一方为真(另一方从检索库退场);

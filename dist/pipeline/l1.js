@@ -9,7 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import { callLLM, parseJsonLogged, resolveLayerTokens } from '../llm.js';
 import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipts.js';
-import { buildConflictPair, validateConflictPair } from '../store/conflicts.js';
+import { buildConflictPair, conflictRejectId, validateConflictPair } from '../store/conflicts.js';
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
@@ -290,6 +290,12 @@ anchorMap) {
     const added = [];
     /** §C 本轮新冻结的冲突对(应用完新增记录后统一落盘)。 */
     const frozen = [];
+    /**
+     * §C 本轮被**丢弃**的 conflict 决策(配不成对,见 task_1.4)。
+     * 关闭态恒为空:收集处有 `freezeEnabled` 前置守卫 ⇒ 结构性不可达,
+     * 不是"落了但读不到"。
+     */
+    const rejected = [];
     const now = Date.now();
     for (const m of extracted) {
         const decision = byRecord.get(m.record_id);
@@ -344,6 +350,21 @@ anchorMap) {
                 logger.warn(`[memory] 矛盾冻结:第 ${m.record_id} 条的 conflict 决策无法构成冻结对` +
                     `(winner=${String(decision.winner)} loser=${String(decision.loser)}),已回落 store`);
                 added.push(toStoreRecord(m, now, ts, anchorMap));
+                // §C 丢弃留痕(task_1.4):这一跳此前**完全静默**——模型明确说了"判不了",
+                // 而它既不停放、也不落库,只在日志留一行 warn,事后在库里查不到。
+                // **关闭态不落痕**:关闭时 prompt 里根本没有 conflict 动作,模型凭惯性输出它
+                // 属无关噪声,落痕只会把默认关闭的库灌满无效行。
+                if (freezeEnabled) {
+                    rejected.push({
+                        rejectId: conflictRejectId(runId, m.record_id, decision.winner, decision.loser),
+                        runId,
+                        recordId: m.record_id,
+                        winnerRaw: decision.winner === undefined ? '' : String(decision.winner),
+                        loserRaw: decision.loser === undefined ? '' : String(decision.loser),
+                        reason: 'not-pair',
+                        createdAt: new Date(now).toISOString(),
+                    });
+                }
             }
             continue;
         }
@@ -432,6 +453,18 @@ anchorMap) {
             logger.warn(`[memory] 矛盾冻结:图谱 disputed 同步失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
         }
         logger.info(`[memory] 矛盾冻结:本轮停放 ${frozen.length} 对待人工裁决(run_id=${runId})`);
+    }
+    // ── §C 丢弃留痕落盘(与冻结对同策略:记 warn、不中断蒸馏) ──
+    // 留痕是**旁路设施**:它无权打断一轮蒸馏,但也不能静默失败——
+    // 「丢弃本身就是我们要审计的事」,连留痕都丢了就必须在日志里说出来。
+    if (rejected.length > 0) {
+        try {
+            store.recordConflictRejected(rejected);
+            logger.info(`[memory] 矛盾冻结:${rejected.length} 条 conflict 决策配不成对,已留痕(conflict_rejected,run_id=${runId})`);
+        }
+        catch (err) {
+            logger.warn(`[memory] 矛盾冻结:${rejected.length} 条丢弃留痕落盘失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
     // 状态按记录族分桶推进(阈值计数各自独立)
     const addedByFamily = { chat: 0, work: 0 };

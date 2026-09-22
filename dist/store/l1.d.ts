@@ -1,7 +1,7 @@
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
-import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { ConflictPair, ConflictRejected, ConflictResolution } from './conflicts.js';
 import { type SupersedeInfo } from './supersede.js';
 import { type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { type EmbeddingService } from './embedding.js';
@@ -95,6 +95,17 @@ export declare class L1Store {
      * 无需新增构造参数;同时它是「冻结写失败不得中断蒸馏」可注入的测试缝。
      */
     recordConflictPending(rows: readonly ConflictPair[]): number;
+    /**
+     * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策(薄包装)。
+     * 与 `recordConflictPending` 同层同理由:管线已持有 L1Store,不新增构造参数;
+     * 同时它是「留痕写失败不得中断蒸馏」可注入的测试缝。
+     */
+    recordConflictRejected(rows: readonly ConflictRejected[]): number;
+    /** §C 读取丢弃留痕(为审计/诊断出口预留;薄包装)。 */
+    listConflictRejected(opts?: {
+        createdBefore?: string;
+        limit?: number;
+    }): ConflictRejected[];
     /**
      * §C 冻结的图谱侧同步:把 `disputed` 状态重算到给定冲突集(命中标记 / 不再命中复原)。
      * 经 store 而非直取 `db.graphStore`,与图谱路 provider 的注入式设计同一理由

@@ -13,7 +13,7 @@ import { familyForType, isScopeVisible } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import { graphHitRecordIds } from '../graph/search.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
-import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { ConflictPair, ConflictRejected, ConflictResolution } from './conflicts.js';
 import { isRetired, type SupersedeInfo } from './supersede.js';
 import { exportThenPurge, readSnapshotManifest, readSnapshotRecords, restoreL1Snapshot, selectSnapshotTargets, snapshotDirFor, listSnapshots as listSnapshotsIn, type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { EmbedHelper, NoopEmbeddingService, type EmbeddingService } from './embedding.js';
@@ -188,6 +188,20 @@ export class L1Store {
    */
   recordConflictPending(rows: readonly ConflictPair[]): number {
     return this.db.recordConflictPending(rows);
+  }
+
+  /**
+   * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策(薄包装)。
+   * 与 `recordConflictPending` 同层同理由:管线已持有 L1Store,不新增构造参数;
+   * 同时它是「留痕写失败不得中断蒸馏」可注入的测试缝。
+   */
+  recordConflictRejected(rows: readonly ConflictRejected[]): number {
+    return this.db.recordConflictRejected(rows);
+  }
+
+  /** §C 读取丢弃留痕(为审计/诊断出口预留;薄包装)。 */
+  listConflictRejected(opts: { createdBefore?: string; limit?: number } = {}): ConflictRejected[] {
+    return this.db.listConflictRejected(opts);
   }
 
   /**

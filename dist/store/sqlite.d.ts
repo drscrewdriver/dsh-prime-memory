@@ -16,7 +16,7 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
-import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { ConflictPair, ConflictRejected, ConflictResolution } from './conflicts.js';
 import { type SupersedeInfo } from './supersede.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
@@ -260,6 +260,25 @@ export declare class MemoryDb {
      * @returns 受影响行数(0 = 该对被裁决过或不存在)。
      */
     resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;
+    /**
+     * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策。
+     *
+     * `INSERT OR IGNORE` + 主键 `reject_id` ⇒ 同一决策重复登记只留一行
+     * (与 {@link recordConflictPending} 同款幂等,幂等来自主键而非调用方自觉)。
+     *
+     * @returns 实际新插入的行数。
+     */
+    recordConflictRejected(rows: readonly ConflictRejected[]): number;
+    /**
+     * §C 读取丢弃留痕(为审计/诊断出口预留)。
+     *
+     * `createdBefore` 为**排他上界**(ISO 串);定序 `created_at ASC, reject_id ASC`
+     * —— 先来先服务且同一毫秒内确定可复现(与 {@link listConflictPending} 同口径)。
+     */
+    listConflictRejected(opts?: {
+        createdBefore?: string;
+        limit?: number;
+    }): ConflictRejected[];
     /**
      * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
      * 返回被删除的行数。

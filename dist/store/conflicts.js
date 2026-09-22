@@ -25,6 +25,19 @@ export const CONFLICT_FORMAT = 'c-conflict-pending/v1';
 export function conflictPairId(runId, winnerId, loserId) {
     return inputDigest([CONFLICT_FORMAT, runId, winnerId, loserId]);
 }
+/** 丢弃留痕的格式版本(进 `reject_id` 的摘要输入,算法演进时不静默混同新旧 id)。 */
+export const REJECT_FORMAT = 'c-conflict-rejected/v1';
+/**
+ * 丢弃留痕的稳定 id。
+ *
+ * 幂等来自**主键**而非调用方自觉(与 `conflictPairId` 同款手法、同一哈希)。
+ * 输入**刻意不含 `reason`**:同一条决策被丢的原因可能随代码演进改变,但
+ * 「哪一条决策被丢了」是同一件事——含 reason 会让同一条决策在演进后落成两行,
+ * 审计看到的是重复的债。
+ */
+export function conflictRejectId(runId, recordId, winner, loser) {
+    return inputDigest([REJECT_FORMAT, runId, recordId, String(winner), String(loser)]);
+}
 /** 未裁决时 `resolved_at` / `resolution` 的取值(空串,不用 NULL)。 */
 export const CONFLICT_UNRESOLVED = '';
 /** 由输入构造一行待裁决冲突对(未裁决态)。纯函数,无 I/O。 */
