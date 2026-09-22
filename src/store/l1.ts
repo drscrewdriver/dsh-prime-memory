@@ -205,6 +205,17 @@ export class L1Store {
   }
 
   /**
+   * §C Phase 2(task_2.0):写入「已复看」痕迹(薄包装)。
+   * **不写 `resolved_at`** —— `defer` 不是裁决结论,该对必须留在待裁决队列里。
+   */
+  markConflictReviewed(
+    pairId: string,
+    next: { reviewedAt: string; deferredAt: string; deferCount: number },
+  ): number {
+    return this.db.markConflictReviewed(pairId, next);
+  }
+
+  /**
    * §C 冻结的图谱侧同步:把 `disputed` 状态重算到给定冲突集(命中标记 / 不再命中复原)。
    * 经 store 而非直取 `db.graphStore`,与图谱路 provider 的注入式设计同一理由
    * (见本文件头部注释):图谱是**可选**的派生投影,开关关闭时必须是 no-op。

@@ -252,6 +252,23 @@ export declare class MemoryDb {
         limit?: number;
     }): ConflictPair[];
     /**
+     * §C Phase 2(task_2.0):写入「已复看」痕迹——**不写 `resolved_at`**。
+     *
+     * `defer`(看过、暂不裁决)不是裁决结论,故它**不能**碰 `resolved_at` / `resolution`:
+     * 那两列一旦写上,该对就退出待裁决队列了,而 `defer` 的语义恰恰是
+     * 「还在队列里,只是我看过了」。这是 R1 与 R2 的分界(审计 N1)。
+     *
+     * `WHERE pair_id = ? AND resolved_at = ''` 保证**已裁决的对不被写回**
+     * ——与 {@link resolveConflictPending} 同款的单向性。
+     *
+     * @returns 受影响行数(0 = 该对已裁决或不存在)。
+     */
+    markConflictReviewed(pairId: string, next: {
+        reviewedAt: string;
+        deferredAt: string;
+        deferCount: number;
+    }): number;
+    /**
      * §C 打上裁决结论。
      *
      * `WHERE resolved_at = ''` 使**已裁决的不会被覆盖**:裁决是一次性的判定行为,

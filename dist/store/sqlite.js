@@ -375,6 +375,22 @@ export class MemoryDb {
       )
     `);
         this.db.exec(`CREATE INDEX IF NOT EXISTS idx_conflict_rejected_created ON conflict_rejected(created_at)`);
+        // ── §C Phase 2(task_2.1):conflict_pending 加"未决态"三列 ──
+        // 三列承载 R1:`reviewed_at` 区分"没看"与"看了没判",`deferred_at` 是**超时基准的重置点**
+        // (见 task_2.3:超时看 `deferred_at ?? created_at`,`defer` 重置计时而非豁免计时),
+        // `defer_count` 是复看次数(上限 3,fail-loud)。
+        // 必须走 ALTER:`CREATE TABLE IF NOT EXISTS` 对**已存在**的表不会补列;
+        // 而 ALTER 重复执行会报错,故先用 `PRAGMA table_info` 判存在 ⇒ 迁移可重复执行。
+        const conflictCols = new Set(this.db.prepare('PRAGMA table_info(conflict_pending)').all().map((r) => String(r.name ?? '')));
+        if (!conflictCols.has('reviewed_at')) {
+            this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN reviewed_at TEXT NOT NULL DEFAULT ''`);
+        }
+        if (!conflictCols.has('deferred_at')) {
+            this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN deferred_at TEXT NOT NULL DEFAULT ''`);
+        }
+        if (!conflictCols.has('defer_count')) {
+            this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN defer_count INTEGER NOT NULL DEFAULT 0`);
+        }
         this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
         record_id, content, type, priority, scene_name, session_id, version,
@@ -1178,11 +1194,31 @@ export class MemoryDb {
             params.push(opts.createdBefore);
         }
         const rows = this.db
-            .prepare(`SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution
+            .prepare(`SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution,
+                reviewed_at, deferred_at, defer_count
            FROM conflict_pending WHERE ${where}
           ORDER BY created_at ASC, pair_id ASC LIMIT ?`)
             .all(...params, limit);
         return rows.map(toConflictPair);
+    }
+    /**
+     * §C Phase 2(task_2.0):写入「已复看」痕迹——**不写 `resolved_at`**。
+     *
+     * `defer`(看过、暂不裁决)不是裁决结论,故它**不能**碰 `resolved_at` / `resolution`:
+     * 那两列一旦写上,该对就退出待裁决队列了,而 `defer` 的语义恰恰是
+     * 「还在队列里,只是我看过了」。这是 R1 与 R2 的分界(审计 N1)。
+     *
+     * `WHERE pair_id = ? AND resolved_at = ''` 保证**已裁决的对不被写回**
+     * ——与 {@link resolveConflictPending} 同款的单向性。
+     *
+     * @returns 受影响行数(0 = 该对已裁决或不存在)。
+     */
+    markConflictReviewed(pairId, next) {
+        if (this.degraded)
+            return 0;
+        const stmt = this.db.prepare(`UPDATE conflict_pending SET reviewed_at = ?, deferred_at = ?, defer_count = ?
+        WHERE pair_id = ? AND resolved_at = ''`);
+        return Number(stmt.run(next.reviewedAt, next.deferredAt, next.deferCount, pairId).changes);
     }
     /**
      * §C 打上裁决结论。
@@ -1992,6 +2028,11 @@ function toConflictPair(r) {
         createdAt: String(r.created_at ?? ''),
         resolvedAt: String(r.resolved_at ?? ''),
         resolution: String(r.resolution ?? ''),
+        // Phase 2 新增列(task_2.0):**只做读取投影,不进快照哈希**
+        // (哈希走 l1-snapshot.ts 的 projectConflictsForHash 列投影,见 task_2.8)
+        reviewedAt: String(r.reviewed_at ?? ''),
+        deferredAt: String(r.deferred_at ?? ''),
+        deferCount: Number(r.defer_count ?? 0),
     };
 }
 /** `conflict_rejected` 行 → {@link ConflictRejected}(snake_case 只活在这一层)。 */

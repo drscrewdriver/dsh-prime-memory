@@ -19,6 +19,7 @@ import {
   hashJson,
   hashRecords,
   listAllL1,
+  projectConflictsForHash,
   readSnapshotManifest,
   readSnapshotRecords,
   restoreL1Snapshot,
@@ -317,7 +318,12 @@ describe('快照 conflicts 段的 golden 锚(task_2.0a)', () => {
 
       const listed = db.listConflictPending({ limit: 100 });
       expect(listed, '哈希输入只含未裁决行').toHaveLength(2);
-      expect(hashJson(listed)).toBe(GOLDEN_CONFLICTS_HASH);
+      // 升级后**原始列出**已含 Phase 2 新列 ⇒ 其哈希**不再**等于常量;
+      // 这正是列投影存在的理由(task_2.8):旧 manifest 存的是它自己那份 7 字段输入。
+      expect(hashJson(listed), '原始列出已变——投影的必要性正在于此').not.toBe(GOLDEN_CONFLICTS_HASH);
+      expect(hashJson(projectConflictsForHash(listed)), '列投影必须回到升级前的哈希输入').toBe(
+        GOLDEN_CONFLICTS_HASH,
+      );
 
       const snap = await createL1Snapshot(db, join(dir, 'snap'), 'golden', new Date('2026-09-17T00:00:00.000Z'));
       expect(snap.manifest.sections.conflicts.count).toBe(2);
@@ -325,6 +331,46 @@ describe('快照 conflicts 段的 golden 锚(task_2.0a)', () => {
 
       // 同一夹具下 verifySnapshot 必须 ok(升级前后都不得因"内容与快照不一致"而中止恢复)
       await expect(verifySnapshot(db, snap.dir)).resolves.toEqual({ ok: true, diffs: [] });
+    });
+  });
+
+  it('列投影与「升级前 7 字段显式字面量」逐字节相等(task_2.0a Step 2)', async () => {
+    await withDb('conflicts-projection', async (db) => {
+      db.recordConflictPending(CONFLICTS_GOLDEN_FIXTURE);
+      const listed = db.listConflictPending({ limit: 100 });
+
+      // 显式字面量(刻意**不用解构**):解构会与投影实现同形,等于自证。
+      const explicit7 = listed.map((p) => ({
+        pairId: p.pairId,
+        runId: p.runId,
+        winnerId: p.winnerId,
+        loserId: p.loserId,
+        createdAt: p.createdAt,
+        resolvedAt: p.resolvedAt,
+        resolution: p.resolution,
+      }));
+      expect(hashJson(explicit7), '显式 7 字段必须等于升级前常量').toBe(GOLDEN_CONFLICTS_HASH);
+      expect(hashJson(projectConflictsForHash(listed)), '列投影必须等于升级前常量').toBe(
+        GOLDEN_CONFLICTS_HASH,
+      );
+
+      // 键序也要钉住:`JSON.stringify` 保序,故"语义相同但键序不同"同样是失配。
+      expect(Object.keys(projectConflictsForHash(listed)[0]!)).toEqual([
+        'pairId',
+        'runId',
+        'winnerId',
+        'loserId',
+        'createdAt',
+        'resolvedAt',
+        'resolution',
+      ]);
+
+      // 新列确实进了**读取投影**(否则 task_2.3 / task_3.4 无从实施),但**不进**哈希输入
+      const first = listed[0]!;
+      expect(first).toHaveProperty('reviewedAt');
+      expect(first).toHaveProperty('deferredAt');
+      expect(first).toHaveProperty('deferCount');
+      expect(Object.keys(projectConflictsForHash([first])[0]!)).toHaveLength(7);
     });
   });
 });

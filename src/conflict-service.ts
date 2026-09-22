@@ -30,7 +30,10 @@ function view(partial: Partial<ConflictResolutionView>): ConflictResolutionView 
 export interface ConflictResolveDeps {
   l1: Pick<
     L1Store,
-    'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed'
+    // `markConflictReviewed`:task_2.0 建立的 `defer` 写入口(只写 reviewed_at/deferred_at/defer_count,
+    // **不写 resolved_at**)。漏了它,`defer` 分支会在调用处报 TS 错——
+    // 第 2 轮复查 R-N2,与 N4 同类:都是"只建了方法、没改消费侧类型"。
+    'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed' | 'markConflictReviewed'
   >;
   /** `conflictFreeze.enabled`。未开启时队列恒空,直接给出提示而非静默无操作。 */
   conflictFreezeEnabled: boolean;

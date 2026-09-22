@@ -95,6 +95,18 @@ export interface ConflictPair {
   resolvedAt: string;
   /** 空串 = 未裁决;否则为 {@link ConflictResolution}。 */
   resolution: string;
+  /**
+   * R1 未决态(task_2.0):人工复看时刻。空串 = **没看过**(`unseen`)。
+   *
+   * **三字段一律可选 `?`**(审计 N4):必填会破三处测试工厂
+   * (`conflict-list` / `conflict-freeze-safety` / `conflict-freeze-resolve`)的
+   * `typecheck`。可选还顺带保证旧快照反序列化出的对象依然合法。
+   */
+  reviewedAt?: string;
+  /** R1:最近一次 `defer` 的时刻。**超时基准 = `deferredAt ?? createdAt`**(task_2.3)。 */
+  deferredAt?: string;
+  /** R1:复看次数。达上限(task_2.3 取 3)后不再被 `auto` 了结,改为 fail-loud 呈现。 */
+  deferCount?: number;
 }
 
 /** 构建冻结对所需的输入。 */

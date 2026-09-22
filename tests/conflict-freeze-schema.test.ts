@@ -41,9 +41,28 @@ describe('task_21 conflict_pending 表结构（磁盘契约）', () => {
         name: string;
         pk: number;
       }>;
+      // 磁盘契约:Phase 2(task_2.1)加了三列承载 R1 未决态。
+      // 本断言是**精确列集合**(审计 S8 点名的"加列必破"处),故新增列必须同批补全——
+      // 保留精确性是有意的:这是磁盘契约测试,子集断言会放过"列被悄悄改名"。
+      // 注意:新增列**不进快照哈希**(哈希走 l1-snapshot 的 7 字段列投影,见 task_2.8)。
       expect(cols.map((c) => c.name).sort()).toEqual(
-        ['created_at', 'loser_id', 'pair_id', 'resolution', 'resolved_at', 'run_id', 'winner_id'].sort(),
+        [
+          'created_at',
+          'defer_count',
+          'deferred_at',
+          'loser_id',
+          'pair_id',
+          'resolution',
+          'resolved_at',
+          'reviewed_at',
+          'run_id',
+          'winner_id',
+        ].sort(),
       );
+      // 升级前的 7 列必须仍然齐全(结构性回归:加列不得挤掉旧列)
+      for (const legacy of ['pair_id', 'run_id', 'winner_id', 'loser_id', 'created_at', 'resolved_at', 'resolution']) {
+        expect(cols.map((c) => c.name)).toContain(legacy);
+      }
       expect(cols.filter((c) => c.pk > 0).map((c) => c.name)).toEqual(['pair_id']);
     } finally {
       raw.close();

@@ -171,6 +171,35 @@ export function listAllL1(db, hardLimit = 100_000) {
  * @param reason - 建快照的原因(写进清单,可追溯)。
  * @param now - 注入时钟(单测用)。
  */
+/**
+ * 冻结历史输入的**列投影**(task_2.8)。
+ *
+ * 为何需要它:`conflict_pending` 在 Phase 2/3 会新增列(`reviewed_at` / `deferred_at` /
+ * `defer_count`,以及 Phase 3 的 `conflict_type` / `claim_key`)。而快照 manifest 里的
+ * `sections.conflicts.hash` 是 `hashJson(listConflictPending())`——**投影一扩,哈希输入就变**,
+ * 于是**升级前写下的旧快照会永久失配**,`exportThenPurge` 每次都中止在"内容与快照不一致"。
+ *
+ * 判据(第 3 轮复查 R3-N1,**必须逐字段复刻升级前 `toConflictPair` 的输出**):
+ * 7 字段、**camelCase**、固定键序
+ * `pairId → runId → winnerId → loserId → createdAt → resolvedAt → resolution`,
+ * 仅剔除新增列。**不是**"另挑参与语义的列"——兼容性要求的是**冻结旧输入**:
+ * 漏 `runId`、或改成 snake_case,都会让新旧哈希不等,于是
+ * 「旧快照仍通过」这件事**不可达**。
+ *
+ * 机械护栏:`tests/l1-snapshot.test.ts` 的 `GOLDEN_CONFLICTS_HASH`(取自升级前实跑),
+ * 且该用例做过反向验证(漏 `runId` / 改 snake_case ⇒ 必红)。
+ */
+export function projectConflictsForHash(rows) {
+    return rows.map(({ pairId, runId, winnerId, loserId, createdAt, resolvedAt, resolution }) => ({
+        pairId,
+        runId,
+        winnerId,
+        loserId,
+        createdAt,
+        resolvedAt,
+        resolution,
+    }));
+}
 export async function createL1Snapshot(db, dir, reason, now = new Date()) {
     const records = listAllL1(db);
     const receipts = db.listReceipts({ limit: 100_000 });
@@ -182,7 +211,7 @@ export async function createL1Snapshot(db, dir, reason, now = new Date()) {
         sections: {
             records: { count: records.length, hash: hashRecords(records) },
             receipts: { count: receipts.length, hash: hashJson(receipts) },
-            conflicts: { count: conflicts.length, hash: hashJson(conflicts) },
+            conflicts: { count: conflicts.length, hash: hashJson(projectConflictsForHash(conflicts)) },
         },
         vecCount: db.countL1Vec(),
     };
@@ -219,7 +248,9 @@ export async function verifySnapshot(db, dir) {
     const receipts = hashJson(db.listReceipts({ limit: 100_000 }));
     if (receipts !== manifest.sections.receipts.hash)
         diffs.push('l1_receipts 内容与快照不一致');
-    const conflicts = hashJson(db.listConflictPending({ limit: 100_000 }));
+    // **与建快照侧同投影**(task_2.8,第 2 轮复查 R-N1):这里只改一处会让
+    // "建快照存整对象哈希、校验算另一种投影"变成**永久失配**,比原问题更糟。
+    const conflicts = hashJson(projectConflictsForHash(db.listConflictPending({ limit: 100_000 })));
     if (conflicts !== manifest.sections.conflicts.hash)
         diffs.push('conflict_pending 内容与快照不一致');
     return { ok: diffs.length === 0, diffs };

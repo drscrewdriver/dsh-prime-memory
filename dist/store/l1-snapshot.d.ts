@@ -1,4 +1,5 @@
 import type { MemoryRecord } from '../types.js';
+import type { ConflictPair } from './conflicts.js';
 export declare const SNAPSHOT_VERSION = 1;
 /** 快照里的一节:行数 + 内容哈希。哈希是"内容有没有变"的判据,行数看不出来。 */
 export interface SnapshotSection {
@@ -86,7 +87,7 @@ export interface SnapshotDbLike {
     countConflictPendingUnresolved: () => number;
     listConflictPending: (opts?: {
         limit?: number;
-    }) => readonly unknown[];
+    }) => readonly ConflictPair[];
     countL1Vec: () => number;
     upsertL1: (record: MemoryRecord, embedding?: Float32Array) => boolean;
 }
@@ -107,6 +108,25 @@ export interface CreateSnapshotResult {
  * @param reason - 建快照的原因(写进清单,可追溯)。
  * @param now - 注入时钟(单测用)。
  */
+/**
+ * 冻结历史输入的**列投影**(task_2.8)。
+ *
+ * 为何需要它:`conflict_pending` 在 Phase 2/3 会新增列(`reviewed_at` / `deferred_at` /
+ * `defer_count`,以及 Phase 3 的 `conflict_type` / `claim_key`)。而快照 manifest 里的
+ * `sections.conflicts.hash` 是 `hashJson(listConflictPending())`——**投影一扩,哈希输入就变**,
+ * 于是**升级前写下的旧快照会永久失配**,`exportThenPurge` 每次都中止在"内容与快照不一致"。
+ *
+ * 判据(第 3 轮复查 R3-N1,**必须逐字段复刻升级前 `toConflictPair` 的输出**):
+ * 7 字段、**camelCase**、固定键序
+ * `pairId → runId → winnerId → loserId → createdAt → resolvedAt → resolution`,
+ * 仅剔除新增列。**不是**"另挑参与语义的列"——兼容性要求的是**冻结旧输入**:
+ * 漏 `runId`、或改成 snake_case,都会让新旧哈希不等,于是
+ * 「旧快照仍通过」这件事**不可达**。
+ *
+ * 机械护栏:`tests/l1-snapshot.test.ts` 的 `GOLDEN_CONFLICTS_HASH`(取自升级前实跑),
+ * 且该用例做过反向验证(漏 `runId` / 改 snake_case ⇒ 必红)。
+ */
+export declare function projectConflictsForHash(rows: readonly ConflictPair[]): Array<Record<string, unknown>>;
 export declare function createL1Snapshot(db: SnapshotDbLike, dir: string, reason: string, now?: Date): Promise<CreateSnapshotResult>;
 /** 读快照清单;不存在或版本不符返回 undefined。 */
 export declare function readSnapshotManifest(dir: string): Promise<L1SnapshotManifest | undefined>;
