@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { MemoryDb } from '../src/store/sqlite.js';
 import {
   createL1Snapshot,
+  hashJson,
   hashRecords,
   listAllL1,
   readSnapshotManifest,
@@ -26,6 +27,7 @@ import {
   snapshotPathFor,
   verifySnapshot,
 } from '../src/store/l1-snapshot.js';
+import type { ConflictPair } from '../src/store/conflicts.js';
 import type { ConversationAnchor, MemoryRecord } from '../src/types.js';
 
 const ANCHOR_METADATA_KEY = 'dsh_source_anchors';
@@ -267,6 +269,62 @@ describe('恢复的边界', () => {
   it('快照目录不存在时恢复为空,不抛', async () => {
     await withDb('missing-snap', async (db, dir) => {
       await expect(restoreL1Snapshot(db, join(dir, 'nope'))).resolves.toEqual({ inSnapshot: 0, targets: 0, restored: 0, failed: 0, vectorsWritten: 0, notFound: [] });
+    });
+  });
+});
+
+/**
+ * 快照 `conflicts` 段的 golden 锚(task_2.0a / Step 1)。
+ *
+ * **存在的理由(事不过三)**:这一处已连续三轮出事——漏 `l1-snapshot.ts:254`(第 1 轮)、
+ * 列投影定义写错(第 3 轮 R3-N1)。根因不是审阅不够,而是本条哈希**从来没有机械护栏**:
+ * 本文件此前只断言 `sections.conflicts.count`,从未 import `hashJson`、从未比对过它的哈希。
+ * 于是"哈希输入长什么样"只能靠人记住形状。
+ *
+ * **口径**:把**升级前**的哈希输入冻成字面量常量。夹具的时间字段全部是**固定 ISO 字面量**,
+ * 禁用无参 `new Date()`——否则常量每次运行都不同,护栏直接失效(R4-N2 的反例是
+ * `conflict-freeze-resolve.test.ts:248`)。
+ *
+ * 后续配合 task_2.8 的列投影:`hashJson(project7(conflicts))` 必须仍等于本常量,
+ * 且**反向验证**必须通过(漏 `runId` 或改用 snake_case ⇒ 本用例变红)。
+ */
+const CONFLICTS_GOLDEN_FIXTURE: ConflictPair[] = [
+  { pairId: 'pair-c1', runId: 'run-c1', winnerId: 'w-c1', loserId: 'l-c1', createdAt: '2026-09-16T00:00:00.000Z', resolvedAt: '', resolution: '' },
+  { pairId: 'pair-c2', runId: 'run-c2', winnerId: 'w-c2', loserId: 'l-c2', createdAt: '2026-09-16T00:01:00.000Z', resolvedAt: '', resolution: '' },
+  { pairId: 'pair-c3', runId: 'run-c3', winnerId: 'w-c3', loserId: 'l-c3', createdAt: '2026-09-16T00:02:00.000Z', resolvedAt: '2026-09-16T00:03:00.000Z', resolution: 'auto' },
+];
+
+/** `hashJson(listConflictPending())` 在**升级前**实现下的 sha1(实跑取得后写死)。 */
+const GOLDEN_CONFLICTS_HASH = '0edfa7f7892b2857992ecbe044090717f37fc990';
+
+/** 直接查表(绕开 L1 门面):用于断言"表里有、但不进哈希输入"的行。 */
+function tableCount(db: MemoryDb, sql: string): number {
+  const raw = (db as unknown as { db: { prepare: (s: string) => { get: () => { n?: number } | undefined } } }).db;
+  return Number(raw.prepare(sql).get()?.n ?? 0);
+}
+
+describe('快照 conflicts 段的 golden 锚(task_2.0a)', () => {
+  it('升级前形状:hashJson(listConflictPending) 等于冻结常量,且 manifest 用它', async () => {
+    await withDb('conflicts-golden', async (db, dir) => {
+      db.recordConflictPending(CONFLICTS_GOLDEN_FIXTURE);
+
+      // 夹具刻意覆盖 '' 与 'auto' 两种 resolution —— 但**哈希输入只含未裁决行**:
+      // `listConflictPending` 自带 `WHERE resolved_at = ''`,故 'auto' 那条
+      // 进得了表、进不了哈希。这一条是实跑发现的(初版断言 3 行 → 实测 2 行),
+      // 记在这里以免下一轮又被"夹具写了 3 行"误导。
+      expect(tableCount(db, 'SELECT COUNT(*) AS n FROM conflict_pending')).toBe(3);
+      expect(tableCount(db, "SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at <> ''")).toBe(1);
+
+      const listed = db.listConflictPending({ limit: 100 });
+      expect(listed, '哈希输入只含未裁决行').toHaveLength(2);
+      expect(hashJson(listed)).toBe(GOLDEN_CONFLICTS_HASH);
+
+      const snap = await createL1Snapshot(db, join(dir, 'snap'), 'golden', new Date('2026-09-17T00:00:00.000Z'));
+      expect(snap.manifest.sections.conflicts.count).toBe(2);
+      expect(snap.manifest.sections.conflicts.hash).toBe(GOLDEN_CONFLICTS_HASH);
+
+      // 同一夹具下 verifySnapshot 必须 ok(升级前后都不得因"内容与快照不一致"而中止恢复)
+      await expect(verifySnapshot(db, snap.dir)).resolves.toEqual({ ok: true, diffs: [] });
     });
   });
 });
