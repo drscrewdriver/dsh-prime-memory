@@ -230,7 +230,19 @@ export const CONFLICT_ACTION_CLAUSE = `## 矛盾冻结动作（"conflict"）
 - 只是同属一个主题但描述对象不同 → 仍用 "store"。
 - 同批次两条新记忆只是**同一事实的不同表述**（互补、粒度不同、不互斥）→ 仍各自 "store"。**只有互相矛盾才算 conflict。**
 
-conflict 只留给"两边都像是对的、机器判不了"的情况——它消耗人的注意力，不可滥用。`;
+### 用三轴时间维度先做一次"时间先后/过期"判定(conflict-3axis)
+
+候选池每条记忆现在带 "valid_from_ms" / "valid_to_ms"(epoch ms,null=未知)与 "persistence"(t/o/s/p)。
+**两条记忆内容互相矛盾时,先按这三轴判断,能判出时间先后的就不要直接 conflict:**
+
+- 一方 "valid_to_ms" 已过期(< 当前时刻),另一方仍在有效期 → 过期的那条描述的事实已不成立,矛盾实为"旧事实被新事实取代",走 **update**(以新替旧),**不要 conflict**。
+- 一方 "valid_from_ms" 明显晚于另一方 → 晚的那条描述更晚发生的真实事实,通常应 **update/merge** 而非 conflict。
+- "persistence" 线索:"t"(恒真事实/规则/偏好)被 "o"(仍在持续)或 "s"(已结束)的矛盾记忆指向时,优先采信与事实时间线一致的那个;"p"(时点事件)是历史事实,**永不被"取代",只能 both 保留或交人工裁决**。
+- 三轴都缺失/都判不了(双方都无有效期、持续性未判定、时间上无法分先后) → 才是真正的 conflict。
+
+三轴是**辅助事实**,不是自动结论:即便三轴指向某一方更可信,只要存在"内容层面无法调和"的疑点,仍可交 conflict 由人裁决。三轴的作用是把"明显有时间先后的伪矛盾"从队列里筛掉,让人只看到真正需要判断的对。
+
+conflict 只留给"两边都像是对的、机器判不了"的情况——它消耗人的注意力,不可滥用。`;
 /**
  * 把注入词表后的 prompt 交给调用方。
  *
@@ -254,7 +266,7 @@ export function getConflictDetectionSystemPrompt(mode, opts) {
 /**
  * 格式化批量冲突检测 prompt（统一候选池）。
  */
-export function formatBatchConflictPrompt(matches) {
+export function formatBatchConflictPrompt(matches, opts) {
     const unifiedPool = new Map();
     const perMemoryCandidateIds = new Map();
     for (const m of matches) {
@@ -273,6 +285,18 @@ export function formatBatchConflictPrompt(matches) {
         priority: c.priority,
         scene_name: c.scene_name,
         timestamps: c.timestamps,
+        // §C 三轴(conflict-3axis):把有效期与持续性一并交给检测器,
+        // 使其能在"内容矛盾"时先按时间轴判定先后/过期,减少误判 conflict。
+        // 与 timestamps 同单位(epoch ms),缺则为 null。
+        // **门控(task_a.5)**:仅在 conflictFreeze 开启时注入候选池——关闭态输出必须与
+        // 改动前逐字节相同(spec R6 的零漂移须覆盖 system 与 user 两路 prompt)。
+        ...(opts?.conflictFreeze === true
+            ? {
+                valid_from_ms: c.validFrom ?? null,
+                valid_to_ms: c.validTo ?? null,
+                persistence: c.persistence ?? null,
+            }
+            : {}),
     }));
     let poolSection;
     if (poolList.length === 0) {

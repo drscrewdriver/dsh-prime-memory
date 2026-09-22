@@ -955,6 +955,12 @@ export interface ConflictPairView {
     loser_id: string;
     loser_content: string;
     created_at: string;
+    winner_valid_from_ms?: number | null;
+    winner_valid_to_ms?: number | null;
+    winner_persistence?: string | null;
+    loser_valid_from_ms?: number | null;
+    loser_valid_to_ms?: number | null;
+    loser_persistence?: string | null;
 }
 /** `dsh-memory/conflicts` 请求(读待裁决队列)。 */
 export interface ConflictsRequest {
