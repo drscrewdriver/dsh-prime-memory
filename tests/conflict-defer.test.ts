@@ -14,9 +14,10 @@
  *    被排除出超时扫描——但人工裁决**仍够得着**(那是它们唯一的出口);
  * ⑥ 读取面能区分 `unseen` 与 `deferred`。
  */
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterAll, describe, expect, it } from 'vitest';
 import { buildConflictPair, DEFER_MAX } from '../src/store/conflicts.js';
 import { listConflictPairs, renderConflictResolution, resolveConflictPair } from '../src/conflict-service.js';
@@ -149,6 +150,29 @@ describe('task_2.2 defer 写入口', () => {
     }
   });
 
+  it('markConflictReviewed 对**已裁决**的对返回 0 行且不改写(审计 N1)', async () => {
+    root = await mkdtemp(join(tmpdir(), 'dsh-defer-after-resolve-'));
+    const { db, store } = await setup('after-');
+    try {
+      db.upsertL1(rec('w-x', '胜方'));
+      db.upsertL1(rec('l-x', '败方'));
+      const pair = buildConflictPair({ runId: 'run-x', winnerId: 'w-x', loserId: 'l-x', createdAt: OLD });
+      db.recordConflictPending([pair]);
+      await resolveConflictPair({ l1: store, conflictFreezeEnabled: true }, pair.pairId, 'winner');
+
+      // 已裁决 ⇒ 写"已复看"必须被拒(`WHERE resolved_at = ''`),不得把结论旁边再添一笔
+      const changes = store.markConflictReviewed(pair.pairId, {
+        reviewedAt: new Date().toISOString(),
+        deferredAt: new Date().toISOString(),
+        deferCount: 9,
+      });
+      expect(changes).toBe(0);
+      expect(Number(rowSnapshot(db, pair.pairId).defer_count), '未被写回').toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
   it('既有 winner / loser / both 三条路径与返回形状不变(回归)', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-defer-legacy-'));
     const { db, store } = await setup('legacy-');
@@ -244,6 +268,74 @@ describe('task_2.3 超时基准与复看上限', () => {
       expect(store.countConflictPendingUnresolved(), 'defer 后仍计为未裁决').toBe(1);
     } finally {
       db.close();
+    }
+  });
+});
+
+describe('task_2.1 迁移:对已存在的旧表执行 ALTER', () => {
+  it('手工造一张升级前的 7 列表 + 一行 ⇒ init 后加列且**既有行逐列不变**', async () => {
+    root = await mkdtemp(join(tmpdir(), 'dsh-defer-migrate-'));
+    const dir = join(root, 'migrate');
+    await mkdir(dir, { recursive: true });
+    const file = join(dir, 'm.db');
+
+    // 1) 造"升级前"的库:只有 7 列 + 一行真实数据
+    const pre = new DatabaseSync(file, { allowExtension: false });
+    pre.exec(`
+      CREATE TABLE conflict_pending (
+        pair_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL DEFAULT '',
+        winner_id TEXT NOT NULL DEFAULT '',
+        loser_id TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT '',
+        resolved_at TEXT NOT NULL DEFAULT '',
+        resolution TEXT NOT NULL DEFAULT ''
+      )
+    `);
+    pre
+      .prepare(
+        `INSERT INTO conflict_pending (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run('pair-old', 'run-old', 'w-old', 'l-old', OLD, '', '');
+    pre.close();
+
+    // 2) 正常打开 ⇒ init 触发 ALTER 迁移(PRAGMA table_info 判存在)
+    const db = new MemoryDb(file, 0);
+    db.init();
+    try {
+      const cols = (rawOf(db).prepare('PRAGMA table_info(conflict_pending)').all() as Array<{ name: string }>).map(
+        (c) => c.name,
+      );
+      expect(cols, '三列被补上').toEqual(
+        expect.arrayContaining(['reviewed_at', 'deferred_at', 'defer_count']),
+      );
+
+      const row = rowSnapshot(db, 'pair-old');
+      // 既有行的 7 个旧列**逐列不变**(迁移不得改写任何既有值)
+      expect(row.run_id).toBe('run-old');
+      expect(row.winner_id).toBe('w-old');
+      expect(row.loser_id).toBe('l-old');
+      expect(row.created_at).toBe(OLD);
+      expect(row.resolved_at).toBe('');
+      expect(row.resolution).toBe('');
+      // 新列取默认值
+      expect(row.reviewed_at).toBe('');
+      expect(row.deferred_at).toBe('');
+      expect(Number(row.defer_count)).toBe(0);
+    } finally {
+      db.close();
+    }
+
+    // 3) 迁移后再开一次:ALTER 必须幂等(不报错、行数不变)
+    const again = new MemoryDb(file, 0);
+    again.init();
+    try {
+      expect(
+        Number((rawOf(again).prepare('SELECT COUNT(*) AS n FROM conflict_pending').get() as { n: number }).n),
+      ).toBe(1);
+    } finally {
+      again.close();
     }
   });
 });
