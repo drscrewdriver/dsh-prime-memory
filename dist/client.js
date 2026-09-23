@@ -3473,7 +3473,7 @@ var __defProp = Object.defineProperty;
 		                }
 		              ),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + m.type, children: TYPE_LABELS[m.type] || m.type }),
-		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Hall · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall) }) : null,
+		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Wing · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "优先级 " + m.priority }),
 		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "相关度 " + Number(m.score).toFixed(2) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
@@ -3550,7 +3550,7 @@ var __defProp = Object.defineProperty;
 		    };
 		  }, [open]);
 		  const labelOf = (id) => props.options.find((o) => o.id === id)?.label ?? id;
-		  const summary = props.selected.length === 0 ? "全部 Hall" : props.selected.length <= 2 ? props.selected.map(labelOf).join(" + ") : `${labelOf(props.selected[0])} 等 ${props.selected.length} 域`;
+		  const summary = props.selected.length === 0 ? "全部 Wing" : props.selected.length <= 2 ? props.selected.map(labelOf).join(" + ") : `${labelOf(props.selected[0])} 等 ${props.selected.length} 域`;
 		  const toggle = (id) => {
 		    props.onChange(props.selected.includes(id) ? props.selected.filter((x) => x !== id) : [...props.selected, id]);
 		  };
@@ -4489,7 +4489,7 @@ var __defProp = Object.defineProperty;
 		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
 		      "div",
 		      {
-		        title: props.halls.length === 0 ? "选定某个角（单域）后，这两项才生效" : "锁定域时两类无角记忆是否参与召回",
+		        title: props.halls.length === 0 ? "选定某个角（单 Wing）后，这两项才生效" : "锁定 Wing 时两类无角记忆是否参与召回",
 		        style: {
 		          display: "flex",
 		          flexDirection: "column",
@@ -4508,7 +4508,7 @@ var __defProp = Object.defineProperty;
 		                value: props.hallIncludeUnlabeled ? "in" : "ex",
 		                options: [
 		                  { key: "in", label: "含未打标", title: "未打标记忆默认包含" },
-		                  { key: "ex", label: "不含", title: "锁定域时排除未打标记忆" }
+		                  { key: "ex", label: "不含", title: "锁定 Wing 时排除未打标记忆" }
 		                ],
 		                onChange: (key) => props.onCommitWingBoundaries({ includeUnlabeled: key === "in" })
 		              }
@@ -4807,7 +4807,7 @@ var __defProp = Object.defineProperty;
 		  const loaded = mode !== null;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
-		  const wingText = halls.length === 1 ? wingLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} 域` : null;
+		  const wingText = halls.length === 1 ? wingLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} Wing` : null;
 		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : wingText ? wingText : info.label;
 		  ensureThemeStyle();
 		  const pillStyle = {

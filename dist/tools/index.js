@@ -316,7 +316,7 @@ ruminate) {
         },
         hall: {
             type: 'string',
-            description: `可选的粗分类 Hall(${[...WING_CATALOG.map((h) => h.id), WING_FALLBACK].join('/')};general = 跨域兜底)`,
+            description: `可选的粗分类 Wing(${[...WING_CATALOG.map((h) => h.id), WING_FALLBACK].join('/')};general = 跨域兜底)`,
         },
         persistence: {
             type: 'string',

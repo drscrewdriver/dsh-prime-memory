@@ -10,7 +10,7 @@ const state = { running: false, updated: 0, failed: 0 };
 export function wingBackfillState() {
     return { ...state };
 }
-const SYSTEM_PROMPT = '你是记忆库的域标注器。给你若干条记忆(带 id),为每条判断其内容属于哪个 Hall 域,输出 JSON 数组:' +
+const SYSTEM_PROMPT = '你是记忆库的 Wing 标注器。给你若干条记忆(带 id),为每条判断其内容属于哪个 Wing,输出 JSON 数组:' +
     '[{"id":"<原id>","wing":"<域id>"}]。wing 只能从给定候选列表中选;横跨多域或确实无法归入任何角时选 general。' +
     '只输出 JSON,不要多余文字。';
 /** 启动后台回填;已在运行返回 false(单飞)。 */
@@ -65,7 +65,7 @@ function pickChunk(_r) {
 }
 async function labelChunk(ctx, cfg, logger, chunk, candidates) {
     const list = chunk.map((r, i) => `${i + 1}. id=${r.id}\n${r.content.slice(0, 300)}`).join('\n\n');
-    const user = `候选 Hall:${candidates}\n\n记忆列表:\n${list}`;
+    const user = `候选 Wing:${candidates}\n\n记忆列表:\n${list}`;
     try {
         const raw = await callLLM(ctx, cfg, {
             system: SYSTEM_PROMPT,

@@ -389,7 +389,7 @@ export function registerMemoryTools(
     },
     hall: {
       type: 'string',
-      description: `可选的粗分类 Hall(${[...WING_CATALOG.map((h) => h.id), WING_FALLBACK].join('/')};general = 跨域兜底)`,
+      description: `可选的粗分类 Wing(${[...WING_CATALOG.map((h) => h.id), WING_FALLBACK].join('/')};general = 跨域兜底)`,
     },
     persistence: {
       type: 'string',
@@ -983,6 +983,19 @@ export function registerMemoryTools(
                   loser_id: { type: 'string' },
                   loser_content: { type: 'string', description: '同上' },
                   created_at: { type: 'string' },
+                  // 以下 10 项与 conflict-service.listConflictPairs 视图逐一对齐(task 三轴/R1/Phase3):
+                  // execute 直接返回该视图,additionalProperties:false 下少声明任何一个,
+                  // 宿主无损校验即拒("not a declared property"),整工具读不出——schema 必须跟视图同步。
+                  winner_valid_from_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+                  winner_valid_to_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+                  winner_persistence: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  loser_valid_from_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+                  loser_valid_to_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+                  loser_persistence: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  review_state: { type: 'string', enum: ['unseen', 'deferred'], description: '没看过 / 看过未决(R1:两者必须可区分)' },
+                  defer_count: { type: 'number', description: '复看次数(defer 上限 3)' },
+                  conflict_type: { type: 'string', description: '冲突类型(默认 hard)' },
+                  claim_key: { type: 'string', description: '同主题多对冲突的归并键(空串=未分组)' },
                 },
                 additionalProperties: false,
               },

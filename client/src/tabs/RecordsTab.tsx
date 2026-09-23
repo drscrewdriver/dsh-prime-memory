@@ -361,7 +361,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                 <span className={'dsh-mem-tag dsh-mem-tag-' + m.type}>{TYPE_LABELS[m.type] || m.type}</span>
                 {m.hall ? (
                   <span className="dsh-mem-tag dsh-mem-tag-work-fact">
-                    {'Hall · ' + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
+                    {"Wing · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
                   </span>
                 ) : null}
                 <span style={S.muted}>{'优先级 ' + m.priority}</span>
@@ -494,7 +494,7 @@ function WingMultiSelect(props: {
   const labelOf = (id: string) => props.options.find((o) => o.id === id)?.label ?? id;
   const summary =
     props.selected.length === 0
-      ? '全部 Hall'
+      ? '全部 Wing'
       : props.selected.length <= 2
         ? props.selected.map(labelOf).join(' + ')
         : `${labelOf(props.selected[0]!)} 等 ${props.selected.length} 域`;

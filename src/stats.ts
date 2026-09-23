@@ -575,12 +575,12 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // 域锁定可选同车:角 id = 锁定;显式 null/空数组 = 回中心;缺省 = 不动。
       // 只认 8 角 id(general 是兜底值不是角,不可锁定),非法值整体拒绝(不做部分提交)
       if (p.hall !== undefined && p.hall !== null && !isWingCorner(p.hall)) {
-        throw new Error(`非法域锁定: ${String(p.hall)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
+        throw new Error(`非法 Wing 锁定: ${String(p.hall)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
       }
       if (p.halls !== undefined && p.halls !== null) {
         const bad = Array.from(p.halls).find((x) => !isWingCorner(x));
         if (bad !== undefined) {
-          throw new Error(`非法域锁定: ${String(bad)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
+          throw new Error(`非法 Wing 锁定: ${String(bad)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
         }
       }
       modes.set(sessionId, p.mode as MemoryMode);

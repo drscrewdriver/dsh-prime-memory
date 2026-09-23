@@ -469,7 +469,7 @@ export function WingWheel(props: {
           智能档/off 时**置灰占位**（不卸载 → 浮层高度稳定、无跳变）。 */}
       <div
         title={
-          props.halls.length === 0 ? '选定某个角（单域）后，这两项才生效' : '锁定域时两类无角记忆是否参与召回'
+          props.halls.length === 0 ? '选定某个角（单 Wing）后，这两项才生效' : '锁定 Wing 时两类无角记忆是否参与召回'
         }
         style={{
           display: 'flex',
@@ -489,7 +489,7 @@ export function WingWheel(props: {
             value={props.hallIncludeUnlabeled ? 'in' : 'ex'}
             options={[
               { key: 'in', label: '含未打标', title: '未打标记忆默认包含' },
-              { key: 'ex', label: '不含', title: '锁定域时排除未打标记忆' },
+              { key: 'ex', label: '不含', title: '锁定 Wing 时排除未打标记忆' },
             ]}
             onChange={(key) => props.onCommitWingBoundaries({ includeUnlabeled: key === 'in' })}
           />

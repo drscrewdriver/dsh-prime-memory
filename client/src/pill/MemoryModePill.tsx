@@ -232,7 +232,7 @@ export function MemoryModePill(props: {
     halls.length === 1
       ? wingLabels[halls[0]!] ?? halls[0]!
       : halls.length > 1
-        ? `${halls.length} 域`
+        ? `${halls.length} Wing`
         : null;
   const faceLabel = !loaded
     ? error
