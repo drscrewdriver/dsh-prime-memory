@@ -1410,7 +1410,9 @@ export async function handleEndpoint(endpoint, payload, deps) {
     }
 }
 /** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
-function hitToUiRecord(r) {
+export function hitToUiRecord(r) {
+    const retired = r.validTo !== undefined;
+    const mark = retired ? readSupersedeMarker(r.metadata) : undefined;
     return {
         id: r.id,
         content: r.content,
@@ -1429,6 +1431,11 @@ function hitToUiRecord(r) {
         // `sourceAnchors` 永远缺失、来源行在 UI 上从未显示过。
         sourceAnchors: sourceAnchorLabels(r.metadata),
         score: r.score ?? null,
+        // 退场态透传:活动列表据此渲染「已退场」徽标 + 行内恢复,而非让记录静默停留在
+        // 原样(那样用户会以为「点了删除没反应」)。面板浏览路径**仍列出**退场记录(软删可恢复),
+        // 但必须给出可见差异。
+        retired,
+        retiredReason: retired ? (mark?.reason ?? 'unknown') : null,
     };
 }
 /**

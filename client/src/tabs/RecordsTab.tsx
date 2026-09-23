@@ -397,7 +397,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
             <div
               key={m.id}
               className="dsh-mem-card dsh-mem-card-hover"
-              style={{ ...S.card, cursor: 'pointer', ...(checked ? { borderLeft: '3px solid var(--dsh-mem-danger)' } : null) }}
+              style={{ ...S.card, cursor: 'pointer', ...(checked ? { borderLeft: '3px solid var(--dsh-mem-danger)' } : null), ...(m.retired ? { opacity: 0.62 } : null) }}
               onClick={() => {
                 setExpandedId(open ? null : m.id);
               }}
@@ -422,13 +422,39 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                     {"Wing · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
                   </span>
                 ) : null}
+                {m.retired ? (
+                  <span
+                    title="该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除"
+                    style={{
+                      fontSize: 11,
+                      padding: '1px 6px',
+                      borderRadius: 999,
+                      border: '1px solid var(--dsh-mem-danger)',
+                      color: 'var(--dsh-mem-danger)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {'已退场' + (m.retiredReason ? ' · ' + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : '')}
+                  </span>
+                ) : null}
                 <span style={S.muted}>{'优先级 ' + m.priority}</span>
                 {m.score !== null && m.score !== undefined ? (
                   <span style={S.muted}>{'相关度 ' + Number(m.score).toFixed(2)}</span>
                 ) : null}
                 <div style={S.grow} />
                 <span style={S.muted}>{fmtTime(m.updatedAt)}</span>
-                {hiPriv ? (
+                {m.retired ? (
+                  <NButton
+                    style={{ padding: '0 7px', minWidth: 26, height: 26, fontSize: 12, color: 'var(--dsh-mem-accent)' }}
+                    title="恢复该记忆到检索面（可撤销退场）"
+                    onClick={(e: { stopPropagation(): void }) => {
+                      e.stopPropagation();
+                      restoreRecords([m.id]);
+                    }}
+                  >
+                    恢复
+                  </NButton>
+                ) : hiPriv ? (
                   <NButton
                     style={{ padding: '0 7px', minWidth: 26, height: 26, fontSize: 12, color: 'var(--dsh-mem-danger)' }}
                     title="删除该记忆（高权限）"

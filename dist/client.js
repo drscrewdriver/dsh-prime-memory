@@ -3549,7 +3549,7 @@ var __defProp = Object.defineProperty;
 		        "div",
 		        {
 		          className: "dsh-mem-card dsh-mem-card-hover",
-		          style: { ...S.card, cursor: "pointer", ...checked ? { borderLeft: "3px solid var(--dsh-mem-danger)" } : null },
+		          style: { ...S.card, cursor: "pointer", ...checked ? { borderLeft: "3px solid var(--dsh-mem-danger)" } : null, ...m.retired ? { opacity: 0.62 } : null },
 		          onClick: () => {
 		            setExpandedId(open ? null : m.id);
 		          },
@@ -3572,11 +3572,37 @@ var __defProp = Object.defineProperty;
 		              ),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + m.type, children: TYPE_LABELS[m.type] || m.type }),
 		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Wing · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall) }) : null,
+		              m.retired ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		                "span",
+		                {
+		                  title: "该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除",
+		                  style: {
+		                    fontSize: 11,
+		                    padding: "1px 6px",
+		                    borderRadius: 999,
+		                    border: "1px solid var(--dsh-mem-danger)",
+		                    color: "var(--dsh-mem-danger)",
+		                    whiteSpace: "nowrap"
+		                  },
+		                  children: "已退场" + (m.retiredReason ? " · " + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : "")
+		                }
+		              ) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "优先级 " + m.priority }),
 		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "相关度 " + Number(m.score).toFixed(2) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: fmtTime(m.updatedAt) }),
-		              hiPriv ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		              m.retired ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		                NButton,
+		                {
+		                  style: { padding: "0 7px", minWidth: 26, height: 26, fontSize: 12, color: "var(--dsh-mem-accent)" },
+		                  title: "恢复该记忆到检索面（可撤销退场）",
+		                  onClick: (e) => {
+		                    e.stopPropagation();
+		                    restoreRecords([m.id]);
+		                  },
+		                  children: "恢复"
+		                }
+		              ) : hiPriv ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
 		                NButton,
 		                {
 		                  style: { padding: "0 7px", minWidth: 26, height: 26, fontSize: 12, color: "var(--dsh-mem-danger)" },

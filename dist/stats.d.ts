@@ -65,7 +65,7 @@ export interface SessionInfoSource {
         vectorSearch: boolean;
     };
 }
-import type { MemoryOccupancy } from './contract.js';
+import type { MemoryOccupancy, UiRecord } from './contract.js';
 export type { MemoryStats } from './contract.js';
 /** 注册状态 RPC(web 侧 connection 服务可选,缺失时跳过,不影响插件主体)。 */
 /** registerMemoryRpc 形参中需要落入端点 deps 的部分。 */
@@ -124,3 +124,21 @@ export interface EndpointDeps {
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;
+/** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
+export declare function hitToUiRecord(r: {
+    id: string;
+    content: string;
+    type: string;
+    priority?: number;
+    scene_name: string;
+    timestamps?: number[];
+    createdAt?: number;
+    updatedAt?: number;
+    version?: number;
+    source_message_ids?: string[];
+    metadata?: Record<string, unknown>;
+    score?: number;
+    family?: string;
+    /** 退场判据:`valid_to` 闭合即已退场(软删)。由 `listL1`/`getByIds` 透传。 */
+    validTo?: number;
+}): UiRecord;

@@ -674,6 +674,14 @@ export interface UiRecord {
   sourceAnchors: string[];
   /** 检索相关度(列表路径无 score → null)。 */
   score: number | null;
+  /**
+   * 是否已退场(软删)。`true` 时该记录在活动列表里仍以「已退场」态呈现(置灰 + 徽标),
+   * 可被 `records-restore` 找回——这正是设计要的「不静默消失、可恢复」,而非真删。
+   * 缺省/ `false` 表示活跃。
+   */
+  retired?: boolean;
+  /** 退场原因:`conflict`(裁决) / `superseded`(取代) / `manual`(人工) / `unknown`。未退场为 null。 */
+  retiredReason?: string | null;
 }
 export interface ListRecordsResponse {
   items: UiRecord[];
