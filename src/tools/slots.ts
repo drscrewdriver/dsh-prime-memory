@@ -102,7 +102,26 @@ export function registerSlotTools(
           const st = args.status.trim();
           all = all.filter((s) => s.status === st);
         }
-        return { slots: all };
+        // 显式压成 output schema 声明的形状:
+        // ① store 的 Slot 恒带 `validUntil: undefined` 键(归一化无条件写键,clone 展开保留)
+        //   —— undefined 键经 JSON.stringify 会被丢掉,宿主无损往返校验报 "not lossless JSON";
+        // ② Slot.origin 不在 schema(additionalProperties:false)里,透传会被 schema 校验拒。
+        // 两个都要在工具边界剥掉,store 持久化形状不动。
+        return {
+          slots: all.map((s) => ({
+            id: s.id,
+            title: s.title,
+            kind: s.kind,
+            status: s.status,
+            priority: s.priority,
+            pinned: s.pinned,
+            body: s.body,
+            refs: [...s.refs],
+            ...(s.validUntil !== undefined ? { validUntil: s.validUntil } : {}),
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+          })),
+        };
       },
     }),
   );

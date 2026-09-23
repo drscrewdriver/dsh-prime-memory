@@ -141,6 +141,28 @@ describe('memory_slot_write / close 的 memoryMutate 门控(F5)', () => {
     expect(h.store.list()[0]?.status).toBe('done');
   });
 
+  it('list 输出无损 JSON 合规:无 origin 键、validUntil 未设时不落 undefined 键(真机回归)', async () => {
+    // 真机 bug:空集能返回,一旦有槽位 host 报 "value is not lossless JSON"。
+    // 根因① store 归一化恒写 `validUntil: undefined` 键,clone 展开保留,JSON.stringify 丢键 → 往返不无损;
+    // 根因② Slot.origin 未在 output schema(additionalProperties:false)声明,透传越界。
+    const h = await harness({ mutate: true });
+    await h.call('memory_slot_write', { title: '无期限槽位' });
+    await h.call('memory_slot_write', { title: '有期限槽位', validUntil: '2026-12-31T00:00:00.000Z' });
+    const listed = (await h.call('memory_slot_list', {})) as { slots: Record<string, unknown>[] };
+    expect(listed.slots).toHaveLength(2);
+    for (const s of listed.slots) {
+      expect('origin' in s).toBe(false);
+      expect(!('validUntil' in s) || s.validUntil !== undefined).toBe(true);
+      // 无损往返:JSON 序列化再反解,键集合必须不变
+      const round = JSON.parse(JSON.stringify(s)) as Record<string, unknown>;
+      expect(Object.keys(round).sort()).toEqual(Object.keys(s).sort());
+    }
+    const withDue = listed.slots.find((s) => s.title === '有期限槽位') as Record<string, unknown>;
+    expect(withDue.validUntil).toBe('2026-12-31T00:00:00.000Z');
+    const noDue = listed.slots.find((s) => s.title === '无期限槽位') as Record<string, unknown>;
+    expect('validUntil' in noDue).toBe(false);
+  });
+
   it('渲染面:notice 与槽位清单直达模型', async () => {
     const denied = await harness({ mutate: false });
     const notice = (await denied.call('memory_slot_write', { title: 'A' })) as never;
