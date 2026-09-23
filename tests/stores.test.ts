@@ -335,7 +335,12 @@ describe('embedding service base', () => {
     expect(await helper.query('q')).toBeUndefined();
     expect(await helper.batch(['a', 'b'])).toEqual([undefined, undefined]);
     expect(helper.vectorReady()).toBe(true);
-    expect(logger.warn).toHaveBeenCalledTimes(1); // 同类失败只告警一次
+    // 两次告警:①query 降级 ②连续失败 ≥2 触发熔断(背压设计:快速降级 FTS-only)
+    expect(logger.warn).toHaveBeenCalledTimes(2);
+    // 熔断中:不再触达底层服务,直接 undefined(底层 embed 调用数不变),且无新增告警
+    expect(await helper.query('q2')).toBeUndefined();
+    expect(await helper.batch(['c'])).toEqual([undefined]);
+    expect(logger.warn).toHaveBeenCalledTimes(2);
   });
 
   it('RemoteEmbeddingService retries 5xx with backoff, not 4xx', async () => {

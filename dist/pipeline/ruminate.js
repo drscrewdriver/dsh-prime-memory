@@ -132,17 +132,19 @@ export class RuminateController {
         const session = this.sessions[index];
         this.status.phase = 'distilling';
         this.status.detail = `L1 蒸馏中:会话 ${session.sessionId}(第 ${index + 1}/${this.sessions.length} 个)`;
-        // 真实产出计数:enqueue 只入队,产出由 onTurnDone 在任务真正跑完后回调
-        // (此前 totalL1 从不累加,recordsBuilt 与完成日志恒为 0,修复效果无法判定)
+        // 背压:上个会话真正跑完(onTurnDone)才入队下一个——队列深度 ≤1。
+        // 原先 setImmediate 连发会把全部会话一次性塞进 runner 队列(无界堆积),
+        // LLM e2e 延迟波动时既拖慢 live 任务也让取消语义变钝;链式入队后
+        // 进度(done)真实逐会话推进,取消即刻停止入队。
         this.runner.enqueue(session.sessionId, session.messages, session.mode, {
             force: true,
             onTurnDone: (records) => {
                 this.totalL1 += records;
                 this.status.recordsBuilt = this.totalL1;
+                this.status.done = index + 1;
+                setImmediate(() => this.doEnqueue(index + 1));
             },
         });
-        // runner 的 drain 是同步循环,给一个 tick 让它消费完再入队下一个
-        setImmediate(() => this.doEnqueue(index + 1));
     }
     /** 收尾:强制 L2 + L3。 */
     async finalize() {
@@ -254,12 +256,15 @@ export class RuminateController {
             }
         }
         this.cancelRequested = false;
+        // 重标定固定算一步(即使无未打标也走一次机械校验),必须计进 total——
+        // 否则会出现 done > total 的荒谬计数(实测 3/2)。
+        const relabelStep = 1;
         this.status = {
             ...IDLE_STATUS,
             running: true,
             phase: 'refreshing',
             done: 0,
-            total: l2Targets.length + l3Targets.length,
+            total: l2Targets.length + l3Targets.length + relabelStep,
             detail: '准备轻量刷新(无未蒸馏缓冲)',
             startedAt: Date.now(),
         };
@@ -310,12 +315,14 @@ export class RuminateController {
                     this.status.sub = { done, total, label: '重标定批次' };
                 },
             });
-            this.status.sub = null;
-            this.status.done++;
         }
         catch (err) {
-            this.status.sub = null;
             this.logger.warn(`[memory] 反刍轻量刷新重标定失败(不影响刷新结果): ${errDetail(err)}`);
+        }
+        finally {
+            // 计数与成败解耦:该步已执行(无论成败都算走完),否则失败时 done 永远追不上 total
+            this.status.sub = null;
+            this.status.done++;
         }
         this.status.running = false;
         this.status.detail = null;

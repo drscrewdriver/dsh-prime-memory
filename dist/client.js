@@ -2952,14 +2952,14 @@ var __defProp = Object.defineProperty;
 		  let lastNote = null;
 		  if (idleLike && rm.phase === "done") {
 		    const rl = rm.relabel;
-		    lastNote = "上次反刍整理：完成（" + rm.done + "/" + rm.total + " 会话，产出 " + rm.recordsBuilt + " 条记录）" + (rl ? " · 重标定：补 cogHall " + rl.cogHallFixed + "，补 wing " + rl.wingLabeled + "，打 tags " + rl.tagged + (rl.deferred > 0 ? "，让出 " + rl.deferred : "") : "") + (rm.finishedAt ? " · " + fmtTime(new Date(rm.finishedAt).toISOString()) : "");
+		    lastNote = "上次反刍整理：完成（" + rm.done + "/" + rm.total + " 步" + (rm.recordsBuilt > 0 ? "，产出 " + rm.recordsBuilt + " 条记录" : "，无待消化缓冲") + "）" + (rl ? " · 重标定：补 cogHall " + rl.cogHallFixed + "，补 wing " + rl.wingLabeled + "，打 tags " + rl.tagged + (rl.deferred > 0 ? "，让出 " + rl.deferred : "") : "") + (rm.finishedAt ? " · " + fmtTime(new Date(rm.finishedAt).toISOString()) : "");
 		  } else if (idleLike && rm.phase === "cancelled") {
 		    lastNote = "上次反刍整理：已取消（完成 " + rm.done + "/" + rm.total + " 会话，已蒸馏部分保留）";
 		  } else if (idleLike && rm.phase === "failed") {
 		    lastNote = "上次反刍整理：失败：" + (rm.error || "未知错误");
 		  }
-		  const unit = rm.phase === "refreshing" ? "步" : "会话";
-		  const progressText = rm.total > 0 ? rm.done + "/" + rm.total + " " + unit + "（" + pct + "%）" : "进行中…";
+		  const unit = rm.phase === "refreshing" || rm.phase === "relabeling" ? "步" : "会话";
+		  const progressText = sub ? sub.label + " " + sub.done + "/" + sub.total + "（" + Math.round(sub.done / sub.total * 100) + "%）" : rm.total > 0 ? rm.done + "/" + rm.total + " " + unit + "（" + pct + "%）" : "进行中…";
 		  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "dsh-mem-rb-card", children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: "反刍整理" }),

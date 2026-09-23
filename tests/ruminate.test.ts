@@ -53,10 +53,15 @@ function liveHandle(): LiveSettingsHandle {
 
 interface Enqueued { sessionId: string; mode: string }
 
-/** 装配一个只记录入队参数的控制器(不触真实抽取/存储)。 */
+/** 装配一个只记录入队参数的控制器(不触真实抽取/存储)。
+ *  桩与真实 runner 的契约一致:任务跑完后调用 onTurnDone——反刍的链式背压
+ *  (上个会话完成才入队下一个)依赖该回调推进。 */
 function makeController(file: string, seen: Enqueued[]): RuminateController {
   const runner = {
-    enqueue: (sessionId: string, _messages: unknown, mode: string) => { seen.push({ sessionId, mode }); },
+    enqueue: (sessionId: string, _messages: unknown, mode: string, opts?: { onTurnDone?: (n: number) => void }) => {
+      seen.push({ sessionId, mode });
+      setImmediate(() => opts?.onTurnDone?.(0));
+    },
     states: {},
   };
   const stores = { l1: { list: () => ({ items: [], total: 0 }) }, scenes: {}, persona: {}, state: {} };
@@ -160,7 +165,10 @@ describe('ruminate: 控制器读取 pending.json(形状契约护栏)', () => {
     const st = await started;
     expect(st.running).toBe(false);
     expect(st.phase).toBe('done');
-    expect(st.done).toBe(1);
+    // 1 个 L2 步 + 1 个重标定步 = 2(重标定步固定计入 total,否则出现 done>total 的荒谬计数)
+    expect(st.done).toBe(2);
+    expect(st.total).toBe(2);
+    expect(st.done).toBeLessThanOrEqual(st.total);
     expect(st.detail).toBeNull();
   });
 

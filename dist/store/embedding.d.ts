@@ -77,7 +77,16 @@ export declare class EmbedHelper {
     private embed;
     private readonly logger?;
     private warned;
+    private emaMs;
+    private failStreak;
+    private openUntil;
+    private openWarned;
     constructor(embed: EmbeddingService, logger?: MemoryLogger | undefined);
+    private static readonly SLOW_MS;
+    private static readonly COOLDOWN_MS;
+    private static readonly EMA_ALPHA;
+    private observe;
+    private get tripped();
     /** 活切换嵌入源:换掉底层服务并复位一次性告警(新服务重新获得告警机会)。 */
     setService(svc: EmbeddingService): void;
     vectorReady(): boolean;

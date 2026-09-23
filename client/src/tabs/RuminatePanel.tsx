@@ -157,9 +157,9 @@ export function RuminatePanel(props: { rpc: RpcFn }) {
       rm.done +
       '/' +
       rm.total +
-      ' 会话，产出 ' +
-      rm.recordsBuilt +
-      ' 条记录）' +
+      ' 步' +
+      (rm.recordsBuilt > 0 ? '，产出 ' + rm.recordsBuilt + ' 条记录' : '，无待消化缓冲') +
+      '）' +
       (rl ? ' · 重标定：补 cogHall ' + rl.cogHallFixed + '，补 wing ' + rl.wingLabeled + '，打 tags ' + rl.tagged + (rl.deferred > 0 ? '，让出 ' + rl.deferred : '') : '') +
       (rm.finishedAt ? ' · ' + fmtTime(new Date(rm.finishedAt).toISOString()) : '');
   } else if (idleLike && rm.phase === 'cancelled') {
@@ -168,9 +168,13 @@ export function RuminatePanel(props: { rpc: RpcFn }) {
     lastNote = '上次反刍整理：失败：' + (rm.error || '未知错误');
   }
 
-  // 轻量刷新阶段计的是"步骤"(L2/L3 各族)，蒸馏阶段计的是"会话"
-  const unit = rm.phase === 'refreshing' ? '步' : '会话';
-  const progressText = rm.total > 0 ? rm.done + '/' + rm.total + ' ' + unit + '（' + pct + '%）' : '进行中…';
+  // 轻量刷新/重标定阶段计的是"步骤"，蒸馏阶段计的是"会话"
+  const unit = rm.phase === 'refreshing' || rm.phase === 'relabeling' ? '步' : '会话';
+  const progressText = sub
+    ? sub.label + ' ' + sub.done + '/' + sub.total + '（' + Math.round((sub.done / sub.total) * 100) + '%）'
+    : rm.total > 0
+      ? rm.done + '/' + rm.total + ' ' + unit + '（' + pct + '%）'
+      : '进行中…';
 
   return (
     <div className="dsh-mem-rb-card">

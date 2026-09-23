@@ -19,17 +19,30 @@ async function tmp(): Promise<string> {
   return dir;
 }
 afterAll(async () => {
-  if (dir) await rm(dir, { recursive: true, force: true });
+  for (const db of dbs) db.close();
+  if (!dir) return;
+  // Windows 句柄释放有延迟:重试几次,最终失败也不算测试失败(临时目录留给系统清理)
+  for (let i = 0; i < 3; i++) {
+    try {
+      await rm(dir, { recursive: true, force: true });
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
 });
 
 const noopLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as unknown as MemoryLogger;
 const cfg = { hall: { enabled: ['work', 'relationships', 'learning', 'creative', 'home', 'health', 'finance', 'journey'] } } as unknown as MemoryConfig;
 const ctx = {} as Context;
 
+const dbs: MemoryDb[] = [];
+
 async function mkL1(): Promise<L1Store> {
   const root = await tmp();
   const db = new MemoryDb(join(root, `m-${Math.random().toString(36).slice(2)}.db`), 0);
   db.init();
+  dbs.push(db); // afterAll 显式关句柄:Windows 上不关会导致 tmp 清理 EBUSY
   return new L1Store(root, db, new NoopEmbeddingService());
 }
 
