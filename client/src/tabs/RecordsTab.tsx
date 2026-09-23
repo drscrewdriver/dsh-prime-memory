@@ -1,6 +1,6 @@
 /** Tab：L1 记忆浏览器（搜索/筛选/分页 + 展开详情 + 高权限**退场(软删)** + 已退场区恢复）。 */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { ListRecordsRequest, RetiredRecordView, UiRecord } from '../../../src/contract.js';
+import type { ListRecordsRequest, RetiredRecordView, RoomCount, UiRecord } from '../../../src/contract.js';
 import { TYPE_LABELS, fmtTime } from '../format.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
@@ -12,6 +12,8 @@ interface QueryConds {
   type: string;
   scene: string;
   halls: string[];
+  /** Room 过滤(自生长 slug tag;空 = 不过滤)。 */
+  tag: string;
 }
 
 // 两族混合视图：筛选器提供全部 7 种类型
@@ -53,11 +55,14 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [typeFilter, setTypeFilter] = useState('');
   const [sceneFilter, setSceneFilter] = useState('');
   const [hallFilter, setHallFilter] = useState<string[]>([]);
+  // Room 过滤(标签自生长分类):点分类 chip 即按该 tag 筛选记录
+  const [tagFilter, setTagFilter] = useState('');
+  const [rooms, setRooms] = useState<RoomCount[]>([]);
   // Wing 词表(服务端下发,R8);null = 未下发(降级:从已加载记录派生)
   const [wingCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
 
   // 上一次实际生效的查询条件（「加载更多」按它续页）
-  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [] });
+  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [], tag: '' });
 
   // 请求序号：快速搜索/翻页时旧响应过期即弃，避免慢响应覆盖新结果
   const seqRef = useRef(0);
@@ -72,6 +77,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       if (conds.type) payload.type = conds.type;
       if (conds.scene) payload.scene = conds.scene;
       if (conds.halls.length > 0) payload.halls = conds.halls;
+      if (conds.tag) payload.tag = conds.tag;
       rpc('dsh-memory/list-records', payload)
         .then((r) => {
           if (token !== seqRef.current) return;
@@ -100,14 +106,26 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   );
 
   const search = () => {
-    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter };
+    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter };
     setLast(conds);
     fetchPage(conds, 0, false);
   };
 
+  // Room 分类(标签自生长):tags 只在反刍里变,首屏拉一次 + 手动刷新时重拉
+  const loadRooms = useCallback(() => {
+    rpc('dsh-memory/rooms-get', {})
+      .then((r) => {
+        if (r && r.ok) setRooms(r.value.rooms ?? []);
+      })
+      .catch(() => {
+        /* 端点不可用时静默:Room 区块降级为不显示,不影响列表主功能 */
+      });
+  }, [rpc]);
+
   useEffect(() => {
-    fetchPage({ query: '', type: '', scene: '', halls: [] }, 0, false);
-  }, [fetchPage]);
+    fetchPage({ query: '', type: '', scene: '', halls: [], tag: '' }, 0, false);
+    loadRooms();
+  }, [fetchPage, loadRooms]);
 
   // 读当前写删门状态（settings-get 的 key 均脱敏，memoryMutate 布尔原样）
   const loadHiPriv = useCallback(() => {
@@ -295,6 +313,45 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           {hiPriv ? '高权限：开' : '高权限：关'}
         </NButton>
       </div>
+      {/* ── Room 分类(标签自生长):点 chip 按该 tag 筛选,再点取消 ── */}
+      {rooms.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+          <span style={S.muted}>Room 分类</span>
+          {rooms.slice(0, 40).map((r) => {
+            const on = tagFilter === r.room;
+            return (
+              <button
+                key={r.room}
+                type="button"
+                title={on ? '取消按该 Room 筛选' : '按该 Room 筛选记录'}
+                onClick={() => {
+                  const next = on ? '' : r.room;
+                  setTagFilter(next);
+                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next };
+                  setLast(conds);
+                  fetchPage(conds, 0, false);
+                }}
+                style={{
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+                  background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+                  color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+                }}
+              >
+                {r.room + ' · ' + r.count}
+              </button>
+            );
+          })}
+          {rooms.length > 40 ? <span style={S.muted}>{'（仅显示前 40 / 共 ' + rooms.length + '）'}</span> : null}
+        </div>
+      ) : (
+        <div style={{ ...S.muted, marginBottom: 10 }}>
+          Room 分类：暂无（由反刍涌现的标签自动生成，无需手工建立）
+        </div>
+      )}
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>{loading ? '加载中…' : countText}</span>
         {/* 批量删除：勾选后成组调 records-delete；写删门关闭时点击给提示 */}
@@ -319,6 +376,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         <NButton
           onClick={() => {
             fetchPage(last, 0, false);
+            loadRooms();
           }}
         >
           刷新

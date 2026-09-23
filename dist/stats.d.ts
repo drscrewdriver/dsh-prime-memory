@@ -13,6 +13,7 @@ import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
 import { type MemoryFamily, type MemoryLogger } from './types.js';
+import { type MemoryBackend } from './store/memory-backend.js';
 export declare const PLUGIN_VERSION: string;
 /** 运行态来源(index.ts 注入):避免 stats 撒谎字段。 */
 export interface MemoryStatusSource {
@@ -91,6 +92,8 @@ export declare function registerMemoryRpc(ctx: Context, cfg: MemoryConfig, store
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 记忆后端(后台边界);未装配时回退为包 l1 的进程内实现。 */
+    backend?: MemoryBackend;
     /** 图谱存储(可选:未装配时图谱端点返空,不报错)。 */
     graph?: GraphStore;
 }, logger: MemoryLogger, status?: MemoryStatusSource, live?: LiveSettingsHandle, modes?: SessionModeStore, dataDir?: string, rebuild?: RebuildController, embedManager?: EmbeddingManager, sessionInfo?: SessionInfoSource, 
@@ -105,6 +108,8 @@ export interface EndpointDeps {
         scenes: Record<MemoryFamily, SceneStore>;
         persona: Record<MemoryFamily, PersonaStore>;
         state: StateStore;
+        /** 记忆后端(后台边界);未装配时回退为包 l1 的进程内实现。 */
+        backend?: MemoryBackend;
         graph?: GraphStore;
     };
     status?: MemoryStatusSource;

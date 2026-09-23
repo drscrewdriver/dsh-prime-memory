@@ -198,6 +198,26 @@ export declare class MemoryDb {
      */
     clearL1(): boolean;
     countL1(): number;
+    /**
+     * 游标分批取 L1 元信息(**仅三列**):后台巡检专用。
+     *
+     * 为什么不复用 `getAllL1()`:后者会连 `content` 全文一起拉,且是一次性全量同步反序列化——
+     * 记录数随使用单调增长,后台任务在事件循环里做这件事会阻塞所有 RPC。
+     * 巡检(反刍重标定 / wing 回填)只需要 `id / type / metadata` 三列。
+     *
+     * `ORDER BY record_id` 而非 `updated_time`:record_id 是主键(唯一且不变),
+     * 巡检期间即使有写回也不会有分页漂移;updated_time 会被写回改动。
+     */
+    getAllL1Lite(limit: number, offset: number): L1MetaLite[];
+    /**
+     * **只**更新 metadata_json(顺带 updated_time),绝不碰 content 或其它列。
+     *
+     * 为什么需要它:分批巡检后调用方手里**没有 content**(L1MetaLite 只有三列),
+     * 若沿用 `upsert({...lite, metadata})` 会把正文写成空 —— 这是分页改造最危险的坑。
+     *
+     * 返回 false 表示 id 不存在或写入失败(调用方据此记账,不静默)。
+     */
+    patchL1Metadata(id: string, metadata: Record<string, unknown>): boolean;
     /** 全量读取(调试/迁移/重嵌入用;检索请走 FTS/向量)。 */
     getAllL1(): MemoryRecord[];
     getL1ByIds(ids: string[]): MemoryRecord[];
@@ -362,6 +382,8 @@ export declare class MemoryDb {
         family?: string;
         hall?: string;
         halls?: readonly string[];
+        /** Room 过滤(metadata.tags 含该 slug)。 */
+        tag?: string;
         workspaceId?: string;
         limit: number;
         offset: number;
@@ -381,6 +403,23 @@ export declare class MemoryDb {
     scanL1Metadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number;
     /** retired 行计数(退场判定与 listRetiredL1 同口径:valid_to 非空)。失败返回 0。 */
     retiredL1Count(): number;
+    /**
+     * Room 计数(**标签自生长分类**):展开 `metadata.tags` 聚合,1 个 slug tag = 1 个 Room。
+     *
+     * 零 schema 变更——tags 落库即自动成为新 Room,无需注册表/迁移,这就是"自生长"。
+     *
+     * **口径与 `wingL1Counts()` 一致(不过滤 retired)**:两者常在同一面板相邻展示,
+     * 口径不一会出现互相矛盾的数字。
+     *
+     * `json_valid` 守卫:单行 metadata 损坏时 `json_each` 会抛「malformed JSON」并连带
+     * 整条聚合失败——宁可跳过该行,也不能让整个 Room 列表空掉。
+     *
+     * 失败返回空数组(存储降级或聚合异常都按"暂无 Room"处理,不报错)。
+     */
+    l1RoomCounts(): Array<{
+        room: string;
+        count: number;
+    }>;
     /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
     wingL1Counts(): {
         counts: Record<string, number>;
@@ -483,5 +522,16 @@ export declare class MemoryDb {
         embedding: Float32Array;
     }>, recordedAt: string): number;
     close(): void;
+}
+/**
+ * 后台巡检用的 L1 最小投影(**不含 content**)。
+ *
+ * 刻意与 `MemoryRecord` 分开:`MemoryRecord.content` 是必填的,若把三列投影硬塞进该类型,
+ * 调用方会在写回时把正文写成空。用独立的窄类型 + `patchL1Metadata` 才能让"不碰正文"成为类型层面的约束。
+ */
+export interface L1MetaLite {
+    id: string;
+    type: string;
+    metadata: Record<string, unknown>;
 }
 export { isZeroVector, vecToBuffer };

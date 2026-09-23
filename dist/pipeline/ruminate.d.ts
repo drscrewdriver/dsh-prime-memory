@@ -15,6 +15,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
 import type { L1Store } from '../store/l1.js';
+import { type MemoryBackend } from '../store/memory-backend.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { StateStore } from '../store/state.js';
@@ -65,8 +66,12 @@ export declare class RuminateController {
     private sessions;
     private totalL1;
     private pendingFile;
+    /** 记忆后端:未注入时包 l1(进程内,行为与改造前等价)。 */
+    private backend;
     constructor(ctx: Context, cfg: MemoryConfig, runner: Pick<MemoryRunner, 'enqueue' | 'states'>, stores: {
         l1: L1Store;
+        /** 记忆后端(后台边界);缺省 = 包 l1 的进程内实现(行为等价)。 */
+        backend?: MemoryBackend;
         scenes: Record<MemoryFamily, SceneStore>;
         persona: Record<MemoryFamily, PersonaStore>;
         state: StateStore;

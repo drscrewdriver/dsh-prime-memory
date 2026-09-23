@@ -13,7 +13,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import { type MemoryLogger, type MemoryRecord } from '../types.js';
-import type { L1Store } from '../store/l1.js';
+import type { MemoryBackend } from '../store/memory-backend.js';
 import type { MemoryConfig } from '../config.js';
 export interface RelabelStats {
     /** 巡检记录总数。 */
@@ -34,7 +34,8 @@ export interface RelabelStats {
 export interface RelabelDeps {
     ctx: Context;
     cfg: MemoryConfig;
-    l1: L1Store;
+    /** 记忆后端(后台边界:可 worker 化;热路径不走这里)。 */
+    backend: MemoryBackend;
     logger: MemoryLogger;
 }
 /** 测试注入口:分别替换 wing 标注器与 tags 标注器(默认走真实 LLM 路径)。 */
@@ -49,8 +50,14 @@ export interface RelabelOverrides {
     }>>;
 }
 export interface RelabelOpts {
-    /** 批次进度回调(relabeling 阶段的 detail/子进度由此驱动)。 */
-    progress?: (text: string, done: number, total: number) => void;
+    /**
+     * 批次进度回调(relabeling 阶段的 detail/子进度由此驱动)。
+     *
+     * 第 4 参 `label` 用于**区分机械段与 LLM 段**:机械巡检按 200 条/批推进,
+     * LLM 段按 20 条/批推进,两者粒度不同,面板必须能分辨(否则用户看到的是
+     * 一个忽快忽慢的"重标定批次")。
+     */
+    progress?: (text: string, done: number, total: number, label?: string) => void;
     /** LLM 段墙钟预算(毫秒);超时停止,剩余计入 deferred 留待下次反刍。默认 90s。 */
     timeBudgetMs?: number;
 }

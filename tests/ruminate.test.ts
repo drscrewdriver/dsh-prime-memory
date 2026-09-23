@@ -64,7 +64,7 @@ function makeController(file: string, seen: Enqueued[]): RuminateController {
     },
     states: {},
   };
-  const stores = { l1: { list: () => ({ items: [], total: 0 }) }, scenes: {}, persona: {}, state: {} };
+  const stores = { l1: { list: () => ({ items: [], total: 0 }), invalidateRooms: () => {} }, scenes: {}, persona: {}, state: {} };
   return new RuminateController(
     {} as never,
     cfg(),
@@ -137,7 +137,7 @@ describe('ruminate: 控制器读取 pending.json(形状契约护栏)', () => {
       states: { chat: { newMemoriesSinceL2: 3, lastL2At: 0 }, work: { newMemoriesSinceL2: 0, lastL2At: 0 } },
     };
     const stores = {
-      l1: { list: () => ({ items: [{ id: 'a' }], total: 1 }) },
+      l1: { list: () => ({ items: [{ id: 'a' }], total: 1 }), invalidateRooms: () => {} },
       scenes: { chat: mkScenes(), work: mkScenes() },
       persona: { chat: {}, work: {} },
       state: {},

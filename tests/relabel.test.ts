@@ -10,6 +10,7 @@ import { MemoryDb } from '../src/store/sqlite.js';
 import { L1Store } from '../src/store/l1.js';
 import { NoopEmbeddingService } from '../src/store/embedding.js';
 import { relabelPass } from '../src/pipeline/relabel.js';
+import { InProcMemoryBackend } from '../src/store/memory-backend.js';
 import type { MemoryConfig, MemoryLogger, MemoryRecord } from '../src/types.js';
 import type { Context } from '@deepseek-ai/cordis';
 
@@ -58,7 +59,7 @@ describe('relabelPass 机械校验(零 LLM 部分)', () => {
       { id: 'r3', content: '未打标', type: 'persona', ...base, metadata: {} },
     ]);
     const stats = await relabelPass(
-      { ctx, cfg, l1, logger: noopLogger },
+      { ctx, cfg, backend: new InProcMemoryBackend(l1), logger: noopLogger },
       {
         wingLabeler: async (chunk) => chunk.filter((r) => r.id === 'r3').map((r) => ({ record: r, wing: 'creative' })),
         tagger: async (chunk) => chunk.map((r) => ({ record: r, tags: ['Riley-College', 'x_9', 'ok-tag'] })),
@@ -85,7 +86,7 @@ describe('relabelPass 机械校验(零 LLM 部分)', () => {
     await l1.appendNew([{ id: 'u1', content: '未打标', type: 'episodic', ...base, metadata: {} }]);
     let llmCalled = false;
     const stats = await relabelPass(
-      { ctx, cfg: { hall: { enabled: [] } } as unknown as MemoryConfig, l1, logger: noopLogger },
+      { ctx, cfg: { hall: { enabled: [] } } as unknown as MemoryConfig, backend: new InProcMemoryBackend(l1), logger: noopLogger },
       { wingLabeler: async () => { llmCalled = true; return []; }, tagger: async () => [] },
     );
     expect(llmCalled).toBe(false);
@@ -98,10 +99,29 @@ describe('relabelPass 机械校验(零 LLM 部分)', () => {
     const l1 = await mkL1();
     let llmCalled = false;
     const stats = await relabelPass(
-      { ctx, cfg, l1, logger: noopLogger },
+      { ctx, cfg, backend: new InProcMemoryBackend(l1), logger: noopLogger },
       { wingLabeler: async () => { llmCalled = true; return []; }, tagger: async () => [] },
     );
     expect(stats.checked).toBe(0);
     expect(llmCalled).toBe(false);
+  });
+
+  it('机械段必须产出子进度(否则面板在写回期间全空白)', async () => {
+    const l1 = await mkL1();
+    await l1.appendNew([
+      { id: 'p1', content: 'a', type: 'work_fact', ...base, metadata: {} },
+      { id: 'p2', content: 'b', type: 'episodic', ...base, metadata: {} },
+    ]);
+    const seen: Array<{ label?: string; done: number; total: number }> = [];
+    await relabelPass(
+      { ctx, cfg, backend: new InProcMemoryBackend(l1), logger: noopLogger },
+      { wingLabeler: async () => [], tagger: async () => [] },
+      { progress: (_text, done, total, label) => seen.push({ label, done, total }) },
+    );
+    // 机械巡检是第一个上报的段,且必须带 label(面板靠它区分机械段与 LLM 段)
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen[0].label).toBe('机械巡检');
+    expect(seen[0].total).toBe(2);
+    expect(seen[0].done).toBe(2);
   });
 });

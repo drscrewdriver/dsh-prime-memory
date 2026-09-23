@@ -12,7 +12,8 @@
  *   不同,不合并;
  * - 端点全集为 26 个(含面板高权限删除 records-delete 与图谱两端点)。
  */
-import type { MemoryFamily, MemoryMode } from './types.js';
+import type { MemoryFamily, MemoryMode, RoomCount } from './types.js';
+export type { RoomCount };
 import type { GraphEdge, GraphNode } from './graph/types.js';
 /** 蒸馏思考档位:'' = 自动(模型默认档 → high)。运行时词汇表源是 config.ts 的
  *  EFFORT_CHOICES(satisfies readonly EffortChoice[] 反向锁定防漂移)。 */
@@ -497,6 +498,20 @@ export interface WingOverviewResponse {
     /** 未打标(metadata 无 wing)计数——角上"另有 N 条未打标"与一键回填的数据源。 */
     unlabeled: number;
 }
+/**
+ * dsh-memory/rooms-get(Room 分类计数)。
+ *
+ * Room = 标签类**自生长**分类:由 `metadata.tags` 直接派生,1 个 slug tag = 1 个 Room。
+ * 无枚举、无注册表、无 schema —— 反刍涌现出新 tag 即自动出现新 Room。
+ *
+ * 降级/无 tags 时 `rooms` 为空数组(面板显示"暂无"),不报错。
+ */
+export interface RoomsGetResponse {
+    /** Room 列表(按记录数降序,同数按名升序)。 */
+    rooms: RoomCount[];
+    /** Room 总数(= rooms.length,冗余只为前端少写一次 .length)。 */
+    total: number;
+}
 /** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */
 export interface WingBackfillResponse {
     /** true = 本次触发启动了新任务;false = 已有任务在跑(单飞,不叠加)。 */
@@ -629,6 +644,12 @@ export interface ListRecordsRequest {
     hall?: string;
     /** Wing 过滤多值(R13):命中任一即可;查询可多选,记录打标仍单值。 */
     halls?: readonly string[];
+    /**
+     * Room 过滤(metadata.tags 含该 slug;空 = 不过滤)。
+     *
+     * Room 由 tags 派生(自生长),故这里传的是**具体 tag 名**而非枚举 id。
+     */
+    tag?: string;
     /** 1~200,默认 50。 */
     limit?: number;
     /** 0~1_000_000。 */
@@ -1121,6 +1142,7 @@ export interface DshMemoryRequestMap {
     'dsh-memory/session-mode-get': SessionModeGetRequest;
     'dsh-memory/session-mode-set': SessionModeSetRequest;
     'dsh-memory/wing-overview': Record<string, never>;
+    'dsh-memory/rooms-get': Record<string, never>;
     'dsh-memory/wing-backfill': Record<string, never>;
     'dsh-memory/session-stats': SessionStatsRequest;
     'dsh-memory/settings-get': Record<string, never>;
@@ -1164,6 +1186,7 @@ export interface DshMemoryResponseMap {
     'dsh-memory/session-mode-get': SessionModeGetResponse;
     'dsh-memory/session-mode-set': SessionModeSetResponse;
     'dsh-memory/wing-overview': WingOverviewResponse;
+    'dsh-memory/rooms-get': RoomsGetResponse;
     'dsh-memory/wing-backfill': WingBackfillResponse;
     'dsh-memory/session-stats': SessionStatsResponse;
     'dsh-memory/settings-get': SettingsGetResponse;

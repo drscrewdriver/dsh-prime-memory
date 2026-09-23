@@ -11,12 +11,13 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import { type MemoryLogger, type MemoryRecord } from './types.js';
-import type { L1Store } from './store/l1.js';
+import type { MemoryBackend } from './store/memory-backend.js';
 import type { MemoryConfig } from './config.js';
 export interface HallBackfillDeps {
     ctx: Context;
     cfg: MemoryConfig;
-    l1: L1Store;
+    /** 记忆后端(后台边界)。 */
+    backend: MemoryBackend;
     logger: MemoryLogger;
 }
 export interface HallBackfillState {
@@ -34,7 +35,7 @@ export declare function startWingBackfill(deps: HallBackfillDeps): {
 /** Wing 标注器(导出):一键回填与反刍重标定共用同一 LLM 路径与措辞。 */
 export declare function labelWingChunk(ctx: Context, cfg: MemoryConfig, logger: MemoryLogger, chunk: MemoryRecord[], candidates: string): Promise<Array<{
     record: MemoryRecord;
-    hall: string;
+    wing: string;
 }>>;
 /**
  * 涌现标签标注器(导出):为一批记录提炼 slug 标签(tags)——Room 的前身。

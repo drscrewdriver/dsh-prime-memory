@@ -25,6 +25,8 @@ import { sourceAnchorLabels } from './pipeline/anchors.js';
 import { readSupersedeMarker } from './store/supersede.js';
 import { isSnapshotName } from './store/l1-snapshot.js';
 import { WING_CATALOG, WING_FALLBACK } from './types.js';
+import { isTag } from './metadata-validators.js';
+import { InProcMemoryBackend } from './store/memory-backend.js';
 import { isWingCorner } from './store/session-modes.js';
 import { startWingBackfill } from './wing-backfill.js';
 import { errDetail } from './util/filelog.js';
@@ -48,6 +50,7 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/session-mode-get',
     'dsh-memory/session-mode-set',
     'dsh-memory/wing-overview',
+    'dsh-memory/rooms-get',
     'dsh-memory/wing-backfill',
     'dsh-memory/session-stats',
     'dsh-memory/settings-get',
@@ -448,9 +451,20 @@ export async function handleEndpoint(endpoint, payload, deps) {
             };
             return v;
         }
+        // ── Room 分类计数(标签自生长分类;展开 metadata.tags 聚合,零 schema) ──
+        case 'dsh-memory/rooms-get': {
+            const rooms = stores.l1.listRooms();
+            const v = { rooms, total: rooms.length };
+            return v;
+        }
         // ── 一键回填(task_15):后台任务,单飞;端点立即返回,进度看 wing-overview ──
         case 'dsh-memory/wing-backfill': {
-            const r = startWingBackfill({ ctx: deps.ctx, cfg: deps.cfg, l1: stores.l1, logger: deps.logger });
+            const r = startWingBackfill({
+                ctx: deps.ctx,
+                cfg: deps.cfg,
+                backend: stores.backend ?? new InProcMemoryBackend(stores.l1),
+                logger: deps.logger,
+            });
             return r;
         }
         // ── 会话级统计(悬浮卡信息区;热路径端点,见 SessionInfoSource 的零 I/O 硬规则) ──
@@ -732,6 +746,10 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const p = (payload ?? {});
             if (p.query !== undefined && p.query.length > 4096)
                 throw new Error('query 过长(≤4096 字符)');
+            // Room 过滤:tag 是**自生长**的 slug(无枚举),只做形状与长度校验(SQL 侧参数化)
+            const tagSel = typeof p.tag === 'string' ? p.tag.trim().slice(0, 64) : '';
+            if (tagSel && !isTag(tagSel))
+                throw new Error('tag 非法(需小写字母数字连字符,1-32 字符)');
             // R13 多值归一: halls 数组只留非空字符串(≤40 字符),去重,上限 8(角数);
             // wing 单值保留兼容,归一后与 halls 合并
             const wingSel = Array.from(new Set([
@@ -751,9 +769,9 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 const wanted = offset + limit + 1;
                 const hits = await stores.l1.search(p.query, Math.min(wanted, SEARCH_CAP), { type: p.type || undefined });
                 let filtered = p.scene ? hits.filter((h) => h.scene_name === p.scene) : hits;
-                // Wing 过滤(检索命中不含 metadata):按 id 批量取回元数据后过滤
+                // Wing / Room 过滤(检索命中不含 metadata):按 id 批量取回元数据后过滤
                 let metaById = null;
-                if (wingSel.length > 0 && filtered.length > 0) {
+                if ((wingSel.length > 0 || tagSel) && filtered.length > 0) {
                     const meta = new Map();
                     for (const r of stores.l1.getByIds(filtered.map((h) => h.id))) {
                         if (r.metadata)
@@ -761,8 +779,18 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     }
                     metaById = meta;
                     filtered = filtered.filter((h) => {
-                        const wing = meta.get(h.id)?.hall;
-                        return typeof wing === 'string' && wing !== '' && wingSel.includes(wing);
+                        const m = meta.get(h.id);
+                        if (wingSel.length > 0) {
+                            const wing = m?.hall;
+                            if (!(typeof wing === 'string' && wing !== '' && wingSel.includes(wing)))
+                                return false;
+                        }
+                        if (tagSel) {
+                            const tags = m?.tags;
+                            if (!Array.isArray(tags) || !tags.some((t) => t === tagSel))
+                                return false;
+                        }
+                        return true;
                     });
                 }
                 const resp = {
@@ -775,7 +803,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 };
                 return resp;
             }
-            const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, limit, offset });
+            const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, limit, offset });
             const resp = {
                 items: items.map(hitToUiRecord),
                 hasMore: offset + items.length < total,

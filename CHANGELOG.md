@@ -56,6 +56,26 @@
 - **`dsh-memory/embedding-reindex` 声明了却恒返 404。** 端点写在契约里，但既缺席 `MEMORY_ENDPOINTS` 白名单、也没有分发 `case`；同时 `startReindex()` 是**死代码**，设置页「向量索引」区块因此只有"取消"没有"开始"。补白名单 + `case` + 用例。
 - **`UiRecord.sourceMessageIds` 是死字段。** 它读的是 `l1_records` **从不存在的列**，永远回退 `[]`，于是记录面板的来源行**从未渲染过**。已替换为读真实数据的 `sourceAnchors`。
 
+## [0.16.0] — 2026-09-24
+
+### 修复
+
+- **重标定/一键回填的 Wing 打标整段是废的**：提示词要求模型返回 `{"id":…,"wing":…}`，解析却读 `item.hall` → 永远取不到 → 整批静默丢弃**（实测 `wingLabeled=0 / tagged=0 / llmSkipped=60`，而日志里 LLM 明明成功）。这是 hall→Wing 改名的**第 3 次同类误伤**（前两次 `cfg.hall`、session-modes 的 `hall`）——提示词里的 JSON 字段名属于 **wire 协议**，不该跟着 UI 文案改名。现解析读 `wing` 并加枚举校验；**丢弃必须留日志**（id 配对失败 / 非法值各一条 warn），删掉永不触发的死 `catch`。
+- **`embedding-state-get` 从 2.5–3.1s 降到毫秒级**。它每次现场跑 6 次 COUNT，其中两次是 `l1_records LEFT JOIN l1_vec … IS NULL`——`l1_vec` 是 **vec0 虚拟表(1024 维)**，普通谓词下退化成逐行 probe。改为「总数 − 已嵌入 − skip」相减（实测 L1 55ms→0ms、L0 371ms→3ms），并加**分级 TTL 缓存**（忙时 1s / 空闲 30s + 重建/切换/补齐收尾显式失效）。
+- **重标定机械段不再一次性全量加载** `l1.all()`。改游标分页 + 只取 `id/type/metadata` 三列（`getAllL1Lite`），每批 200 条后让位；写回走 `patchL1Metadata`（**只改 metadata，绝不动正文**，有测试钉死）。
+
+### 新增
+
+- **Room 层：标签类自生长分类**。MemPalace 五层里 Room 位于 Wing/认知 hall 之下，由 `metadata.tags` **动态派生**（`json_each` 聚合，零 schema、零注册表）——新 tag 落库即成为新 Room。新增 `rooms-get` 端点与记录面板的 Room 分类区块（点击按该 tag 筛选，`list-records` 新增 `tag` 过滤通道）。实测本机已有 **78 个 Room**（聚合 2ms）。
+- **共享校验模块 `src/metadata-validators.ts`**：`isWingId` / `isCognitiveHall` / `isTag` / `normTags` 集中一处。此前 Wing 侧**完全没有校验**（任何非空字符串都能写进 `metadata.hall`），而认知 hall 侧有 `isCognitiveHall()` 严格校验——两处枚举不对称是数据完整性缺口。
+- **后台处理 worker 隔离（B 窄切）**：抽出 `MemoryBackend` 边界，后台批处理（反刍/回填/重标定）的 SQLite 访问搬进 `worker_threads`，不再占住宿主主事件循环；起不来自动退回进程内并留 warn（**隔离失败绝不让后台处理失效**）。热路径（召回/捕获）一行未动——它们每轮调 DB，线程化会付 IPC 税。
+- **批次进度可按段区分**：机械巡检 / 补 Wing / 提炼标签各带独立 label 与批次进度（此前 `sub` 只在 LLM 段有值，机械段 1439 条写回期间面板全空白）。
+
+### 变更
+
+- 重标定的 metadata 写回从 `l1.upsert` 改为 `patchMetadata`。**只改 metadata 原本就不该重算嵌入**——此前每条记录写回都在跑一次 embedding，单次重标定最多浪费 900 次嵌入调用。
+
+
 ## [0.12.0] — 2026-09-17
 
 ### 新增

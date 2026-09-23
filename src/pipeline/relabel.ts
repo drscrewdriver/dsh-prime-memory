@@ -14,10 +14,12 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { cognitiveHallOf, COG_HALL_METADATA_KEY } from '../cognitive-hall.js';
 import { normWingEnabled } from '../config.js';
-import { WING_FALLBACK, WING_CATALOG, type MemoryLogger, type MemoryRecord } from '../types.js';
-import type { L1Store } from '../store/l1.js';
+import { WING_FALLBACK, type MemoryLogger, type MemoryRecord } from '../types.js';
+import type { MemoryBackend } from '../store/memory-backend.js';
 import type { MemoryConfig } from '../config.js';
 import { labelWingChunk, tagChunk } from '../wing-backfill.js';
+import { isWingId, normTags } from '../metadata-validators.js';
+import { yieldLoop } from '../util/yield.js';
 
 /** 机械写回上限(首次全量巡检可能上千条待补 cogHall;分次反刍消化,防单次跑飞)。 */
 const MECH_CAP = 800;
@@ -25,8 +27,6 @@ const MECH_CAP = 800;
 const LLM_CAP = 60;
 /** LLM 批大小(一次调用判定的记录数;批次进度/预算/让位都以此为粒度)。 */
 const LLM_CHUNK = 20;
-/** slug 标签校验:小写字母数字连字符,1-32 字符。 */
-const TAG_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
 export interface RelabelStats {
   /** 巡检记录总数。 */
@@ -48,7 +48,8 @@ export interface RelabelStats {
 export interface RelabelDeps {
   ctx: Context;
   cfg: MemoryConfig;
-  l1: L1Store;
+  /** 记忆后端(后台边界:可 worker 化;热路径不走这里)。 */
+  backend: MemoryBackend;
   logger: MemoryLogger;
 }
 
@@ -59,31 +60,24 @@ export interface RelabelOverrides {
 }
 
 export interface RelabelOpts {
-  /** 批次进度回调(relabeling 阶段的 detail/子进度由此驱动)。 */
-  progress?: (text: string, done: number, total: number) => void;
+  /**
+   * 批次进度回调(relabeling 阶段的 detail/子进度由此驱动)。
+   *
+   * 第 4 参 `label` 用于**区分机械段与 LLM 段**:机械巡检按 200 条/批推进,
+   * LLM 段按 20 条/批推进,两者粒度不同,面板必须能分辨(否则用户看到的是
+   * 一个忽快忽慢的"重标定批次")。
+   */
+  progress?: (text: string, done: number, total: number, label?: string) => void;
   /** LLM 段墙钟预算(毫秒);超时停止,剩余计入 deferred 留待下次反刍。默认 90s。 */
   timeBudgetMs?: number;
 }
-
-function slugTags(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  const out = v
-    .filter((t): t is string => typeof t === 'string')
-    .map((t) => t.trim().toLowerCase())
-    .filter((t) => TAG_RE.test(t));
-  return [...new Set(out)].slice(0, 3);
-}
-
-/** 让出事件循环:后台批次的每一步写回之间都必须插队友好让位,
- *  保证设置面板/input 面板的状态 RPC 永远优先于后台处理(setImmediate 级延迟)。 */
-const yieldLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 export async function relabelPass(
   deps: RelabelDeps,
   overrides: RelabelOverrides = {},
   opts: RelabelOpts = {},
 ): Promise<RelabelStats> {
-  const { ctx, cfg, l1, logger } = deps;
+  const { ctx, cfg, backend, logger } = deps;
   const timeBudgetMs = opts.timeBudgetMs ?? 90_000;
   const stats: RelabelStats = {
     checked: 0,
@@ -95,68 +89,95 @@ export async function relabelPass(
     deferred: 0,
   };
 
-  const wingIds = new Set<string>([...WING_CATALOG.map((w) => w.id), WING_FALLBACK]);
-  const all = l1.all();
-  stats.checked = all.length;
-
-  // ── 机械校验 + 修正(有界写回) ──
-  const needWingLLM: MemoryRecord[] = [];
+  // ── 机械校验 + 修正(游标分批 + 有界写回) ──
+  //
+  // 分批而非全量:轻量投影只取 id/type/metadata,不拉 content(巡检用不到正文)。
+  // 每批后 yieldLoop 让位 → 巡检不会饿死面板 RPC,因此无需另设墙钟预算;
+  // 写回上限仍由 MECH_CAP 兜底(超限的记录留给下次反刍,不入账)。
+  const PAGE = 200;
+  const total = await backend.size();
+  const needWingIds: string[] = [];
+  const needWingSeen = new Set<string>();
+  let scanned = 0;
+  let offset = 0;
   let mechWrites = 0;
-  for (const r of all) {
-    const meta = { ...(r.metadata ?? {}) } as Record<string, unknown>;
-    let changed = false;
+  let mechCapWarned = false;
+  for (;;) {
+    const page = await backend.allLite(PAGE, offset);
+    if (page.length === 0) break;
+    for (const r of page) {
+      const meta = { ...r.metadata } as Record<string, unknown>;
+      let changed = false;
+      let stripped = false;
+      let cogFixed = false;
 
-    // Wing 合法性:非法值剥离,转入 LLM 重标队列
-    const wing = meta.hall;
-    if (typeof wing === 'string' && wing !== '' && !wingIds.has(wing)) {
-      delete meta.hall;
-      changed = true;
-      stats.wingInvalidFixed++;
-      needWingLLM.push({ ...r, metadata: meta });
-    }
+      // Wing 合法性:非法值剥离,转入 LLM 重标队列(词表校验统一走 metadata-validators)
+      const wing = meta.hall;
+      if (typeof wing === 'string' && wing !== '' && !isWingId(wing)) {
+        delete meta.hall;
+        changed = true;
+        stripped = true;
+      }
 
-    // 认知 hall:type 可派生而未写/不一致 → 修正
-    const expected = cognitiveHallOf(r.type);
-    if (expected && meta[COG_HALL_METADATA_KEY] !== expected) {
-      meta[COG_HALL_METADATA_KEY] = expected;
-      changed = true;
-      stats.cogHallFixed++;
-    }
+      // 认知 hall:type 可派生而未写/不一致 → 修正
+      const expected = cognitiveHallOf(r.type);
+      if (expected && meta[COG_HALL_METADATA_KEY] !== expected) {
+        meta[COG_HALL_METADATA_KEY] = expected;
+        changed = true;
+        cogFixed = true;
+      }
 
-    if (changed && mechWrites < MECH_CAP) {
-      mechWrites++;
-      try {
-        await l1.upsert({ ...r, metadata: meta });
-        await yieldLoop(); // 每次写回后让位:面板状态 RPC 优先
-      } catch (err) {
-        logger.warn(`[memory] 反刍重标定机械写回失败(id=${r.id},跳过): ${err instanceof Error ? err.message : String(err)}`);
-        mechWrites--;
+      if (changed) {
+        // 计数只记**已落盘**的条数(超上限或写失败都不入账,面板数字才对得上库)
+        if (mechWrites < MECH_CAP && await backend.patchMetadata(r.id, meta)) {
+          mechWrites++;
+          if (stripped) stats.wingInvalidFixed++;
+          if (cogFixed) stats.cogHallFixed++;
+        } else if (mechWrites >= MECH_CAP) {
+          // 达上限:本轮不再写,留待下次反刍(静默跳过会让人误以为已处理完,故留痕一次)
+          if (!mechCapWarned) {
+            mechCapWarned = true;
+            logger.info(`[memory] 反刍重标定:机械写回达上限 ${MECH_CAP} 条,其余留待下次反刍`);
+          }
+        } else {
+          logger.warn(`[memory] 反刍重标定机械写回失败(id=${r.id},跳过)`);
+        }
+      }
+
+      // 未打标 wing(含刚剥离非法值的)进 LLM 队列。
+      // 只记 id:批上限只有 60 条,内容在进入 LLM 段时按 id 补水即可,
+      // 没必要把上千条完整记录(含正文)全揣在内存里。
+      const after = meta.hall;
+      if (typeof after !== 'string' || after === '') {
+        if (!needWingSeen.has(r.id)) {
+          needWingSeen.add(r.id);
+          needWingIds.push(r.id);
+        }
       }
     }
-
-    // 未打标 wing(含刚剥离非法值的)进 LLM 队列
-    const after = meta.hall;
-    if (typeof after !== 'string' || after === '') {
-      if (!needWingLLM.some((x) => x.id === r.id)) needWingLLM.push({ ...r, metadata: meta });
-    }
+    scanned += page.length;
+    offset += PAGE;
+    opts.progress?.(`标注校验:机械巡检 ${scanned}/${total} 条`, scanned, total, '机械巡检');
+    await yieldLoop(); // 每批让位:面板状态 RPC 优先于后台巡检
   }
+  stats.checked = scanned;
 
   // ── LLM 重标定(有界;wing.enabled 关闭则跳过) ──
   const wingEnabled = normWingEnabled(cfg.hall?.enabled);
-  if (wingEnabled.length === 0 || needWingLLM.length === 0) return stats;
+  if (wingEnabled.length === 0 || needWingIds.length === 0) return stats;
 
-  const batch = needWingLLM.slice(0, LLM_CAP);
+  // 按需补水:标注器需要 content 才能构造提示词,而巡检只取了轻量投影。
+  // 只给有界批(LLM_CAP 条)按 id 精确取(主键索引),不做全量回填。
+  const batch = await backend.getByIds(needWingIds.slice(0, LLM_CAP));
   if (batch.length === 0) return stats;
   logger.info(
-    `[memory] 反刍重标定:未打标/待重标 ${needWingLLM.length} 条,本次 LLM 处理 ${batch.length} 条(候选 ${[...wingEnabled, WING_FALLBACK].join(' / ')})`,
+    `[memory] 反刍重标定:未打标/待重标 ${needWingIds.length} 条,本次 LLM 处理 ${batch.length} 条(候选 ${[...wingEnabled, WING_FALLBACK].join(' / ')})`,
   );
 
   const wingLabeler =
     overrides.wingLabeler ??
     ((chunk: MemoryRecord[]) =>
-      labelWingChunk(ctx, cfg, logger, chunk, [...wingEnabled, WING_FALLBACK].join(' / ')).then((rows) =>
-        rows.map(({ record, hall }) => ({ record, wing: hall })),
-      ));
+      labelWingChunk(ctx, cfg, logger, chunk, [...wingEnabled, WING_FALLBACK].join(' / ')));
 
   // ── LLM wing 重标定:20 条/批逐批推进,批间让位 + 墙钟预算 + 批次进度回显 ──
   const startedAt = Date.now();
@@ -172,26 +193,36 @@ export async function relabelPass(
       logger.info(`[memory] 反刍重标定:时间预算用尽,deferred ${stats.deferred} 条`);
       return stats;
     }
-    opts.progress?.(`重标定:LLM 补 wing 第 ${i + 1}/${chunks.length} 批(已完成 ${doneCount}/${batch.length} 条)`, doneCount, batch.length);
+    opts.progress?.(`重标定:LLM 补 wing 第 ${i + 1}/${chunks.length} 批(已完成 ${doneCount}/${batch.length} 条)`, doneCount, batch.length, '补 Wing');
     let rows: Array<{ record: MemoryRecord; wing: string }>;
     try {
       rows = await wingLabeler(chunks[i]);
-    } catch {
+    } catch (err) {
+      // labelWingChunk 自身已兜底(不向调用方抛);能走到这里只可能是注入桩抛错。
+      // 即便如此也必须留痕——静默吞掉批次是本次「整批丢弃却无日志」的直接教训。
       stats.llmSkipped += chunks[i].length;
       doneCount += chunks[i].length;
+      logger.warn(
+        `[memory] 重标定第 ${i + 1}/${chunks.length} 批标注器抛错,跳过 ${chunks[i].length} 条: ${err instanceof Error ? err.message : String(err)}`,
+      );
       continue;
     }
-    stats.llmSkipped += chunks[i].length - rows.length;
+    const dropped = chunks[i].length - rows.length;
+    if (dropped > 0) {
+      logger.warn(`[memory] 重标定第 ${i + 1}/${chunks.length} 批丢弃 ${dropped} 条(详见上方 wing 回填日志)`);
+    }
+    stats.llmSkipped += dropped;
     stats.wingLabeled += rows.length;
 
     // 写前重读:机械阶段可能已写过 cogHall,标注器持有旧副本——以库内最新为基线合并
-    const freshById = new Map(l1.getByIds(rows.map(({ record }) => record.id)).map((r) => [r.id, r]));
+    const freshRows = await backend.getByIds(rows.map(({ record }) => record.id));
+    const freshById = new Map(freshRows.map((r) => [r.id, r]));
     for (const { record, wing } of rows) {
       const current = freshById.get(record.id) ?? record;
       const meta = { ...(current.metadata ?? {}) } as Record<string, unknown>;
       meta.hall = wing;
       try {
-        await l1.upsert({ ...current, metadata: meta });
+        await backend.patchMetadata(current.id, meta);
         taggedPool.push(current);
       } catch {
         stats.wingLabeled--;
@@ -209,22 +240,26 @@ export async function relabelPass(
   for (let i = 0; i < tagBatch.length; i += LLM_CHUNK) tagChunks.push(tagBatch.slice(i, i + LLM_CHUNK));
   for (let i = 0; i < tagChunks.length; i++) {
     if (overBudget()) break;
-    opts.progress?.(`重标定:提炼涌现标签 第 ${i + 1}/${tagChunks.length} 批`, doneCount, batch.length);
+    opts.progress?.(`重标定:提炼涌现标签 第 ${i + 1}/${tagChunks.length} 批`, doneCount, batch.length, '提炼标签');
     let tagRows: Array<{ record: MemoryRecord; tags: string[] }>;
     try {
       tagRows = await tagger(tagChunks[i]);
-    } catch {
+    } catch (err) {
+      logger.warn(
+        `[memory] 重标定 tags 第 ${i + 1}/${tagChunks.length} 批标注器抛错,跳过 ${tagChunks[i].length} 条: ${err instanceof Error ? err.message : String(err)}`,
+      );
       continue;
     }
-    const freshForTags = new Map(l1.getByIds(tagRows.map(({ record }) => record.id)).map((r) => [r.id, r]));
+    const freshTagRows = await backend.getByIds(tagRows.map(({ record }) => record.id));
+    const freshForTags = new Map(freshTagRows.map((r) => [r.id, r]));
     for (const { record, tags: rawTags } of tagRows) {
-      const tags = slugTags(rawTags); // 归一+校验在写回点强制:无论标签来自真实 LLM 还是注入桩
+      const tags = normTags(rawTags); // 归一+校验在写回点强制:无论标签来自真实 LLM 还是注入桩
       if (tags.length === 0) continue;
       const current = freshForTags.get(record.id) ?? record;
       const meta = { ...(current.metadata ?? {}) } as Record<string, unknown>;
       meta.tags = tags;
       try {
-        await l1.upsert({ ...current, metadata: meta });
+        await backend.patchMetadata(current.id, meta);
         stats.tagged++;
         await yieldLoop();
       } catch {

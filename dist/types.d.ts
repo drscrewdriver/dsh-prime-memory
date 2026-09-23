@@ -29,6 +29,19 @@ export declare const HALL_CORNERS: readonly WingDef[];
 export declare const WING_DEFAULT_ENABLED: string[];
 export type WingId = (typeof WING_CATALOG)[number]['id'];
 export declare function wingLabel(id: string): string;
+/**
+ * Room(房间)= **标签类自生长分类**的构成单元:1 个 slug tag = 1 个 Room。
+ *
+ * MemPalace 五层映射里 Room 位于 Wing/Hall 之下、Closet/Drawer 之上:
+ * Wing(生活域)与认知 hall(类型轴)都是**固定枚举**,而 Room **没有枚举**——
+ * 它由记录上涌现的 `metadata.tags` 直接派生,新 tag 落库即成为新 Room(零注册、零迁移)。
+ */
+export interface RoomCount {
+    /** Room 名 = 归一化后的 slug tag(小写字母数字连字符)。 */
+    room: string;
+    /** 该 Room 下的记录数(与 `wingL1Counts()` 同口径:含 retired 行)。 */
+    count: number;
+}
 /** 记录族标签推断:work_* 前缀 → work,其余(含 auto 档兜底)→ chat。 */
 export declare function familyForType(type: string): MemoryFamily;
 /**

@@ -1,11 +1,11 @@
-import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
+import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord, RoomCount } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
 import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
 import { type SupersedeInfo } from './supersede.js';
 import { type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { type EmbeddingService } from './embedding.js';
-import { type MemoryDb } from './sqlite.js';
+import { type L1MetaLite, type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
 /**
  * 图谱路提供者(§D 第 3 路):按查询返回图谱命中(已按 score 降序)。
@@ -61,6 +61,8 @@ export declare class L1Store {
     private readonly decayHalfLifeDays;
     /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
     private readonly graphLaneProvider?;
+    /** Room 计数缓存(见 `listRooms()`:tags 仅随反刍变化,不必每次敲库)。 */
+    private roomCache;
     constructor(dataDir: string, db: MemoryDb, embed?: EmbeddingService, strategy?: RecallStrategy, logger?: MemoryLogger, 
     /** 时效衰减半衰期(天;0=关)。缺省 30 与 config 默认一致。 */
     decayHalfLifeDays?: number, 
@@ -72,6 +74,20 @@ export declare class L1Store {
     get size(): number;
     /** 全量读取(调试/迁移用;检索请走 search)。 */
     all(): MemoryRecord[];
+    /**
+     * 游标分批取元信息(**只三列**,不含 content):后台巡检专用。
+     *
+     * 与 `all()` 的区别是结构性的:`all()` 一次性全量同步反序列化(含正文),
+     * 记录数随使用增长后会在事件循环里阻塞 RPC;巡检只需要 id/type/metadata。
+     *
+     * 配套写回必须用 `patchMetadata()` —— 本方法拿不到 content,用 upsert 会把正文清空。
+     */
+    allLite(limit: number, offset: number): L1MetaLite[];
+    /**
+     * 只更新 metadata_json 的最小写回(不动 content 与其它列)。
+     * 返回 false 表示 id 不存在或写入失败——调用方须记账,不许静默。
+     */
+    patchMetadata(id: string, metadata: Record<string, unknown>): boolean;
     /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
     getByIds(ids: string[]): MemoryRecord[];
     /**
@@ -273,6 +289,8 @@ export declare class L1Store {
         family?: string;
         hall?: string;
         halls?: readonly string[];
+        /** Room 过滤(metadata.tags 含该 slug)。 */
+        tag?: string;
         workspaceId?: string;
         limit: number;
         offset: number;
@@ -287,6 +305,15 @@ export declare class L1Store {
         counts: Record<string, number>;
         unlabeled: number;
     };
+    /**
+     * Room 计数(标签自生长分类):展开 metadata.tags 聚合,1 tag = 1 Room。
+     *
+     * tags 只在反刍的标签段变化,故带 30s TTL 缓存;反刍收尾显式 `invalidateRooms()`
+     * 保证新涌现的 Room 立刻可见。降级时返回空数组(面板显示"暂无"而非报错)。
+     */
+    listRooms(): RoomCount[];
+    /** 丢弃 Room 计数缓存(tags 写入侧调用:反刍标签段收尾 / 手工打标)。 */
+    invalidateRooms(): void;
     /** 主表全量元数据扫描(单一所有者共享函数,供并行计划引用门禁复用;见 MemoryDb.scanL1Metadata)。 */
     scanAllMetadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number;
     /** 查询向量(域软门禁用):复用既有嵌入源;失败/未就绪返回 undefined,调用方降级。 */

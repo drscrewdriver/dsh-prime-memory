@@ -55,6 +55,11 @@ export interface EmbeddingSourceState {
 
 // ── 状态存储(写穿持久化) ──
 
+/** 向量计数缓存 TTL(忙时:重建/切换进行中,进度要看得见)。 */
+const VEC_CACHE_TTL_BUSY_MS = 1_000;
+/** 向量计数缓存 TTL(空闲:面板常开也不敲库)。 */
+const VEC_CACHE_TTL_IDLE_MS = 30_000;
+
 export class EmbeddingSourceStore {
   private state: EmbeddingSourceState = { source: 'remote', activeModel: null };
   private readonly file: string;
@@ -225,6 +230,13 @@ export class EmbeddingManager {
     cancelled: false,
   };
   private reindexCancel = false;
+  /**
+   * 向量计数缓存(分级 TTL)。
+   *
+   * 见 `vectorsCached()`:`embedding-state-get` 是设置页轮询热点,
+   * 原实现每次现场跑 6 次 COUNT + 2 次 vec0 LEFT JOIN(实测 2.5–3.1s)。
+   */
+  private vecCache: { at: number; view: VectorIndexView } | null = null;
   /** 停机标志:dispose 后应用链不再推进(防卸载后的孤儿重嵌/安装)。 */
   private disposedFlag = false;
   /** 当前生效目标的 providerInfo(backfill/启动链的 meta 写入用——杜绝陈旧闭包)。 */
@@ -299,6 +311,7 @@ export class EmbeddingManager {
     this.applyMessage = '';
     void this.applyChain(state).finally(() => {
       this.applyBusy = false;
+      this.invalidateVecCache(); // 切换链含 drop 重建,计数必须重新取
     });
     return { accepted: true };
   }
@@ -517,11 +530,13 @@ export class EmbeddingManager {
       const cancelled = !!(r1.cancelled || r0.cancelled);
       this.reindex.cancelled = cancelled;
       this.reindex.running = false;
+      this.invalidateVecCache(); // 收尾:计数必须立刻反映重建结果(TTL 可能还压着 1s 旧值)
       return { cancelled, failedTotal };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.reindex.running = false;
       this.reindex.error = message;
+      this.invalidateVecCache();
       return { cancelled: false, failedTotal, error: `重嵌入失败: ${message}` };
     }
   }
@@ -562,7 +577,7 @@ export class EmbeddingManager {
       apply: { phase: this.applyPhase, message: this.applyMessage, startedAt: this.applyStartedAt, busy: this.applyBusy },
       local: this.localSvc ? { state: this.localSvc.getState(), error: this.localSvc.getLoadError() } : null,
       reindex: { ...this.reindex },
-      vectors: this.vectorCounts(),
+      vectors: this.vectorsCached(),
       activeNote: this.activeNote,
     };
   }
@@ -570,9 +585,14 @@ export class EmbeddingManager {
   /**
    * 向量索引计数(设置页「已嵌入 X / 总 Y」的数据源)。
    *
-   * 直接读 db 的 COUNT,不走缓存:重建跑完后 UI 靠轮询同一份快照看结果,
-   * 缓存会让"重建完成"之后数字还停在旧值,用户以为白跑了。
-   * 计数在 `embedding-state-get` 每次调用时算一遍(仅忙时 1s 轮询),开销可忽略。
+   * **缺失数走相减,不走 `countVecMissing` 的 LEFT JOIN**。原因:vec 表是
+   * `vec0` 虚拟表,普通谓词下 `LEFT JOIN ... WHERE v.record_id IS NULL` 退化成
+   * **逐行 probe**(L0 侧驱动 24467 行),实测该接口稳定 2.5–3.1s —— 而它只是个展示用计数。
+   * 相减法的前提是「vec 表无指向已删记录的孤儿行」,已对四条写路径审计(硬删同事务删 vec /
+   * 软删走 detach / upsert 先删再插 / clearL1 DROP 重建),并以 `Math.max(0, ·)` 兜底。
+   *
+   * ⚠️ **仅用于展示**。`index.ts` 里「missing 复查 == 0 才 markEmbeddingSynced」的门控
+   * 仍走精确的 `countVecMissing` —— 那处若因孤儿行少算,会把未完成的重建误标成完成。
    *
    * db 层的 `-1` 哨兵原样透传(向量能力不可用),UI 据此换文案——
    * 不在这里折叠成 0,否则"能力挂了"与"一条都没嵌"在界面上长得一样。
@@ -580,14 +600,42 @@ export class EmbeddingManager {
   private vectorCounts(): VectorIndexView {
     const count = (kind: 'l1' | 'l0'): VectorCountView => {
       const skip = this.deps.db.getVecSkipSet(kind);
-      return {
-        embedded: kind === 'l1' ? this.deps.db.countL1Vec() : this.deps.db.countL0Vec(),
-        total: kind === 'l1' ? this.deps.db.countL1() : this.deps.db.countL0(),
-        missing:
-          kind === 'l1' ? this.deps.db.countL1VecMissing(skip) : this.deps.db.countL0VecMissing(skip),
-        skipped: skip.size,
-      };
+      const embedded = kind === 'l1' ? this.deps.db.countL1Vec() : this.deps.db.countL0Vec();
+      const total = kind === 'l1' ? this.deps.db.countL1() : this.deps.db.countL0();
+      // 缺失数走**相减**而非 LEFT JOIN:见下方 vectorsCached 上方的说明。
+      const missing =
+        embedded < 0 || total < 0 ? -1 : Math.max(0, total - embedded - skip.size);
+      return { embedded, total, missing, skipped: skip.size };
     };
     return { l1: count('l1'), l0: count('l0') };
+  }
+
+  /**
+   * 快照用的向量计数(带分级 TTL 缓存)。
+   *
+   * 即便改成了相减法,`getVecSkipSet` 仍是一次读 + JSON 解析,两次 COUNT 也要扫表;
+   * 而设置页在**忙时 1s 轮询**、反刍跑起来时前端并发取数 —— 重复算没意义。
+   * 分级 TTL:忙时 1s(重建进度要看得见)、空闲 30s(面板常开也不敲库)。
+   */
+  private vectorsCached(): VectorIndexView {
+    // 忙时判定与 isBusy() 同源但排除 downloader:模型下载不改变向量计数本身
+    const busy = this.applyBusy || this.reindex.running;
+    const ttl = busy ? VEC_CACHE_TTL_BUSY_MS : VEC_CACHE_TTL_IDLE_MS;
+    const now = Date.now();
+    if (this.vecCache && now - this.vecCache.at < ttl) return this.vecCache.view;
+    const view = this.vectorCounts();
+    this.vecCache = { at: now, view };
+    return view;
+  }
+
+  /**
+   * 丢弃向量计数缓存。
+   *
+   * 向量侧的写路径大多在 store 层(L1/L0 的 reindex、删除、skip 集变更),
+   * 本管理器拿不到逐批回调,故以「忙时短 TTL + 收尾显式失效」组合保证收敛:
+   * 重建/切换期间最长落后 1s,收尾时立即失效,不会停在旧值。
+   */
+  invalidateVecCache(): void {
+    this.vecCache = null;
   }
 }

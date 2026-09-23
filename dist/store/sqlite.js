@@ -1100,6 +1100,58 @@ export class MemoryDb {
             return 0;
         }
     }
+    /**
+     * 游标分批取 L1 元信息(**仅三列**):后台巡检专用。
+     *
+     * 为什么不复用 `getAllL1()`:后者会连 `content` 全文一起拉,且是一次性全量同步反序列化——
+     * 记录数随使用单调增长,后台任务在事件循环里做这件事会阻塞所有 RPC。
+     * 巡检(反刍重标定 / wing 回填)只需要 `id / type / metadata` 三列。
+     *
+     * `ORDER BY record_id` 而非 `updated_time`:record_id 是主键(唯一且不变),
+     * 巡检期间即使有写回也不会有分页漂移;updated_time 会被写回改动。
+     */
+    getAllL1Lite(limit, offset) {
+        if (this.degraded)
+            return [];
+        if (limit <= 0)
+            return [];
+        try {
+            const rows = this.db
+                .prepare('SELECT record_id, type, metadata_json FROM l1_records ORDER BY record_id LIMIT ? OFFSET ?')
+                .all(limit, offset);
+            return rows.map((r) => ({
+                id: r.record_id,
+                type: r.type,
+                metadata: parseMetadataJson(r.metadata_json),
+            }));
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L1 分批读取失败(返回空,本轮跳过): ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+    }
+    /**
+     * **只**更新 metadata_json(顺带 updated_time),绝不碰 content 或其它列。
+     *
+     * 为什么需要它:分批巡检后调用方手里**没有 content**(L1MetaLite 只有三列),
+     * 若沿用 `upsert({...lite, metadata})` 会把正文写成空 —— 这是分页改造最危险的坑。
+     *
+     * 返回 false 表示 id 不存在或写入失败(调用方据此记账,不静默)。
+     */
+    patchL1Metadata(id, metadata) {
+        if (this.degraded)
+            return false;
+        try {
+            const r = this.db
+                .prepare('UPDATE l1_records SET metadata_json = ?, updated_time = ? WHERE record_id = ?')
+                .run(JSON.stringify(metadata), new Date().toISOString(), id);
+            return Number(r.changes) > 0;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} patchL1Metadata 失败(id=${id}): ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
     /** 全量读取(调试/迁移/重嵌入用;检索请走 FTS/向量)。 */
     getAllL1() {
         if (this.degraded)
@@ -1428,6 +1480,12 @@ export class MemoryDb {
                 where.push(`json_extract(metadata_json, '$.hall') IN (${values.map(() => '?').join(',')})`);
                 params.push(...values);
             }
+            if (opts.tag) {
+                // Room 过滤:tags 是 JSON 数组,用 json_each 展开判等(表小,逐行代价可接受)。
+                // 与 l1RoomCounts() 同一展开口径,保证「点某个 Room → 条数」与该 Room 的计数一致。
+                where.push(`EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END, '$.tags') j WHERE j.value = ?)`);
+                params.push(opts.tag);
+            }
             const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
             const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params);
             const rows = this.db
@@ -1500,6 +1558,39 @@ export class MemoryDb {
         }
         catch {
             return 0;
+        }
+    }
+    /**
+     * Room 计数(**标签自生长分类**):展开 `metadata.tags` 聚合,1 个 slug tag = 1 个 Room。
+     *
+     * 零 schema 变更——tags 落库即自动成为新 Room,无需注册表/迁移,这就是"自生长"。
+     *
+     * **口径与 `wingL1Counts()` 一致(不过滤 retired)**:两者常在同一面板相邻展示,
+     * 口径不一会出现互相矛盾的数字。
+     *
+     * `json_valid` 守卫:单行 metadata 损坏时 `json_each` 会抛「malformed JSON」并连带
+     * 整条聚合失败——宁可跳过该行,也不能让整个 Room 列表空掉。
+     *
+     * 失败返回空数组(存储降级或聚合异常都按"暂无 Room"处理,不报错)。
+     */
+    l1RoomCounts() {
+        if (this.degraded)
+            return [];
+        try {
+            const rows = this.db
+                .prepare(`SELECT j.value AS room, COUNT(*) AS n
+           FROM l1_records r,
+                json_each(CASE WHEN json_valid(r.metadata_json) THEN r.metadata_json ELSE '{}' END, '$.tags') j
+           WHERE j.value IS NOT NULL AND j.value <> ''
+           GROUP BY j.value
+           ORDER BY n DESC, j.value ASC`)
+                .all();
+            return rows
+                .filter((r) => typeof r.room === 'string' && r.room !== '')
+                .map((r) => ({ room: r.room, count: Number(r.n) }));
+        }
+        catch {
+            return [];
         }
     }
     /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
@@ -2084,6 +2175,15 @@ export class MemoryDb {
         catch {
             /* ignore */
         }
+    }
+}
+/** 容忍坏 JSON 的 metadata 解析(与 rowToRecord 同口径:解析失败退化为空对象,不抛)。 */
+function parseMetadataJson(raw) {
+    try {
+        return JSON.parse(raw || '{}');
+    }
+    catch {
+        return {};
     }
 }
 function rowToRecord(row) {

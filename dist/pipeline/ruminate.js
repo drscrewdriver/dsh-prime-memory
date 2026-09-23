@@ -1,3 +1,4 @@
+import { InProcMemoryBackend } from '../store/memory-backend.js';
 import { groupPendingBySession, loadPending, } from '../store/pending.js';
 import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
@@ -43,6 +44,10 @@ export class RuminateController {
     sessions = [];
     totalL1 = 0;
     pendingFile;
+    /** 记忆后端:未注入时包 l1(进程内,行为与改造前等价)。 */
+    backend() {
+        return this.stores.backend ?? new InProcMemoryBackend(this.stores.l1);
+    }
     constructor(ctx, cfg, runner, stores, logger, live, pendingFile) {
         this.ctx = ctx;
         this.cfg = cfg;
@@ -200,13 +205,15 @@ export class RuminateController {
             this.status.phase = 'relabeling';
             this.status.detail = '标注校验与重标定(Wing/认知 hall/标签)';
             try {
-                this.status.relabel = await relabelPass({ ctx: this.ctx, cfg: this.cfg, l1: this.stores.l1, logger: this.logger }, {}, {
-                    progress: (text, done, total) => {
+                this.status.relabel = await relabelPass({ ctx: this.ctx, cfg: this.cfg, backend: this.backend(), logger: this.logger }, {}, {
+                    progress: (text, done, total, label) => {
                         this.status.detail = text;
-                        this.status.sub = { done, total, label: '重标定批次' };
+                        this.status.sub = { done, total, label: label ?? '重标定批次' };
                     },
                 });
                 this.status.sub = null;
+                // tags 刚被改写 → Room 分类(由 tags 派生)必须重算,否则新 Room 要等 30s TTL
+                this.stores.l1.invalidateRooms();
                 const r = this.status.relabel;
                 this.logger.info(`[memory] 反刍重标定完成:巡检 ${r.checked},补 cogHall ${r.cogHallFixed},非法 wing ${r.wingInvalidFixed},LLM 补 wing ${r.wingLabeled},打 tags ${r.tagged},跳过 ${r.llmSkipped},预算让出 ${r.deferred}`);
             }
@@ -309,10 +316,10 @@ export class RuminateController {
         this.status.phase = 'relabeling';
         this.status.detail = '标注校验与重标定(Wing/认知 hall/标签)';
         try {
-            this.status.relabel = await relabelPass({ ctx: this.ctx, cfg: this.cfg, l1: this.stores.l1, logger: this.logger }, {}, {
-                progress: (text, done, total) => {
+            this.status.relabel = await relabelPass({ ctx: this.ctx, cfg: this.cfg, backend: this.backend(), logger: this.logger }, {}, {
+                progress: (text, done, total, label) => {
                     this.status.detail = text;
-                    this.status.sub = { done, total, label: '重标定批次' };
+                    this.status.sub = { done, total, label: label ?? '重标定批次' };
                 },
             });
         }
@@ -320,6 +327,8 @@ export class RuminateController {
             this.logger.warn(`[memory] 反刍轻量刷新重标定失败(不影响刷新结果): ${errDetail(err)}`);
         }
         finally {
+            // 同全量路径:tags 可能被改写过,成败都要让 Room 缓存重算
+            this.stores.l1.invalidateRooms();
             // 计数与成败解耦:该步已执行(无论成败都算走完),否则失败时 done 永远追不上 total
             this.status.sub = null;
             this.status.done++;

@@ -27,6 +27,8 @@ import { L0Store } from './store/l0.js';
 import { L1Store } from './store/l1.js';
 import { PersonaStore } from './store/persona.js';
 import { MemoryDb } from './store/sqlite.js';
+import { InProcMemoryBackend } from './store/memory-backend.js';
+import { createMemoryBackend } from './store/memory-backend-worker.js';
 import { SceneStore } from './store/scenes.js';
 import { SessionModeStore } from './store/session-modes.js';
 import { StateStore } from './store/state.js';
@@ -160,6 +162,8 @@ export async function apply(ctx, config) {
         }),
         // 图谱存储(MemoryDb 内自治:初始化失败仅图谱 no-op,不影响主链路)
         graph: db.graphStore,
+        // 后台记忆后端:初始化完成后填充(worker 隔离,失败则进程内)
+        backend: undefined,
     };
     if (storageOk) {
         try {
@@ -226,6 +230,9 @@ export async function apply(ctx, config) {
                     catch (err) {
                         logger.warn(`[memory] 向量重建失败: ${err instanceof Error ? err.message : String(err)}`);
                     }
+                    finally {
+                        embedManagerRef?.invalidateVecCache();
+                    }
                 })();
             }
         }
@@ -271,6 +278,10 @@ export async function apply(ctx, config) {
                     catch (err) {
                         logger.warn(`[memory] 向量补齐失败: ${err instanceof Error ? err.message : String(err)}`);
                     }
+                    finally {
+                        // 补齐走了 store 层写路径,管理器的计数缓存拿不到回调 → 显式失效
+                        embedManagerRef?.invalidateVecCache();
+                    }
                 })();
             };
             ctx.effect(() => {
@@ -314,6 +325,13 @@ export async function apply(ctx, config) {
         : undefined;
     // 反刍控制器(与重建共用数据,但更轻量;存储降级时不建)
     const ruminateFile = storageOk ? pendingPathFor(resolveDataDir(config)) : '';
+    // 后台记忆后端:优先 worker 线程隔离(后台批处理的同步 SQL 不再占主事件循环),
+    // 起不来就退回进程内(功能不受影响,只留一条 warn)。
+    let backend = new InProcMemoryBackend(stores.l1);
+    if (storageOk && !db.isDegraded()) {
+        backend = await createMemoryBackend({ dbPath: path.join(dataDir, 'memory.db'), dimensions: initial.dims, logger }, backend);
+    }
+    stores.backend = backend;
     const ruminate = storageOk && !db.isDegraded() && ruminateFile
         ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile)
         : undefined;
@@ -359,6 +377,9 @@ export async function apply(ctx, config) {
         runner.stop();
         embedManager?.dispose();
         downloader.dispose();
+        // 后台记忆后端:worker 实现要 terminate 线程,否则宿主关不掉(process 挂住)。
+        // 必须在 db.close() **之前**——worker 还持有自己的连接。
+        void stores.backend?.dispose();
         return (async () => {
             await flushL0?.();
             db.close();
