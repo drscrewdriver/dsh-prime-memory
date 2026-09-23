@@ -26,7 +26,7 @@ const TYPE_CHOICES = [
 ];
 
 // Hall 属性通道筛选项(R8 单一事实源):随 list-records 首屏由服务端下发(8 角 + general 跨域),
-// client 不再手抄词表。下发缺失(旧服务端)时降级为从已加载记录的 hall 值派生选项(只显示已有标签)。
+// client 不再手抄词表。下发缺失(旧服务端)时降级为从已加载记录的 wing 值派生选项(只显示已有标签)。
 
 /** records-delete 单次上限（契约：ids ≤200）。 */
 const DELETE_LIMIT = 200;
@@ -53,8 +53,8 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [typeFilter, setTypeFilter] = useState('');
   const [sceneFilter, setSceneFilter] = useState('');
   const [hallFilter, setHallFilter] = useState<string[]>([]);
-  // Hall 词表(服务端下发,R8);null = 未下发(降级:从已加载记录派生)
-  const [hallCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
+  // Wing 词表(服务端下发,R8);null = 未下发(降级:从已加载记录派生)
+  const [wingCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
 
   // 上一次实际生效的查询条件（「加载更多」按它续页）
   const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [] });
@@ -88,7 +88,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           setTotal(v.total === undefined || v.total === null ? null : v.total);
           setTruncated(!!v.truncated);
           if (v.scenes) setSceneOptions(v.scenes);
-          if (v.hallCatalog) setHallCatalog(v.hallCatalog);
+          if (v.wingCatalog) setHallCatalog(v.wingCatalog);
         })
         .catch((e: unknown) => {
           if (token !== seqRef.current) return;
@@ -274,9 +274,9 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           value={sceneFilter}
           onChange={setSceneFilter}
         />
-        <HallMultiSelect
+        <WingMultiSelect
           options={
-            hallCatalog ??
+            wingCatalog ??
             Array.from(new Set(items.map((m) => m.hall).filter((h): h is string => !!h))).map((id) => ({ id, label: id }))
           }
           selected={hallFilter}
@@ -361,7 +361,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                 <span className={'dsh-mem-tag dsh-mem-tag-' + m.type}>{TYPE_LABELS[m.type] || m.type}</span>
                 {m.hall ? (
                   <span className="dsh-mem-tag dsh-mem-tag-work-fact">
-                    {'Hall · ' + (hallCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
+                    {'Hall · ' + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
                   </span>
                 ) : null}
                 <span style={S.muted}>{'优先级 ' + m.priority}</span>
@@ -469,7 +469,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
 
 /** Hall 筛选多选下拉（R13 查询侧多选；选项 = 服务端下发的词表，缺失时降级为已有标签）。
  *  触发钮沿用 .dsh-mem-select 观感；面板复用 .dsh-mem-pop 材质，行内勾选即时切换。 */
-function HallMultiSelect(props: {
+function WingMultiSelect(props: {
   options: Array<{ id: string; label: string }>;
   selected: string[];
   onChange(next: string[]): void;

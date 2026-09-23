@@ -13,22 +13,22 @@ export type ExtractMode = 'auto' | 'chat' | 'work';
 /**
  * Hall(粗分类属性通道,与 family/type 正交):给 L1 记忆加一个跨族的可检索标签。
  * 8 角全为主线(experimental 字段已退休);`general` 不占角,降为中心专属兜底值
- * (HALL_FALLBACK:跨域/无法归类时由智能档产出)。细粒度归属由 prompt 语义判断,
+ * (WING_FALLBACK:跨域/无法归类时由智能档产出)。细粒度归属由 prompt 语义判断,
  * 跨域或实在无法归类时落 general(唯一允许的兜底)。
  */
-export interface HallDef {
+export interface WingDef {
     id: string;
     label: string;
 }
-export declare const HALL_CATALOG: HallDef[];
+export declare const WING_CATALOG: WingDef[];
 /** 跨域兜底值:移出角集,仅作为"无法归入任何角"的中心专属产出(不再进角集/门面)。 */
-export declare const HALL_FALLBACK = "general";
-/** 八边形角集 = 全目录(角集固定,不随 hall.enabled 开关改变形状;开关只把角画灰)。 */
-export declare const HALL_CORNERS: readonly HallDef[];
-/** 默认启用的 Hall id(打标候选集,默认 8 角全集;归一化规则见 config.normHallEnabled)。 */
-export declare const HALL_DEFAULT_ENABLED: string[];
-export type HallId = (typeof HALL_CATALOG)[number]['id'];
-export declare function hallLabel(id: string): string;
+export declare const WING_FALLBACK = "general";
+/** 八边形角集 = 全目录(角集固定,不随 wing.enabled 开关改变形状;开关只把角画灰)。 */
+export declare const HALL_CORNERS: readonly WingDef[];
+/** 默认启用的 Hall id(打标候选集,默认 8 角全集;归一化规则见 config.normWingEnabled)。 */
+export declare const WING_DEFAULT_ENABLED: string[];
+export type WingId = (typeof WING_CATALOG)[number]['id'];
+export declare function wingLabel(id: string): string;
 /** 记录族标签推断:work_* 前缀 → work,其余(含 auto 档兜底)→ chat。 */
 export declare function familyForType(type: string): MemoryFamily;
 /**

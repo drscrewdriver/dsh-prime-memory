@@ -2,7 +2,7 @@
  * `l1_records.metadata_json` 里承载取代标记的**保留键**。
  *
  * 加 `dsh_` 前缀的理由与 `ANCHOR_METADATA_KEY` 完全相同:写库时本插件的保留键
- * 会与 LLM 产出的 metadata(`hall` / `artifact_type` 等)合并进同一个 JSON 对象,
+ * 会与 LLM 产出的 metadata(`wing` / `artifact_type` 等)合并进同一个 JSON 对象,
  * 必须靠命名空间隔开,否则一次 LLM 幻觉输出 `superseded` 就能伪装成人工裁决。
  */
 export const SUPERSEDE_METADATA_KEY = 'dsh_superseded';

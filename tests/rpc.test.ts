@@ -1,6 +1,6 @@
 /**
  * RPC 层单元测试:端点分发(统计聚合/档位设置校验/settings-set 写入门/
- * records-delete 门/list-records hall 过滤/log-tail)、机密脱敏、bench 控制面。
+ * records-delete 门/list-records wing 过滤/log-tail)、机密脱敏、bench 控制面。
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -305,7 +305,7 @@ describe('rpc: list-records / records-delete', () => {
     ]);
   }
 
-  it('list-records filters by hall on both browse and search paths', async () => {
+  it('list-records filters by wing on both browse and search paths', async () => {
     const h = await harness();
     await seed(h);
     const browse = await h.call('dsh-memory/list-records', { hall: 'work' }) as { items: Array<{ id: string; hall: string | null }> };
@@ -327,7 +327,7 @@ describe('rpc: list-records / records-delete', () => {
     expect(both.items.map((i) => i.id)).toEqual(expect.arrayContaining(['h1']));
     const single = await h.call('dsh-memory/list-records', { halls: ['general'] }) as { items: Array<{ id: string }> };
     expect(single.items.map((i) => i.id)).not.toContain('h1');
-    // 单值 hall 与 halls 合并去重
+    // 单值 wing 与 halls 合并去重
     const merged = await h.call('dsh-memory/list-records', { hall: 'work', halls: ['general'] }) as { items: Array<{ id: string }> };
     expect(merged.items.map((i) => i.id)).toEqual(expect.arrayContaining(['h1']));
     h.db.close();

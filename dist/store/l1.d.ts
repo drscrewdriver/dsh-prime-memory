@@ -283,7 +283,7 @@ export declare class L1Store {
     /** 场景名去重列表(UI 筛选器数据源)。 */
     distinctScenes(): string[];
     /** Hall 域计数(八边形角上"该域 N 条 / 未打标 M"数据源):按 metadata.hall 分组计数。 */
-    hallCounts(): {
+    wingCounts(): {
         counts: Record<string, number>;
         unlabeled: number;
     };

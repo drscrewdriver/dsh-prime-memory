@@ -58,12 +58,12 @@ export function ensureThemeStyle() {
     // 开关旋钮 / 进度条底（滑轨已随 ModeSlider 删除，填充渐变与停点令牌一并移除）
     '  --dsh-mem-thumb: #ffffff;',
     '  --dsh-mem-track: rgba(128,140,150,0.32);',
-    // hall 八边形令牌（HallWheel）：连线 / 角默认 / 角选中 / 空角与未打标态；
+    // wing 八边形令牌（WingWheel）：连线 / 角默认 / 角选中 / 空角与未打标态；
     // 全部引用既有中性色与品牌蓝体系，双主题各自声明，无裸色溢出
-    '  --dsh-mem-hall-line: rgba(128,140,150,0.35);',
-    '  --dsh-mem-hall-corner: var(--dsh-mem-text-2);',
-    '  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);',
-    '  --dsh-mem-hall-empty: var(--dsh-mem-text-3);',
+    '  --dsh-mem-wing-line: rgba(128,140,150,0.35);',
+    '  --dsh-mem-wing-corner: var(--dsh-mem-text-2);',
+    '  --dsh-mem-wing-corner-on: var(--dsh-mem-accent);',
+    '  --dsh-mem-wing-empty: var(--dsh-mem-text-3);',
     '  --dsh-mem-shadow-card: var(--dsw-shadow-lv1, 0 2px 4px 0 rgba(0,0,0,0.05));',
     '  --dsh-mem-shadow-pop: var(--dsw-shadow-lv3, 0 0 1px 0 rgba(0,0,0,.2), 0 0 4px 0 rgba(0,0,0,.02), 0 12px 32px 0 rgba(0,0,0,0.08));',
     '}',
@@ -97,10 +97,10 @@ export function ensureThemeStyle() {
     '  --dsh-mem-mode-auto: #7b90ff;',
     '  --dsh-mem-thumb: #e8ebf5;',
     '  --dsh-mem-track: rgba(148,160,180,0.30);',
-    '  --dsh-mem-hall-line: rgba(148,160,180,0.32);',
-    '  --dsh-mem-hall-corner: var(--dsh-mem-text-2);',
-    '  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);',
-    '  --dsh-mem-hall-empty: var(--dsh-mem-text-3);',
+    '  --dsh-mem-wing-line: rgba(148,160,180,0.32);',
+    '  --dsh-mem-wing-corner: var(--dsh-mem-text-2);',
+    '  --dsh-mem-wing-corner-on: var(--dsh-mem-accent);',
+    '  --dsh-mem-wing-empty: var(--dsh-mem-text-3);',
     '  --dsh-mem-shadow-card: var(--dsw-shadow-lv1, 0 2px 4px 0 rgba(0,0,0,0.3));',
     '  --dsh-mem-shadow-pop: var(--dsw-shadow-lv3, 0 0 1px 0 rgba(0,0,0,.2), 0 0 4px 0 rgba(0,0,0,.02), 0 12px 32px 0 rgba(0,0,0,0.08));',
     '}',

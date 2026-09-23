@@ -2,7 +2,7 @@
 /**
  * hall 词表迁移 CLI(task_14):一次性脚本,dry-run 先行。
  *
- * 用法:npm run build && node scripts/hall-migrate.mjs [--db <memory.db 路径>] [--apply] [--backup-dir <dir>]
+ * 用法:npm run build && node scripts/wing-migrate.mjs [--db <memory.db 路径>] [--apply] [--backup-dir <dir>]
  *   缺省 db = $DSH_HOME/memory/memory.db(dshHomePath('memory') 同口径)
  *   缺省 dry-run:只读扫描出报告,不写任何文件;--apply 才写 metadata_json 备份。
  * 退出码:0 = 报告正常(expected 或 unknown-values 已列出);非 0 = 扫描失败。
@@ -26,7 +26,7 @@ if (!statSync(dbPath, { throwIfNoEntry: false })) {
   process.exit(2);
 }
 
-const { runHallMigration } = await import('../dist/hall-migrate.js');
+const { runHallMigration } = await import('../dist/wing-migrate.js');
 const report = runHallMigration({
   dbPath,
   dryRun,

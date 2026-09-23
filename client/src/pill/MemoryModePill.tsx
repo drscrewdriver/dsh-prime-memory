@@ -1,11 +1,11 @@
-/** 输入栏 pill：点击展开八边形域轮（HallWheel）；props 来自 conversation.input.left 的 zone 注入。 */
+/** 输入栏 pill：点击展开八边形域轮（WingWheel）；props 来自 conversation.input.left 的 zone 注入。 */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { currentMeterSnapshot, initOccupancyIndicator, noteOccupancySession, watchContextMeter } from '../meter/occupancy-indicator.js';
 import { initPanelSection } from '../meter/panel-section.js';
 import type { RpcFn } from '../rpc.js';
 import { watchSidebarIcon } from '../sidebar-icon.js';
 import { ensureThemeStyle } from '../theme.js';
-import { HallWheel, useViewportClamp } from './HallWheel.js';
+import { WingWheel, useViewportClamp } from './WingWheel.js';
 import { modeInfo } from './modes.js';
 
 export function MemoryModePill(props: {
@@ -20,12 +20,12 @@ export function MemoryModePill(props: {
   // 生效值（面文直接消费——client 不另知全局开关，解析权威在 host）
   const [recall, setRecall] = useState<boolean | null>(null);
   const [recallResolved, setRecallResolved] = useState(true);
-  // 会话级域锁定（hall 八边形手动挡，Phase 2 多选）：空数组 = 中心（智能档）
-  const [halls, setHalls] = useState<string[]>([]);
-  const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = useState(true);
-  const [hallIncludeGeneral, setHallIncludeGeneral] = useState(false);
-  // 面文域显示名（hall-overview 下发，词表单一事实源在服务端）
-  const [hallLabels, setHallLabels] = useState<Record<string, string>>({});
+  // 会话级域锁定（wing 八边形手动挡，Phase 2 多选）：空数组 = 中心（智能档）
+  const [halls, setWings] = useState<string[]>([]);
+  const [hallIncludeUnlabeled, setWingIncludeUnlabeled] = useState(true);
+  const [hallIncludeGeneral, setWingIncludeGeneral] = useState(false);
+  // 面文域显示名（wing-overview 下发，词表单一事实源在服务端）
+  const [wingLabels, setHallLabels] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -45,9 +45,9 @@ export function MemoryModePill(props: {
           setMode(r.value.mode);
           setRecall(r.value.recall);
           setRecallResolved(r.value.recallResolved);
-          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
-          setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
-          setHallIncludeGeneral(r.value.hallIncludeGeneral);
+          setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+          setWingIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+          setWingIncludeGeneral(r.value.hallIncludeGeneral);
         } else setError(r && !r.ok ? r.error.message : 'RPC error');
       })
       .catch((e: unknown) => {
@@ -55,7 +55,7 @@ export function MemoryModePill(props: {
         setError(String((e && (e as Error).message) || e));
       });
     // 域显示名（角计数端点顺带下发词表；失败降级为角 id 原样显示）
-    rpc('dsh-memory/hall-overview', {})
+    rpc('dsh-memory/wing-overview', {})
       .then((r) => {
         if (r && r.ok && r.value) {
           setHallLabels(Object.fromEntries(r.value.corners.map((c) => [c.id, c.label])));
@@ -159,38 +159,38 @@ export function MemoryModePill(props: {
 
   /** 域锁定提交（R12 手动挡，Phase 2 多选）：角 id 数组 = 锁定集；null = 回中心。
    *  mode 未加载时拒绝提交（请求必带 mode，同 commitRecall 的口径）。 */
-  const commitHall = (next: string[] | null) => {
+  const commitWing = (next: string[] | null) => {
     if (!rpc || !sessionId || mode === null) return;
     const norm = next ?? [];
     if (JSON.stringify(norm) === JSON.stringify(halls)) return;
     const prevHalls = halls;
     const token = seqRef.current;
-    setHalls(norm);
+    setWings(norm);
     setError(null);
     rpc('dsh-memory/session-mode-set', { sessionId, mode: mode as 'auto', halls: next })
       .then((r) => {
         if (token !== seqRef.current) return;
         if (!r || !r.ok) {
-          setHalls(prevHalls);
+          setWings(prevHalls);
           setError(r && r.error ? '域设置失败：' + r.error.message : '域设置失败');
         } else {
-          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+          setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
         }
       })
       .catch((e: unknown) => {
         if (token !== seqRef.current) return;
-        setHalls(prevHalls);
+        setWings(prevHalls);
         setError('域设置失败：' + String((e && (e as Error).message) || e));
       });
   };
 
   /** 锁定域边界开关（未打标 / 跨域是否参与召回）。 */
-  const commitHallBoundaries = (patch: { includeUnlabeled?: boolean; includeGeneral?: boolean }) => {
+  const commitWingBoundaries = (patch: { includeUnlabeled?: boolean; includeGeneral?: boolean }) => {
     if (!rpc || !sessionId || mode === null) return;
     const prev = { unlabeled: hallIncludeUnlabeled, general: hallIncludeGeneral };
     const token = seqRef.current;
-    if (patch.includeUnlabeled !== undefined) setHallIncludeUnlabeled(patch.includeUnlabeled);
-    if (patch.includeGeneral !== undefined) setHallIncludeGeneral(patch.includeGeneral);
+    if (patch.includeUnlabeled !== undefined) setWingIncludeUnlabeled(patch.includeUnlabeled);
+    if (patch.includeGeneral !== undefined) setWingIncludeGeneral(patch.includeGeneral);
     setError(null);
     rpc('dsh-memory/session-mode-set', {
       sessionId,
@@ -202,19 +202,19 @@ export function MemoryModePill(props: {
       .then((r) => {
         if (token !== seqRef.current) return;
         if (!r || !r.ok) {
-          setHallIncludeUnlabeled(prev.unlabeled);
-          setHallIncludeGeneral(prev.general);
+          setWingIncludeUnlabeled(prev.unlabeled);
+          setWingIncludeGeneral(prev.general);
           setError(r && r.error ? '域设置失败：' + r.error.message : '域设置失败');
         } else {
-          setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
-          setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
-          setHallIncludeGeneral(r.value.hallIncludeGeneral);
+          setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+          setWingIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+          setWingIncludeGeneral(r.value.hallIncludeGeneral);
         }
       })
       .catch((e: unknown) => {
         if (token !== seqRef.current) return;
-        setHallIncludeUnlabeled(prev.unlabeled);
-        setHallIncludeGeneral(prev.general);
+        setWingIncludeUnlabeled(prev.unlabeled);
+        setWingIncludeGeneral(prev.general);
         setError('域设置失败：' + String((e && (e as Error).message) || e));
       });
   };
@@ -228,9 +228,9 @@ export function MemoryModePill(props: {
   const isFlow = loaded && !isOff;
   // 面文换字：off → 「关闭」；注入关 → 「只写」；锁域 → 「记忆 · <域>」（单选显域名，
   // 多选显「N 域」；词表下发的显示名，未送达时原样显示角 id）；否则档位名。
-  const hallText =
+  const wingText =
     halls.length === 1
-      ? hallLabels[halls[0]!] ?? halls[0]!
+      ? wingLabels[halls[0]!] ?? halls[0]!
       : halls.length > 1
         ? `${halls.length} 域`
         : null;
@@ -242,8 +242,8 @@ export function MemoryModePill(props: {
       ? info.label
       : !recallResolved
         ? '只写'
-        : hallText
-          ? hallText
+        : wingText
+          ? wingText
           : info.label;
 
   ensureThemeStyle();
@@ -302,14 +302,14 @@ export function MemoryModePill(props: {
             // padding 收窄(14/16 → 10/12):八边形容器压到 196px 后,整体宽度进窄栏
             style={{ position: 'relative', padding: '10px 12px' }}
           >
-            <HallWheel
+            <WingWheel
               mode={mode || 'auto'}
               halls={halls}
               hallIncludeUnlabeled={hallIncludeUnlabeled}
               hallIncludeGeneral={hallIncludeGeneral}
               onCommit={commit}
-              onCommitHall={commitHall}
-              onCommitHallBoundaries={commitHallBoundaries}
+              onCommitWing={commitWing}
+              onCommitWingBoundaries={commitWingBoundaries}
               recall={loaded ? recall : undefined}
               onCommitRecall={commitRecall}
               error={error}

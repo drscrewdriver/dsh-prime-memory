@@ -7,14 +7,14 @@
  * 新记忆的族标签。
  */
 import { randomBytes } from 'node:crypto';
-import { normHallEnabled } from '../config.js';
+import { normWingEnabled } from '../config.js';
 import { callLLM, parseJsonLogged, resolveLayerTokens } from '../llm.js';
 import { buildReceipts, newRunId, persistReceiptsSafely } from '../store/receipts.js';
 import { buildConflictPair, conflictRejectId, DEFER_MAX, normalizeClaimKey, normalizeConflictType, occupiesConflictQuota, pendingHardTotal, validateConflictPair, } from '../store/conflicts.js';
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
-import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope, HALL_FALLBACK } from '../types.js';
+import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope, WING_FALLBACK } from '../types.js';
 /** 解析 ISO/epoch 时间证据,非法或非正值一律 undefined——不猜测。 */
 function parseTimeEvidence(raw) {
     const t = typeof raw === 'string' ? Date.parse(raw) : typeof raw === 'number' ? raw : Number.NaN;
@@ -172,10 +172,10 @@ anchorMap) {
     const extracted = [];
     let lastScene = chainState.lastSceneName;
     let sceneCount = 0;
-    // hall 打标候选(R14 归一化后的启用列表);general(跨域兜底)仅在 auto 档追加进候选
-    const hallCandidates = normHallEnabled(cfg.hall?.enabled);
-    const halls = mode === 'auto' && !hallCandidates.includes(HALL_FALLBACK)
-        ? [...hallCandidates, HALL_FALLBACK]
+    // wing 打标候选(R14 归一化后的启用列表);general(跨域兜底)仅在 auto 档追加进候选
+    const hallCandidates = normWingEnabled(cfg.hall?.enabled);
+    const halls = mode === 'auto' && !hallCandidates.includes(WING_FALLBACK)
+        ? [...hallCandidates, WING_FALLBACK]
         : hallCandidates;
     for (const chunk of chunks) {
         const userPrompt = formatExtractionPrompt({

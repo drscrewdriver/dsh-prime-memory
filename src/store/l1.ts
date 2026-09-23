@@ -624,8 +624,8 @@ export class L1Store {
   }
 
   /** Hall 域计数(八边形角上"该域 N 条 / 未打标 M"数据源):按 metadata.hall 分组计数。 */
-  hallCounts(): { counts: Record<string, number>; unlabeled: number } {
-    return this.db.hallL1Counts();
+  wingCounts(): { counts: Record<string, number>; unlabeled: number } {
+    return this.db.wingL1Counts();
   }
 
   /** 主表全量元数据扫描(单一所有者共享函数,供并行计划引用门禁复用;见 MemoryDb.scanL1Metadata)。 */

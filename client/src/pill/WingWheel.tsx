@@ -1,5 +1,5 @@
 /**
- * 八边形域轮（hall 主题轴门面，v6 换挡版）。
+ * 八边形域轮（wing 主题轴门面，v6 换挡版）。
  *
  * 几何：八边形为**固定规则正八边形**（顶点半径恒定，无鼓起/无连续半径形变）。
  * 交互：拖动 = 在 8 个顶点间**离散换挡**（档位只能是整数 0-7，绝不停在边中），
@@ -10,13 +10,13 @@
  * 语义：点角 / 拖动松手 = 以该角为主题（会话级域锁定），其余角由服务端硬过滤抑制；
  *       点中心 / 向中心拖 = 回全域（智能档）。权重只与"停在哪个档位"有关。
  *
- * 数据：角计数来自 dsh-memory/hall-overview（打开时拉取一次）。
+ * 数据：角计数来自 dsh-memory/wing-overview（打开时拉取一次）。
  * 层级：设置页全局闸 ⊃ 会话闸（图形外）⊃ 域范围（图形内）。
  */
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { ActionButton, Segmented } from '../ui/controls.js';
 import type { RpcFn } from '../rpc.js';
-import type { HallOverviewResponse } from '../../../src/contract.js';
+import type { WingOverviewResponse } from '../../../src/contract.js';
 import { ensureThemeStyle } from '../theme.js';
 import { SessionInfoArea } from './SessionInfoArea.js';
 
@@ -29,7 +29,7 @@ const DEAD = 3 * (Math.PI / 180); // 边中点迟滞带（只防边界抖动，�
 const DEG = Math.PI / 180;
 const TAU = Math.PI * 2;
 
-/** 第 i 角的角度（i=0 从正上开始，顺时针与 HALL_CATALOG 词表序一致）。 */
+/** 第 i 角的角度（i=0 从正上开始，顺时针与 WING_CATALOG 词表序一致）。 */
 function cornerAngle(i: number): number {
   return (-90 + i * 45) * DEG;
 }
@@ -75,7 +75,7 @@ function snapIndex(p: number, cur: number): number {
   return cand;
 }
 
-export function HallWheel(props: {
+export function WingWheel(props: {
   mode: string;
   /** 会话级域锁定（单选语义）：空数组 = 中心（智能档）；[id] = 以该角为主题。 */
   halls: string[];
@@ -83,8 +83,8 @@ export function HallWheel(props: {
   hallIncludeGeneral: boolean;
   onCommit(key: string): void;
   /** 锁定提交：[id] = 以该角为主题；null = 回中心（清除锁定）。 */
-  onCommitHall(halls: string[] | null): void;
-  onCommitHallBoundaries(patch: { includeUnlabeled?: boolean; includeGeneral?: boolean }): void;
+  onCommitWing(halls: string[] | null): void;
+  onCommitWingBoundaries(patch: { includeUnlabeled?: boolean; includeGeneral?: boolean }): void;
   /** 会话级注入覆盖（复用既有控件）：缺省 = 浮层不渲染注入行。 */
   recall?: boolean | null;
   onCommitRecall?(next: boolean | null): void;
@@ -94,7 +94,7 @@ export function HallWheel(props: {
 }) {
   ensureThemeStyle();
   const isOff = props.mode === 'off';
-  const [overview, setOverview] = useState<HallOverviewResponse | null>(null);
+  const [overview, setOverview] = useState<WingOverviewResponse | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   // 回填后的轮询计时器（卸载时统一清除）
@@ -110,7 +110,7 @@ export function HallWheel(props: {
   useEffect(() => {
     let alive = true;
     props
-      .rpc('dsh-memory/hall-overview', {})
+      .rpc('dsh-memory/wing-overview', {})
       .then((r) => {
         if (!alive) return;
         if (r && r.ok) setOverview(r.value);
@@ -127,7 +127,7 @@ export function HallWheel(props: {
     return overview.corners.find((c) => c.id === id)?.count ?? 0;
   };
 
-  /** 一键回填：对存量未打标记忆批量补打 hall 标签。 */
+  /** 一键回填：对存量未打标记忆批量补打 wing 标签。 */
   const backfill = () => {
     if (backfillBusy || !overview || overview.unlabeled === 0) return;
     setBackfillBusy(true);
@@ -137,7 +137,7 @@ export function HallWheel(props: {
     const tick = () => {
       polls++;
       props
-        .rpc('dsh-memory/hall-overview', {})
+        .rpc('dsh-memory/wing-overview', {})
         .then((r) => {
           const v = r && r.ok ? r.value : null;
           if (v) setOverview(v);
@@ -150,7 +150,7 @@ export function HallWheel(props: {
         .catch(() => finish());
     };
     props
-      .rpc('dsh-memory/hall-backfill', {})
+      .rpc('dsh-memory/wing-backfill', {})
       .then((r) => {
         if (!r || !r.ok) {
           setLocalError(r && r.error ? '回填失败：' + r.error.message : '回填失败');
@@ -289,14 +289,14 @@ export function HallWheel(props: {
       // 回全域只走中心（避免"点一下松开又弹回去"的误触）。
       const id = di != null ? overview?.corners[di]?.id : undefined;
       if (!id) return;
-      if (!props.halls.includes(id)) props.onCommitHall([id]);
+      if (!props.halls.includes(id)) props.onCommitWing([id]);
     } else if (dt == null) {
       // 拖到中心：回智能档（全域）
-      if (props.halls.length !== 0) props.onCommitHall(null);
+      if (props.halls.length !== 0) props.onCommitWing(null);
     } else {
       // 拖到某角：以该角为主题
       const id = overview?.corners[dt]?.id;
-      if (id && !props.halls.includes(id)) props.onCommitHall([id]);
+      if (id && !props.halls.includes(id)) props.onCommitWing([id]);
     }
   };
 
@@ -335,7 +335,7 @@ export function HallWheel(props: {
           <polygon
             points={polyPoints}
             fill="none"
-            stroke="var(--dsh-mem-hall-line)"
+            stroke="var(--dsh-mem-wing-line)"
             strokeWidth="1"
             strokeDasharray="3 3"
             opacity={0.45}
@@ -344,7 +344,7 @@ export function HallWheel(props: {
           <polygon
             points={polyPoints}
             fill="none"
-            stroke="var(--dsh-mem-hall-line)"
+            stroke="var(--dsh-mem-wing-line)"
             strokeWidth="1"
           />
           {/* 8 条固定辐条：中性参考线，不强调颜色、不参与动画 */}
@@ -357,7 +357,7 @@ export function HallWheel(props: {
                 y1={CENTER}
                 x2={p.left}
                 y2={p.top}
-                stroke="var(--dsh-mem-hall-line)"
+                stroke="var(--dsh-mem-wing-line)"
                 strokeWidth="1"
               />
             );
@@ -385,7 +385,7 @@ export function HallWheel(props: {
         <button
           type="button"
           title="智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）"
-          onClick={() => props.onCommitHall(null)}
+          onClick={() => props.onCommitWing(null)}
           style={{
             position: 'absolute',
             left: CENTER,
@@ -398,8 +398,8 @@ export function HallWheel(props: {
             background: 'transparent',
             color:
               activeCorner == null
-                ? 'var(--dsh-mem-hall-corner-on)'
-                : 'var(--dsh-mem-hall-corner)',
+                ? 'var(--dsh-mem-wing-corner-on)'
+                : 'var(--dsh-mem-wing-corner)',
             fontSize: 11,
             fontWeight: 600,
             cursor: 'pointer',
@@ -440,10 +440,10 @@ export function HallWheel(props: {
                 border: '1px solid transparent',
                 background: 'transparent',
                 color: active
-                  ? 'var(--dsh-mem-hall-corner-on)'
+                  ? 'var(--dsh-mem-wing-corner-on)'
                   : empty
-                    ? 'var(--dsh-mem-hall-empty)'
-                    : 'var(--dsh-mem-hall-corner)',
+                    ? 'var(--dsh-mem-wing-empty)'
+                    : 'var(--dsh-mem-wing-corner)',
                 fontSize: 9.5,
                 lineHeight: '12px',
                 fontWeight: active ? 600 : 400,
@@ -491,7 +491,7 @@ export function HallWheel(props: {
               { key: 'in', label: '含未打标', title: '未打标记忆默认包含' },
               { key: 'ex', label: '不含', title: '锁定域时排除未打标记忆' },
             ]}
-            onChange={(key) => props.onCommitHallBoundaries({ includeUnlabeled: key === 'in' })}
+            onChange={(key) => props.onCommitWingBoundaries({ includeUnlabeled: key === 'in' })}
           />
           <Segmented
             value={props.hallIncludeGeneral ? 'in' : 'ex'}
@@ -499,7 +499,7 @@ export function HallWheel(props: {
               { key: 'in', label: '含跨域', title: '跨域（general）兜底记忆也参与召回' },
               { key: 'ex', label: '不含', title: '跨域与单主题相悖，默认不含' },
             ]}
-            onChange={(key) => props.onCommitHallBoundaries({ includeGeneral: key === 'in' })}
+            onChange={(key) => props.onCommitWingBoundaries({ includeGeneral: key === 'in' })}
           />
         </div>
       </div>
@@ -551,7 +551,7 @@ export function HallWheel(props: {
         </span>
         <ActionButton
           label={backfillBusy ? '回填中…' : '回填'}
-          title="对存量未打标记忆批量补打 hall 标签"
+          title="对存量未打标记忆批量补打 wing 标签"
           disabled={!overview || overview.unlabeled === 0 || backfillBusy}
           onClick={() => backfill()}
         />
@@ -586,7 +586,7 @@ function Row(props: { label: string; children: React.ReactNode }) {
   );
 }
 
-/** 词表未送达时的兜底显示（正常路径由 hall-overview 下发的 label 取代）。 */
+/** 词表未送达时的兜底显示（正常路径由 wing-overview 下发的 label 取代）。 */
 const LABEL_FALLBACK = ['工作', '人际', '学习', '创作娱乐', '居家', '健康', '财务', '出行'];
 
 /** 水平视口夹持（手机端适配）：浮层以 pill 中心为轴悬浮，窄视口下贴边平移。 */

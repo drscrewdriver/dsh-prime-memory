@@ -8,7 +8,7 @@ import Schema from '@deepseek-ai/schemastery';
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths';
 import type { EffortChoice, LayerRouteKey, StaticFallbackEntry } from './contract.js';
 import type { ExtractMode, ScopeMode } from './types.js';
-import { HALL_DEFAULT_ENABLED, HALL_FALLBACK } from './types.js';
+import { WING_DEFAULT_ENABLED, WING_FALLBACK } from './types.js';
 
 /**
  * 蒸馏思考档位全词汇表(唯一事实源):'' = 自动(模型默认档 → high),
@@ -158,7 +158,7 @@ export interface MemoryConfig {
      *  0/缺省 = 用内置默认。非静态 schema——预算无部署上限语义)。 */
     budgets?: Partial<{ extract: number; dedup: number; l2: number; l3: number; graph: number }>;
   };
-  /** Hall(粗分类属性通道):参与 L1 自动打标与记忆库过滤的 Hall id 列表。
+  /** Hall(粗分类属性通道):参与 L1 自动打标与记忆库过滤的 Wing id 列表。
    *  空数组 = 关闭 Hall 功能(不自动打标)。 */
   hall: {
     enabled: string[];
@@ -303,7 +303,7 @@ export const memorySchema = Schema.object({
     timeoutMs: Schema.number().min(1000).max(600_000).default(120_000),
   }),
   hall: Schema.object({
-    enabled: Schema.array(Schema.string()).default([...HALL_DEFAULT_ENABLED]),
+    enabled: Schema.array(Schema.string()).default([...WING_DEFAULT_ENABLED]),
   }),
   // token_cost 明细保留期(写入时滚动清理;0 = 永久保留)。成本看板「近 N 天」窗口上限同源
   tokenCost: Schema.object({
@@ -329,18 +329,18 @@ export function resolveDataDir(cfg: MemoryConfig): string {
 }
 
 /**
- * `hall.enabled` 归一化(R14 三条规则,唯一实现点):
- * ① **空数组保持为空** = 关闭 hall 打标(既有语义,`pipeline/l1.ts` 据此整段省略打标指令)
+ * `wing.enabled` 归一化(R14 三条规则,唯一实现点):
+ * ① **空数组保持为空** = 关闭 wing 打标(既有语义,`pipeline/l1.ts` 据此整段省略打标指令)
  *    ——不得被归一化补全吃掉,否则用户显式关闭的意图被静默撤销;
  * ② **含退休 id `general` → 补全 8 角全集**:含 `general` 的配置必然是旧默认
  *    (v0.12 词表),按子集解读会被静默缩到 2 角,故补全而非过滤;
  * ③ **不含 `general` 的其他子集原样保留**(尊重显式配置,不悄悄扩写)。
  */
-export function normHallEnabled(raw: unknown): string[] {
+export function normWingEnabled(raw: unknown): string[] {
   const ids = Array.isArray(raw)
     ? raw.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim())
     : [];
   if (ids.length === 0) return [];
-  if (ids.includes(HALL_FALLBACK)) return [...HALL_DEFAULT_ENABLED];
+  if (ids.includes(WING_FALLBACK)) return [...WING_DEFAULT_ENABLED];
   return ids;
 }

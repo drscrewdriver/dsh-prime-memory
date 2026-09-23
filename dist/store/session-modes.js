@@ -5,7 +5,7 @@
  * 存储失败只降级为内存态(warn 不崩),与插件的存储降级不变量一致。
  */
 import * as path from 'node:path';
-import { HALL_CATALOG } from '../types.js';
+import { WING_CATALOG } from '../types.js';
 import { errDetail } from '../util/filelog.js';
 import { atomicWriteJson, ensureDir, readJsonIfExists } from '../util/io.js';
 const MODES = ['auto', 'chat', 'work', 'off'];
@@ -15,8 +15,8 @@ export function isMemoryMode(v) {
     return typeof v === 'string' && MODES.includes(v);
 }
 /** 合法角 id 判定(锁域只认 8 角;general 是兜底值不是角,不可锁定)。 */
-export function isHallCorner(v) {
-    return typeof v === 'string' && HALL_CATALOG.some((h) => h.id === v);
+export function isWingCorner(v) {
+    return typeof v === 'string' && WING_CATALOG.some((h) => h.id === v);
 }
 export class SessionModeStore {
     defaultMode;
@@ -52,10 +52,10 @@ export class SessionModeStore {
                 // 非布尔视为损坏丢弃(= 跟随全局);旧文件无此键同款兼容
                 recall: typeof entry.recall === 'boolean' ? entry.recall : undefined,
                 // 域锁定只认 8 角 id;非法/缺省 = 中心(智能档)。多选数组优先,单值键兜底
-                hall: isHallCorner(entry.hall) ? entry.hall : undefined,
+                hall: isWingCorner(entry.hall) ? entry.hall : undefined,
                 halls: Array.isArray(entry.halls)
-                    ? Array.from(new Set(entry.halls.filter((x) => isHallCorner(x))))
-                    : isHallCorner(entry.hall)
+                    ? Array.from(new Set(entry.halls.filter((x) => isWingCorner(x))))
+                    : isWingCorner(entry.hall)
                         ? [entry.hall]
                         : undefined,
                 hallIncludeUnlabeled: typeof entry.hallIncludeUnlabeled === 'boolean' ? entry.hallIncludeUnlabeled : undefined,
@@ -108,18 +108,18 @@ export class SessionModeStore {
         this.writeChain = this.writeChain.then(() => this.persist());
     }
     /** 会话级域锁定(多选):空数组 = 中心(智能档,无锁域)。 */
-    getHalls(sessionId) {
+    getWings(sessionId) {
         const e = this.entries.get(sessionId);
         if (e?.halls && e.halls.length > 0)
             return e.halls;
         return e?.hall ? [e.hall] : [];
     }
     /** 兼容读取(单选口径,取第一个锁定域):undefined = 中心。 */
-    getHall(sessionId) {
-        return this.getHalls(sessionId)[0];
+    getWing(sessionId) {
+        return this.getWings(sessionId)[0];
     }
     /** 锁定域边界开关:未打标是否包含(缺省 true)/ general 是否包含(缺省 false)。 */
-    hallBoundaries(sessionId) {
+    wingBoundaries(sessionId) {
         const e = this.entries.get(sessionId);
         return {
             includeUnlabeled: e?.hallIncludeUnlabeled ?? true,
@@ -129,11 +129,11 @@ export class SessionModeStore {
     /** 设置会话级域锁定(多选:角 id 数组;`[]` = 明确回中心清除锁定。写穿持久化)。
      *  **`undefined` = 本轮不动锁域**(例如只更新边界开关,见 stats.ts)——不再把"没传"
      *  误当"回中心",否则只切边界开关会把已锁定的域悄悄清掉。
-     *  单角时镜像写 `hall` 兼容键,多角时置空(旧读者按无锁域读)。 */
-    setHall(sessionId, halls, boundaries) {
+     *  单角时镜像写 `wing` 兼容键,多角时置空(旧读者按无锁域读)。 */
+    setWing(sessionId, halls, boundaries) {
         const entry = this.entries.get(sessionId);
         // undefined = 不动锁域;[]/数组 = 按显式值归一(空 = 回中心)
-        const locked = halls === undefined ? undefined : Array.from(new Set(halls.filter((x) => isHallCorner(x))));
+        const locked = halls === undefined ? undefined : Array.from(new Set(halls.filter((x) => isWingCorner(x))));
         this.entries.set(sessionId, {
             mode: entry?.mode ?? this.loaded,
             recall: entry?.recall,

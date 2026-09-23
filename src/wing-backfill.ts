@@ -1,6 +1,6 @@
 /**
- * 存量未打标记录的一键回填(task_15):从 HallWheel"未打标 M"入口触发,
- * 对 metadata 无 hall 的 L1 记录按 8 角词表批量补打标签(复用 L1 抽取的打标路径:
+ * 存量未打标记录的一键回填(task_15):从 WingWheel"未打标 M"入口触发,
+ * 对 metadata 无 wing 的 L1 记录按 8 角词表批量补打标签(复用 L1 抽取的打标路径:
  * 同一候选词表与措辞,经既有蒸馏 LLM 路由)。
  *
  * 安全边界:
@@ -11,8 +11,8 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import { callLLM } from './llm.js';
-import { normHallEnabled } from './config.js';
-import { HALL_FALLBACK, type MemoryLogger, type MemoryRecord } from './types.js';
+import { normWingEnabled } from './config.js';
+import { WING_FALLBACK, type MemoryLogger, type MemoryRecord } from './types.js';
 import type { L1Store } from './store/l1.js';
 import type { MemoryConfig } from './config.js';
 import { parseJsonLogged } from './llm.js';
@@ -38,41 +38,41 @@ export interface HallBackfillState {
 
 const state: HallBackfillState = { running: false, updated: 0, failed: 0 };
 
-export function hallBackfillState(): HallBackfillState {
+export function wingBackfillState(): HallBackfillState {
   return { ...state };
 }
 
 const SYSTEM_PROMPT =
   '你是记忆库的域标注器。给你若干条记忆(带 id),为每条判断其内容属于哪个 Hall 域,输出 JSON 数组:' +
-  '[{"id":"<原id>","hall":"<域id>"}]。hall 只能从给定候选列表中选;横跨多域或确实无法归入任何角时选 general。' +
+  '[{"id":"<原id>","wing":"<域id>"}]。wing 只能从给定候选列表中选;横跨多域或确实无法归入任何角时选 general。' +
   '只输出 JSON,不要多余文字。';
 
 /** 启动后台回填;已在运行返回 false(单飞)。 */
-export function startHallBackfill(deps: HallBackfillDeps): { started: boolean; running: boolean } {
+export function startWingBackfill(deps: HallBackfillDeps): { started: boolean; running: boolean } {
   if (state.running) return { started: false, running: true };
   state.running = true;
   state.updated = 0;
   state.failed = 0;
   void run(deps).finally(() => {
     state.running = false;
-    deps.logger.info(`[memory] hall 回填结束:成功 ${state.updated} 条,失败 ${state.failed} 条`);
+    deps.logger.info(`[memory] wing 回填结束:成功 ${state.updated} 条,失败 ${state.failed} 条`);
   });
   return { started: true, running: true };
 }
 
 async function run(deps: HallBackfillDeps): Promise<void> {
   const { ctx, cfg, l1, logger } = deps;
-  const halls = normHallEnabled(cfg.hall?.enabled);
+  const halls = normWingEnabled(cfg.hall?.enabled);
   if (halls.length === 0) {
-    logger.warn('[memory] hall 回填跳过:hall.enabled 为空(打标功能已关闭)');
+    logger.warn('[memory] wing 回填跳过:wing.enabled 为空(打标功能已关闭)');
     return;
   }
-  const candidates = [...halls, HALL_FALLBACK].join(' / ');
-  // 未打标集:主表全量里的 null hall(含 retired 行——restore 后标签已补,不重扫)
+  const candidates = [...halls, WING_FALLBACK].join(' / ');
+  // 未打标集:主表全量里的 null wing(含 retired 行——restore 后标签已补,不重扫)
   const all = l1.all();
   const pending = all.filter((r) => !(r.metadata && typeof r.metadata.hall === 'string' && r.metadata.hall !== ''));
   let budget = Math.min(pending.length, MAX_RECORDS);
-  logger.info(`[memory] hall 回填启动:未打标 ${pending.length} 条,本次上限 ${budget} 条(候选 ${candidates})`);
+  logger.info(`[memory] wing 回填启动:未打标 ${pending.length} 条,本次上限 ${budget} 条(候选 ${candidates})`);
   for (let offset = 0; offset < pending.length && budget > 0; offset += CHUNK) {
     const chunk = pending.slice(offset, offset + CHUNK).filter(pickChunk);
     if (chunk.length === 0) continue;
@@ -114,7 +114,7 @@ async function labelChunk(
       layer: 'l1-extract',
       logger,
     });
-    const parsed = parseJsonLogged<Array<{ id?: unknown; hall?: unknown }>>(raw, 'hall 回填', logger);
+    const parsed = parseJsonLogged<Array<{ id?: unknown; hall?: unknown }>>(raw, 'wing 回填', logger);
     if (!Array.isArray(parsed)) return [];
     const byId = new Map(chunk.map((r) => [r.id, r]));
     const out: Array<{ record: MemoryRecord; hall: string }> = [];
@@ -125,7 +125,7 @@ async function labelChunk(
     }
     return out;
   } catch (err) {
-    logger.warn(`[memory] hall 回填块失败(跳过 ${chunk.length} 条,原记录未改): ${err instanceof Error ? err.message : String(err)}`);
+    logger.warn(`[memory] wing 回填块失败(跳过 ${chunk.length} 条,原记录未改): ${err instanceof Error ? err.message : String(err)}`);
     state.failed += chunk.length;
     return [];
   }

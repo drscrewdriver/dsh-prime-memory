@@ -254,12 +254,12 @@ var __defProp = Object.defineProperty;
 		    // 开关旋钮 / 进度条底（滑轨已随 ModeSlider 删除，填充渐变与停点令牌一并移除）
 		    "  --dsh-mem-thumb: #ffffff;",
 		    "  --dsh-mem-track: rgba(128,140,150,0.32);",
-		    // hall 八边形令牌（HallWheel）：连线 / 角默认 / 角选中 / 空角与未打标态；
+		    // wing 八边形令牌（WingWheel）：连线 / 角默认 / 角选中 / 空角与未打标态；
 		    // 全部引用既有中性色与品牌蓝体系，双主题各自声明，无裸色溢出
-		    "  --dsh-mem-hall-line: rgba(128,140,150,0.35);",
-		    "  --dsh-mem-hall-corner: var(--dsh-mem-text-2);",
-		    "  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);",
-		    "  --dsh-mem-hall-empty: var(--dsh-mem-text-3);",
+		    "  --dsh-mem-wing-line: rgba(128,140,150,0.35);",
+		    "  --dsh-mem-wing-corner: var(--dsh-mem-text-2);",
+		    "  --dsh-mem-wing-corner-on: var(--dsh-mem-accent);",
+		    "  --dsh-mem-wing-empty: var(--dsh-mem-text-3);",
 		    "  --dsh-mem-shadow-card: var(--dsw-shadow-lv1, 0 2px 4px 0 rgba(0,0,0,0.05));",
 		    "  --dsh-mem-shadow-pop: var(--dsw-shadow-lv3, 0 0 1px 0 rgba(0,0,0,.2), 0 0 4px 0 rgba(0,0,0,.02), 0 12px 32px 0 rgba(0,0,0,0.08));",
 		    "}",
@@ -293,10 +293,10 @@ var __defProp = Object.defineProperty;
 		    "  --dsh-mem-mode-auto: #7b90ff;",
 		    "  --dsh-mem-thumb: #e8ebf5;",
 		    "  --dsh-mem-track: rgba(148,160,180,0.30);",
-		    "  --dsh-mem-hall-line: rgba(148,160,180,0.32);",
-		    "  --dsh-mem-hall-corner: var(--dsh-mem-text-2);",
-		    "  --dsh-mem-hall-corner-on: var(--dsh-mem-accent);",
-		    "  --dsh-mem-hall-empty: var(--dsh-mem-text-3);",
+		    "  --dsh-mem-wing-line: rgba(148,160,180,0.32);",
+		    "  --dsh-mem-wing-corner: var(--dsh-mem-text-2);",
+		    "  --dsh-mem-wing-corner-on: var(--dsh-mem-accent);",
+		    "  --dsh-mem-wing-empty: var(--dsh-mem-text-3);",
 		    "  --dsh-mem-shadow-card: var(--dsw-shadow-lv1, 0 2px 4px 0 rgba(0,0,0,0.3));",
 		    "  --dsh-mem-shadow-pop: var(--dsw-shadow-lv3, 0 0 1px 0 rgba(0,0,0,.2), 0 0 4px 0 rgba(0,0,0,.02), 0 12px 32px 0 rgba(0,0,0,0.08));",
 		    "}",
@@ -3199,7 +3199,7 @@ var __defProp = Object.defineProperty;
 		  const [typeFilter, setTypeFilter] = (0, import_react15.useState)("");
 		  const [sceneFilter, setSceneFilter] = (0, import_react15.useState)("");
 		  const [hallFilter, setHallFilter] = (0, import_react15.useState)([]);
-		  const [hallCatalog, setHallCatalog] = (0, import_react15.useState)(null);
+		  const [wingCatalog, setHallCatalog] = (0, import_react15.useState)(null);
 		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", halls: [] });
 		  const seqRef = (0, import_react15.useRef)(0);
 		  const fetchPage = (0, import_react15.useCallback)(
@@ -3226,7 +3226,7 @@ var __defProp = Object.defineProperty;
 		        setTotal(v.total === void 0 || v.total === null ? null : v.total);
 		        setTruncated(!!v.truncated);
 		        if (v.scenes) setSceneOptions(v.scenes);
-		        if (v.hallCatalog) setHallCatalog(v.hallCatalog);
+		        if (v.wingCatalog) setHallCatalog(v.wingCatalog);
 		      }).catch((e) => {
 		        if (token !== seqRef.current) return;
 		        setLoading(false);
@@ -3387,9 +3387,9 @@ var __defProp = Object.defineProperty;
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
-		        HallMultiSelect,
+		        WingMultiSelect,
 		        {
-		          options: hallCatalog ?? Array.from(new Set(items.map((m) => m.hall).filter((h) => !!h))).map((id) => ({ id, label: id })),
+		          options: wingCatalog ?? Array.from(new Set(items.map((m) => m.hall).filter((h) => !!h))).map((id) => ({ id, label: id })),
 		          selected: hallFilter,
 		          onChange: setHallFilter
 		        }
@@ -3473,7 +3473,7 @@ var __defProp = Object.defineProperty;
 		                }
 		              ),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + m.type, children: TYPE_LABELS[m.type] || m.type }),
-		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Hall · " + (hallCatalog?.find((h) => h.id === m.hall)?.label || m.hall) }) : null,
+		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Hall · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "优先级 " + m.priority }),
 		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "相关度 " + Number(m.score).toFixed(2) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
@@ -3531,7 +3531,7 @@ var __defProp = Object.defineProperty;
 		    ] }) : null
 		  ] });
 		}
-		function HallMultiSelect(props) {
+		function WingMultiSelect(props) {
 		  const [open, setOpen] = (0, import_react15.useState)(false);
 		  const wrapRef = (0, import_react15.useRef)(null);
 		  (0, import_react15.useEffect)(() => {
@@ -4006,7 +4006,7 @@ var __defProp = Object.defineProperty;
 		  return section;
 		}
 		
-		// client/src/pill/HallWheel.tsx
+		// client/src/pill/WingWheel.tsx
 		var import_react19 = require("react");
 		
 		// client/src/pill/SessionInfoArea.tsx
@@ -4118,7 +4118,7 @@ var __defProp = Object.defineProperty;
 		  ] });
 		}
 		
-		// client/src/pill/HallWheel.tsx
+		// client/src/pill/WingWheel.tsx
 		var import_jsx_runtime19 = require("react/jsx-runtime");
 		var SIZE = 196;
 		var CENTER = SIZE / 2;
@@ -4159,7 +4159,7 @@ var __defProp = Object.defineProperty;
 		  if (Math.abs(normAngle(p - edge)) < DEAD) return cur;
 		  return cand;
 		}
-		function HallWheel(props) {
+		function WingWheel(props) {
 		  ensureThemeStyle();
 		  const isOff = props.mode === "off";
 		  const [overview, setOverview] = (0, import_react19.useState)(null);
@@ -4174,7 +4174,7 @@ var __defProp = Object.defineProperty;
 		  );
 		  (0, import_react19.useEffect)(() => {
 		    let alive = true;
-		    props.rpc("dsh-memory/hall-overview", {}).then((r) => {
+		    props.rpc("dsh-memory/wing-overview", {}).then((r) => {
 		      if (!alive) return;
 		      if (r && r.ok) setOverview(r.value);
 		    }).catch(() => {
@@ -4196,7 +4196,7 @@ var __defProp = Object.defineProperty;
 		    const finish = () => setBackfillBusy(false);
 		    const tick = () => {
 		      polls++;
-		      props.rpc("dsh-memory/hall-overview", {}).then((r) => {
+		      props.rpc("dsh-memory/wing-overview", {}).then((r) => {
 		        const v = r && r.ok ? r.value : null;
 		        if (v) setOverview(v);
 		        if (v && v.unlabeled === 0 || polls >= 20) finish();
@@ -4206,7 +4206,7 @@ var __defProp = Object.defineProperty;
 		        }
 		      }).catch(() => finish());
 		    };
-		    props.rpc("dsh-memory/hall-backfill", {}).then((r) => {
+		    props.rpc("dsh-memory/wing-backfill", {}).then((r) => {
 		      if (!r || !r.ok) {
 		        setLocalError(r && r.error ? "回填失败：" + r.error.message : "回填失败");
 		        finish();
@@ -4323,12 +4323,12 @@ var __defProp = Object.defineProperty;
 		    if (!moved) {
 		      const id = di != null ? overview?.corners[di]?.id : void 0;
 		      if (!id) return;
-		      if (!props.halls.includes(id)) props.onCommitHall([id]);
+		      if (!props.halls.includes(id)) props.onCommitWing([id]);
 		    } else if (dt == null) {
-		      if (props.halls.length !== 0) props.onCommitHall(null);
+		      if (props.halls.length !== 0) props.onCommitWing(null);
 		    } else {
 		      const id = overview?.corners[dt]?.id;
-		      if (id && !props.halls.includes(id)) props.onCommitHall([id]);
+		      if (id && !props.halls.includes(id)) props.onCommitWing([id]);
 		    }
 		  };
 		  const polyPoints = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
@@ -4361,7 +4361,7 @@ var __defProp = Object.defineProperty;
 		                  {
 		                    points: polyPoints,
 		                    fill: "none",
-		                    stroke: "var(--dsh-mem-hall-line)",
+		                    stroke: "var(--dsh-mem-wing-line)",
 		                    strokeWidth: "1",
 		                    strokeDasharray: "3 3",
 		                    opacity: 0.45
@@ -4372,7 +4372,7 @@ var __defProp = Object.defineProperty;
 		                  {
 		                    points: polyPoints,
 		                    fill: "none",
-		                    stroke: "var(--dsh-mem-hall-line)",
+		                    stroke: "var(--dsh-mem-wing-line)",
 		                    strokeWidth: "1"
 		                  }
 		                ),
@@ -4385,7 +4385,7 @@ var __defProp = Object.defineProperty;
 		                      y1: CENTER,
 		                      x2: p.left,
 		                      y2: p.top,
-		                      stroke: "var(--dsh-mem-hall-line)",
+		                      stroke: "var(--dsh-mem-wing-line)",
 		                      strokeWidth: "1"
 		                    },
 		                    "spoke" + i
@@ -4418,7 +4418,7 @@ var __defProp = Object.defineProperty;
 		            {
 		              type: "button",
 		              title: "智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）",
-		              onClick: () => props.onCommitHall(null),
+		              onClick: () => props.onCommitWing(null),
 		              style: {
 		                position: "absolute",
 		                left: CENTER,
@@ -4429,7 +4429,7 @@ var __defProp = Object.defineProperty;
 		                borderRadius: 10,
 		                border: "none",
 		                background: "transparent",
-		                color: activeCorner == null ? "var(--dsh-mem-hall-corner-on)" : "var(--dsh-mem-hall-corner)",
+		                color: activeCorner == null ? "var(--dsh-mem-wing-corner-on)" : "var(--dsh-mem-wing-corner)",
 		                fontSize: 11,
 		                fontWeight: 600,
 		                cursor: "pointer",
@@ -4465,7 +4465,7 @@ var __defProp = Object.defineProperty;
 		                  borderRadius: 8,
 		                  border: "1px solid transparent",
 		                  background: "transparent",
-		                  color: active ? "var(--dsh-mem-hall-corner-on)" : empty ? "var(--dsh-mem-hall-empty)" : "var(--dsh-mem-hall-corner)",
+		                  color: active ? "var(--dsh-mem-wing-corner-on)" : empty ? "var(--dsh-mem-wing-empty)" : "var(--dsh-mem-wing-corner)",
 		                  fontSize: 9.5,
 		                  lineHeight: "12px",
 		                  fontWeight: active ? 600 : 400,
@@ -4510,7 +4510,7 @@ var __defProp = Object.defineProperty;
 		                  { key: "in", label: "含未打标", title: "未打标记忆默认包含" },
 		                  { key: "ex", label: "不含", title: "锁定域时排除未打标记忆" }
 		                ],
-		                onChange: (key) => props.onCommitHallBoundaries({ includeUnlabeled: key === "in" })
+		                onChange: (key) => props.onCommitWingBoundaries({ includeUnlabeled: key === "in" })
 		              }
 		            ),
 		            /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
@@ -4521,7 +4521,7 @@ var __defProp = Object.defineProperty;
 		                  { key: "in", label: "含跨域", title: "跨域（general）兜底记忆也参与召回" },
 		                  { key: "ex", label: "不含", title: "跨域与单主题相悖，默认不含" }
 		                ],
-		                onChange: (key) => props.onCommitHallBoundaries({ includeGeneral: key === "in" })
+		                onChange: (key) => props.onCommitWingBoundaries({ includeGeneral: key === "in" })
 		              }
 		            )
 		          ] })
@@ -4572,7 +4572,7 @@ var __defProp = Object.defineProperty;
 		            ActionButton,
 		            {
 		              label: backfillBusy ? "回填中…" : "回填",
-		              title: "对存量未打标记忆批量补打 hall 标签",
+		              title: "对存量未打标记忆批量补打 wing 标签",
 		              disabled: !overview || overview.unlabeled === 0 || backfillBusy,
 		              onClick: () => backfill()
 		            }
@@ -4642,10 +4642,10 @@ var __defProp = Object.defineProperty;
 		  const [mode, setMode] = (0, import_react20.useState)(null);
 		  const [recall, setRecall] = (0, import_react20.useState)(null);
 		  const [recallResolved, setRecallResolved] = (0, import_react20.useState)(true);
-		  const [halls, setHalls] = (0, import_react20.useState)([]);
-		  const [hallIncludeUnlabeled, setHallIncludeUnlabeled] = (0, import_react20.useState)(true);
-		  const [hallIncludeGeneral, setHallIncludeGeneral] = (0, import_react20.useState)(false);
-		  const [hallLabels, setHallLabels] = (0, import_react20.useState)({});
+		  const [halls, setWings] = (0, import_react20.useState)([]);
+		  const [hallIncludeUnlabeled, setWingIncludeUnlabeled] = (0, import_react20.useState)(true);
+		  const [hallIncludeGeneral, setWingIncludeGeneral] = (0, import_react20.useState)(false);
+		  const [wingLabels, setHallLabels] = (0, import_react20.useState)({});
 		  const [error, setError] = (0, import_react20.useState)(null);
 		  const [open, setOpen] = (0, import_react20.useState)(false);
 		  const wrapRef = (0, import_react20.useRef)(null);
@@ -4662,15 +4662,15 @@ var __defProp = Object.defineProperty;
 		        setMode(r.value.mode);
 		        setRecall(r.value.recall);
 		        setRecallResolved(r.value.recallResolved);
-		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
-		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
-		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
+		        setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+		        setWingIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+		        setWingIncludeGeneral(r.value.hallIncludeGeneral);
 		      } else setError(r && !r.ok ? r.error.message : "RPC error");
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
 		      setError(String(e && e.message || e));
 		    });
-		    rpc("dsh-memory/hall-overview", {}).then((r) => {
+		    rpc("dsh-memory/wing-overview", {}).then((r) => {
 		      if (r && r.ok && r.value) {
 		        setHallLabels(Object.fromEntries(r.value.corners.map((c) => [c.id, c.label])));
 		      }
@@ -4749,34 +4749,34 @@ var __defProp = Object.defineProperty;
 		      setError("注入设置失败：" + String(e && e.message || e));
 		    });
 		  };
-		  const commitHall = (next) => {
+		  const commitWing = (next) => {
 		    if (!rpc || !sessionId || mode === null) return;
 		    const norm = next ?? [];
 		    if (JSON.stringify(norm) === JSON.stringify(halls)) return;
 		    const prevHalls = halls;
 		    const token = seqRef.current;
-		    setHalls(norm);
+		    setWings(norm);
 		    setError(null);
 		    rpc("dsh-memory/session-mode-set", { sessionId, mode, halls: next }).then((r) => {
 		      if (token !== seqRef.current) return;
 		      if (!r || !r.ok) {
-		        setHalls(prevHalls);
+		        setWings(prevHalls);
 		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
 		      } else {
-		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+		        setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
 		      }
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
-		      setHalls(prevHalls);
+		      setWings(prevHalls);
 		      setError("域设置失败：" + String(e && e.message || e));
 		    });
 		  };
-		  const commitHallBoundaries = (patch) => {
+		  const commitWingBoundaries = (patch) => {
 		    if (!rpc || !sessionId || mode === null) return;
 		    const prev = { unlabeled: hallIncludeUnlabeled, general: hallIncludeGeneral };
 		    const token = seqRef.current;
-		    if (patch.includeUnlabeled !== void 0) setHallIncludeUnlabeled(patch.includeUnlabeled);
-		    if (patch.includeGeneral !== void 0) setHallIncludeGeneral(patch.includeGeneral);
+		    if (patch.includeUnlabeled !== void 0) setWingIncludeUnlabeled(patch.includeUnlabeled);
+		    if (patch.includeGeneral !== void 0) setWingIncludeGeneral(patch.includeGeneral);
 		    setError(null);
 		    rpc("dsh-memory/session-mode-set", {
 		      sessionId,
@@ -4787,18 +4787,18 @@ var __defProp = Object.defineProperty;
 		    }).then((r) => {
 		      if (token !== seqRef.current) return;
 		      if (!r || !r.ok) {
-		        setHallIncludeUnlabeled(prev.unlabeled);
-		        setHallIncludeGeneral(prev.general);
+		        setWingIncludeUnlabeled(prev.unlabeled);
+		        setWingIncludeGeneral(prev.general);
 		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
 		      } else {
-		        setHalls(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
-		        setHallIncludeUnlabeled(r.value.hallIncludeUnlabeled);
-		        setHallIncludeGeneral(r.value.hallIncludeGeneral);
+		        setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
+		        setWingIncludeUnlabeled(r.value.hallIncludeUnlabeled);
+		        setWingIncludeGeneral(r.value.hallIncludeGeneral);
 		      }
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
-		      setHallIncludeUnlabeled(prev.unlabeled);
-		      setHallIncludeGeneral(prev.general);
+		      setWingIncludeUnlabeled(prev.unlabeled);
+		      setWingIncludeGeneral(prev.general);
 		      setError("域设置失败：" + String(e && e.message || e));
 		    });
 		  };
@@ -4807,8 +4807,8 @@ var __defProp = Object.defineProperty;
 		  const loaded = mode !== null;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
-		  const hallText = halls.length === 1 ? hallLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} 域` : null;
-		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : hallText ? hallText : info.label;
+		  const wingText = halls.length === 1 ? wingLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} 域` : null;
+		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : wingText ? wingText : info.label;
 		  ensureThemeStyle();
 		  const pillStyle = {
 		    position: "relative",
@@ -4866,15 +4866,15 @@ var __defProp = Object.defineProperty;
 		            className: "dsh-mem-popover",
 		            style: { position: "relative", padding: "10px 12px" },
 		            children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
-		              HallWheel,
+		              WingWheel,
 		              {
 		                mode: mode || "auto",
 		                halls,
 		                hallIncludeUnlabeled,
 		                hallIncludeGeneral,
 		                onCommit: commit,
-		                onCommitHall: commitHall,
-		                onCommitHallBoundaries: commitHallBoundaries,
+		                onCommitWing: commitWing,
+		                onCommitWingBoundaries: commitWingBoundaries,
 		                recall: loaded ? recall : void 0,
 		                onCommitRecall: commitRecall,
 		                error,

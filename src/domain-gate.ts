@@ -8,11 +8,11 @@
  *
  * 可解释性:每次召回把 8 个域权重写进日志(可读出),权重计算是纯函数、可回归。
  */
-import { HALL_FALLBACK } from './types.js';
+import { WING_FALLBACK } from './types.js';
 
 /** 8 条域锚文本(单一事实源):一段描述该域典型内容的短文本,供向量化。
  *  keywords 是嵌入关闭时的关键词降级匹配词表(命中任一 = 该域相关)。 */
-export const HALL_ANCHORS: ReadonlyArray<{ id: string; anchor: string; keywords: readonly string[] }> = [
+export const WING_ANCHORS: ReadonlyArray<{ id: string; anchor: string; keywords: readonly string[] }> = [
   {
     id: 'work',
     anchor: '工作任务、项目进度、代码开发、部署运维、API 设计、供应商对接、客户沟通、团队流程与工程实践',
@@ -56,10 +56,10 @@ export const HALL_ANCHORS: ReadonlyArray<{ id: string; anchor: string; keywords:
 ];
 
 /** 软门禁权重下界:相关度 0 的域仍保留 0.4 的权重(降权而非消失——不硬排除)。 */
-export const HALL_GATE_WEIGHT_FLOOR = 0.4;
+export const WING_GATE_WEIGHT_FLOOR = 0.4;
 
 /** 无偏置权重(降级到头/无信号时全域恒 1,零干预)。 */
-export const HALL_GATE_NEUTRAL = 1;
+export const WING_GATE_NEUTRAL = 1;
 
 export type DomainGateSource = 'embedding' | 'keyword' | 'none';
 
@@ -89,10 +89,10 @@ export function cosine(a: ArrayLike<number>, b: ArrayLike<number>): number {
 /** 嵌入路径:查询向量 × 8 条锚向量 → 每域相关度(余弦 clamp 到 [0,1])→ 权重。 */
 export function weightsFromVectors(queryVec: ArrayLike<number>, anchorVecs: ReadonlyArray<ArrayLike<number>>): Record<string, number> {
   const weights: Record<string, number> = {};
-  for (let i = 0; i < HALL_ANCHORS.length; i++) {
-    const id = HALL_ANCHORS[i]!.id;
+  for (let i = 0; i < WING_ANCHORS.length; i++) {
+    const id = WING_ANCHORS[i]!.id;
     const rel = Math.max(0, Math.min(1, cosine(queryVec, anchorVecs[i]!)));
-    weights[id] = HALL_GATE_WEIGHT_FLOOR + (1 - HALL_GATE_WEIGHT_FLOOR) * rel;
+    weights[id] = WING_GATE_WEIGHT_FLOOR + (1 - WING_GATE_WEIGHT_FLOOR) * rel;
   }
   return weights;
 }
@@ -102,9 +102,9 @@ export function weightsFromKeywords(query: string): Record<string, number> | nul
   const lower = query.toLowerCase();
   const weights: Record<string, number> = {};
   let any = false;
-  for (const { id, keywords } of HALL_ANCHORS) {
+  for (const { id, keywords } of WING_ANCHORS) {
     const hit = keywords.some((k) => lower.includes(k.toLowerCase()));
-    weights[id] = hit ? 0.75 : HALL_GATE_WEIGHT_FLOOR;
+    weights[id] = hit ? 0.75 : WING_GATE_WEIGHT_FLOOR;
     if (hit) any = true;
   }
   return any ? weights : null;
@@ -112,13 +112,13 @@ export function weightsFromKeywords(query: string): Record<string, number> | nul
 
 /**
  * 软门禁主入口(降级阶梯在此收敛)。`embed` 返回 undefined = 嵌入不可用。
- * 锚向量由调用方缓存后传入(`anchorVecs` 与 HALL_ANCHORS 等长;缺省 = 嵌入路径不可用)。
+ * 锚向量由调用方缓存后传入(`anchorVecs` 与 WING_ANCHORS 等长;缺省 = 嵌入路径不可用)。
  */
 export function domainGate(
   query: string,
   embed?: { queryVec?: ArrayLike<number>; anchorVecs?: ReadonlyArray<ArrayLike<number>> },
 ): DomainGateResult {
-  if (embed?.queryVec && embed.anchorVecs && embed.anchorVecs.length === HALL_ANCHORS.length) {
+  if (embed?.queryVec && embed.anchorVecs && embed.anchorVecs.length === WING_ANCHORS.length) {
     return { weights: weightsFromVectors(embed.queryVec, embed.anchorVecs), source: 'embedding' };
   }
   const kw = weightsFromKeywords(query);
@@ -128,36 +128,36 @@ export function domainGate(
 
 export function neutralWeights(): Record<string, number> {
   const weights: Record<string, number> = {};
-  for (const { id } of HALL_ANCHORS) weights[id] = HALL_GATE_NEUTRAL;
+  for (const { id } of WING_ANCHORS) weights[id] = WING_GATE_NEUTRAL;
   return weights;
 }
 
 /** 命中域归属:记录的 metadata.hall;未打标/兜底值返回 null(取中性权重)。 */
-export function domainOfHall(hall: unknown): string | null {
+export function domainOfWing(hall: unknown): string | null {
   if (typeof hall !== 'string') return null;
-  return HALL_ANCHORS.some((a) => a.id === hall) ? hall : null;
+  return WING_ANCHORS.some((a) => a.id === hall) ? hall : null;
 }
 
 /** 权重的可读日志形态(每次召回可解释:8 个域权重逐个读出)。 */
 export function formatWeights(weights: Record<string, number>): string {
-  return HALL_ANCHORS.map(({ id }) => `${id}=${(weights[id] ?? HALL_GATE_NEUTRAL).toFixed(2)}`).join(' ');
+  return WING_ANCHORS.map(({ id }) => `${id}=${(weights[id] ?? WING_GATE_NEUTRAL).toFixed(2)}`).join(' ');
 }
 
 /** 归一化会话级域权重(拖动角点的写入面):只认 8 角 id,数值 clamp 到 [0, MAX],
  *  非数字/非法 id 一律丢弃;结果为空对象时返回 undefined(= 无用户偏置,不写盘)。 */
 /** 手动挡硬过滤(纯函数,回归锚点):锁定集(多选,命中任一)= 只留锁定域;
  *  未打标/跨域按边界开关放行。验证口径:单主题咨询下其他域记忆零注入。 */
-export function hardFilterByHallLock<T extends { id: string }>(
+export function hardFilterByWingLock<T extends { id: string }>(
   hits: readonly T[],
-  hallOf: (id: string) => unknown,
+  wingOf: (id: string) => unknown,
   locks: readonly string[],
   includeUnlabeled: boolean,
   includeGeneral: boolean,
 ): T[] {
   return hits.filter((h) => {
-    const hall = hallOf(h.id);
-    if (typeof hall === 'string' && hall !== '') {
-      return locks.includes(hall) || (hall === HALL_FALLBACK && includeGeneral);
+    const wing = wingOf(h.id);
+    if (typeof wing === 'string' && wing !== '') {
+      return locks.includes(wing) || (wing === WING_FALLBACK && includeGeneral);
     }
     return includeUnlabeled;
   });
@@ -167,12 +167,12 @@ export function hardFilterByHallLock<T extends { id: string }>(
  *  低相关域被降权而非消失——排序 + 预算截断实现"每域配额",不硬排除。 */
 export function sortByDomainWeight<T extends { id: string; score: number }>(
   hits: readonly T[],
-  hallOf: (id: string) => unknown,
+  wingOf: (id: string) => unknown,
   weights: Record<string, number>,
 ): T[] {
   const weightOf = (id: string): number => {
-    const w = weights[domainOfHall(hallOf(id)) ?? ''];
-    return typeof w === 'number' ? w : HALL_GATE_NEUTRAL;
+    const w = weights[domainOfWing(wingOf(id)) ?? ''];
+    return typeof w === 'number' ? w : WING_GATE_NEUTRAL;
   };
   return [...hits].sort((a, b) => weightOf(b.id) - weightOf(a.id) || b.score - a.score);
 }

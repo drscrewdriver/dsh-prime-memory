@@ -43,7 +43,7 @@ import {
 } from '../util/context-occupancy.js';
 import { errDetail } from '../util/filelog.js';
 import { blocksToText } from '../util/text.js';
-import { domainGate, formatWeights, hardFilterByHallLock, sortByDomainWeight, HALL_ANCHORS } from '../domain-gate.js';
+import { domainGate, formatWeights, hardFilterByWingLock, sortByDomainWeight, WING_ANCHORS } from '../domain-gate.js';
 
 const PROFILE_TTL = 60_000;
 
@@ -202,7 +202,7 @@ export function registerRecall(
     if (!stores.l1.vectorsReady()) return anchorVecs;
     try {
       const vecs: Array<Float32Array | undefined> = [];
-      for (const a of HALL_ANCHORS) vecs.push(await stores.l1.embedText(a.anchor));
+      for (const a of WING_ANCHORS) vecs.push(await stores.l1.embedText(a.anchor));
       anchorVecs = vecs.every((v) => v !== undefined && v.length > 0) ? (vecs as Float32Array[]) : null;
     } catch {
       anchorVecs = null;
@@ -210,8 +210,8 @@ export function registerRecall(
     return anchorVecs;
   };
 
-  /** hits 的 hall 归属表(检索命中不含 metadata,按 id 批量取回一次)。 */
-  const hallByIdOf = (hits: Array<{ id: string }>): Map<string, unknown> => {
+  /** hits 的 wing 归属表(检索命中不含 metadata,按 id 批量取回一次)。 */
+  const wingByIdOf = (hits: Array<{ id: string }>): Map<string, unknown> => {
     const map = new Map<string, unknown>();
     if (hits.length === 0) return map;
     for (const r of stores.l1.getByIds(hits.map((h) => h.id))) map.set(r.id, r.metadata?.hall);
@@ -344,17 +344,17 @@ export function registerRecall(
             return decision;
           }
           st.lastDurationMs = Date.now() - searchStart;
-          // ── hall 域范围(Phase 1c,R2/R12):锁角 = 硬过滤(手动挡);
+          // ── wing 域范围(Phase 1c,R2/R12):锁角 = 硬过滤(手动挡);
           // 中心 = 软门禁(域相关度加权,task_19)。写侧零感知(蒸馏/打标不过此路)。 ──
           let scoped = hits;
-          const hallLocks = modes.getHalls(ownerId);
-          if (hallLocks.length > 0) {
+          const wingLocks = modes.getWings(ownerId);
+          if (wingLocks.length > 0) {
             // 手动挡:只召回锁定域;未打标默认包含(524/994,默认排除会静默丢一半),
             // general(跨域)默认不含;两个边界均可由会话开关切换
-            const { includeUnlabeled, includeGeneral } = modes.hallBoundaries(ownerId);
-            scoped = hardFilterByHallLock(hits, (id) => hallByIdOf(hits).get(id), hallLocks, includeUnlabeled, includeGeneral);
+            const { includeUnlabeled, includeGeneral } = modes.wingBoundaries(ownerId);
+            scoped = hardFilterByWingLock(hits, (id) => wingByIdOf(hits).get(id), wingLocks, includeUnlabeled, includeGeneral);
             logger.debug?.(
-              `[memory] 域硬过滤 hall=${hallLocks.join('+')}:${hits.length} → ${scoped.length} 条(未打标${includeUnlabeled ? '含' : '不含'}/跨域${includeGeneral ? '含' : '不含'})`,
+              `[memory] 域硬过滤 wing=${wingLocks.join('+')}:${hits.length} → ${scoped.length} 条(未打标${includeUnlabeled ? '含' : '不含'}/跨域${includeGeneral ? '含' : '不含'})`,
             );
           } else {
             // 智能档(中心):域相关度 → 每域权重,加权排序 + 预算截断实现"低相关域降权
@@ -366,8 +366,8 @@ export function registerRecall(
                 : undefined;
             const gate = domainGate(query, { queryVec, anchorVecs: anchorVecsReady ?? undefined });
             if (gate.source !== 'none' && scoped.length > 1) {
-              const hallById = hallByIdOf(scoped);
-              scoped = sortByDomainWeight(scoped, (id) => hallById.get(id), gate.weights);
+              const wingById = wingByIdOf(scoped);
+              scoped = sortByDomainWeight(scoped, (id) => wingById.get(id), gate.weights);
               logger.info(
                 `[memory] 域软门禁(source=${gate.source}) ${formatWeights(gate.weights)} agent=${payload.agent.id}`,
               );

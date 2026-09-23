@@ -27,7 +27,7 @@ import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryFamily, MemoryLogger, MemoryRecord, Persistence } from '../types.js';
-import { HALL_CATALOG, HALL_FALLBACK, normPersistence, normScope, resolveRecordScope } from '../types.js';
+import { WING_CATALOG, WING_FALLBACK, normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 
@@ -345,14 +345,14 @@ export function registerMemoryTools(
     const persistence: Persistence | undefined = normPersistence(item.persistence);
     const createdAt = parseTime(item.created_at) ?? now;
     const updatedAt = parseTime(item.updated_at) ?? createdAt;
-    const hall =
+    const wing =
       typeof item.hall === 'string' && item.hall.trim() ? item.hall.trim().slice(0, 40) : undefined;
     const origin =
       typeof item.origin === 'string' && item.origin.trim() ? item.origin.trim().slice(0, 200) : undefined;
     const metadata: Record<string, unknown> = {
       temporal: { st: persistence ?? '?', vf: toIsoOrNull(validFrom), vt: toIsoOrNull(validTo) },
     };
-    if (hall) metadata.hall = hall;
+    if (wing) metadata.hall = wing;
     if (origin) metadata.origin = origin;
     if (validFrom !== undefined) metadata.activity_start_time = toIsoOrNull(validFrom);
     if (validTo !== undefined) metadata.activity_end_time = toIsoOrNull(validTo);
@@ -389,7 +389,7 @@ export function registerMemoryTools(
     },
     hall: {
       type: 'string',
-      description: `可选的粗分类 Hall(${[...HALL_CATALOG.map((h) => h.id), HALL_FALLBACK].join('/')};general = 跨域兜底)`,
+      description: `可选的粗分类 Hall(${[...WING_CATALOG.map((h) => h.id), WING_FALLBACK].join('/')};general = 跨域兜底)`,
     },
     persistence: {
       type: 'string',

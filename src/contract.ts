@@ -453,7 +453,7 @@ export interface SessionModeGetResponse {
   recall: boolean | null;
   /** host 解析后的注入生效值(会话覆盖 ?? 全局开关):pill 面文直接消费。 */
   recallResolved: boolean;
-  /** 会话级域锁定(hall 八边形手动挡):角 id = 锁定单域;null = 中心(智能档)。
+  /** 会话级域锁定(wing 八边形手动挡):角 id = 锁定单域;null = 中心(智能档)。
    *  Phase 2 多选:完整选择集在 halls,本字段取第一个锁定域(兼容)。 */
   hall: string | null;
   /** 多选域锁定:命中任一锁定域即通过硬过滤;空数组 = 中心。 */
@@ -492,18 +492,18 @@ export interface SessionModeSetResponse {
   hallIncludeGeneral: boolean;
 }
 
-/** dsh-memory/hall-overview(八边形角计数;HallWheel 打开时拉取,非热路径)。 */
-export interface HallOverviewResponse {
+/** dsh-memory/wing-overview(八边形角计数;WingWheel 打开时拉取,非热路径)。 */
+export interface WingOverviewResponse {
   /** 8 角逐域计数(词表顺序)。 */
   corners: Array<{ id: string; label: string; count: number }>;
   /** 跨域兜底值(general)计数。 */
   general: number;
-  /** 未打标(metadata 无 hall)计数——角上"另有 N 条未打标"与一键回填的数据源。 */
+  /** 未打标(metadata 无 wing)计数——角上"另有 N 条未打标"与一键回填的数据源。 */
   unlabeled: number;
 }
 
-/** dsh-memory/hall-backfill(一键回填,后台任务;端点立即返回,进度以 hall-overview 轮询)。 */
-export interface HallBackfillResponse {
+/** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */
+export interface WingBackfillResponse {
   /** true = 本次触发启动了新任务;false = 已有任务在跑(单飞,不叠加)。 */
   started: boolean;
   running: boolean;
@@ -603,9 +603,9 @@ export interface ListRecordsRequest {
   query?: string;
   type?: string;
   scene?: string;
-  /** Hall 过滤(metadata.hall == 该值;空 = 不过滤)。单值保留兼容;多选走 halls。 */
+  /** Wing 过滤(metadata.hall == 该值;空 = 不过滤)。单值保留兼容;多选走 halls。 */
   hall?: string;
-  /** Hall 过滤多值(R13):命中任一即可;查询可多选,记录打标仍单值。 */
+  /** Wing 过滤多值(R13):命中任一即可;查询可多选,记录打标仍单值。 */
   halls?: readonly string[];
   /** 1~200,默认 50。 */
   limit?: number;
@@ -620,7 +620,7 @@ export interface UiRecord {
   priority: number;
   scene: string;
   family: MemoryFamily | null;
-  /** Hall 标签(metadata.hall,可空)。 */
+  /** Wing 标签(metadata.hall,可空)。 */
   hall: string | null;
   timestamps: string[];
   createdAt: string | null;
@@ -648,11 +648,11 @@ export interface ListRecordsResponse {
   /** 场景筛选下拉选项(仅 offset===0 时附带)。 */
   scenes?: string[];
   /**
-   * Hall 词表(R8 单一事实源:服务端随 list-records 下发,client 不再手抄;仅 offset===0 时附带)。
+   * Wing 词表(R8 单一事实源:服务端随 list-records 下发,client 不再手抄;仅 offset===0 时附带)。
    * 含 8 角 + `general`(跨域兜底,存量大 reserved 值仍可筛)。缺省(旧服务端)时 client
-   * 降级为从已加载记录的 hall 值派生选项。
+   * 降级为从已加载记录的 wing 值派生选项。
    */
-  hallCatalog?: Array<{ id: string; label: string }>;
+  wingCatalog?: Array<{ id: string; label: string }>;
 }
 
 /** dsh-memory/records-delete(面板高权限退场指定记忆;须 memoryMutate 开启)。 */
@@ -1135,8 +1135,8 @@ export interface DshMemoryRequestMap {
   'dsh-memory/token-cost': TokenCostRequest;
   'dsh-memory/session-mode-get': SessionModeGetRequest;
   'dsh-memory/session-mode-set': SessionModeSetRequest;
-  'dsh-memory/hall-overview': Record<string, never>;
-  'dsh-memory/hall-backfill': Record<string, never>;
+  'dsh-memory/wing-overview': Record<string, never>;
+  'dsh-memory/wing-backfill': Record<string, never>;
   'dsh-memory/session-stats': SessionStatsRequest;
   'dsh-memory/settings-get': Record<string, never>;
   'dsh-memory/settings-set': SettingsSetRequest;
@@ -1179,8 +1179,8 @@ export interface DshMemoryResponseMap {
   'dsh-memory/token-cost': TokenCostResponse;
   'dsh-memory/session-mode-get': SessionModeGetResponse;
   'dsh-memory/session-mode-set': SessionModeSetResponse;
-  'dsh-memory/hall-overview': HallOverviewResponse;
-  'dsh-memory/hall-backfill': HallBackfillResponse;
+  'dsh-memory/wing-overview': WingOverviewResponse;
+  'dsh-memory/wing-backfill': WingBackfillResponse;
   'dsh-memory/session-stats': SessionStatsResponse;
   'dsh-memory/settings-get': SettingsGetResponse;
   'dsh-memory/settings-set': SettingsSetResponse;

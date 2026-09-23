@@ -1503,7 +1503,7 @@ export class MemoryDb {
         }
     }
     /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
-    hallL1Counts() {
+    wingL1Counts() {
         if (this.degraded)
             return { counts: {}, unlabeled: 0 };
         try {

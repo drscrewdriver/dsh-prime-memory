@@ -14,7 +14,7 @@ import type { ConversationAnchor, ConversationMessage } from '../types.js';
 /**
  * `l1_records.metadata_json` 里承载锚点集合的**保留键**。
  *
- * 加前缀 `dsh_` 是为了与 LLM 产出的 metadata 键(`hall` / `activity_start_time` 等)
+ * 加前缀 `dsh_` 是为了与 LLM 产出的 metadata 键(`wing` / `activity_start_time` 等)
  * 在命名空间上隔开——写库时两者会被合并进同一个 JSON 对象(见 `withSourceAnchors`)。
  */
 export declare const ANCHOR_METADATA_KEY = "dsh_source_anchors";

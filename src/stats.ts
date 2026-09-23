@@ -40,9 +40,9 @@ import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
-import { HALL_CATALOG, HALL_FALLBACK, type MemoryFamily, type MemoryLogger, type MemoryMode } from './types.js';
-import { isHallCorner } from './store/session-modes.js';
-import { startHallBackfill } from './hall-backfill.js';
+import { WING_CATALOG, WING_FALLBACK, type MemoryFamily, type MemoryLogger, type MemoryMode } from './types.js';
+import { isWingCorner } from './store/session-modes.js';
+import { startWingBackfill } from './wing-backfill.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 
@@ -73,8 +73,8 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/token-cost',
   'dsh-memory/session-mode-get',
   'dsh-memory/session-mode-set',
-  'dsh-memory/hall-overview',
-  'dsh-memory/hall-backfill',
+  'dsh-memory/wing-overview',
+  'dsh-memory/wing-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
   'dsh-memory/settings-set',
@@ -234,8 +234,8 @@ import type {
   RecallDisabledReason,
   RuminateStatusResponse,
   ScenesResponse,
-  HallBackfillResponse,
-  HallOverviewResponse,
+  WingBackfillResponse,
+  WingOverviewResponse,
   SessionModeGetResponse,
   SessionModeSetResponse,
   SessionStatsResponse,
@@ -534,8 +534,8 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // 注入解析权威在 host:recall 是原始覆盖(null=跟随全局),recallResolved 是生效值
       const s = live?.get();
       const globalRecall = s?.recall ?? true;
-      const bounds = modes.hallBoundaries(sessionId);
-      const locked = modes.getHalls(sessionId);
+      const bounds = modes.wingBoundaries(sessionId);
+      const locked = modes.getWings(sessionId);
       const v: SessionModeGetResponse = {
         sessionId,
         mode: modes.get(sessionId),
@@ -574,13 +574,13 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       }
       // 域锁定可选同车:角 id = 锁定;显式 null/空数组 = 回中心;缺省 = 不动。
       // 只认 8 角 id(general 是兜底值不是角,不可锁定),非法值整体拒绝(不做部分提交)
-      if (p.hall !== undefined && p.hall !== null && !isHallCorner(p.hall)) {
-        throw new Error(`非法域锁定: ${String(p.hall)}(允许 ${HALL_CATALOG.map((h) => h.id).join('/')}/null)`);
+      if (p.hall !== undefined && p.hall !== null && !isWingCorner(p.hall)) {
+        throw new Error(`非法域锁定: ${String(p.hall)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
       }
       if (p.halls !== undefined && p.halls !== null) {
-        const bad = Array.from(p.halls).find((x) => !isHallCorner(x));
+        const bad = Array.from(p.halls).find((x) => !isWingCorner(x));
         if (bad !== undefined) {
-          throw new Error(`非法域锁定: ${String(bad)}(允许 ${HALL_CATALOG.map((h) => h.id).join('/')}/null)`);
+          throw new Error(`非法域锁定: ${String(bad)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
         }
       }
       modes.set(sessionId, p.mode as MemoryMode);
@@ -595,9 +595,9 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         p.hallIncludeUnlabeled !== undefined ||
         p.hallIncludeGeneral !== undefined
       ) {
-        // hall/halls 都没传 = 只改边界开关 → 传 undefined，由 store 保留现锁域
+        // wing/halls 都没传 = 只改边界开关 → 传 undefined，由 store 保留现锁域
         //（旧写法在这条分支算出 undefined 并在 store 侧被当"回中心"，会静默清掉锁定）
-        const nextHalls =
+        const nextWings =
           p.hall === undefined && p.halls === undefined
             ? undefined
             : p.halls === null || p.hall === null
@@ -605,17 +605,17 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
               : p.halls !== undefined
                 ? p.halls
                 : [p.hall as string];
-        modes.setHall(sessionId, nextHalls, {
+        modes.setWing(sessionId, nextWings, {
           includeUnlabeled: p.hallIncludeUnlabeled,
           includeGeneral: p.hallIncludeGeneral,
         });
       }
       deps.logger.info(
-        `[memory] 会话档位设置 session=${sessionId} mode=${p.mode} recall=${JSON.stringify(modes.getRecall(sessionId) ?? null)} hall=${JSON.stringify(modes.getHall(sessionId) ?? null)}`,
+        `[memory] 会话档位设置 session=${sessionId} mode=${p.mode} recall=${JSON.stringify(modes.getRecall(sessionId) ?? null)} wing=${JSON.stringify(modes.getWing(sessionId) ?? null)}`,
       );
       const s = live?.get();
-      const bounds = modes.hallBoundaries(sessionId);
-      const locked = modes.getHalls(sessionId);
+      const bounds = modes.wingBoundaries(sessionId);
+      const locked = modes.getWings(sessionId);
       const v: SessionModeSetResponse = {
         sessionId,
         mode: p.mode as MemoryMode,
@@ -629,20 +629,20 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       return v;
     }
 
-    // ── Hall 八边形角计数(HallWheel 打开时拉取;非热路径,组查询一条 SQL) ──
-    case 'dsh-memory/hall-overview': {
-      const { counts, unlabeled } = stores.l1.hallCounts();
-      const v: HallOverviewResponse = {
-        corners: HALL_CATALOG.map((h) => ({ id: h.id, label: h.label, count: counts[h.id] ?? 0 })),
-        general: counts[HALL_FALLBACK] ?? 0,
+    // ── Hall 八边形角计数(WingWheel 打开时拉取;非热路径,组查询一条 SQL) ──
+    case 'dsh-memory/wing-overview': {
+      const { counts, unlabeled } = stores.l1.wingCounts();
+      const v: WingOverviewResponse = {
+        corners: WING_CATALOG.map((h) => ({ id: h.id, label: h.label, count: counts[h.id] ?? 0 })),
+        general: counts[WING_FALLBACK] ?? 0,
         unlabeled,
       };
       return v;
     }
 
-    // ── 一键回填(task_15):后台任务,单飞;端点立即返回,进度看 hall-overview ──
-    case 'dsh-memory/hall-backfill': {
-      const r = startHallBackfill({ ctx: deps.ctx, cfg: deps.cfg, l1: stores.l1, logger: deps.logger });
+    // ── 一键回填(task_15):后台任务,单飞;端点立即返回,进度看 wing-overview ──
+    case 'dsh-memory/wing-backfill': {
+      const r = startWingBackfill({ ctx: deps.ctx, cfg: deps.cfg, l1: stores.l1, logger: deps.logger });
       return r;
     }
 
@@ -908,40 +908,40 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const p = (payload ?? {}) as { query?: string; type?: string; scene?: string; hall?: string; halls?: unknown; limit?: number; offset?: number };
       if (p.query !== undefined && p.query.length > 4096) throw new Error('query 过长(≤4096 字符)');
       // R13 多值归一: halls 数组只留非空字符串(≤40 字符),去重,上限 8(角数);
-      // hall 单值保留兼容,归一后与 halls 合并
-      const hallSel = Array.from(
+      // wing 单值保留兼容,归一后与 halls 合并
+      const wingSel = Array.from(
         new Set(
           [
             ...(Array.isArray(p.halls) ? p.halls.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim().slice(0, 40)) : []),
             ...(p.hall ? [p.hall.trim().slice(0, 40)] : []),
-          ].slice(0, HALL_CATALOG.length + 1),
+          ].slice(0, WING_CATALOG.length + 1),
         ),
       );
       const limit = Math.min(Math.max(Number(p.limit) || 50, 1), 200);
       const offset = Math.min(Math.max(Number(p.offset) || 0, 0), 1_000_000);
-      // Hall 词表随首屏下发(R8 单一事实源,client 不手抄);常量拼接,零 I/O,不触碰热路径规则
-      const hallCatalog =
+      // Wing 词表随首屏下发(R8 单一事实源,client 不手抄);常量拼接,零 I/O,不触碰热路径规则
+      const wingCatalog =
         offset === 0
-          ? [...HALL_CATALOG.map((h) => ({ id: h.id, label: h.label })), { id: HALL_FALLBACK, label: '跨域' }]
+          ? [...WING_CATALOG.map((h) => ({ id: h.id, label: h.label })), { id: WING_FALLBACK, label: '跨域' }]
           : undefined;
-      // 关键词路径:复用检索唯一缝(与召回同源),取回后做场景/Hall 过滤 + 手工分页。
+      // 关键词路径:复用检索唯一缝(与召回同源),取回后做场景/Wing 过滤 + 手工分页。
       // 检索侧单次上限 200:分页窗口触达上限时显式标记 truncated(结果可能不完整)。
       if (p.query && p.query.trim()) {
         const SEARCH_CAP = 200;
         const wanted = offset + limit + 1;
         const hits = await stores.l1.search(p.query, Math.min(wanted, SEARCH_CAP), { type: p.type || undefined });
         let filtered = p.scene ? hits.filter((h) => h.scene_name === p.scene) : hits;
-        // Hall 过滤(检索命中不含 metadata):按 id 批量取回元数据后过滤
+        // Wing 过滤(检索命中不含 metadata):按 id 批量取回元数据后过滤
         let metaById: Map<string, Record<string, unknown>> | null = null;
-        if (hallSel.length > 0 && filtered.length > 0) {
+        if (wingSel.length > 0 && filtered.length > 0) {
           const meta = new Map<string, Record<string, unknown>>();
           for (const r of stores.l1.getByIds(filtered.map((h) => h.id))) {
             if (r.metadata) meta.set(r.id, r.metadata);
           }
           metaById = meta;
           filtered = filtered.filter((h) => {
-            const hall = meta.get(h.id)?.hall;
-            return typeof hall === 'string' && hall !== '' && hallSel.includes(hall);
+            const wing = meta.get(h.id)?.hall;
+            return typeof wing === 'string' && wing !== '' && wingSel.includes(wing);
           });
         }
         const resp: ListRecordsResponse = {
@@ -950,18 +950,18 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           total: null,
           truncated: wanted > SEARCH_CAP,
           scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
-          hallCatalog,
+          wingCatalog,
         };
         return resp;
       }
-      const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: hallSel.length > 0 ? hallSel : undefined, limit, offset });
+      const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, limit, offset });
       const resp: ListRecordsResponse = {
         items: items.map(hitToUiRecord),
         hasMore: offset + items.length < total,
         total,
         truncated: false,
         scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
-        hallCatalog,
+        wingCatalog,
       };
       return resp;
     }

@@ -160,7 +160,7 @@ export interface MemoryConfig {
             graph: number;
         }>;
     };
-    /** Hall(粗分类属性通道):参与 L1 自动打标与记忆库过滤的 Hall id 列表。
+    /** Hall(粗分类属性通道):参与 L1 自动打标与记忆库过滤的 Wing id 列表。
      *  空数组 = 关闭 Hall 功能(不自动打标)。 */
     hall: {
         enabled: string[];
@@ -759,11 +759,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
 }>>;
 export declare function resolveDataDir(cfg: MemoryConfig): string;
 /**
- * `hall.enabled` 归一化(R14 三条规则,唯一实现点):
- * ① **空数组保持为空** = 关闭 hall 打标(既有语义,`pipeline/l1.ts` 据此整段省略打标指令)
+ * `wing.enabled` 归一化(R14 三条规则,唯一实现点):
+ * ① **空数组保持为空** = 关闭 wing 打标(既有语义,`pipeline/l1.ts` 据此整段省略打标指令)
  *    ——不得被归一化补全吃掉,否则用户显式关闭的意图被静默撤销;
  * ② **含退休 id `general` → 补全 8 角全集**:含 `general` 的配置必然是旧默认
  *    (v0.12 词表),按子集解读会被静默缩到 2 角,故补全而非过滤;
  * ③ **不含 `general` 的其他子集原样保留**(尊重显式配置,不悄悄扩写)。
  */
-export declare function normHallEnabled(raw: unknown): string[];
+export declare function normWingEnabled(raw: unknown): string[];

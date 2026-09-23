@@ -1,7 +1,14 @@
-# HallWheel Spec — 八边形域轮（hall 主题轴门面）
+# WingWheel Spec — 八边形域轮（Wing 主题轴门面）
 
-> 组件组：`client/src/pill/HallWheel.tsx`（域轮本体）+ `MemoryModePill.tsx`（面文与浮层壳）。
+> 组件组：`client/src/pill/WingWheel.tsx`（域轮本体）+ `MemoryModePill.tsx`（面文与浮层壳）。
 > 档位词表 `client/src/pill/modes.ts` 现在只服务 pill 面文。全局令牌与守则见 `global-spec.md`。
+>
+> **v9（2026-09-23）Wing 升格**：采纳 MemPalace 五层理念（Wing/Hall/Room/Closet/Drawer），
+> 8 生活域概念由 hall **升格改名为 Wing**（最宽泛组织单元，轮盘八顶点天然适配）。
+> 代码标识符/组件/LLM 文案/RPC 端点（`dsh-memory/wing-overview`、`wing-backfill`）已全改；
+> **磁盘与 wire 兼容键保留**：`metadata.hall`（实库已落盘）、session-modes 的
+> `hall`/`halls`/`hallInclude*`、`cfg.hall`、memory_search 参数名——无数据迁移。
+> 后续立项：5 认知 hall 映射 L1 type 轴、Room 涌现 slug 层、Closet/Drawer 两级展开召回。
 >
 > **v6（2026-09-23）收敛**：状态只剩「**8 角单族 / 中心智能 / 关闭注入**」三态。
 > 删除了 `ModeSlider.tsx`（强制单族滑轨，整组件删除）、连续域权重（`hallWeights` 通道

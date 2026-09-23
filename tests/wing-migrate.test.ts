@@ -1,5 +1,5 @@
 /**
- * hall 迁移(task_14)回归:dry-run/apply、幂等(两次一致)、retired 行不漏扫、
+ * wing 迁移(task_14)回归:dry-run/apply、幂等(两次一致)、retired 行不漏扫、
  * 单一所有者扫描函数(scanL1Metadata 全量,含 retired)。
  */
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
@@ -8,12 +8,12 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MemoryDb } from '../src/store/sqlite.js';
 import { L1Store } from '../src/store/l1.js';
-import { runHallMigration } from '../src/hall-migrate.js';
+import { runWingMigration } from '../src/wing-migrate.js';
 import { NoopEmbeddingService } from '../src/store/embedding.js';
 
 let dir: string;
 async function tmp(): Promise<string> {
-  if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-hall-mig-'));
+  if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-wing-mig-'));
   return dir;
 }
 afterAll(async () => {
@@ -41,19 +41,19 @@ async function seedDb(retire = false): Promise<string> {
   return dbPath;
 }
 
-describe('hall migration (task_14)', () => {
+describe('wing migration (task_14)', () => {
   it('dry-run reports counts on full main table incl. retired rows; idempotent across runs', async () => {
     const dbPath = await seedDb(true);
-    const first = runHallMigration({ dbPath, dryRun: true });
+    const first = runWingMigration({ dbPath, dryRun: true });
     expect(first.total).toBe(3);
     expect(first.retired).toBe(1); // retired 行不漏扫
-    expect(first.byHall['work']).toBe(1);
-    expect(first.byHall['general']).toBe(1); // general 保留为跨域值(只报告)
+    expect(first.byWing['work']).toBe(1);
+    expect(first.byWing['general']).toBe(1); // general 保留为跨域值(只报告)
     expect(first.unlabeled).toBe(1);
     expect(first.backupPath).toBeNull(); // dry-run 不写文件
     expect(first.verdict).toBe('expected');
     // 连续两次结果一致(幂等)
-    const second = runHallMigration({ dbPath, dryRun: true });
+    const second = runWingMigration({ dbPath, dryRun: true });
     expect(second).toEqual(first);
   });
 
@@ -61,15 +61,15 @@ describe('hall migration (task_14)', () => {
     const dbPath = await seedDb();
     const backupDir = join(await tmp(), 'backup');
     await mkdir(backupDir, { recursive: true });
-    const report = runHallMigration({ dbPath, dryRun: false, backupDir });
+    const report = runWingMigration({ dbPath, dryRun: false, backupDir });
     expect(report.backupPath).toBeTruthy();
     const lines = (await readFile(report.backupPath!, 'utf8')).trim().split('\n');
     expect(lines).toHaveLength(3);
     const ids = lines.map((l) => JSON.parse(l).recordId).sort();
     expect(ids).toEqual(['g1', 'n1', 'w1']);
     // 原记录未被改写(本迁移零改写)
-    const after = runHallMigration({ dbPath, dryRun: true });
-    expect(after.byHall).toEqual(report.byHall);
+    const after = runWingMigration({ dbPath, dryRun: true });
+    expect(after.byWing).toEqual(report.byWing);
   });
 
   it('single-owner scan function reaches retired metadata (B 计划引用门禁的口径契约)', async () => {

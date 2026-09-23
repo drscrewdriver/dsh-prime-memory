@@ -1,7 +1,7 @@
 import type { MemoryLogger, MemoryMode } from '../types.js';
 export declare function isMemoryMode(v: unknown): v is MemoryMode;
 /** 合法角 id 判定(锁域只认 8 角;general 是兜底值不是角,不可锁定)。 */
-export declare function isHallCorner(v: unknown): v is string;
+export declare function isWingCorner(v: unknown): v is string;
 export declare class SessionModeStore {
     private readonly defaultMode;
     private readonly logger?;
@@ -34,19 +34,19 @@ export declare class SessionModeStore {
     /** 设置会话级注入覆盖(undefined = 清除覆盖跟随全局。写穿持久化)。 */
     setRecall(sessionId: string, recall: boolean | undefined): void;
     /** 会话级域锁定(多选):空数组 = 中心(智能档,无锁域)。 */
-    getHalls(sessionId: string): string[];
+    getWings(sessionId: string): string[];
     /** 兼容读取(单选口径,取第一个锁定域):undefined = 中心。 */
-    getHall(sessionId: string): string | undefined;
+    getWing(sessionId: string): string | undefined;
     /** 锁定域边界开关:未打标是否包含(缺省 true)/ general 是否包含(缺省 false)。 */
-    hallBoundaries(sessionId: string): {
+    wingBoundaries(sessionId: string): {
         includeUnlabeled: boolean;
         includeGeneral: boolean;
     };
     /** 设置会话级域锁定(多选:角 id 数组;`[]` = 明确回中心清除锁定。写穿持久化)。
      *  **`undefined` = 本轮不动锁域**(例如只更新边界开关,见 stats.ts)——不再把"没传"
      *  误当"回中心",否则只切边界开关会把已锁定的域悄悄清掉。
-     *  单角时镜像写 `hall` 兼容键,多角时置空(旧读者按无锁域读)。 */
-    setHall(sessionId: string, halls: readonly string[] | undefined, boundaries?: {
+     *  单角时镜像写 `wing` 兼容键,多角时置空(旧读者按无锁域读)。 */
+    setWing(sessionId: string, halls: readonly string[] | undefined, boundaries?: {
         includeUnlabeled?: boolean;
         includeGeneral?: boolean;
     }): void;

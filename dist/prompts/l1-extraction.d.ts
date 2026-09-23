@@ -17,6 +17,6 @@ export declare function formatExtractionPrompt(params: {
     newMessages: ConversationMessage[];
     backgroundMessages?: ConversationMessage[];
     previousSceneName?: string;
-    /** 启用的 Hall id 列表（非空才要求 LLM 给每条记忆打 metadata.hall；空 = 关闭该功能）。 */
+    /** 启用的 Wing id 列表（非空才要求 LLM 给每条记忆打 metadata.hall；空 = 关闭该功能）。 */
     halls?: string[];
 }): string;

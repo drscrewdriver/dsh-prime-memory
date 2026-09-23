@@ -382,7 +382,7 @@ export declare class MemoryDb {
     /** retired 行计数(退场判定与 listRetiredL1 同口径:valid_to 非空)。失败返回 0。 */
     retiredL1Count(): number;
     /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
-    hallL1Counts(): {
+    wingL1Counts(): {
         counts: Record<string, number>;
         unlabeled: number;
     };

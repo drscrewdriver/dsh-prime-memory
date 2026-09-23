@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { EFFORT_CHOICES, memorySchema, resolveDataDir } from '../src/config.js';
 import { MEMORY_ENDPOINTS } from '../src/stats.js';
-import { HALL_CATALOG, HALL_CORNERS, HALL_DEFAULT_ENABLED, HALL_FALLBACK, hallLabel, familyForType, resolveRecordFamily } from '../src/types.js';
+import { WING_CATALOG, HALL_CORNERS, WING_DEFAULT_ENABLED, WING_FALLBACK, wingLabel, familyForType, resolveRecordFamily } from '../src/types.js';
 import {
   CHARS_PER_TOKEN,
   CONTEXT_METER_CIRCUMFERENCE,
@@ -61,8 +61,8 @@ const ENDPOINTS = [
   'dsh-memory/token-cost',
   'dsh-memory/session-mode-get',
   'dsh-memory/session-mode-set',
-  'dsh-memory/hall-overview',
-  'dsh-memory/hall-backfill',
+  'dsh-memory/wing-overview',
+  'dsh-memory/wing-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
   'dsh-memory/settings-set',
@@ -106,9 +106,9 @@ describe('effort vocabulary', () => {
   });
 });
 
-describe('hall catalog', () => {
+describe('wing catalog', () => {
   it('keeps the 8-corner catalog and mainline defaults', () => {
-    expect(HALL_CATALOG.map((h) => h.id)).toEqual([
+    expect(WING_CATALOG.map((h) => h.id)).toEqual([
       'work',
       'relationships',
       'learning',
@@ -120,11 +120,11 @@ describe('hall catalog', () => {
       'journey',
     ]);
     // experimental 字段已退休(8 角全主线);角集 = 全目录,general 移出角集作跨域兜底
-    expect(HALL_CORNERS.map((h) => h.id)).toEqual(HALL_CATALOG.map((h) => h.id));
-    expect(HALL_CATALOG.some((h) => h.id === 'general')).toBe(false);
-    expect(HALL_FALLBACK).toBe('general');
-    expect(hallLabel('general')).toBe('跨域');
-    expect([...HALL_DEFAULT_ENABLED]).toEqual([
+    expect(HALL_CORNERS.map((h) => h.id)).toEqual(WING_CATALOG.map((h) => h.id));
+    expect(WING_CATALOG.some((h) => h.id === 'general')).toBe(false);
+    expect(WING_FALLBACK).toBe('general');
+    expect(wingLabel('general')).toBe('跨域');
+    expect([...WING_DEFAULT_ENABLED]).toEqual([
       'work',
       'relationships',
       'learning',
