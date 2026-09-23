@@ -45,6 +45,8 @@ export interface RuminateStatus {
   detail: string | null;
   /** 标注校验/重标定结果(最后一次反刍/轻量刷新;未执行或旧版为 null)。 */
   relabel: RelabelStats | null;
+  /** 子进度:非会话阶段(relabeling)的批次进度,由重标定批回调驱动;离开阶段即清空。 */
+  sub: { done: number; total: number; label: string } | null;
   /** 取消请求标志 */
   cancelRequested: boolean;
   /** 开始时间 */
@@ -62,6 +64,7 @@ const IDLE_STATUS: RuminateStatus = {
   total: 0,
   recordsBuilt: 0,
   relabel: null,
+  sub: null,
   detail: null,
   cancelRequested: false,
   startedAt: null,
@@ -262,20 +265,27 @@ export class RuminateController {
       }
 
       // 标注校验/重标定:Wing 合法性 + 认知 hall 映射 + 未打标补标 + 涌现标签
+      // 批次进度经 onProgress 写入 detail + sub 子进度(非会话阶段的进度由重标批次决定)
       this.status.phase = 'relabeling';
       this.status.detail = '标注校验与重标定(Wing/认知 hall/标签)';
       try {
-        this.status.relabel = await relabelPass({
-          ctx: this.ctx,
-          cfg: this.cfg,
-          l1: this.stores.l1,
-          logger: this.logger,
-        });
+        this.status.relabel = await relabelPass(
+          { ctx: this.ctx, cfg: this.cfg, l1: this.stores.l1, logger: this.logger },
+          {},
+          {
+            progress: (text, done, total) => {
+              this.status.detail = text;
+              this.status.sub = { done, total, label: '重标定批次' };
+            },
+          },
+        );
+        this.status.sub = null;
         const r = this.status.relabel;
         this.logger.info(
-          `[memory] 反刍重标定完成:巡检 ${r.checked},补 cogHall ${r.cogHallFixed},非法 wing ${r.wingInvalidFixed},LLM 补 wing ${r.wingLabeled},打 tags ${r.tagged},跳过 ${r.llmSkipped}`,
+          `[memory] 反刍重标定完成:巡检 ${r.checked},补 cogHall ${r.cogHallFixed},非法 wing ${r.wingInvalidFixed},LLM 补 wing ${r.wingLabeled},打 tags ${r.tagged},跳过 ${r.llmSkipped},预算让出 ${r.deferred}`,
         );
       } catch (err) {
+        this.status.sub = null;
         // 重标定失败不拖垮反刍整体(蒸馏/L2/L3 产物保留)
         this.logger.warn(`[memory] 反刍重标定失败(不影响本次产物): ${errDetail(err)}`);
       }
@@ -369,14 +379,20 @@ export class RuminateController {
     this.status.phase = 'relabeling';
     this.status.detail = '标注校验与重标定(Wing/认知 hall/标签)';
     try {
-      this.status.relabel = await relabelPass({
-        ctx: this.ctx,
-        cfg: this.cfg,
-        l1: this.stores.l1,
-        logger: this.logger,
-      });
+      this.status.relabel = await relabelPass(
+        { ctx: this.ctx, cfg: this.cfg, l1: this.stores.l1, logger: this.logger },
+        {},
+        {
+          progress: (text, done, total) => {
+            this.status.detail = text;
+            this.status.sub = { done, total, label: '重标定批次' };
+          },
+        },
+      );
+      this.status.sub = null;
       this.status.done++;
     } catch (err) {
+      this.status.sub = null;
       this.logger.warn(`[memory] 反刍轻量刷新重标定失败(不影响刷新结果): ${errDetail(err)}`);
     }
 

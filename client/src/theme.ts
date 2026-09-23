@@ -251,6 +251,9 @@ export function ensureThemeStyle() {
     '}',
     '.dsh-mem-rb-bar { height: 8px; border-radius: 4px; overflow: hidden; flex: 1; background: var(--dsh-mem-track); }',
     '.dsh-mem-rb-fill { height: 100%; border-radius: 4px; background: var(--dsh-mem-accent-fill); transition: width .4s ease; }',
+    // 无位移阶段(单次 LLM 调用可达分钟级)的呼吸进度条:宽度满格,透明度呼吸表达"在跑"
+    '@keyframes dshMemRbBreath { 0%,100% { opacity: 1; } 50% { opacity: .35; } }',
+    '.dsh-mem-rb-fill-indet { animation: dshMemRbBreath 1.6s ease-in-out infinite; transition: none; }',
     '.dsh-mem-rb-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35);',
     '  display: flex; align-items: center; justify-content: center; z-index: 2000; }',
     '.dsh-mem-rb-modal { width: 440px; max-width: calc(100vw - 48px); border-radius: 12px;',

@@ -36,6 +36,12 @@ export interface RuminateStatus {
     detail: string | null;
     /** 标注校验/重标定结果(最后一次反刍/轻量刷新;未执行或旧版为 null)。 */
     relabel: RelabelStats | null;
+    /** 子进度:非会话阶段(relabeling)的批次进度,由重标定批回调驱动;离开阶段即清空。 */
+    sub: {
+        done: number;
+        total: number;
+        label: string;
+    } | null;
     /** 取消请求标志 */
     cancelRequested: boolean;
     /** 开始时间 */

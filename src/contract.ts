@@ -195,7 +195,11 @@ export interface RuminateStatus {
     wingLabeled: number;
     tagged: number;
     llmSkipped: number;
+    /** 时间预算用尽未处理、留待下次反刍的条数。 */
+    deferred: number;
   } | null;
+  /** 子进度:非会话阶段(relabeling)的批次进度;离开阶段即清空,旧版/其他阶段省略。 */
+  sub?: { done: number; total: number; label: string } | null;
   cancelRequested: boolean;
   startedAt: number | null;
   finishedAt: number | null;

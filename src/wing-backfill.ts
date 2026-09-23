@@ -67,6 +67,10 @@ async function run(deps: HallBackfillDeps): Promise<void> {
     logger.warn('[memory] wing 回填跳过:wing.enabled 为空(打标功能已关闭)');
     return;
   }
+  // 墙钟预算:超时即停,剩余留待再次触发(任务本身设计为可重复执行)。
+  // 保证后台回填不长时间占据事件循环,设置面板的状态 RPC 始终优先。
+  const TIME_BUDGET_MS = 120_000;
+  const startedAt = Date.now();
   const candidates = [...halls, WING_FALLBACK].join(' / ');
   // 未打标集:主表全量里的 null wing(含 retired 行——restore 后标签已补,不重扫)
   const all = l1.all();
@@ -74,6 +78,10 @@ async function run(deps: HallBackfillDeps): Promise<void> {
   let budget = Math.min(pending.length, MAX_RECORDS);
   logger.info(`[memory] wing 回填启动:未打标 ${pending.length} 条,本次上限 ${budget} 条(候选 ${candidates})`);
   for (let offset = 0; offset < pending.length && budget > 0; offset += CHUNK) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      logger.info(`[memory] wing 回填:墙钟预算(${TIME_BUDGET_MS / 1000}s)用尽,剩余 ${pending.length - offset} 条留待再次触发`);
+      break;
+    }
     const chunk = pending.slice(offset, offset + CHUNK).filter(pickChunk);
     if (chunk.length === 0) continue;
     budget -= chunk.length;
@@ -87,6 +95,8 @@ async function run(deps: HallBackfillDeps): Promise<void> {
       } catch {
         state.failed++;
       }
+      // 写回间让位:面板状态 RPC 优先于后台批次
+      await new Promise<void>((resolve) => setImmediate(resolve));
     }
   }
 }

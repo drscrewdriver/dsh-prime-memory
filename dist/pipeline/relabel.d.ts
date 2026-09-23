@@ -28,6 +28,8 @@ export interface RelabelStats {
     tagged: number;
     /** LLM 失败/跳过的记录条数(原记录零改动)。 */
     llmSkipped: number;
+    /** 时间预算用尽时未处理、留待下次反刍的条数。 */
+    deferred: number;
 }
 export interface RelabelDeps {
     ctx: Context;
@@ -46,4 +48,10 @@ export interface RelabelOverrides {
         tags: string[];
     }>>;
 }
-export declare function relabelPass(deps: RelabelDeps, overrides?: RelabelOverrides): Promise<RelabelStats>;
+export interface RelabelOpts {
+    /** 批次进度回调(relabeling 阶段的 detail/子进度由此驱动)。 */
+    progress?: (text: string, done: number, total: number) => void;
+    /** LLM 段墙钟预算(毫秒);超时停止,剩余计入 deferred 留待下次反刍。默认 90s。 */
+    timeBudgetMs?: number;
+}
+export declare function relabelPass(deps: RelabelDeps, overrides?: RelabelOverrides, opts?: RelabelOpts): Promise<RelabelStats>;

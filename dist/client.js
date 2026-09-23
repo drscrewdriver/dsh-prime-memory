@@ -447,6 +447,9 @@ var __defProp = Object.defineProperty;
 		    "}",
 		    ".dsh-mem-rb-bar { height: 8px; border-radius: 4px; overflow: hidden; flex: 1; background: var(--dsh-mem-track); }",
 		    ".dsh-mem-rb-fill { height: 100%; border-radius: 4px; background: var(--dsh-mem-accent-fill); transition: width .4s ease; }",
+		    // 无位移阶段(单次 LLM 调用可达分钟级)的呼吸进度条:宽度满格,透明度呼吸表达"在跑"
+		    "@keyframes dshMemRbBreath { 0%,100% { opacity: 1; } 50% { opacity: .35; } }",
+		    ".dsh-mem-rb-fill-indet { animation: dshMemRbBreath 1.6s ease-in-out infinite; transition: none; }",
 		    ".dsh-mem-rb-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35);",
 		    "  display: flex; align-items: center; justify-content: center; z-index: 2000; }",
 		    ".dsh-mem-rb-modal { width: 440px; max-width: calc(100vw - 48px); border-radius: 12px;",
@@ -2839,9 +2842,20 @@ var __defProp = Object.defineProperty;
 		  refreshing: "轻量刷新中",
 		  distilling: "L1 蒸馏中",
 		  consolidating: "L2 场景整合中",
-		  updating: "L3 画像更新中"
+		  updating: "L3 画像更新中",
+		  relabeling: "标注校验/重标定中"
 		};
-		var RM_RUNNING_PHASES = ["refreshing", "distilling", "consolidating", "updating"];
+		var RM_RUNNING_PHASES = ["refreshing", "distilling", "consolidating", "updating", "relabeling"];
+		var RM_PHASE_INTERVAL = {
+		  refreshing: 4e3,
+		  distilling: 1500,
+		  consolidating: 6e3,
+		  updating: 6e3,
+		  relabeling: 3e3
+		  // 重标定按批次推进,detail 每批都变,可稍密
+		};
+		var RM_BACKOFF_CAP = 5;
+		var RM_IDLE_INTERVAL = 3e4;
 		function RuminatePanel(props) {
 		  const rpc = props.rpc;
 		  const [rmRaw, setRm] = (0, import_react12.useState)(null);
@@ -2849,18 +2863,49 @@ var __defProp = Object.defineProperty;
 		  const [busy, setBusy] = (0, import_react12.useState)(false);
 		  const [rmError, setRmError] = (0, import_react12.useState)(null);
 		  const refresh = (0, import_react12.useCallback)(() => {
-		    rpc("dsh-memory/ruminate-status", {}).then((r) => {
-		      if (r && r.ok) setRm(r.value);
+		    return rpc("dsh-memory/ruminate-status", {}).then((r) => {
+		      if (r && r.ok) {
+		        const st = r.value;
+		        const base = RM_PHASE_INTERVAL[st.phase] ?? 3e3;
+		        if (st.detail && st.detail === lastDetailRef.current) backoffRef.current = Math.min(backoffRef.current * 2, RM_BACKOFF_CAP);
+		        else backoffRef.current = 1;
+		        lastDetailRef.current = st.detail ?? null;
+		        pollRef.current = Math.min(base * backoffRef.current, 15e3);
+		        setRm(st);
+		      }
+		      return r;
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
+		  const pollRef = (0, import_react12.useRef)(1500);
+		  const backoffRef = (0, import_react12.useRef)(1);
+		  const lastDetailRef = (0, import_react12.useRef)(null);
 		  (0, import_react12.useEffect)(() => {
 		    refresh();
 		  }, [refresh]);
 		  const running = !!(rmRaw && (rmRaw.running || RM_RUNNING_PHASES.indexOf(rmRaw.phase) >= 0));
 		  (0, import_react12.useEffect)(() => {
 		    if (!running) return;
-		    const timer = setInterval(refresh, 1500);
+		    let alive = true;
+		    let timer;
+		    const loop = () => {
+		      void Promise.resolve(refresh()).finally(() => {
+		        if (!alive) return;
+		        timer = setTimeout(loop, pollRef.current);
+		      });
+		    };
+		    loop();
+		    return () => {
+		      alive = false;
+		      clearTimeout(timer);
+		      pollRef.current = 1500;
+		      backoffRef.current = 1;
+		      lastDetailRef.current = null;
+		    };
+		  }, [running, refresh]);
+		  (0, import_react12.useEffect)(() => {
+		    if (running) return;
+		    const timer = setInterval(refresh, RM_IDLE_INTERVAL);
 		    return () => clearInterval(timer);
 		  }, [running, refresh]);
 		  const [, setTick] = (0, import_react12.useState)(0);
@@ -2898,12 +2943,16 @@ var __defProp = Object.defineProperty;
 		    });
 		  };
 		  const pct = rm.total > 0 ? Math.round(rm.done / rm.total * 100) : 0;
+		  const sub = rm.sub && rm.sub.total > 0 ? rm.sub : null;
+		  const barPct = sub ? Math.round(sub.done / sub.total * 100) : pct;
+		  const indet = running && !sub && (rm.phase === "consolidating" || rm.phase === "updating" || rm.phase === "relabeling");
 		  const idleLike = !running;
 		  const elapsed = running && rm.startedAt ? Math.max(0, Date.now() - rm.startedAt) : 0;
 		  const elapsedText = elapsed > 0 ? elapsed >= 6e4 ? Math.floor(elapsed / 6e4) + "分" + Math.floor(elapsed % 6e4 / 1e3) + "秒" : Math.floor(elapsed / 1e3) + "秒" : "";
 		  let lastNote = null;
 		  if (idleLike && rm.phase === "done") {
-		    lastNote = "上次反刍整理：完成（" + rm.done + "/" + rm.total + " 会话，产出 " + rm.recordsBuilt + " 条记录）" + (rm.finishedAt ? " · " + fmtTime(new Date(rm.finishedAt).toISOString()) : "");
+		    const rl = rm.relabel;
+		    lastNote = "上次反刍整理：完成（" + rm.done + "/" + rm.total + " 会话，产出 " + rm.recordsBuilt + " 条记录）" + (rl ? " · 重标定：补 cogHall " + rl.cogHallFixed + "，补 wing " + rl.wingLabeled + "，打 tags " + rl.tagged + (rl.deferred > 0 ? "，让出 " + rl.deferred : "") : "") + (rm.finishedAt ? " · " + fmtTime(new Date(rm.finishedAt).toISOString()) : "");
 		  } else if (idleLike && rm.phase === "cancelled") {
 		    lastNote = "上次反刍整理：已取消（完成 " + rm.done + "/" + rm.total + " 会话，已蒸馏部分保留）";
 		  } else if (idleLike && rm.phase === "failed") {
@@ -2929,8 +2978,14 @@ var __defProp = Object.defineProperty;
 		      )
 		    ] }),
 		    running ? /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "dsh-mem-rb-bar", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "dsh-mem-rb-fill", style: { width: (rm.total > 0 ? pct : 100) + "%" } }) }),
-		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: "产出 " + rm.recordsBuilt + " 条" })
+		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "dsh-mem-rb-bar", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+		        "div",
+		        {
+		          className: "dsh-mem-rb-fill" + (indet ? " dsh-mem-rb-fill-indet" : ""),
+		          style: { width: indet ? "100%" : barPct + "%" }
+		        }
+		      ) }),
+		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: sub ? sub.label + " " + sub.done + "/" + sub.total : "产出 " + rm.recordsBuilt + " 条" })
 		    ] }) : null,
 		    running && rm.detail ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 6, whiteSpace: "normal" }, children: "当前：" + rm.detail }) : null,
 		    lastNote ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: lastNote }) : null,

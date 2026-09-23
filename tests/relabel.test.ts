@@ -55,7 +55,7 @@ describe('relabelPass 机械校验(零 LLM 部分)', () => {
     expect(stats.cogHallFixed).toBe(3); // 三条都可派生且原本缺失
     expect(stats.wingInvalidFixed).toBe(1);
     expect(stats.wingLabeled).toBe(1);
-    expect(stats.tagged).toBe(2); // tagger 桩对整批(r2+r3)都产出标签
+    expect(stats.tagged).toBe(1); // tags 只打在成功补上 wing 的记录池上(r2 未补上,不进 tags 批)
     expect(stats.llmSkipped).toBe(1); // r2 在批里但桩未返回
 
     const byId = new Map(l1.all().map((r) => [r.id, r]));
