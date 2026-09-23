@@ -39,7 +39,20 @@ interface Harness {
   text: (name: string, args: Record<string, unknown>, value: unknown) => string;
 }
 
-async function harness(opts: { mutate?: boolean; globalRecall?: boolean; tools?: boolean; maxSlots?: number } = {}): Promise<Harness> {
+/** L1 勾连桩:retiredIds 里能解析到的 id 视为现存 L1 记录;retire 调用被记录。 */
+function stubL1(retiredIds: string[]) {
+  const retireCalls: string[][] = [];
+  return {
+    retireCalls,
+    getByIds: (ids: string[]) => ids.filter((id) => retiredIds.includes(id)).map((id) => ({ id })),
+    retire: (ids: string[]) => {
+      retireCalls.push([...ids]);
+      return ids.length;
+    },
+  };
+}
+
+async function harness(opts: { mutate?: boolean; globalRecall?: boolean; tools?: boolean; maxSlots?: number; l1?: ReturnType<typeof stubL1> } = {}): Promise<Harness> {
   const dataDir = join(await tmp(), `t-${Math.random().toString(36).slice(2)}`);
   const store = new SlotStore(SlotStore.pathFor(dataDir), noopLogger, {
     maxSlots: opts.maxSlots ?? 8,
@@ -69,7 +82,7 @@ async function harness(opts: { mutate?: boolean; globalRecall?: boolean; tools?:
   } as unknown as Parameters<typeof registerSlotTools>[0];
 
   const cfg = { tools: opts.tools ?? true } as unknown as MemoryConfig;
-  registerSlotTools(ctx, cfg, store, noopLogger, modes, liveHandle);
+  registerSlotTools(ctx, cfg, store, noopLogger, modes, liveHandle, opts.l1);
 
   const find = (name: string): RegisteredTool => {
     const tool = registered.find((t) => t.name === name);
@@ -132,13 +145,68 @@ describe('memory_slot_write / close 的 memoryMutate 门控(F5)', () => {
   it('close:命中置 done,未命中返回 ok=false', async () => {
     const h = await harness({ mutate: true });
     const created = (await h.call('memory_slot_write', { title: 'A', pinned: true })) as { id: string };
-    expect(await h.call('memory_slot_close', { id: created.id, status: 'done' })).toEqual({ ok: true });
+    expect(await h.call('memory_slot_close', { id: created.id, status: 'done' })).toEqual({ ok: true, linked: [], retired: [] });
     expect(h.store.list()[0]?.status).toBe('done');
-    expect(await h.call('memory_slot_close', { id: 'slot_missing' })).toEqual({ ok: false });
+    expect(await h.call('memory_slot_close', { id: 'slot_missing' })).toEqual({ ok: false, linked: [], retired: [], notice: '槽位不存在或关闭失败' });
     expect(await h.call('memory_slot_close', { id: '  ' })).toEqual(
       expect.objectContaining({ ok: false, notice: 'id 为空' }),
     );
     expect(h.store.list()[0]?.status).toBe('done');
+  });
+
+  it('close 勾连记忆(方案 A):refs 中 record_id 回带 linked + 引导语,不写 L1', async () => {
+    const l1 = stubL1(['r-123']);
+    const h = await harness({ mutate: true, l1 });
+    const created = (await h.call('memory_slot_write', {
+      title: '旧网络策略',
+      refs: 'r-123, design/network-policy.md, https://example.com/a',
+    })) as { id: string };
+    const res = (await h.call('memory_slot_close', { id: created.id, status: 'dropped' })) as {
+      ok: boolean;
+      linked: string[];
+      retired: string[];
+    };
+    expect(res).toEqual({ ok: true, linked: ['r-123'], retired: [] });
+    expect(l1.retireCalls).toEqual([]); // 方案 A 纯读,零写入
+    // 文案引导:告诉模型正文仍在检索面 + 两条后续路径
+    const text = h.text('memory_slot_close', {}, res);
+    expect(text).toMatch(/引用 1 条 L1 记忆/);
+    expect(text).toMatch(/memory_delete|retireRefs/);
+  });
+
+  it('close 勾连记忆(方案 B):retireRefs=true 把可解析 refs 一并软删退场', async () => {
+    const l1 = stubL1(['r-123']);
+    const h = await harness({ mutate: true, l1 });
+    const created = (await h.call('memory_slot_write', {
+      title: '旧网络策略',
+      refs: 'r-123, design/network-policy.md',
+    })) as { id: string };
+    const res = (await h.call('memory_slot_close', { id: created.id, retireRefs: true })) as {
+      ok: boolean;
+      linked: string[];
+      retired: string[];
+    };
+    expect(res).toEqual({ ok: true, linked: ['r-123'], retired: ['r-123'] });
+    expect(l1.retireCalls).toEqual([['r-123']]);
+    const text = h.text('memory_slot_close', {}, res);
+    expect(text).toMatch(/退场 1 条引用记忆/);
+  });
+
+  it('close 勾连记忆:路径/URL 类 refs 自动跳过;无勾连时不带引导噪音', async () => {
+    const l1 = stubL1([]);
+    const h = await harness({ mutate: true, l1 });
+    const created = (await h.call('memory_slot_write', {
+      title: '纯指针槽位',
+      refs: 'design/x.md, https://example.com',
+    })) as { id: string };
+    const res = (await h.call('memory_slot_close', { id: created.id, retireRefs: true })) as {
+      ok: boolean;
+      linked: string[];
+      retired: string[];
+    };
+    expect(res).toEqual({ ok: true, linked: [], retired: [] });
+    expect(l1.retireCalls).toEqual([]);
+    expect(h.text('memory_slot_close', {}, res)).not.toMatch(/引用|退场/);
   });
 
   it('list 输出无损 JSON 合规:无 origin 键、validUntil 未设时不落 undefined 键(真机回归)', async () => {

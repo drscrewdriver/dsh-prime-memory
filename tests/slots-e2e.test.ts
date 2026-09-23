@@ -131,7 +131,7 @@ describe('端到端 E1 → E4', () => {
     const written = (await call('memory_slot_write', { title: RULE_TITLE, body: RULE_BODY, pinned: true })) as { id: string };
     expect((await nextTurn()).injected).toContain(RULE_TITLE);
 
-    expect(await call('memory_slot_close', { id: written.id, status: 'done' })).toEqual({ ok: true });
+    expect(await call('memory_slot_close', { id: written.id, status: 'done' })).toEqual({ ok: true, linked: [], retired: [] });
 
     const after = await nextTurn();
     expect(after.injected).not.toContain(RULE_TITLE);

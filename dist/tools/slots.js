@@ -2,7 +2,9 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 const MUTATE_OFF_NOTICE = '槽位写操作未开放:请在记忆库面板开启高权限模式(memoryMutate)后再试。';
 const OFF_NOTICE = '本会话的记忆档位为"关闭":槽位读取不可用。';
 const GLOBAL_OFF_NOTICE = '记忆召回已关闭:槽位读取不可用。';
-export function registerSlotTools(ctx, cfg, slots, logger, modes, live) {
+export function registerSlotTools(ctx, cfg, slots, logger, modes, live, 
+/** L1 存储句柄:close 的 refs→记忆勾连(解析/退场)依赖;缺省时 close 只关槽位不碰 L1。 */
+l1) {
     if (!cfg.tools)
         return;
     /** 解析有效归属会话(简化版,仅取自身 id;跨会话持久的槽位不依赖父链)。 */
@@ -21,7 +23,8 @@ export function registerSlotTools(ctx, cfg, slots, logger, modes, live) {
     // ── memory_slot_list:列出槽位(读,档位门控) ──
     ctx.tools.register(defineTool({
         name: 'memory_slot_list',
-        description: '列出当前所有激活槽位(active slot)。槽位是可跨会话持久化的结构化提示(规则/待办/锚点/指针);pinned 的 open 槽位会被常驻注入每轮对话上下文。',
+        description: '列出当前所有激活槽位(active slot)。槽位是可跨会话持久化的结构化提示(规则/待办/锚点/指针);pinned 的 open 槽位会被常驻注入每轮对话上下文。' +
+            '条目的 refs 是记忆指针:L1 record_id 类 refs 可用 memory_receipts / memory_search / memory_read_scene 勾连读取原文;路径与 URL 类 refs 按字面访问。',
         parameters: {
             status: { type: 'string', description: '按状态过滤:open / done / dropped / expired;留空返回全部' },
         },
@@ -153,32 +156,81 @@ export function registerSlotTools(ctx, cfg, slots, logger, modes, live) {
     // ── memory_slot_close:关闭槽位(写,memoryMutate 门控) ──
     ctx.tools.register(defineTool({
         name: 'memory_slot_close',
-        description: '关闭一个激活槽位(标记 done 或 dropped)。关闭后不再常驻注入,但仍可在 memory_slot_list 中查看。需高权限模式开启。',
+        description: '关闭一个激活槽位(标记 done 或 dropped)。关闭后不再常驻注入,但仍可在 memory_slot_list 中查看。需高权限模式开启。' +
+            '槽位的 refs 是记忆指针(L1 record_id / 文件路径 / URL):关闭槽位不会自动处理被引用的记忆,' +
+            '可用 retireRefs=true 把其中能解析到 L1 记录的条目一并退场(软删,可在记忆列表恢复)。',
         parameters: {
             id: { type: 'string', required: true, description: '要关闭的槽位 id(来自 memory_slot_list)' },
             status: { type: 'string', description: '关闭后的状态:done(完成)/dropped(放弃);默认 done' },
+            retireRefs: {
+                type: 'boolean',
+                description: '联动退场:把 refs 中能解析到现存 L1 记录的条目一并软删退场(可恢复);不传或 false 只关槽位,返回 linked 列表由模型/人决定后续',
+            },
         },
         output: {
             schema: {
                 type: 'object',
-                properties: { ok: { type: 'boolean' }, notice: { type: 'string' } },
+                properties: {
+                    ok: { type: 'boolean' },
+                    /** refs 中能解析到现存 L1 记录的条目(方案 A:回带给模型/人判定)。 */
+                    linked: { type: 'array', items: { type: 'string' } },
+                    /** 实际随本次关闭退场的 L1 记录 id(方案 B,仅 retireRefs=true 时非空)。 */
+                    retired: { type: 'array', items: { type: 'string' } },
+                    notice: { type: 'string' },
+                },
                 additionalProperties: false,
             },
-            render: (_args, value) => [
-                { type: 'text', text: value.notice ?? (value.ok ? '已关闭槽位' : '槽位不存在或关闭失败') },
-            ],
+            render: (_args, value) => {
+                if (value.notice && !value.ok)
+                    return [{ type: 'text', text: value.notice }];
+                const lines = [value.notice ?? (value.ok ? '已关闭槽位' : '槽位不存在或关闭失败')];
+                // 局部收窄:schema 里 linked/retired 是可选字段,模板串里直接引用过不了 TS18048
+                const retired = value.retired ?? [];
+                const linked = value.linked ?? [];
+                if (retired.length > 0) {
+                    lines.push(`已随槽位关闭退场 ${retired.length} 条引用记忆(软删,可在记忆列表恢复):${retired.join('，')}`);
+                }
+                else if (linked.length > 0) {
+                    lines.push(`该槽位引用 ${linked.length} 条 L1 记忆(${linked.join('，')})——正文仍在检索面。` +
+                        '如确认已失效,可用 memory_delete 按 id 精确退场,或重新关闭并带 retireRefs=true。');
+                }
+                return [{ type: 'text', text: lines.join('\n') }];
+            },
         },
         execute: async (args, _exec) => {
-            if (!live.get().memoryMutate)
-                return { ok: false, notice: MUTATE_OFF_NOTICE };
+            if (!live.get().memoryMutate) {
+                return { ok: false, linked: [], retired: [], notice: MUTATE_OFF_NOTICE };
+            }
             const id = String(args.id ?? '').trim();
             if (!id)
-                return { ok: false, notice: 'id 为空' };
+                return { ok: false, linked: [], retired: [], notice: 'id 为空' };
             const status = args.status === 'dropped' ? 'dropped' : 'done';
+            // 关闭前先取槽位:close 后 refs 仍可从 list 查到,但取一次副本语义最直白
+            const slot = slots.get(id);
             const ok = await slots.close(id, status);
+            if (!ok)
+                return { ok: false, linked: [], retired: [], notice: '槽位不存在或关闭失败' };
             if (ok)
                 logger.info(`[memory] 关闭激活槽位(${status}):${id}`);
-            return { ok };
+            // ── 勾连记忆(读侧判定,写侧仅在 retireRefs=true 时执行) ──
+            // refs 三类:L1 record_id / 文件路径 / URL。能被 l1.getByIds 解析到现存记录的
+            // 才算"记忆引用"——路径与 URL 天然落空,自动跳过,不需要格式猜测。
+            const refs = slot?.refs ?? [];
+            let linked = [];
+            if (l1 && refs.length > 0) {
+                const found = l1.getByIds(refs);
+                linked = found.map((r) => r.id);
+            }
+            let retired = [];
+            if (args.retireRefs === true && l1 && linked.length > 0) {
+                const n = l1.retire(linked, { at: new Date().toISOString(), reason: 'manual' });
+                // retire 按存在行计数,理论上等于 linked.length;以返回数截取语义诚实
+                retired = linked.slice(0, n);
+                if (retired.length > 0) {
+                    logger.info(`[memory] 随槽位关闭退场(软删)引用记忆 ${retired.length} 条(${retired.join('，')})`);
+                }
+            }
+            return { ok: true, linked, retired };
         },
     }));
 }

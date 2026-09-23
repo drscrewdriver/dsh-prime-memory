@@ -325,7 +325,7 @@ export async function apply(ctx, config) {
     runner.setAfterRun(recall.invalidateProfile);
     registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate);
     // 激活槽位(active slot):工具面 + 常驻注入 + 服务端投影(均走 ctx.effect,可撤销)
-    registerSlotTools(ctx, config, stores.slots, logger, modes, live);
+    registerSlotTools(ctx, config, stores.slots, logger, modes, live, stores.l1);
     const slotRecall = registerSlotRecall(ctx, config, stores.slots, logger, live);
     registerSlotsProjection(ctx, stores.slots);
     void slotRecall;

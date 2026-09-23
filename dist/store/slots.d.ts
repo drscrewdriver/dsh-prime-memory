@@ -67,6 +67,8 @@ export declare class SlotStore {
     list(): Slot[];
     /** 同步读内存,仅 open 槽位副本。 */
     open(): Slot[];
+    /** 按 id 取单个槽位副本(不存在返回 undefined)——close 工具关闭前读 refs 用。 */
+    get(id: string): Slot | undefined;
     /** 当前版本号(投影 apply 的判脏依据)。 */
     revision(): number;
     /** 总数(投影 count 用)。 */

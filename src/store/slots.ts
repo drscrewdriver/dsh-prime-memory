@@ -183,6 +183,12 @@ export class SlotStore {
     return this.slots.filter((s) => s.status === 'open').map(clone);
   }
 
+  /** 按 id 取单个槽位副本(不存在返回 undefined)——close 工具关闭前读 refs 用。 */
+  get(id: string): Slot | undefined {
+    const slot = this.slots.find((s) => s.id === id);
+    return slot ? clone(slot) : undefined;
+  }
+
   /** 当前版本号(投影 apply 的判脏依据)。 */
   revision(): number {
     return this.rev;
