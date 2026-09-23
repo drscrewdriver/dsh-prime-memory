@@ -20,6 +20,7 @@ import type { SceneStore } from '../store/scenes.js';
 import type { StateStore } from '../store/state.js';
 import type { LiveSettingsHandle } from '../settings.js';
 import type { MemoryFamily, MemoryLogger } from '../types.js';
+import { type RelabelStats } from './relabel.js';
 import type { MemoryRunner } from './runner.js';
 export interface RuminateStatus {
     running: boolean;
@@ -33,6 +34,8 @@ export interface RuminateStatus {
     recordsBuilt: number;
     /** 当前动作的人类可读描述(L2/L3 单次可达分钟级) */
     detail: string | null;
+    /** 标注校验/重标定结果(最后一次反刍/轻量刷新;未执行或旧版为 null)。 */
+    relabel: RelabelStats | null;
     /** 取消请求标志 */
     cancelRequested: boolean;
     /** 开始时间 */

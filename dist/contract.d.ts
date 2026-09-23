@@ -156,7 +156,7 @@ export interface RebuildStatus {
     preserveNote: string | null;
 }
 /** 反刍阶段。 */
-export type RuminatePhase = 'idle' | 'refreshing' | 'distilling' | 'consolidating' | 'updating' | 'done' | 'cancelled' | 'failed';
+export type RuminatePhase = 'idle' | 'refreshing' | 'distilling' | 'consolidating' | 'updating' | 'relabeling' | 'done' | 'cancelled' | 'failed';
 /** 反刍状态(ruminate-status/start/cancel 端点返回值)。 */
 export interface RuminateStatus {
     running: boolean;
@@ -169,6 +169,15 @@ export interface RuminateStatus {
     recordsBuilt: number;
     /** 当前动作的人类可读描述(L2/L3 单次调用可达分钟级,无此字段界面只能显示"运行中")。 */
     detail?: string | null;
+    /** 标注校验/重标定结果(relabeling 阶段的产出;未执行或旧版省略)。 */
+    relabel?: {
+        checked: number;
+        cogHallFixed: number;
+        wingInvalidFixed: number;
+        wingLabeled: number;
+        tagged: number;
+        llmSkipped: number;
+    } | null;
     cancelRequested: boolean;
     startedAt: number | null;
     finishedAt: number | null;

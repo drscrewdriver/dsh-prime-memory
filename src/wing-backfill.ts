@@ -77,7 +77,7 @@ async function run(deps: HallBackfillDeps): Promise<void> {
     const chunk = pending.slice(offset, offset + CHUNK).filter(pickChunk);
     if (chunk.length === 0) continue;
     budget -= chunk.length;
-    const labeled = await labelChunk(ctx, cfg, logger, chunk, candidates);
+    const labeled = await labelWingChunk(ctx, cfg, logger, chunk, candidates);
     for (const { record, hall } of labeled) {
       // 原记录最小改动:metadata.hall 单键写入,其余字段原样 upsert(同 id 版本不变语义)
       const next: MemoryRecord = { ...record, metadata: { ...(record.metadata ?? {}), hall } };
@@ -97,7 +97,8 @@ function pickChunk(_r: MemoryRecord): boolean {
   return true;
 }
 
-async function labelChunk(
+/** Wing 标注器(导出):一键回填与反刍重标定共用同一 LLM 路径与措辞。 */
+export async function labelWingChunk(
   ctx: Context,
   cfg: MemoryConfig,
   logger: MemoryLogger,
@@ -127,6 +128,48 @@ async function labelChunk(
   } catch (err) {
     logger.warn(`[memory] wing 回填块失败(跳过 ${chunk.length} 条,原记录未改): ${err instanceof Error ? err.message : String(err)}`);
     state.failed += chunk.length;
+    return [];
+  }
+}
+
+const TAGGER_SYSTEM_PROMPT =
+  '你是记忆库的标签标注器。给你若干条记忆(带 id),为每条提炼 1-3 个能概括其主题的英文 slug 标签' +
+  '(小写字母/数字/连字符,如 graphql-switch、riley-college-apps)。标签从内容中涌现,不从预定义列表选;' +
+  '输出 JSON 数组:[{"id":"<原id>","tags":["slug1","slug2"]}]。只输出 JSON,不要多余文字。';
+
+/**
+ * 涌现标签标注器(导出):为一批记录提炼 slug 标签(tags)——Room 的前身。
+ * 与 Wing 标注共用 LLM 路由(layer='l1-extract');失败返回空数组,调用方零改动。
+ */
+export async function tagChunk(
+  ctx: Context,
+  cfg: MemoryConfig,
+  logger: MemoryLogger,
+  chunk: MemoryRecord[],
+): Promise<Array<{ record: MemoryRecord; tags: string[] }>> {
+  const list = chunk.map((r, i) => `${i + 1}. id=${r.id}\n${r.content.slice(0, 300)}`).join('\n\n');
+  try {
+    const raw = await callLLM(ctx, cfg, {
+      system: TAGGER_SYSTEM_PROMPT,
+      user: `记忆列表:\n${list}`,
+      maxTokens: 4096,
+      layer: 'l1-extract',
+      logger,
+    });
+    const parsed = parseJsonLogged<Array<{ id?: unknown; tags?: unknown }>>(raw, 'tags 标注', logger);
+    if (!Array.isArray(parsed)) return [];
+    const byId = new Map(chunk.map((r) => [r.id, r]));
+    const out: Array<{ record: MemoryRecord; tags: string[] }> = [];
+    for (const item of parsed) {
+      const record = typeof item?.id === 'string' ? byId.get(item.id) : undefined;
+      const tags = Array.isArray(item?.tags)
+        ? (item.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+        : [];
+      if (record && tags.length > 0) out.push({ record, tags });
+    }
+    return out;
+  } catch (err) {
+    logger.warn(`[memory] tags 标注块失败(跳过 ${chunk.length} 条,原记录未改): ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 }

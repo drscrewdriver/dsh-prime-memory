@@ -1,6 +1,7 @@
 import { groupPendingBySession, loadPending, } from '../store/pending.js';
 import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
+import { relabelPass } from './relabel.js';
 import { runPersona } from './l3.js';
 const IDLE_STATUS = {
     running: false,
@@ -8,6 +9,7 @@ const IDLE_STATUS = {
     done: 0,
     total: 0,
     recordsBuilt: 0,
+    relabel: null,
     detail: null,
     cancelRequested: false,
     startedAt: null,
@@ -190,6 +192,23 @@ export class RuminateController {
                     }
                 }
             }
+            // 标注校验/重标定:Wing 合法性 + 认知 hall 映射 + 未打标补标 + 涌现标签
+            this.status.phase = 'relabeling';
+            this.status.detail = '标注校验与重标定(Wing/认知 hall/标签)';
+            try {
+                this.status.relabel = await relabelPass({
+                    ctx: this.ctx,
+                    cfg: this.cfg,
+                    l1: this.stores.l1,
+                    logger: this.logger,
+                });
+                const r = this.status.relabel;
+                this.logger.info(`[memory] 反刍重标定完成:巡检 ${r.checked},补 cogHall ${r.cogHallFixed},非法 wing ${r.wingInvalidFixed},LLM 补 wing ${r.wingLabeled},打 tags ${r.tagged},跳过 ${r.llmSkipped}`);
+            }
+            catch (err) {
+                // 重标定失败不拖垮反刍整体(蒸馏/L2/L3 产物保留)
+                this.logger.warn(`[memory] 反刍重标定失败(不影响本次产物): ${errDetail(err)}`);
+            }
             this.status.phase = 'done';
             this.finish(null);
         }
@@ -276,6 +295,21 @@ export class RuminateController {
                 this.logger.warn(`[memory] 反刍轻量刷新 L3 失败(family=${family}): ${errDetail(err)}`);
             }
             this.status.done++;
+        }
+        // 轻量刷新同样做标注校验/重标定(有界,失败不影响刷新结果)
+        this.status.phase = 'relabeling';
+        this.status.detail = '标注校验与重标定(Wing/认知 hall/标签)';
+        try {
+            this.status.relabel = await relabelPass({
+                ctx: this.ctx,
+                cfg: this.cfg,
+                l1: this.stores.l1,
+                logger: this.logger,
+            });
+            this.status.done++;
+        }
+        catch (err) {
+            this.logger.warn(`[memory] 反刍轻量刷新重标定失败(不影响刷新结果): ${errDetail(err)}`);
         }
         this.status.running = false;
         this.status.detail = null;

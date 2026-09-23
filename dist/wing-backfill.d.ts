@@ -10,7 +10,7 @@
  * - **有界**:单次任务最多处理 MAX_RECORDS 条,防止一次跑飞;其余可再次触发。
  */
 import type { Context } from '@deepseek-ai/cordis';
-import { type MemoryLogger } from './types.js';
+import { type MemoryLogger, type MemoryRecord } from './types.js';
 import type { L1Store } from './store/l1.js';
 import type { MemoryConfig } from './config.js';
 export interface HallBackfillDeps {
@@ -31,3 +31,16 @@ export declare function startWingBackfill(deps: HallBackfillDeps): {
     started: boolean;
     running: boolean;
 };
+/** Wing 标注器(导出):一键回填与反刍重标定共用同一 LLM 路径与措辞。 */
+export declare function labelWingChunk(ctx: Context, cfg: MemoryConfig, logger: MemoryLogger, chunk: MemoryRecord[], candidates: string): Promise<Array<{
+    record: MemoryRecord;
+    hall: string;
+}>>;
+/**
+ * 涌现标签标注器(导出):为一批记录提炼 slug 标签(tags)——Room 的前身。
+ * 与 Wing 标注共用 LLM 路由(layer='l1-extract');失败返回空数组,调用方零改动。
+ */
+export declare function tagChunk(ctx: Context, cfg: MemoryConfig, logger: MemoryLogger, chunk: MemoryRecord[]): Promise<Array<{
+    record: MemoryRecord;
+    tags: string[];
+}>>;
