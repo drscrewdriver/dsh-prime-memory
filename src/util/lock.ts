@@ -155,7 +155,7 @@ async function pump(target: string, opts: FileLockOptions): Promise<void> {
   const q = queues.get(target);
   if (!q || q.length === 0) return;
   pumping.add(target);
-  let staleReclaimed = false;
+  let staleReclaimed: boolean;
   try {
     const acquired = await acquireLockFile(target, opts);
     staleReclaimed = acquired.staleReclaimed;

@@ -72,7 +72,7 @@ const results = await Promise.all(
   ),
 );
 
-let finalSlots = 0;
+let finalSlots;
 try {
   const parsed = JSON.parse(await readFile(file, 'utf8'));
   finalSlots = Array.isArray(parsed?.slots) ? parsed.slots.length : 0;

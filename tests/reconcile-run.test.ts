@@ -235,16 +235,24 @@ describe('executeReconcile —— 中断与续跑', () => {
     }
   });
 
-  it('状态文件损坏时按空状态处理,不阻止运行', async () => {
+  it('状态文件损坏时:读侧告警不静默,写侧拒绝覆盖(运行显式失败,原文件保留)', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-recon-run-'));
     try {
-      const { writeFile } = await import('node:fs/promises');
+      const { writeFile, readFile } = await import('node:fs/promises');
       const file = reconcileStatePathFor(dir);
-      await writeFile(file, '{ 这不是 JSON', 'utf8');
-      await expect(loadRunState(file)).resolves.toBeUndefined();
+      const corrupt = '{ 这不是 JSON';
+      await writeFile(file, corrupt, 'utf8');
+      // 读侧(T2.10):损坏不再静默当空 —— 仍不抛(续跑状态只是优化,重跑即可),但必须留诊断
+      const warns: string[] = [];
+      const logger = { info: () => {}, warn: (m: string) => warns.push(m), error: () => {} };
+      await expect(loadRunState(file, logger)).resolves.toBeUndefined();
+      expect(warns.join()).toContain('损坏');
+      // 写侧(覆盖保护):损坏文件写不进去 → 运行显式失败,而不是洗成默认值
       const { deps } = depsOf();
-      const result = await executeReconcile(deps, planReconcile([memory('a')], budget()), { stateFile: file });
-      expect(result.verdicts).toHaveLength(1);
+      await expect(
+        executeReconcile(deps, planReconcile([memory('a')], budget()), { stateFile: file }),
+      ).rejects.toThrow(/拒绝覆盖/);
+      expect(await readFile(file, 'utf8')).toBe(corrupt);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

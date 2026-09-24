@@ -262,6 +262,10 @@ export async function rmwJson<T, R>(
   decide: (current: JsonReadResult<T>) => Promise<{ next?: T; result: R }>,
   opts: FileLockOptions = {},
 ): Promise<R> {
+  // 锁文件与目标同目录,而锁在写之前就要创建:目标父目录可能尚未存在
+  // (首写场景)。atomicWriteText 会在写时 ensureDir,拿锁却等不到那一步,
+  // 会以 ENOENT 失败——在拿锁前先建目录,写语义才与直接调用 atomicWrite* 一致。
+  await ensureDir(path.dirname(file));
   const r = await withFileLock(
     file,
     async () => {

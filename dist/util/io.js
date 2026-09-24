@@ -229,6 +229,10 @@ export async function atomicWriteJson(file, value, opts = {}) {
  * ③ 抛错(并发冲突 → 调用方可观测地失败,而不是静默覆盖)。
  */
 export async function rmwJson(file, decide, opts = {}) {
+    // 锁文件与目标同目录,而锁在写之前就要创建:目标父目录可能尚未存在
+    // (首写场景)。atomicWriteText 会在写时 ensureDir,拿锁却等不到那一步,
+    // 会以 ENOENT 失败——在拿锁前先建目录,写语义才与直接调用 atomicWrite* 一致。
+    await ensureDir(path.dirname(file));
     const r = await withFileLock(file, async () => {
         const current = await readJsonStrict(file);
         const { next, result } = await decide(current);
