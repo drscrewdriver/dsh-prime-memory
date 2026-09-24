@@ -648,6 +648,8 @@ export class L1Store {
     /** Room 过滤(metadata.tags 含该 slug)。 */
     tag?: string;
     workspaceId?: string;
+    /** 退场筛查:三态(`undefined` 全部 / `false` 仅活跃 / `true` 仅已退场)。 */
+    retired?: boolean;
     limit: number;
     offset: number;
   }): { items: MemoryRecord[]; total: number } {

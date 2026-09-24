@@ -644,6 +644,12 @@ export interface ListRecordsRequest {
    * Room 由 tags 派生(自生长),故这里传的是**具体 tag 名**而非枚举 id。
    */
   tag?: string;
+  /**
+   * 退场(软删)筛查:三态。省略 = 全部(活跃+已退场混排,靠 `UiRecord.retired`
+   * 徽标区分);`false` = 仅活跃;`true` = 仅已退场。
+   * **仅浏览路径生效**:关键词检索只覆盖检索面,已退场记录本就不在其中。
+   */
+  retired?: boolean;
   /** 1~200,默认 50。 */
   limit?: number;
   /** 0~1_000_000。 */

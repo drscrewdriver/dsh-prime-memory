@@ -1486,6 +1486,14 @@ export class MemoryDb {
                 where.push(`EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END, '$.tags') j WHERE j.value = ?)`);
                 params.push(opts.tag);
             }
+            // 退场筛查(三态,见 opts.retired 注释):与 listRetiredL1 同一判据,保证
+            // 「仅退场」视图与「已退场」区看到同一批行。
+            if (opts.retired === false) {
+                where.push("COALESCE(valid_to, '') = ''");
+            }
+            else if (opts.retired === true) {
+                where.push("COALESCE(valid_to, '') <> ''");
+            }
             const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
             const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params);
             const rows = this.db

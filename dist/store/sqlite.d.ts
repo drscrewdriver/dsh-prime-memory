@@ -385,6 +385,15 @@ export declare class MemoryDb {
         /** Room 过滤(metadata.tags 含该 slug)。 */
         tag?: string;
         workspaceId?: string;
+        /**
+         * 退场(软删)筛查:三态。
+         * - 省略(undefined):不过滤,活跃+已退场都列(快照导出/重建需要全量;面板「全部」同此);
+         * - `false`:只列**活跃**记录(`valid_to` 为空);
+         * - `true`:只列**已退场**记录(`valid_to` 非空)——与 `listRetiredL1` 同口径。
+         * 面板默认不过滤而是靠徽标区分(「退场了」与「根本没这条」必须能分辨),
+         * 筛查只是把混排的两种态**分开看**,不改变"浏览路径不隐藏退场记录"的设计。
+         */
+        retired?: boolean;
         limit: number;
         offset: number;
     }): {

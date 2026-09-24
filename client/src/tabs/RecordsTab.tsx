@@ -14,6 +14,15 @@ interface QueryConds {
   halls: string[];
   /** Room 过滤(自生长 slug tag;空 = 不过滤)。 */
   tag: string;
+  /** 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场。 */
+  retired: '' | 'active' | 'retired';
+}
+
+/** 退场筛查 → 契约三态布尔('' 不传 = 全部)。 */
+function retiredSelOf(r: '' | 'active' | 'retired'): boolean | undefined {
+  if (r === 'active') return false;
+  if (r === 'retired') return true;
+  return undefined;
 }
 
 // 两族混合视图：筛选器提供全部 7 种类型
@@ -57,12 +66,14 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [hallFilter, setHallFilter] = useState<string[]>([]);
   // Room 过滤(标签自生长分类):点分类 chip 即按该 tag 筛选记录
   const [tagFilter, setTagFilter] = useState('');
+  // 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场
+  const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
   const [rooms, setRooms] = useState<RoomCount[]>([]);
   // Wing 词表(服务端下发,R8);null = 未下发(降级:从已加载记录派生)
   const [wingCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
 
   // 上一次实际生效的查询条件（「加载更多」按它续页）
-  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [], tag: '' });
+  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [], tag: '', retired: '' });
 
   // 请求序号：快速搜索/翻页时旧响应过期即弃，避免慢响应覆盖新结果
   const seqRef = useRef(0);
@@ -78,6 +89,8 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       if (conds.scene) payload.scene = conds.scene;
       if (conds.halls.length > 0) payload.halls = conds.halls;
       if (conds.tag) payload.tag = conds.tag;
+      const retiredSel = retiredSelOf(conds.retired);
+      if (retiredSel !== undefined) payload.retired = retiredSel;
       rpc('dsh-memory/list-records', payload)
         .then((r) => {
           if (token !== seqRef.current) return;
@@ -106,7 +119,15 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   );
 
   const search = () => {
-    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter };
+    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: retiredFilter };
+    setLast(conds);
+    fetchPage(conds, 0, false);
+  };
+
+  /** 切换退场筛查(全部/仅活跃/仅退场)并立即重查第一页。 */
+  const applyRetiredFilter = (next: '' | 'active' | 'retired') => {
+    setRetiredFilter(next);
+    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: next };
     setLast(conds);
     fetchPage(conds, 0, false);
   };
@@ -123,7 +144,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   }, [rpc]);
 
   useEffect(() => {
-    fetchPage({ query: '', type: '', scene: '', halls: [], tag: '' }, 0, false);
+    fetchPage({ query: '', type: '', scene: '', halls: [], tag: '', retired: '' }, 0, false);
     loadRooms();
   }, [fetchPage, loadRooms]);
 
@@ -327,7 +348,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                 onClick={() => {
                   const next = on ? '' : r.room;
                   setTagFilter(next);
-                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next };
+                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, retired: retiredFilter };
                   setLast(conds);
                   fetchPage(conds, 0, false);
                 }}
@@ -354,6 +375,36 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       )}
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>{loading ? '加载中…' : countText}</span>
+        {/* 退场筛查:三态分开看——软删记录不隐藏(可恢复),但混排时可一键分流 */}
+        <span style={S.muted}>退场筛查</span>
+        {([['', '全部'], ['active', '仅活跃'], ['retired', '仅退场']] as const).map(([val, label]) => {
+          const on = retiredFilter === val;
+          return (
+            <button
+              key={val}
+              type="button"
+              title={
+                val === ''
+                  ? '活跃与已退场混排（已退场的带徽标）'
+                  : val === 'active'
+                    ? '只看未退场的记忆'
+                    : '只看已退场（软删）的记忆，可在此恢复'
+              }
+              onClick={() => applyRetiredFilter(val)}
+              style={{
+                cursor: 'pointer',
+                fontSize: 12,
+                padding: '2px 10px',
+                borderRadius: 999,
+                border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+                background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+                color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
         {/* 批量删除：勾选后成组调 records-delete；写删门关闭时点击给提示 */}
         <NButton
           style={selCount > 0 ? { color: 'var(--dsh-mem-danger)' } : undefined}
