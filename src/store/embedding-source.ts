@@ -13,9 +13,10 @@
  *   重嵌取消/部分失败 → 已切换(物理表即新维度,meta 已同步),缺失向量由周期
  *   backfill 补齐——不回滚(回滚需要再 drop 一次表,得不偿失)。
  */
-import { promises as fs } from 'node:fs';
+import { promises as fs } from 'node:fs'; // T2.11 读侧 strict 化后移除
 import * as path from 'node:path';
 import type { MemoryConfig } from '../config.js';
+import { atomicWriteText } from '../util/io.js';
 import type { MemoryLogger } from '../types.js';
 import type { EmbeddingProviderInfo, EmbeddingService } from './embedding.js';
 import { NoopEmbeddingService, RemoteEmbeddingService } from './embedding.js';
@@ -92,16 +93,27 @@ export class EmbeddingSourceStore {
     }
   }
 
+  /**
+   * 改状态并写穿持久化。
+   *
+   * **失败必须对调用方可观测**:旧实现是 `writeQueue.then(persist).catch(() => {})`,
+   * 写失败后 `await` 照样 resolve——调用方以为已落盘,重启却回到旧源(G6 静默失败)。
+   * 现在本次 await 直接抛出;队列本身用 `.catch()` 兜住,免得一次失败把后续
+   * set 永久钉在 rejected 链上。
+   */
   async set(next: EmbeddingSourceState): Promise<void> {
     this.state = { source: next.source, activeModel: next.activeModel };
-    this.writeQueue = this.writeQueue.then(() => this.persist()).catch(() => {});
-    await this.writeQueue;
+    const write = this.writeQueue.then(() => this.persist());
+    this.writeQueue = write.catch(() => {});
+    await write;
   }
 
+  /**
+   * 落盘。走 `atomicWriteText` 而不是自研 tmp+rename:白拿文件级 fsync、
+   * 随机 tmp 名(旧实现的固定名 `*.tmp` 在多实例下会撞名)、以及失败路径清理。
+   */
   private async persist(): Promise<void> {
-    const tmp = this.file + '.tmp';
-    await fs.writeFile(tmp, JSON.stringify(this.state, null, 2), 'utf8');
-    await fs.rename(tmp, this.file);
+    await atomicWriteText(this.file, JSON.stringify(this.state, null, 2), { logger: this.logger });
   }
 }
 
@@ -492,13 +504,22 @@ export class EmbeddingManager {
         if (result.error) throw new Error(result.error);
       }
 
-      await this.sourceStore.set(next);
+      // 落盘失败不等于切换失败:走到这里服务已换、物理表已按新维度重建——真相是
+      // "本次会话用新源、重启回旧源"。旧实现把失败吞掉(§6.2),UI 却显示完全成功,
+      // 于是用户以为已保存。这里如实报出来,不再把两种结果混成一个 'done'。
+      let persistNote = '';
+      try {
+        await this.sourceStore.set(next);
+      } catch (err) {
+        persistNote = ';状态持久化失败,重启将回到旧嵌入源';
+        this.deps.logger.warn(
+          `[memory] 嵌入源状态持久化失败(本次会话仍用新源): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
       this.activeNote = undefined;
       this.applyPhase = 'done';
       this.applyMessage =
-        next.source === 'off'
-          ? '已切换为关键词检索'
-          : '切换完成' + pendingNote;
+        (next.source === 'off' ? '已切换为关键词检索' : '切换完成' + pendingNote) + persistNote;
     } catch (err) {
       this.applyPhase = 'error';
       this.applyMessage = err instanceof Error ? err.message : String(err);
