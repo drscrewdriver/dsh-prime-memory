@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import type { MemoryLogger } from '../types.js';
+import { withFileLock, type FileLockOptions } from './lock.js';
 
 export async function ensureDir(dir: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
@@ -236,6 +237,34 @@ async function guardAgainstCorrupt(file: string): Promise<void> {
 export async function atomicWriteJson(file: string, value: unknown, opts: AtomicWriteOptions = {}): Promise<void> {
   if (opts.overwriteGuard !== false) await guardAgainstCorrupt(file);
   await atomicWriteText(file, JSON.stringify(value, null, 2), opts);
+}
+
+/**
+ * **锁内 read-modify-write**(文件层加固 T4 的核心原语)。
+ *
+ * 顺序保证:拿锁 → 读磁盘原文 → 交给 `decide` 决定写什么 → 落盘 → 释放锁。
+ * 把"读"放进锁内是关键——否则两个进程各自读到旧值、各自算、后写的那个
+ * 会把前一个的更新整块盖掉(last-writer-wins 丢更新)。
+ *
+ * `decide` 可以:① 返回 `next` 写回;② 返回 `next: undefined` 放弃写入(快照/降级场景);
+ * ③ 抛错(并发冲突 → 调用方可观测地失败,而不是静默覆盖)。
+ */
+export async function rmwJson<T, R>(
+  file: string,
+  decide: (current: JsonReadResult<T>) => Promise<{ next?: T; result: R }>,
+  opts: FileLockOptions = {},
+): Promise<R> {
+  const r = await withFileLock(
+    file,
+    async () => {
+      const current = await readJsonStrict<T>(file);
+      const { next, result } = await decide(current);
+      if (next !== undefined) await atomicWriteJson(file, next, { logger: opts.logger });
+      return result;
+    },
+    opts,
+  );
+  return r.value;
 }
 
 /**

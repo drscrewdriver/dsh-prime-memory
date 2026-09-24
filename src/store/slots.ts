@@ -11,7 +11,7 @@
  */
 import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { atomicWriteJson, readJsonStrict, nowIso } from '../util/io.js';
+import { readJsonStrict, rmwJson, nowIso } from '../util/io.js';
 import { SLOTS_FILE_VERSION } from './file-versions.js';
 import type { MemoryLogger } from '../types.js';
 
@@ -153,6 +153,8 @@ export class SlotStore {
   private rev = 0;
   /** 只读降级原因(undefined = 正常):非空时内存照常更新,但停止回写。 */
   private degraded: string | undefined;
+  /** 本进程已认可的磁盘 rev(并发冲突判据:磁盘比它新 = 别人写过)。 */
+  private baseRev = 0;
   private degradedLogged = false;
   private readonly maxSlots: number;
   private readonly maxBodyChars: number;
@@ -202,6 +204,7 @@ export class SlotStore {
     const { slots, rev } = fromFile(raw);
     this.slots = slots;
     this.rev = rev;
+    this.baseRev = rev;
   }
 
   /** 同步读内存,返回副本(不泄漏内部数组)。 */
@@ -338,10 +341,15 @@ export class SlotStore {
     };
   }
 
-  /** 原子写盘 + rev 单调递增。 */
+  /**
+   * 锁内 RMW 写盘 + rev 单调递增(文件层加固 T4.7)。
+   *
+   * `rev` 在这里多担一个职责:**并发冲突判据**。锁保证"读-算-写"不交错,
+   * 但本进程的内存态仍可能是旧的(别人在我上次读之后写过)——比较磁盘 rev 与
+   * `baseRev` 能发现这件事,此时**拒绝写入**并让调用方看到失败,而不是把别人的
+   * 更新整块盖掉(丢更新)或假装成功。
+   */
   private async persist(): Promise<void> {
-    this.rev += 1;
-    const file: SlotsFile = { version: SLOTS_FILE_VERSION, rev: this.rev, slots: this.slots };
     if (this.degraded !== undefined) {
       // 只读降级:内存态照常更新(工具语义不受影响),但绝不落盘——
       // 此刻内存里是"按当前形状解释"的结果,写回去会把磁盘上的新格式洗成旧格式。
@@ -352,7 +360,38 @@ export class SlotStore {
       return;
     }
     try {
-      await atomicWriteJson(this.file, file, { logger: this.logger });
+      await rmwJson<SlotsFile, void>(
+        this.file,
+        async (cur) => {
+          const disk = cur.ok ? cur.value : undefined;
+          const diskRev = disk && typeof disk.rev === 'number' && disk.rev >= 0 ? disk.rev : 0;
+          if (diskRev > this.baseRev) {
+            // 别人写过。槽位是**独立条目集合**(相互无引用、无计数),合并没有歧义:
+            // 以磁盘为底、本进程的同 id 条目覆盖之(内存态更新),于是两边的新增都留下。
+            // 直接拒写虽然"可观测",但会让并发场景下的新增静默消失——能合并就别丢。
+            const merged = new Map<string, Slot>();
+            for (const s of (disk?.slots ?? [])) merged.set(s.id, s);
+            for (const s of this.slots) merged.set(s.id, s); // 本进程优先
+            if (merged.size > this.maxSlots) {
+              this.logger.warn(
+                `[memory] 槽位合并后超过上限(${merged.size} > ${this.maxSlots}),保留本进程优先的前 ${this.maxSlots} 条`,
+              );
+              const keep = new Set(this.slots.map((s) => s.id));
+              const trimmed = [...merged.values()].filter((s) => keep.has(s.id)).slice(0, this.maxSlots);
+              merged.clear();
+              for (const s of trimmed) merged.set(s.id, s);
+            }
+            this.slots = [...merged.values()];
+            this.rev = diskRev + 1;
+            this.baseRev = this.rev;
+            return { next: { version: SLOTS_FILE_VERSION, rev: this.rev, slots: this.slots }, result: undefined };
+          }
+          this.rev = Math.max(this.rev, diskRev) + 1;
+          this.baseRev = this.rev;
+          return { next: { version: SLOTS_FILE_VERSION, rev: this.rev, slots: this.slots }, result: undefined };
+        },
+        { logger: this.logger, purpose: 'slots-rmw' },
+      );
     } catch (err) {
       // 写盘失败只告警,不阻断调用方(降级:内存态已更新,下次写会重试)
       this.logger.warn(`[memory] 槽位持久化失败(内存态已更新): ${err instanceof Error ? err.message : String(err)}`);

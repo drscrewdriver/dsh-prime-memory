@@ -14,7 +14,7 @@
  */
 import * as path from 'node:path';
 import type { MemoryFamily, MemoryLogger } from '../types.js';
-import { atomicWriteJson, readJsonStrict } from '../util/io.js';
+import { readJsonStrict, rmwJson } from '../util/io.js';
 import { STATE_FILE_VERSION, STATE_FILE_VERSION_LEGACY } from './file-versions.js';
 
 export interface MemoryState {
@@ -66,6 +66,8 @@ export class StateStore {
   /** 只读降级原因(非空 = 拒绝加载且禁止回写)。 */
   private degradedReason: string | undefined;
   private saveBlockedLogged = false;
+  /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据。 */
+  private lastPersisted: string | undefined;
 
   constructor(private readonly file: string, private readonly logger?: MemoryLogger) {}
 
@@ -149,8 +151,22 @@ export class StateStore {
       }
       return;
     }
-    const file: StateFile = { version: STATE_FILE_VERSION, families: this.buckets };
-    await atomicWriteJson(this.file, file, { logger: this.logger });
+    // 锁内 RMW(T4.9):读磁盘 → 判并发 → 写。state 没有 rev 字段,冲突判据是
+    // "磁盘内容与本进程上次写入的不同"——双进程(将来的宿主+后端)交替写时,
+    // 后写者会看到差异并显式失败,而不是把别人的 checkpoint 静默盖掉。
+    await rmwJson<StateFile, void>(
+      this.file,
+      async (cur) => {
+        const diskRaw = cur.ok ? JSON.stringify(cur.value) : undefined;
+        if (this.lastPersisted !== undefined && diskRaw !== undefined && diskRaw !== this.lastPersisted) {
+          throw new Error(`state.json 已被其它进程更新,本次写入已取消以避免覆盖`);
+        }
+        const next: StateFile = { version: STATE_FILE_VERSION, families: this.buckets };
+        this.lastPersisted = JSON.stringify(next);
+        return { next, result: undefined };
+      },
+      { logger: this.logger, purpose: 'state-rmw' },
+    );
   }
 
   static pathFor(dataDir: string): string {

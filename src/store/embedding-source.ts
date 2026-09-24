@@ -15,7 +15,7 @@
  */
 import * as path from 'node:path';
 import type { MemoryConfig } from '../config.js';
-import { atomicWriteText, readJsonStrict } from '../util/io.js';
+import { readJsonStrict, rmwJson } from '../util/io.js';
 import type { MemoryLogger } from '../types.js';
 import type { EmbeddingProviderInfo, EmbeddingService } from './embedding.js';
 import { NoopEmbeddingService, RemoteEmbeddingService } from './embedding.js';
@@ -67,6 +67,8 @@ export class EmbeddingSourceStore {
   private readonly logger?: MemoryLogger;
   /** 只读降级原因(undefined = 正常):文件损坏/不可读时置位,此后 `set()` 一律失败。 */
   private degraded: string | undefined;
+  /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据。 */
+  private lastPersisted: string | undefined;
 
   constructor(dataDir: string, logger?: MemoryLogger) {
     this.file = path.join(dataDir, 'embedding-source.json');
@@ -104,6 +106,7 @@ export class EmbeddingSourceStore {
       (parsed.activeModel === null || typeof parsed.activeModel === 'string')
     ) {
       this.state = { source: parsed.source, activeModel: parsed.activeModel };
+      this.lastPersisted = JSON.stringify(this.state);
     } else {
       this.logger?.warn('[memory] 嵌入源状态文件形状非法,按默认 remote 起步');
     }
@@ -133,7 +136,21 @@ export class EmbeddingSourceStore {
    * 随机 tmp 名(旧实现的固定名 `*.tmp` 在多实例下会撞名)、以及失败路径清理。
    */
   private async persist(): Promise<void> {
-    await atomicWriteText(this.file, JSON.stringify(this.state, null, 2), { logger: this.logger });
+    // 锁内 RMW(T4.11):嵌入源是"改一次落一次"的低频写,锁开销可忽略;
+    // 两个实例并发 set 时,后写的那个会看到磁盘与自己的上次写入不同 → 显式失败。
+    await rmwJson<EmbeddingSourceState, void>(
+      this.file,
+      async (cur) => {
+        const diskRaw = cur.ok ? JSON.stringify(cur.value) : undefined;
+        if (this.lastPersisted !== undefined && diskRaw !== undefined && diskRaw !== this.lastPersisted) {
+          throw new Error(`嵌入源状态已被其它进程更新,本次写入已取消以避免覆盖;请重试该操作`);
+        }
+        const next: EmbeddingSourceState = { source: this.state.source, activeModel: this.state.activeModel };
+        this.lastPersisted = JSON.stringify(next);
+        return { next, result: undefined };
+      },
+      { logger: this.logger, purpose: 'embedding-source-rmw' },
+    );
   }
 }
 

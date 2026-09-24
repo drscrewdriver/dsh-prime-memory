@@ -11,7 +11,7 @@
 import * as path from 'node:path';
 import type { MemoryLogger } from '../types.js';
 import { errDetail } from '../util/filelog.js';
-import { atomicWriteJson, ensureDir, readJsonStrict } from '../util/io.js';
+import { ensureDir, readJsonStrict, rmwJson } from '../util/io.js';
 import { RECALL_DEDUPE_FILE_VERSION } from './file-versions.js';
 
 /** 会话条目上限(按 updatedAt 淘汰最旧;防文件无限增长)。 */
@@ -38,6 +38,8 @@ export class RecallDedupeStore {
   /** 只读降级原因(undefined = 正常):非空时去重集合照常生效,但停止回写。 */
   private degraded: string | undefined;
   private degradedLogged = false;
+  /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据:磁盘与它不同 = 别人写过。 */
+  private lastPersisted: string | undefined;
   /** 串行化持久化写(避免并发原子写撞临时文件名);init 链最前(先载入再落盘,防丢更新)。 */
   private writeChain: Promise<void>;
 
@@ -73,6 +75,7 @@ export class RecallDedupeStore {
       this.degraded = `未知版本(${lenient.version ?? '无 version 字段'})`;
       this.logger?.warn(`[memory] 召回去重文件版本未知(${lenient.version ?? '无'}):按当前形状读取并进入只读降级(不回写)`);
     }
+    this.lastPersisted = JSON.stringify(data);
     if (!data?.sessions || typeof data.sessions !== 'object') return;
     const now = Date.now();
     let count = 0;
@@ -141,7 +144,19 @@ export class RecallDedupeStore {
     }
     try {
       await ensureDir(path.dirname(this.file));
-      await atomicWriteJson(this.file, this.serialize(), { logger: this.logger });
+      await rmwJson<DedupeFile, void>(
+        this.file,
+        async (cur) => {
+          const diskRaw = cur.ok ? JSON.stringify(cur.value) : undefined;
+          if (this.lastPersisted !== undefined && diskRaw !== undefined && diskRaw !== this.lastPersisted) {
+            throw new Error(`召回去重文件已被其它进程更新,本次写入已取消以避免覆盖;请重试该操作`);
+          }
+          const next = this.serialize();
+          this.lastPersisted = JSON.stringify(next);
+          return { next, result: undefined };
+        },
+        { logger: this.logger, purpose: 'recall-dedupe-rmw' },
+      );
       this.persistFailed = false;
     } catch (err) {
       if (!this.persistFailed) {

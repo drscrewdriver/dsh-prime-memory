@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import type { MemoryLogger, MemoryMode } from '../types.js';
 import { WING_CATALOG } from '../types.js';
 import { errDetail } from '../util/filelog.js';
-import { atomicWriteJson, ensureDir, readJsonStrict } from '../util/io.js';
+import { ensureDir, readJsonStrict, rmwJson } from '../util/io.js';
 import { SESSION_MODES_FILE_VERSION } from './file-versions.js';
 
 const MODES: readonly MemoryMode[] = ['auto', 'chat', 'work', 'off'];
@@ -57,6 +57,8 @@ export class SessionModeStore {
   /** 只读降级原因(undefined = 正常):非空时内存态照常生效,但停止回写。 */
   private degraded: string | undefined;
   private degradedLogged = false;
+  /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据:磁盘与它不同 = 别人写过。 */
+  private lastPersisted: string | undefined;
   /** 档位切换回调(index.ts 装配 runner 的同步动作:切片落袋/挂起,ADR-0003)。 */
   private onModeChange?: (sessionId: string, oldMode: MemoryMode, newMode: MemoryMode) => void;
   /** 串行化持久化写(避免并发原子写撞临时文件名)。 */
@@ -99,6 +101,7 @@ export class SessionModeStore {
       this.degraded = `未知版本(${lenient.version ?? '无 version 字段'})`;
       this.logger?.warn(`[memory] 会话档位文件版本未知(${lenient.version ?? '无'}):按当前形状读取并进入只读降级(不回写)`);
     }
+    this.lastPersisted = JSON.stringify(data);
     if (!data?.sessions || typeof data.sessions !== 'object') return;
     const now = Date.now();
     let count = 0;
@@ -265,7 +268,19 @@ export class SessionModeStore {
     }
     try {
       await ensureDir(path.dirname(this.file));
-      await atomicWriteJson(this.file, this.serialize(), { logger: this.logger });
+      await rmwJson<ModeFile, void>(
+        this.file,
+        async (cur) => {
+          const diskRaw = cur.ok ? JSON.stringify(cur.value) : undefined;
+          if (this.lastPersisted !== undefined && diskRaw !== undefined && diskRaw !== this.lastPersisted) {
+            throw new Error(`会话档位文件已被其它进程更新,本次写入已取消以避免覆盖;请重试该操作`);
+          }
+          const next = this.serialize();
+          this.lastPersisted = JSON.stringify(next);
+          return { next, result: undefined };
+        },
+        { logger: this.logger, purpose: 'session-modes-rmw' },
+      );
       this.persistFailed = false;
     } catch (err) {
       if (!this.persistFailed) {

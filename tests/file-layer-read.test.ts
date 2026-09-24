@@ -133,6 +133,27 @@ describe('T3.1 / T3.2 state:有迁移路径 → 未知版本拒绝加载', () =>
   });
 });
 
+describe('T3.4 迁移幂等', () => {
+  it('v1 → v2 迁移连续执行两次结果一致', async () => {
+    const d = await flTmp('state-idempotent');
+    const f = join(d, 'state.json');
+    await writeFile(f, '{"lastExtractAt":42,"totalExtracted":7,"hasPersona":true}', 'utf8');
+    const s1 = new StateStore(f);
+    await s1.load();
+    await s1.save();
+    const after1 = await readFile(f, 'utf8');
+    expect(s1.didMigrate).toBe(true);
+    const s2 = new StateStore(f);
+    await s2.load();
+    await s2.save();
+    const after2 = await readFile(f, 'utf8');
+    expect(s2.didMigrate).toBe(false); // 第二次已是 v2,不再迁移
+    expect(JSON.parse(after2)).toEqual(JSON.parse(after1));
+    expect(JSON.parse(after2).version).toBe(2);
+    expect(s2.forFamily('chat').lastExtractAt).toBe(42); // 数据没在二次迁移中被搬错
+  });
+});
+
 describe('T3.2 / T3.5 无迁移路径者:未知版本允许读、禁止写', () => {
   it('slots v99 → 值被读出,但写被拒(磁盘字节不变)', async () => {
     const d = await flTmp('slots-v99');

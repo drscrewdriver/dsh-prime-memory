@@ -9,12 +9,23 @@ export declare class SessionModeStore {
     private readonly entries;
     private readonly loaded;
     private persistFailed;
+    /** 只读降级原因(undefined = 正常):非空时内存态照常生效,但停止回写。 */
+    private degraded;
+    private degradedLogged;
+    /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据:磁盘与它不同 = 别人写过。 */
+    private lastPersisted;
     /** 档位切换回调(index.ts 装配 runner 的同步动作:切片落袋/挂起,ADR-0003)。 */
     private onModeChange?;
     /** 串行化持久化写(避免并发原子写撞临时文件名)。 */
     private writeChain;
     constructor(dataDir: string, defaultMode: Extract<MemoryMode, 'auto' | 'chat' | 'work'>, logger?: MemoryLogger | undefined);
-    /** 载入持久化映射(index.ts 启动时 await;失败降级内存态)。 */
+    /**
+     * 载入持久化映射(index.ts 启动时 await;失败降级内存态)。
+     *
+     * **读侧分类**(文件层加固 T2):缺失合法;损坏/不可读 → 告警 + 只读降级;
+     * 未知版本 → **仍按当前形状读取**(本 store 无迁移路径,一律拒载会让档位在
+     * 版本回退后全部失效)+ 只读降级(禁写)。
+     */
     init(): Promise<void>;
     get default(): MemoryMode;
     /** 同步读取:未设置过的会话返回默认档。 */

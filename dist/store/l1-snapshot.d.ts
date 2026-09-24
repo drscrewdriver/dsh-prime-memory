@@ -1,4 +1,4 @@
-import type { MemoryRecord } from '../types.js';
+import type { MemoryLogger, MemoryRecord } from '../types.js';
 import type { ConflictPair } from './conflicts.js';
 export declare const SNAPSHOT_VERSION = 1;
 /** 快照里的一节:行数 + 内容哈希。哈希是"内容有没有变"的判据,行数看不出来。 */
@@ -63,6 +63,7 @@ export interface SnapshotSummary {
  */
 export declare function listSnapshots(dataDir: string, opts?: {
     limit?: number;
+    logger?: MemoryLogger;
 }): Promise<{
     items: SnapshotSummary[];
     total: number;
@@ -128,9 +129,22 @@ export interface CreateSnapshotResult {
  */
 export declare function projectConflictsForHash(rows: readonly ConflictPair[]): Array<Record<string, unknown>>;
 export declare function createL1Snapshot(db: SnapshotDbLike, dir: string, reason: string, now?: Date): Promise<CreateSnapshotResult>;
-/** 读快照清单;不存在或版本不符返回 undefined。 */
+/**
+ * 读快照清单。
+ *
+ * **读侧分类**(文件层加固 T2.7):
+ * - 缺失 / 版本不符 → `undefined`(沿用既有"这份快照不可用"的语义);
+ * - **损坏 / 不可读 → 抛错**:旧实现把损坏也压成 `undefined`,于是"清单坏了"和
+ *   "没有清单"在调用方眼里一样——恢复时会选中一个半截快照却报 0 条成功。
+ */
 export declare function readSnapshotManifest(dir: string): Promise<L1SnapshotManifest | undefined>;
-/** 读回快照里的记录(与 `createL1Snapshot` 的写入格式必须成对:`atomicWriteJson` ↔ `readJsonIfExists`)。 */
+/**
+ * 读回快照里的记录(与 `createL1Snapshot` 的写入格式必须成对)。
+ *
+ * **损坏不再返回空数组**:空数组会让"记录文件坏了"表现成"这份快照有 0 条记录",
+ * 恢复下去就是静默丢数据。缺文件同样抛错——建快照时正文与清单是成对写入的,
+ * 只缺其一说明这份快照本身不完整。
+ */
 export declare function readSnapshotRecords(dir: string): Promise<MemoryRecord[]>;
 /** 快照与当前库的差异。 */
 export interface SnapshotVerification {
