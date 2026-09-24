@@ -115,6 +115,35 @@ describe('软删原语:退场 → 检索不可见 → 恢复可见', () => {
     db.close();
   });
 
+  it('退场筛查三态:listL1 的 retired 过滤(缺省全量/false 仅活跃/true 仅退场)', async () => {
+    const { db, store } = await setup();
+    store.retire([GONE], { at: AT, reason: 'manual' });
+
+    // 缺省:不过滤,活跃+退场都在(浏览路径不隐藏退场记录的设计不变)
+    const all = store.list({ limit: 50, offset: 0 });
+    expect(all.items.map((r) => r.id).sort()).toEqual([GONE, KEEP].sort());
+    expect(all.total).toBe(2);
+
+    // false:仅活跃
+    const active = store.list({ limit: 50, offset: 0, retired: false });
+    expect(active.items.map((r) => r.id)).toEqual([KEEP]);
+    expect(active.total).toBe(1);
+
+    // true:仅已退场,与 listRetiredL1 同一批行
+    const retiredOnly = store.list({ limit: 50, offset: 0, retired: true });
+    expect(retiredOnly.items.map((r) => r.id)).toEqual([GONE]);
+    expect(retiredOnly.total).toBe(1);
+    expect(retiredOnly.items.map((r) => r.id)).toEqual(
+      store.listRetired({ limit: 50, offset: 0 }).items.map((r) => r.id),
+    );
+
+    // 恢复后三态随之归位:退场视图回空
+    await store.restore([GONE]);
+    expect(store.list({ limit: 50, offset: 0, retired: true }).total).toBe(0);
+    expect(store.list({ limit: 50, offset: 0, retired: false }).total).toBe(2);
+    db.close();
+  });
+
   it('幂等:二次退场不改写首次的原因与时刻', async () => {
     const { db, store } = await setup();
     expect(store.retire([GONE], { at: AT, reason: 'conflict', verdict: 'winner', pairId: 'p1' })).toBe(1);

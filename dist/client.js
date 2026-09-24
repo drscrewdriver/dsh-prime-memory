@@ -3226,6 +3226,11 @@ var __defProp = Object.defineProperty;
 		// client/src/tabs/RecordsTab.tsx
 		var import_react15 = require("react");
 		var import_jsx_runtime15 = require("react/jsx-runtime");
+		function retiredSelOf(r) {
+		  if (r === "active") return false;
+		  if (r === "retired") return true;
+		  return void 0;
+		}
 		var TYPE_CHOICES = [
 		  "persona",
 		  "episodic",
@@ -3255,9 +3260,10 @@ var __defProp = Object.defineProperty;
 		  const [sceneFilter, setSceneFilter] = (0, import_react15.useState)("");
 		  const [hallFilter, setHallFilter] = (0, import_react15.useState)([]);
 		  const [tagFilter, setTagFilter] = (0, import_react15.useState)("");
+		  const [retiredFilter, setRetiredFilter] = (0, import_react15.useState)("");
 		  const [rooms, setRooms] = (0, import_react15.useState)([]);
 		  const [wingCatalog, setHallCatalog] = (0, import_react15.useState)(null);
-		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", halls: [], tag: "" });
+		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", halls: [], tag: "", retired: "" });
 		  const seqRef = (0, import_react15.useRef)(0);
 		  const fetchPage = (0, import_react15.useCallback)(
 		    (conds, offset, append) => {
@@ -3270,6 +3276,8 @@ var __defProp = Object.defineProperty;
 		      if (conds.scene) payload.scene = conds.scene;
 		      if (conds.halls.length > 0) payload.halls = conds.halls;
 		      if (conds.tag) payload.tag = conds.tag;
+		      const retiredSel = retiredSelOf(conds.retired);
+		      if (retiredSel !== void 0) payload.retired = retiredSel;
 		      rpc("dsh-memory/list-records", payload).then((r) => {
 		        if (token !== seqRef.current) return;
 		        setLoading(false);
@@ -3294,7 +3302,13 @@ var __defProp = Object.defineProperty;
 		    [rpc]
 		  );
 		  const search = () => {
-		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter };
+		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: retiredFilter };
+		    setLast(conds);
+		    fetchPage(conds, 0, false);
+		  };
+		  const applyRetiredFilter = (next) => {
+		    setRetiredFilter(next);
+		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: next };
 		    setLast(conds);
 		    fetchPage(conds, 0, false);
 		  };
@@ -3305,7 +3319,7 @@ var __defProp = Object.defineProperty;
 		    });
 		  }, [rpc]);
 		  (0, import_react15.useEffect)(() => {
-		    fetchPage({ query: "", type: "", scene: "", halls: [], tag: "" }, 0, false);
+		    fetchPage({ query: "", type: "", scene: "", halls: [], tag: "", retired: "" }, 0, false);
 		    loadRooms();
 		  }, [fetchPage, loadRooms]);
 		  const loadHiPriv = (0, import_react15.useCallback)(() => {
@@ -3486,7 +3500,7 @@ var __defProp = Object.defineProperty;
 		            onClick: () => {
 		              const next = on ? "" : r.room;
 		              setTagFilter(next);
-		              const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next };
+		              const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, retired: retiredFilter };
 		              setLast(conds);
 		              fetchPage(conds, 0, false);
 		            },
@@ -3508,6 +3522,29 @@ var __defProp = Object.defineProperty;
 		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: "Room 分类：暂无（由反刍涌现的标签自动生成，无需手工建立）" }),
 		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: loading ? "加载中…" : countText }),
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "退场筛查" }),
+		      [["", "全部"], ["active", "仅活跃"], ["retired", "仅退场"]].map(([val, label]) => {
+		        const on = retiredFilter === val;
+		        return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		          "button",
+		          {
+		            type: "button",
+		            title: val === "" ? "活跃与已退场混排（已退场的带徽标）" : val === "active" ? "只看未退场的记忆" : "只看已退场（软删）的记忆，可在此恢复",
+		            onClick: () => applyRetiredFilter(val),
+		            style: {
+		              cursor: "pointer",
+		              fontSize: 12,
+		              padding: "2px 10px",
+		              borderRadius: 999,
+		              border: on ? "1px solid var(--dsh-mem-accent)" : "1px solid var(--dsh-mem-border)",
+		              background: on ? "var(--dsh-mem-bg-inset)" : "transparent",
+		              color: on ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-2)"
+		            },
+		            children: label
+		          },
+		          val
+		        );
+		      }),
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
 		        NButton,
 		        {
@@ -3549,7 +3586,7 @@ var __defProp = Object.defineProperty;
 		        "div",
 		        {
 		          className: "dsh-mem-card dsh-mem-card-hover",
-		          style: { ...S.card, cursor: "pointer", ...checked ? { borderLeft: "3px solid var(--dsh-mem-danger)" } : null },
+		          style: { ...S.card, cursor: "pointer", ...checked ? { borderLeft: "3px solid var(--dsh-mem-danger)" } : null, ...m.retired ? { opacity: 0.62 } : null },
 		          onClick: () => {
 		            setExpandedId(open ? null : m.id);
 		          },
@@ -3572,11 +3609,37 @@ var __defProp = Object.defineProperty;
 		              ),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + m.type, children: TYPE_LABELS[m.type] || m.type }),
 		              m.hall ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-fact", children: "Wing · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall) }) : null,
+		              m.retired ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		                "span",
+		                {
+		                  title: "该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除",
+		                  style: {
+		                    fontSize: 11,
+		                    padding: "1px 6px",
+		                    borderRadius: 999,
+		                    border: "1px solid var(--dsh-mem-danger)",
+		                    color: "var(--dsh-mem-danger)",
+		                    whiteSpace: "nowrap"
+		                  },
+		                  children: "已退场" + (m.retiredReason ? " · " + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : "")
+		                }
+		              ) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "优先级 " + m.priority }),
 		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "相关度 " + Number(m.score).toFixed(2) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: fmtTime(m.updatedAt) }),
-		              hiPriv ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		              m.retired ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		                NButton,
+		                {
+		                  style: { padding: "0 7px", minWidth: 26, height: 26, fontSize: 12, color: "var(--dsh-mem-accent)" },
+		                  title: "恢复该记忆到检索面（可撤销退场）",
+		                  onClick: (e) => {
+		                    e.stopPropagation();
+		                    restoreRecords([m.id]);
+		                  },
+		                  children: "恢复"
+		                }
+		              ) : hiPriv ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
 		                NButton,
 		                {
 		                  style: { padding: "0 7px", minWidth: 26, height: 26, fontSize: 12, color: "var(--dsh-mem-danger)" },

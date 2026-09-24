@@ -925,8 +925,11 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     }
 
     case 'dsh-memory/list-records': {
-      const p = (payload ?? {}) as { query?: string; type?: string; scene?: string; hall?: string; halls?: unknown; tag?: string; limit?: number; offset?: number };
+      const p = (payload ?? {}) as { query?: string; type?: string; scene?: string; hall?: string; halls?: unknown; tag?: string; retired?: unknown; limit?: number; offset?: number };
       if (p.query !== undefined && p.query.length > 4096) throw new Error('query 过长(≤4096 字符)');
+      // 退场筛查:三态(缺省=全部混排/false=仅活跃/true=仅已退场)。显式布尔才透传,
+      // 其余值(字符串/数字等)一律视为缺省——宁可宽看,不可静默筛掉一半。
+      const retiredSel = typeof p.retired === 'boolean' ? p.retired : undefined;
       // Room 过滤:tag 是**自生长**的 slug(无枚举),只做形状与长度校验(SQL 侧参数化)
       const tagSel = typeof p.tag === 'string' ? p.tag.trim().slice(0, 64) : '';
       if (tagSel && !isTag(tagSel)) throw new Error('tag 非法(需小写字母数字连字符,1-32 字符)');
@@ -985,7 +988,9 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         };
         return resp;
       }
-      const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, limit, offset });
+      // 退场筛查仅浏览路径透传;检索路径不接——FTS/向量里本就没有已退场行,
+      // 接了只会让「仅退场+关键词」永远空结果,不如如实不筛。
+      const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, retired: retiredSel, limit, offset });
       const resp: ListRecordsResponse = {
         items: items.map(hitToUiRecord),
         hasMore: offset + items.length < total,
@@ -1596,7 +1601,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
 }
 
 /** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
-function hitToUiRecord(r: {
+export function hitToUiRecord(r: {
   id: string;
   content: string;
   type: string;
@@ -1610,7 +1615,11 @@ function hitToUiRecord(r: {
   metadata?: Record<string, unknown>;
   score?: number;
   family?: string;
+  /** 退场判据:`valid_to` 闭合即已退场(软删)。由 `listL1`/`getByIds` 透传。 */
+  validTo?: number;
 }): UiRecord {
+  const retired = r.validTo !== undefined;
+  const mark = retired ? readSupersedeMarker(r.metadata) : undefined;
   return {
     id: r.id,
     content: r.content,
@@ -1629,6 +1638,11 @@ function hitToUiRecord(r: {
     // `sourceAnchors` 永远缺失、来源行在 UI 上从未显示过。
     sourceAnchors: sourceAnchorLabels(r.metadata),
     score: r.score ?? null,
+    // 退场态透传:活动列表据此渲染「已退场」徽标 + 行内恢复,而非让记录静默停留在
+    // 原样(那样用户会以为「点了删除没反应」)。面板浏览路径**仍列出**退场记录(软删可恢复),
+    // 但必须给出可见差异。
+    retired,
+    retiredReason: retired ? (mark?.reason ?? 'unknown') : null,
   };
 }
 
