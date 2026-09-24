@@ -34,8 +34,8 @@
  */
 import { createHash } from 'node:crypto';
 import { readdir } from 'node:fs/promises';
-import { atomicWriteJson, readJsonIfExists } from '../util/io.js';
-import type { MemoryRecord } from '../types.js';
+import { atomicWriteJson, readJsonStrict } from '../util/io.js';
+import type { MemoryLogger, MemoryRecord } from '../types.js';
 import type { ConflictPair } from './conflicts.js';
 
 export const SNAPSHOT_VERSION = 1;
@@ -128,7 +128,10 @@ export interface SnapshotSummary {
  * 不能出现在"选一份来恢复"的列表里,否则人会选中一份根本恢复不了的东西)。
  * 目录不存在**不抛**,返回空列表——"还没建过快照"是部署状态,不是调用错误。
  */
-export async function listSnapshots(dataDir: string, opts: { limit?: number } = {}): Promise<{ items: SnapshotSummary[]; total: number }> {
+export async function listSnapshots(
+  dataDir: string,
+  opts: { limit?: number; logger?: MemoryLogger } = {},
+): Promise<{ items: SnapshotSummary[]; total: number }> {
   const root = snapshotsRootFor(dataDir);
   let names: string[];
   try {
@@ -142,7 +145,17 @@ export async function listSnapshots(dataDir: string, opts: { limit?: number } = 
   for (const name of names) {
     if (!isSnapshotName(name)) continue;
     const dir = `${root}/${name}`;
-    const manifest = await readSnapshotManifest(dir);
+    let manifest: L1SnapshotManifest | undefined;
+    try {
+      manifest = await readSnapshotManifest(dir);
+    } catch (err) {
+      // 单个快照清单损坏不该让整个列表拿不到:跳过它,但**必须留诊断**
+      // (旧实现把损坏当"没有清单"静默略过,用户永远不知道坏了一份)
+      opts.logger?.warn(
+        `[memory] 快照清单损坏,已从列表中排除: ${dir} — ${err instanceof Error ? err.message : String(err)}`,
+      );
+      continue;
+    }
     if (manifest === undefined) continue;
     items.push({
       name,
@@ -294,17 +307,40 @@ export async function createL1Snapshot(
   return { dir, name: snapshotNameOf(dir), manifest, records };
 }
 
-/** 读快照清单;不存在或版本不符返回 undefined。 */
+/**
+ * 读快照清单。
+ *
+ * **读侧分类**(文件层加固 T2.7):
+ * - 缺失 / 版本不符 → `undefined`(沿用既有"这份快照不可用"的语义);
+ * - **损坏 / 不可读 → 抛错**:旧实现把损坏也压成 `undefined`,于是"清单坏了"和
+ *   "没有清单"在调用方眼里一样——恢复时会选中一个半截快照却报 0 条成功。
+ */
 export async function readSnapshotManifest(dir: string): Promise<L1SnapshotManifest | undefined> {
-  const raw = await readJsonIfExists<Partial<L1SnapshotManifest>>(`${dir}/manifest.json`);
-  if (!raw || raw.version !== SNAPSHOT_VERSION) return undefined;
-  return raw as L1SnapshotManifest;
+  const r = await readJsonStrict<Partial<L1SnapshotManifest>>(`${dir}/manifest.json`, {
+    expectedVersion: SNAPSHOT_VERSION,
+  });
+  if (r.ok) return r.value as L1SnapshotManifest;
+  if (r.reason === 'missing' || r.reason === 'unknown_version') return undefined;
+  throw new Error(
+    `快照清单${r.reason === 'corrupt' ? '已损坏' : '不可读'}(${dir})${r.detail ? ` — ${r.detail}` : ''};` +
+      `原文件未改动,请人工确认后再恢复`,
+  );
 }
 
-/** 读回快照里的记录(与 `createL1Snapshot` 的写入格式必须成对:`atomicWriteJson` ↔ `readJsonIfExists`)。 */
+/**
+ * 读回快照里的记录(与 `createL1Snapshot` 的写入格式必须成对)。
+ *
+ * **损坏不再返回空数组**:空数组会让"记录文件坏了"表现成"这份快照有 0 条记录",
+ * 恢复下去就是静默丢数据。缺文件同样抛错——建快照时正文与清单是成对写入的,
+ * 只缺其一说明这份快照本身不完整。
+ */
 export async function readSnapshotRecords(dir: string): Promise<MemoryRecord[]> {
-  const raw = await readJsonIfExists<MemoryRecord[]>(`${dir}/l1-records.json`);
-  return Array.isArray(raw) ? raw : [];
+  const r = await readJsonStrict<MemoryRecord[]>(`${dir}/l1-records.json`);
+  if (!r.ok) {
+    const why = r.reason === 'missing' ? '缺失' : r.reason === 'corrupt' ? '已损坏' : '不可读';
+    throw new Error(`快照记录${why}(${dir})${r.detail ? ` — ${r.detail}` : ''}`);
+  }
+  return Array.isArray(r.value) ? r.value : [];
 }
 
 /** 快照与当前库的差异。 */

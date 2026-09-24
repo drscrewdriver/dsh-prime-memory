@@ -80,20 +80,31 @@ export class StateStore {
   }
 
   async load(): Promise<void> {
-    const r = await readJsonStrict<RawState>(this.file, {
-      expectedVersion: [STATE_FILE_VERSION_LEGACY, STATE_FILE_VERSION],
-    });
+    // 版本判定**不走** `expectedVersion`:历史 v1 平铺文件根本没有 version 字段,
+    // 而按契约"版本缺失"在 expectedVersion 下会被判成 unknown_version——那会把
+    // 老用户的文件拒掉。这里要的语义是:**只有 version === 1 或缺失才走 v1 迁移**,
+    // 其余(2 走 v2、其它一律拒绝)由下面的分支显式表达。
+    const r = await readJsonStrict<RawState>(this.file);
     if (!r.ok) {
       if (r.reason === 'missing') return; // 首次运行,合法
-      this.degradedReason = r.reason === 'unknown_version' ? `未知版本(${r.detail ?? ''})` : r.reason;
+      this.degradedReason = r.reason;
       this.logger?.error(
-        `[memory] state.json ${this.degradedReason} —— 拒绝加载(不迁移、不覆盖),记忆从默认空态起步;` +
-          `原文件已保留在 ${this.file},修复或移除后重启即可恢复`,
+        `[memory] state.json ${r.reason === 'corrupt' ? '损坏' : '不可读'} —— 拒绝加载(不迁移、不覆盖),` +
+          `记忆从默认空态起步;原文件已保留在 ${this.file},修复或移除后重启即可恢复`,
       );
       return;
     }
     const raw = r.value;
-    if (r.version === STATE_FILE_VERSION && raw.families && typeof raw.families === 'object') {
+    const v = r.version;
+    if (v !== undefined && v !== STATE_FILE_VERSION && v !== STATE_FILE_VERSION_LEGACY) {
+      this.degradedReason = `未知版本(${v})`;
+      this.logger?.error(
+        `[memory] state.json 版本未知(${v},支持 ${STATE_FILE_VERSION_LEGACY}/${STATE_FILE_VERSION}) —— ` +
+          `拒绝加载(不迁移、不覆盖),记忆从默认空态起步;原文件已保留在 ${this.file}`,
+      );
+      return;
+    }
+    if (v === STATE_FILE_VERSION && raw.families && typeof raw.families === 'object') {
       // v2:逐族宽容合并(新字段自动带默认值)
       this.buckets = {
         chat: { ...defaultState(), ...(raw.families.chat ?? {}) },

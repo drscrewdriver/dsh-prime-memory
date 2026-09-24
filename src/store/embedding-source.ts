@@ -13,10 +13,9 @@
  *   重嵌取消/部分失败 → 已切换(物理表即新维度,meta 已同步),缺失向量由周期
  *   backfill 补齐——不回滚(回滚需要再 drop 一次表,得不偿失)。
  */
-import { promises as fs } from 'node:fs'; // T2.11 读侧 strict 化后移除
 import * as path from 'node:path';
 import type { MemoryConfig } from '../config.js';
-import { atomicWriteText } from '../util/io.js';
+import { atomicWriteText, readJsonStrict } from '../util/io.js';
 import type { MemoryLogger } from '../types.js';
 import type { EmbeddingProviderInfo, EmbeddingService } from './embedding.js';
 import { NoopEmbeddingService, RemoteEmbeddingService } from './embedding.js';
@@ -66,6 +65,8 @@ export class EmbeddingSourceStore {
   private readonly file: string;
   private writeQueue: Promise<void> = Promise.resolve();
   private readonly logger?: MemoryLogger;
+  /** 只读降级原因(undefined = 正常):文件损坏/不可读时置位,此后 `set()` 一律失败。 */
+  private degraded: string | undefined;
 
   constructor(dataDir: string, logger?: MemoryLogger) {
     this.file = path.join(dataDir, 'embedding-source.json');
@@ -76,20 +77,35 @@ export class EmbeddingSourceStore {
     return { ...this.state };
   }
 
+  /**
+   * 读侧 strict 化(文件层加固 T2.11)。
+   *
+   * 旧实现是「裸 readFile + 外层 `catch {}`」:那个 catch 同时吞掉 ENOENT 与
+   * **JSON 解析错误**,于是「文件损坏」与「首次运行」长得一模一样——既无告警,
+   * 也会在随后被回写覆盖。现在三态分开:
+   * - `missing` → 默认 remote(历史行为,老用户无感),**不告警**;
+   * - `corrupt` / `unreadable` → 告警 + **只读降级**(后续 `set()` 抛错,不覆盖原文件);
+   * - 形状非法(解析成功但字段不对)→ 告警,同样按默认 remote 起步。
+   */
   async init(): Promise<void> {
-    try {
-      const raw = await fs.readFile(this.file, 'utf8');
-      const parsed = JSON.parse(raw) as Partial<EmbeddingSourceState>;
-      if (
-        (parsed.source === 'remote' || parsed.source === 'local' || parsed.source === 'off') &&
-        (parsed.activeModel === null || typeof parsed.activeModel === 'string')
-      ) {
-        this.state = { source: parsed.source, activeModel: parsed.activeModel };
-      } else {
-        this.logger?.warn('[memory] 嵌入源状态文件损坏,按默认 remote 起步');
-      }
-    } catch {
-      // 无文件 = 历史行为(跟随部署配置的远程嵌入)
+    const r = await readJsonStrict<Partial<EmbeddingSourceState>>(this.file);
+    if (!r.ok) {
+      if (r.reason === 'missing') return;
+      this.degraded = r.reason;
+      this.logger?.warn(
+        `[memory] 嵌入源状态文件${r.reason === 'corrupt' ? '损坏' : '不可读'}(${this.file}): ` +
+          `按默认 remote 起步且**不回写**,原文件已保留${r.detail ? ` — ${r.detail}` : ''}`,
+      );
+      return;
+    }
+    const parsed = r.value;
+    if (
+      (parsed.source === 'remote' || parsed.source === 'local' || parsed.source === 'off') &&
+      (parsed.activeModel === null || typeof parsed.activeModel === 'string')
+    ) {
+      this.state = { source: parsed.source, activeModel: parsed.activeModel };
+    } else {
+      this.logger?.warn('[memory] 嵌入源状态文件形状非法,按默认 remote 起步');
     }
   }
 
@@ -102,6 +118,10 @@ export class EmbeddingSourceStore {
    * set 永久钉在 rejected 链上。
    */
   async set(next: EmbeddingSourceState): Promise<void> {
+    if (this.degraded !== undefined) {
+      // 损坏文件绝不覆盖:重启会回到旧源,但用户至少能看到这条失败(不再"改了没生效")
+      throw new Error(`嵌入源状态文件${this.degraded === 'corrupt' ? '已损坏' : '不可读'},拒绝覆盖: ${this.file}`);
+    }
     this.state = { source: next.source, activeModel: next.activeModel };
     const write = this.writeQueue.then(() => this.persist());
     this.writeQueue = write.catch(() => {});
