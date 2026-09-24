@@ -33,6 +33,27 @@ async function forgeLock(file: string, pid: number, ageMs: number): Promise<void
   await utimes(`${file}.lock`, back, back);
 }
 
+/**
+ * 等锁文件真正被释放。
+ *
+ * ⚠️ 本机 `unlink` 异常慢(1.6~5.4s,见 findings §11):`withFileLock` 在值返回后才异步
+ * `unlink` 锁文件。若紧接着 `forgeLock` 覆盖同一路径或立刻 `stat` 判存在,会与未完成的
+ * `unlink` 竞态——前者会被慢 unlink 删掉、后者会误判"锁没释放"。这里轮询到锁文件消失,
+ * 让释放真正落盘后再继续,避免把环境 IO 慢误判成产品缺陷。(产品语义不变:调用方不被 unlink 阻塞)
+ */
+async function waitLockGone(lockPath: string, timeoutMs = 8000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      await stat(lockPath);
+    } catch {
+      return; // 已释放
+    }
+    if (Date.now() >= deadline) throw new Error(`锁文件未在 ${timeoutMs}ms 内释放: ${lockPath}`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
 describe('T4.1 / T4.2 独占创建与锁内容', () => {
   it('锁内执行;锁文件内容含 pid/hostname/startedAt/purpose', async () => {
     const d = await flTmp('lock-basic');
@@ -48,6 +69,7 @@ describe('T4.1 / T4.2 独占创建与锁内容', () => {
     expect(r.value).toBe('done');
     expect(r.waitMs).toBeGreaterThanOrEqual(0);
     expect(r.staleReclaimed).toBe(false);
+    await waitLockGone(`${f}.lock`); // 本机 unlink 慢:等释放真正落盘
     // 正常释放后锁文件不留
     await expect(stat(`${f}.lock`)).rejects.toThrow();
   });
@@ -74,6 +96,7 @@ describe('T4.1 / T4.2 独占创建与锁内容', () => {
 
     release();
     await expect(first).resolves.toEqual(expect.objectContaining({ value: 'first' }));
+    await waitLockGone(`${f}.lock`); // 等 first 释放落盘,避免 third 在锁还在时被陈旧回收误判
     const third = await withFileLock(f, async () => 'third', { timeoutMs: 2000 });
     expect(third.value).toBe('third');
   });
@@ -99,6 +122,7 @@ describe('T4.3 有界等待 + 超时显式抛错', () => {
         throw new Error('boom');
       }),
     ).rejects.toThrow('boom');
+    await waitLockGone(`${f}.lock`); // 本机 unlink 慢:等释放真正落盘
     await expect(stat(`${f}.lock`)).rejects.toThrow();
     // 后续仍可正常获取
     await expect(withFileLock(f, async () => 'ok')).resolves.toMatchObject({ value: 'ok' });
@@ -144,12 +168,14 @@ describe('T4.5 三种情形诊断可区分', () => {
     const r1 = await withFileLock(f, async () => 1);
     expect(r1.waitMs).toBeLessThan(1_000);
     expect(r1.staleReclaimed).toBe(false);
+    await waitLockGone(`${f}.lock`); // 等 r1 释放落盘,避免慢 unlink 误删下面 forgeLock 造的锁
     // 情形 2:陈旧回收 → staleReclaimed=true + 专属 warn
     const log2 = logs();
     await forgeLock(f, 999_998, 60_000);
     const r2 = await withFileLock(f, async () => 2, { staleMs: 30_000, logger: log2.logger });
     expect(r2.staleReclaimed).toBe(true);
     expect(log2.warn.some((m) => m.includes('回收陈旧文件锁'))).toBe(true);
+    await waitLockGone(`${f}.lock`); // 等 r2 释放落盘,避免误删下面 forgeLock 造的锁
     // 情形 3:超时 → FileLockTimeoutError 带 waitMs,且有 timeout= 诊断
     const log3 = logs();
     await forgeLock(f, process.pid, 1_000);

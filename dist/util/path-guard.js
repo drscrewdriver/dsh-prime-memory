@@ -33,7 +33,10 @@ async function checkParent(dir) {
         st = await fs.lstat(dir);
     }
     catch (err) {
-        // 父目录不存在:交给写侧的 ensureDir / 读侧的 ENOENT 处理,不算安全违例
+        // 父目录不存在:首次写是合法的(写侧 ensureDir 会创建它),不算安全违例。
+        // 交给写侧 ensureDir / 读侧 readFile 的 ENOENT 处理。
+        if (err?.code === 'ENOENT')
+            return;
         throw err;
     }
     if (isSymlink(st))

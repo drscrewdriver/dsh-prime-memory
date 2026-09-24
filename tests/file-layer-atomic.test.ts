@@ -8,7 +8,7 @@
  * 10s hook 超时 → 全文件**共用**一个临时目录、只在 afterAll 清一次,并显式放宽
  * hook 超时。别在 afterEach 里递归删目录。
  */
-import { mkdir, readFile, readdir, rmdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rmdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EmbeddingSourceStore } from '../src/store/embedding-source.js';
@@ -28,6 +28,24 @@ const collectLogs = () => {
     logger: { debug() {}, info: (m: string) => info.push(m), warn: (m: string) => warn.push(m), error() {} },
   };
 };
+
+/**
+ * 等锁文件真正被释放(本机 unlink 异常慢 1.6~5.4s,见 findings §11)。
+ * `withFileLock` 在值返回后才异步 `unlink` 锁文件,若紧接着 `readdir` 判"无残留"会
+ * 与未完成的 unlink 竞态,把环境 IO 慢误判成产品缺陷。轮询到锁文件消失再继续。
+ */
+async function waitLockGone(lockPath: string, timeoutMs = 8000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      await stat(lockPath);
+    } catch {
+      return;
+    }
+    if (Date.now() >= deadline) throw new Error(`锁文件未在 ${timeoutMs}ms 内释放: ${lockPath}`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
 
 describe('T1.3 孤儿 tmp 启动清理', () => {
   it('清理本插件命名的 tmp 与 legacy 固定名,跳过第三方 .tmp 与 runtime 子树,且每条留日志', async () => {
@@ -95,6 +113,7 @@ describe('T1.5 embedding-source 收编', () => {
     const d = await flTmp('clean');
     const store = new EmbeddingSourceStore(d);
     await store.set({ source: 'remote', activeModel: null });
+    await waitLockGone(join(d, 'embedding-source.json.lock')); // 等释放落盘,避免误判残留
     const files = await readdir(d);
     expect(files).toEqual(['embedding-source.json']); // 无 embedding-source.json.tmp 残留
     expect(await readFile(join(d, 'embedding-source.json'), 'utf8')).toBe(

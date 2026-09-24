@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { withFileLock } from './lock.js';
+import { assertSafePath, UnsafePathError } from './path-guard.js';
 export async function ensureDir(dir) {
     await fs.mkdir(dir, { recursive: true });
 }
@@ -55,6 +56,9 @@ export async function syncDirectory(dir, logger) {
 export async function atomicWriteText(file, content, opts = {}) {
     const dir = path.dirname(file);
     await ensureDir(dir);
+    // 路径安全(T5):父目录是 symlink / 目标是 symlink 或非普通文件 → 拒绝。
+    // 否则 rename 会把内容搬到链接指向的别处,或被引导去覆盖无关文件。
+    await assertSafePath(file);
     const tmp = `${file}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
     try {
         await fs.writeFile(tmp, content, 'utf-8');
@@ -147,11 +151,16 @@ export async function cleanupOrphanTmp(dataDir, logger) {
 export async function readJsonStrict(file, opts = {}) {
     let raw;
     try {
+        // 路径安全(T5):违例不抛到调用方,而是归类成 `unreadable` + 明确 detail
+        // (含 violation 类型),让 store 走既有的只读降级与诊断通道。
+        await assertSafePath(file);
         raw = await fs.readFile(file, 'utf-8');
     }
     catch (err) {
         const code = err?.code;
         const detail = err instanceof Error ? err.message : String(err);
+        if (err instanceof UnsafePathError)
+            return { ok: false, reason: 'unreadable', detail };
         if (code === 'ENOENT')
             return { ok: false, reason: 'missing' };
         return { ok: false, reason: 'unreadable', detail };
