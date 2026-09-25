@@ -7,6 +7,21 @@
 
 This file covers the **0.12.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 
+## [0.17.0-dsh0.1.7.1] — 2026-09-25
+
+> First release of the **host 0.1.7** compatibility line (dist-tag `dsh-0.1.7`, based on main @ 85d9b05). **Requires host ≥0.1.7-rc.1**; hosts 0.1.5 / 0.1.6 should stay on the `dsh-0.1.5` tag. Contains everything from main plus the adaptation below.
+
+### Changed
+
+- **Runtime toggles moved into a Config volatile section (0.1.7 declarative settings).** Host 0.1.7 removed both generations of imperative registration APIs (`settings.register` / `installSection`). The runtime toggles (master/capture/distill/recall, distill route chains, remote-embedding overrides, write-delete gate — 20 keys) are now carried by a whole-section `.volatile()` on `memorySchema.live`: the host projects volatile fields into a settings form automatically, and runtime changes flow through `ctx.settings.update` → configEditor → profile patch → loader volatile-only commit (no plugin remount). The `LiveSettingsHandle` contract is unchanged; RPC and all consumers untouched. The plugin ships its own custom settings page, so the host's auto-generated form page is suppressed (`suppressAutoSettingsForm`).
+- **⚠️ Old setting values do not migrate automatically**: the legacy `dsh-memory` section in `settings.yaml` holds flat top-level keys that do not match the new `live.*` paths (and its boolean `conflictFreeze` collides with the same-named object section in the new Config), so the host importer rejects the whole section. After upgrading, hand-write the old values into the profile patch as `- id: dsh-memory / config: { live: {…} }` (key names are identical to the old namespace, just one `live.` level deeper).
+- devDeps bumped to the 0.1.7 stack (cordis 4.0.4 / schemastery 3.18.4 / cordis-plugin-loader 1.0.5); not shipped to consumers.
+
+### Fixed
+
+- **Silent first-write loss regression**: lock files are created before the write; when the target's parent directory did not exist yet, `open('wx')` failed with ENOENT and stores swallowed it as a warn. `rmwJson` now `ensureDir`s before acquiring the lock (included from the main line).
+- Also includes everything from the main line: file-layer hardening (atomic writes / read-side classification / version fail-closed / file locking / path safety — see [Unreleased] entries).
+
 ## [Unreleased]
 
 ### Added

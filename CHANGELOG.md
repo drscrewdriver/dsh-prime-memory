@@ -56,6 +56,22 @@
 - **`dsh-memory/embedding-reindex` 声明了却恒返 404。** 端点写在契约里，但既缺席 `MEMORY_ENDPOINTS` 白名单、也没有分发 `case`；同时 `startReindex()` 是**死代码**，设置页「向量索引」区块因此只有"取消"没有"开始"。补白名单 + `case` + 用例。
 - **`UiRecord.sourceMessageIds` 是死字段。** 它读的是 `l1_records` **从不存在的列**，永远回退 `[]`，于是记录面板的来源行**从未渲染过**。已替换为读真实数据的 `sourceAnchors`。
 
+## [0.17.0-dsh0.1.7.1] — 2026-09-25
+
+> 宿主 **0.1.7** 兼容线首发（dist-tag `dsh-0.1.7`，基于 main @ 85d9b05）。**仅适用于宿主 ≥0.1.7-rc.1**；
+> 0.1.5 / 0.1.6 宿主请继续使用 `dsh-0.1.5` tag 的版本线。内容 = main 全量 + 以下适配。
+
+### 变更
+
+- **运行时开关迁入 Config volatile 节（0.1.7 声明式设置面）。** 宿主 0.1.7 删除了 `settings.register` / `installSection` 两代命令式注册 API，运行时开关（总/捕获/蒸馏/召回、蒸馏路由链、远程嵌入覆盖、写删门等 20 键）改为 `memorySchema.live` 整节 `.volatile()` 承载：宿主把 volatile 字段自动投影成设置表单，运行时变更经 `ctx.settings.update` → configEditor 落 profile patch → loader volatile-only 提交（不 remount 插件）。`LiveSettingsHandle` 契约不变，RPC 与消费方零改动。**自带自定义设置页 → 已关掉宿主自动表单页**（`suppressAutoSettingsForm`）。
+- **⚠️ 旧设置值不自动迁移**：旧 `settings.yaml` 的 `dsh-memory` section 是顶层扁平键，与新 `live.*` 路径不匹配（且 `conflictFreeze` 布尔与新 Config 同名对象节冲突），宿主导入器会整段拒收——升级后请把旧值手工写进 profile patch 的 `- id: dsh-memory / config: { live: {…} }`（键名与旧 namespace 完全一致，仅多一层 `live.` 前缀）。
+- devDeps 升 0.1.7 系（cordis 4.0.4 / schemastery 3.18.4 / cordis-plugin-loader 1.0.5），不随包发布。
+
+### 修复
+
+- **首写静默丢失回归**：锁文件先于写入创建，目标父目录未建时 `open('wx')` ENOENT 被各 store `persist()` 吞成 warn → 首写静默丢失。`rmwJson` 拿锁前 `ensureDir`（随 main 线修复一并包含）。
+- 另含 main 线全部内容：文件层工程加固（原子写/读侧分类/版本 fail-closed/文件锁/路径安全，详见 [0.16.1] 与 Unreleased 各条）。
+
 ## [0.16.1] — 2026-09-24
 
 ### 新增
