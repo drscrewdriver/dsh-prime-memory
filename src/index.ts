@@ -18,7 +18,7 @@ import { MemoryRunner } from './pipeline/runner.js';
 import { RebuildController } from './pipeline/rebuild.js';
 import { RuminateController } from './pipeline/ruminate.js';
 import { registerMemoryRpc, PLUGIN_VERSION } from './stats.js';
-import { registerLiveSettings } from './settings.js';
+import { registerLiveSettings, suppressAutoSettingsForm } from './settings.js';
 import { NoopEmbeddingService, type EmbeddingProviderInfo } from './store/embedding.js';
 import {
   EmbeddingManager,
@@ -111,8 +111,11 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     }
   }
 
-  // ── 记忆模式运行时开关(官方 settings 服务,live 生效;缺失时恒开) ──
-  const live = registerLiveSettings(ctx, logger);
+  // ── 记忆模式运行时开关(0.1.7 声明式:Config 的 live volatile 节;缺失时恒开) ──
+  const live = registerLiveSettings(ctx, config, logger);
+  // 自带自定义设置页(client 半 settings.section「记忆」分节)→ 关掉宿主按
+  // volatile 字段自动生成的表单页,避免同一插件出现两份设置入口。
+  suppressAutoSettingsForm(ctx);
 
   /** 插件停机标志:置位后不再发起后台 embeddings 调用(dispose 序最先设置)。 */
   let disposed = false;

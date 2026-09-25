@@ -1,19 +1,27 @@
 /**
- * 记忆模式运行时开关(官方 settings 服务,live 生效)。
+ * 记忆模式运行时开关(0.1.7 声明式设置面)。
  * 语义:静态 config(cordis.patch.yml,部署上限)AND 运行时开关,两者同时开才工作。
- * settings 服务缺失(如 headless)时退化为恒开——行为与无开关版本一致。
+ *
+ * **0.1.7 迁移**(host dsh-v0.1.7-rc.1,compat/0.1.7 线):宿主删除了
+ * `settings.register` / `installSection` 两代命令式注册面,开关改由 Config 的
+ * **volatile 节**承载(`memorySchema.live`,src/config.ts)——宿主把 volatile
+ * 字段自动投影成设置表单,运行时变更提交进引用并广播 `loader/volatile-update`,
+ * 不 remount 插件。本模块只剩一个薄句柄:
+ * - 读 = `config.live.get()` 冻结快照 + `resolveSettings` 防御性解析(无缓存可失真);
+ * - 写 = `ctx.settings.update(ENTRY_ID, { live })` → configEditor 落 profile
+ *   patch → loader 做 volatile-only 提交(生命周期保留)。settings-set RPC
+ *   (stats.ts)与本插件客户端面板经此读写,patch 合并语义与旧 scope 一致。
+ * - 命名空间 = 本插件 loader entry id `dsh-memory`(cordis.patch.yml 固定),
+ *   与 0.1.6 以前的 settings namespace 恰好同串——旧 settings.yaml 的
+ *   `dsh-memory` section 因此能被宿主导入器按 entry id 对上(§6 迁移)。
  *
  * v0.9.0 契约:含远程嵌入运行时覆盖四键(embedRemote*)与记忆写删门 memoryMutate
  * (自 dist 逆向补全——settings 缺键 = 用户已存值被静默丢弃,红线)。
  */
 import type { Context } from '@deepseek-ai/cordis';
-// 纯类型导入:拉入 ctx.settings 的 Context 声明合并 + namespace 品牌类型。
-// 铁律:禁止从 '@deepseek-ai/dsh-settings' 做**值**导入——v0.1.3+ 移除了
-// settingsNamespace 等导出符号,值导入会让模块加载期直接 Failed to load plugins;
-// 类型导入编译后擦除,无加载风险。
-import type {} from '@deepseek-ai/dsh-settings';
-import type { SettingsNamespace } from '@deepseek-ai/dsh-settings';
-import Schema from '@deepseek-ai/schemastery';
+// 纯类型导入:拉入 `loader/volatile-update` 事件声明(module augmentation)。
+import type {} from '@deepseek-ai/cordis-plugin-loader';
+import type { MemoryConfig } from './config.js';
 import { EFFORT_CHOICES } from './config.js';
 import type { MemoryLogger } from './types.js';
 
@@ -77,25 +85,24 @@ export function validateDistillChain(
   return null;
 }
 
-/**
- * settings scope 的本地结构类型:与官方 SettingsScope<T> 的 owner 面一致
- * (get/watch/update),但不依赖包级类型导出,跨 DSH 版本稳定。
- */
-export interface SettingsScope<T> {
-  get(): T;
-  watch(callback: (next: T, prev: T) => void | Promise<void>): () => void;
-  update(patch: object): Promise<void>;
-}
-
 export interface LiveSettingsHandle {
-  /** settings 服务是否可用(不可用时 UI 侧隐藏开关面板) */
+  /** 读取面是否可用(0.1.7 起 volatile 引用恒在,恒为 true;写面缺失时 update 抛错) */
   supported: boolean;
   get(): MemoryLiveSettings;
-  /** UI 写入入口;不支持时抛错由 RPC 层转成业务错误 */
+  /** UI 写入入口;写面缺失或宿主拒绝时抛错,由 RPC 层转成业务错误 */
   update(patch: Partial<MemoryLiveSettings>): Promise<void>;
 }
 
-const NS = 'dsh-memory' as SettingsNamespace;
+/** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
+export const MEMORY_ENTRY_ID = 'dsh-memory';
+
+/** settings 服务的结构化最小面(不依赖包级类型导出,跨 DSH 版本稳定)。 */
+interface SettingsFormsLike {
+  /** 合并可编辑字段进 entry 的 profile patch(0.1.7 SettingsForms.update)。 */
+  update(ns: string, patch: object, expectedRevision?: number): Promise<void>;
+  /** 登记本实例的页面策略;自带自定义页的插件用它关掉自动生成的表单页。 */
+  configure?(presentation: { auto?: boolean }, owner?: unknown): () => void;
+}
 
 const ALWAYS_ON: MemoryLiveSettings = {
   enabled: true,
@@ -120,225 +127,62 @@ const ALWAYS_ON: MemoryLiveSettings = {
   conflictFreeze: false,
 };
 
-/**
- * 进程内 scope 复用(fiber 重启重挂)。
- * dsh-settings 的 register 把注册挂在其服务自身 ctx 的 effect 上,不随本插件
- * fiber 销毁——fiber 重启后二次 register 会抛 already registered。模块级状态在
- * fiber 重启间存活:复用上次注册的 scope 并重挂 watcher,否则开关读写停在 stub。
- *
- * 同时按服务实例(cachedSvc)判活:settings 服务自身重启时其注册随服务 ctx 销毁,
- * 旧 scope 变死引用——新实例与缓存不符时作废缓存、向新实例重新注册
- * (用户层由服务从磁盘重解析,已存开关不丢)。
- */
-let cachedScope: SettingsScope<MemoryLiveSettings> | undefined;
-let cachedUnwatch: (() => void) | undefined;
-let cachedSvc: unknown;
-
-export function liveSettingsSchema(): Schema<MemoryLiveSettings> {
-  const budget = () => Schema.number().min(0).max(1_000_000).default(0);
-  // 层链条目形状与 distillChain 相同(档位必填、'' = 跟随);写入校验另在
-  // settings-set 门做逐层 requireExplicitHead(schema 层只管形状默认,语义门在 host)
-  const chainEntry = () => Schema.object({
-    provider: Schema.string().default(''),
-    model: Schema.string().default(''),
-    reasoningEffort: Schema.union([...EFFORT_CHOICES]).default(''),
-  });
-  return Schema.object({
-    enabled: Schema.boolean().default(true),
-    capture: Schema.boolean().default(true),
-    distill: Schema.boolean().default(true),
-    recall: Schema.boolean().default(true),
-    reasoningEffort: Schema.union([...EFFORT_CHOICES]).default(''),
-    distillProvider: Schema.string().default(''),
-    distillModel: Schema.string().default(''),
-    distillChain: Schema.array(chainEntry()).default([]),
-    distillLayerChains: Schema.object({
-      l1: Schema.array(chainEntry()).default([]),
-      l2: Schema.array(chainEntry()).default([]),
-      l3: Schema.array(chainEntry()).default([]),
-    }).default({ l1: [], l2: [], l3: [] }),
-    distillBudgets: Schema.object({
-      extract: budget(),
-      dedup: budget(),
-      l2: budget(),
-      l3: budget(),
-      // 图谱投影输出预算(投影 job 单批 ≤8 条记录,默认 8000)
-      graph: budget(),
-    }).default({ extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }),
-    distillMaxInputChars: Schema.number().min(0).max(1_000_000).default(0),
-    // 蒸馏通道运行时覆盖:'' = 跟随部署 config / 'host' = 复用宿主 / 'direct' = 原生直连
-    distillMode: Schema.union(['', 'host', 'direct']).default(''),
-    directBaseURL: Schema.string().default(''),
-    // 直连 apiKey 属机密:schema 只接受字符串,不回读到 UI、不落日志
-    directApiKey: Schema.string().default(''),
-    // 远程嵌入连接运行时覆盖(设置 UI 可编辑,替代部署 YAML;dimension 上限与部署 schema 一致)
-    embedRemoteBaseURL: Schema.string().default(''),
-    embedRemoteApiKey: Schema.string().default(''),
-    embedRemoteModel: Schema.string().default(''),
-    embedRemoteDimensions: Schema.number().min(0).max(8192).default(0),
-    // 记忆写删权限门:默认 false(模型写删风险高,须显式在面板开启高权限模式)
-    memoryMutate: Schema.boolean().default(false),
-    // §C 人工冲突裁决总开关:默认 false(冻结消耗注意力,不可默认全开)
-    conflictFreeze: Schema.boolean().default(false),
+/** 自带自定义设置页(settings.section 顶层「记忆」分节,client 半挂载):
+ *  关掉宿主按 volatile 字段自动生成的表单页,避免同一个插件出现两份设置入口。
+ *  settings 服务缺失/未挂 configure 时静默跳过(自动表单页照常生成,无害)。 */
+export function suppressAutoSettingsForm(ctx: Context): void {
+  ctx.inject(['settings'], (sctx) => {
+    sctx.effect(() => {
+      const svc = sctx.get('settings') as SettingsFormsLike | undefined;
+      return svc?.configure?.({ auto: false }, ctx.fiber) ?? (() => {});
+    });
   });
 }
 
-export function registerLiveSettings(ctx: Context, logger: MemoryLogger): LiveSettingsHandle {
-  // settings 服务可能晚于插件就绪(provider 先读盘再发布):先探测,未上线则监听补挂
-  let inner: LiveSettingsHandle = {
-    supported: false,
-    get: () => ALWAYS_ON,
-    update: () => Promise.reject(new Error('settings 服务不可用')),
-  };
+export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger: MemoryLogger): LiveSettingsHandle {
+  // 读面:volatile 引用恒在(由 Config schema 默认值兜底),读数现取现解析,
+  // 无进程内缓存——旧「服务就绪探测 / scope 复用 / 实例判活」整套机制随
+  // 命令式注册面一起删除(0.1.7 无注册,自然无 already-registered 竞态)。
+  const ref = config.live;
+  const read = (): MemoryLiveSettings => resolveSettings(ref.get());
 
-  /** 挂接一个(新注册或复用的)scope:重挂前先摘旧 watcher,防跨重启累积。 */
-  const wireScope = (scope: SettingsScope<MemoryLiveSettings>): LiveSettingsHandle => {
-    cachedUnwatch?.();
-    let current = resolveSettings(scope.get());
-    cachedUnwatch = scope.watch((next) => {
-      const prev = current;
-      current = resolveSettings(next);
-      const b = current.distillBudgets;
-      const budgetNote = (b.extract || b.dedup || b.l2 || b.l3 || b.graph)
-        ? `,输出预算=抽取 ${b.extract || '默认'}/去重 ${b.dedup || '默认'}/L2 ${b.l2 || '默认'}/L3 ${b.l3 || '默认'}/图谱 ${b.graph || '默认'}`
-        : '';
-      const inputNote = current.distillMaxInputChars > 0 ? `,输入预算=${current.distillMaxInputChars}` : '';
-      logger.info(
-        `[memory] 记忆模式开关更新:总=${current.enabled} 捕获=${current.capture} 蒸馏=${current.distill} 召回=${current.recall}` +
-          `,蒸馏思考=${current.reasoningEffort || '跟随配置'}(此前 总=${prev.enabled})` +
-          (current.distillProvider && current.distillModel
-            ? `,蒸馏模型=${current.distillProvider}/${current.distillModel}`
-            : '') + budgetNote + inputNote,
-      );
-    });
-    return {
-      supported: true,
-      get: () => current,
-      update: async (patch) => {
-        await scope.update(patch);
-      },
-    };
-  };
+  // 变更诊断(替代旧 scope.watch):宿主把 volatile-only 变更提交进引用后,
+  // 向持有 fiber 广播一次 loader/volatile-update(路径为键数组,只关心 live 节)。
+  ctx.on('loader/volatile-update', (paths) => {
+    if (!paths.some((p) => p[0] === 'live')) return;
+    const current = read();
+    const b = current.distillBudgets;
+    const budgetNote = (b.extract || b.dedup || b.l2 || b.l3 || b.graph)
+      ? `,输出预算=抽取 ${b.extract || '默认'}/去重 ${b.dedup || '默认'}/L2 ${b.l2 || '默认'}/L3 ${b.l3 || '默认'}/图谱 ${b.graph || '默认'}`
+      : '';
+    const inputNote = current.distillMaxInputChars > 0 ? `,输入预算=${current.distillMaxInputChars}` : '';
+    logger.info(
+      `[memory] 记忆模式开关更新:总=${current.enabled} 捕获=${current.capture} 蒸馏=${current.distill} 召回=${current.recall}` +
+        `,蒸馏思考=${current.reasoningEffort || '跟随配置'}` +
+        (current.distillProvider && current.distillModel
+          ? `,蒸馏模型=${current.distillProvider}/${current.distillModel}`
+          : '') + budgetNote + inputNote,
+    );
+  });
 
-  /** 作废进程内缓存(服务下线/实例替换时旧注册已随服务销毁)。 */
-  const invalidateCache = (): void => {
-    cachedScope = undefined;
-    cachedSvc = undefined;
-    cachedUnwatch?.();
-    cachedUnwatch = undefined;
-  };
-
-  const tryAttach = (): boolean => {
-    const settings = ctx.get('settings');
-    if (!settings) return false;
-    // 仅当缓存来自同一服务实例时才可复用——换了实例(服务重启/替换)就重新注册
-    if (cachedScope && cachedSvc === settings) {
-      try {
-        inner = wireScope(cachedScope);
-        const c = inner.get();
-        logger.info(
-          `[memory] 记忆模式开关重挂(复用进程内注册,当前:总=${c.enabled} 捕获=${c.capture} 蒸馏=${c.distill} 召回=${c.recall}` +
-            `,蒸馏思考=${c.reasoningEffort || '跟随配置'})`,
-        );
-        return true;
-      } catch (err) {
-        logger.warn(`[memory] 记忆模式开关缓存复用失败,改为重新注册: ${err instanceof Error ? err.message : String(err)}`);
-        invalidateCache();
-      }
-    }
-    // 分支 1(全版本存在):register 返回 owner 面的 SettingsScope(get/watch/update),
-    // 本插件的 live 开关读写/UI 写入全走它——优先级高于 installSection:
-    // 后者返回 void 只走 hooks(setSource/onChange),桥接后 update 写路径不可用,
-    // 仅当宿主只暴露 installSection 时才作降级回退(见分支 2)。
-    if (typeof (settings as { register?: unknown }).register === 'function') {
-      try {
-        const scope = (settings as { register: <T>(ns: SettingsNamespace, schema: Schema, options?: object) => SettingsScope<T> })
-          .register<MemoryLiveSettings>(NS, liveSettingsSchema(), { applies: 'live' });
-        cachedScope = scope;
-        cachedSvc = settings;
-        inner = wireScope(scope);
-        logger.info(
-          `[memory] 记忆模式开关就绪(settings.register,命名空间 dsh-memory,当前:总=${inner.get().enabled} 捕获=${inner.get().capture} 蒸馏=${inner.get().distill} 召回=${inner.get().recall}` +
-            `,蒸馏思考=${inner.get().reasoningEffort || '跟随配置'})`,
-        );
-        return true;
-      } catch (err) {
-        logger.warn(`[memory] 记忆模式开关注册失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
-        return true; // 已拿到服务但注册失败,不再重试
-      }
-    }
-    // 分支 2(v0.1.2+ 服务面,仅 register 缺失时):installSection(owner, ns, schema,
-    // entry, hooks) 只回 hooks——get 走 setSource 注入的 thunk,变更通知走 onChange,
-    // update 桥接为显式拒绝(UI 写入报业务错误;宿主未删 register 时不会走到这)。
-    if (typeof (settings as { installSection?: unknown }).installSection === 'function') {
-      try {
-        let source: () => MemoryLiveSettings = () => ({ ...ALWAYS_ON });
-        let notify: (() => void) | undefined;
-        const bridge: SettingsScope<MemoryLiveSettings> = {
-          get: () => resolveSettings(source()),
-          watch: (callback) => {
-            notify = () => void callback(bridge.get(), bridge.get());
-            return () => {
-              notify = undefined;
-            };
-          },
-          update: () => Promise.reject(new Error('installSection 桥接模式不支持运行时写入')),
-        };
-        (settings as unknown as {
-          installSection: (
-            owner: Context,
-            ns: SettingsNamespace,
-            schema: Schema,
-            entry: MemoryLiveSettings,
-            hooks: { setSource(current: () => MemoryLiveSettings): void; onChange(): void },
-          ) => void;
-        }).installSection(ctx, NS, liveSettingsSchema(), { ...ALWAYS_ON }, {
-          setSource: (current) => {
-            source = current;
-          },
-          onChange: () => notify?.(),
-        });
-        cachedScope = bridge;
-        cachedSvc = settings;
-        inner = wireScope(bridge);
-        logger.info('[memory] 记忆模式开关就绪(settings.installSection 桥接,运行时写入不可用)');
-        return true;
-      } catch (err) {
-        logger.warn(`[memory] 记忆模式开关 installSection 桥接失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
-        return true;
-      }
-    }
-    // 分支 3(双 API 皆无):settings 服务在但没有可用注册面——保持全开降级,
-    // 不再重试(服务面不会凭空长出新 API)。
-    logger.warn('[memory] settings 服务无可用的 register/installSection API,记忆模式开关降级为恒开');
-    return true;
-  };
-
-  if (!tryAttach()) {
-    logger.warn('[memory] settings 服务未就绪,记忆模式开关暂不可用(保持全开,等待服务上线)');
-  }
-  // 无论初始是否成功都监听服务迁移:下线 → 作废缓存;换实例 → 作废后立即重挂
-  ctx.on('internal/service', (name: string, impl: unknown) => {
-    if (name !== 'settings') return;
-    if (!impl) {
-      if (cachedSvc !== undefined) {
-        invalidateCache();
-        logger.warn('[memory] settings 服务下线,开关缓存已作废(期间读数为冻结值,恢复后自动重挂)');
-      }
-      return;
-    }
-    // 实例变了才作废缓存;但 tryAttach 无条件执行(幂等)——同一事件会广播到
-    // 所有存活 fiber 的监听器,后跑的那个也必须修好自己闭包里的 inner
-    if (impl !== cachedSvc) invalidateCache();
-    tryAttach();
+  // 写面:settings 服务(宿主服务,可能晚于本插件就绪)——用 inject 惰性握手,
+  // 服务替换时 cordis 会重跑回调换上新实例,无需手工判活。
+  let forms: SettingsFormsLike | undefined;
+  ctx.inject(['settings'], (sctx) => {
+    forms = sctx.get('settings') as SettingsFormsLike | undefined;
   });
 
   return {
-    get supported(): boolean {
-      return inner.supported;
+    supported: true,
+    get: read,
+    update: async (patch) => {
+      if (!forms) throw new Error('settings 服务不可用,记忆开关无法写入');
+      // patch 合并语义与旧 scope.update 一致:只改传入键。合并在插件侧完成后
+      // **整节提交**——宿主的表单 update 按 volatile 节整体写入 profile patch,
+      // 部分对象会覆盖掉未提交字段。写失败(update 抛错)对调用方可观测。
+      const next: MemoryLiveSettings = { ...read(), ...patch };
+      await forms.update(MEMORY_ENTRY_ID, { live: next });
     },
-    get: (): MemoryLiveSettings => inner.get(),
-    update: (patch: Partial<MemoryLiveSettings>): Promise<void> => inner.update(patch),
   };
 }
 

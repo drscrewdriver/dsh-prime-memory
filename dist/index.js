@@ -17,7 +17,7 @@ import { MemoryRunner } from './pipeline/runner.js';
 import { RebuildController } from './pipeline/rebuild.js';
 import { RuminateController } from './pipeline/ruminate.js';
 import { registerMemoryRpc, PLUGIN_VERSION } from './stats.js';
-import { registerLiveSettings } from './settings.js';
+import { registerLiveSettings, suppressAutoSettingsForm } from './settings.js';
 import { NoopEmbeddingService } from './store/embedding.js';
 import { EmbeddingManager, EmbeddingSourceStore, makeLocalServiceFactory, resolveInitialEmbedding, } from './store/embedding-source.js';
 import { ModelDownloadQueue } from './store/download-queue.js';
@@ -92,8 +92,11 @@ export async function apply(ctx, config) {
             logger.warn(`[memory] 孤儿临时文件扫描失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
         }
     }
-    // ── 记忆模式运行时开关(官方 settings 服务,live 生效;缺失时恒开) ──
-    const live = registerLiveSettings(ctx, logger);
+    // ── 记忆模式运行时开关(0.1.7 声明式:Config 的 live volatile 节;缺失时恒开) ──
+    const live = registerLiveSettings(ctx, config, logger);
+    // 自带自定义设置页(client 半 settings.section「记忆」分节)→ 关掉宿主按
+    // volatile 字段自动生成的表单页,避免同一插件出现两份设置入口。
+    suppressAutoSettingsForm(ctx);
     /** 插件停机标志:置位后不再发起后台 embeddings 调用(dispose 序最先设置)。 */
     let disposed = false;
     // ── 会话档位存储(sessionId → auto/chat/work/off;默认档 = config.family) ──

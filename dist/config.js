@@ -13,6 +13,64 @@ import { WING_DEFAULT_ENABLED, WING_FALLBACK } from './types.js';
  * schema(config/settings)、运行时解析与 RPC 写入门共用,勿在别处再抄字面量表。
  */
 export const EFFORT_CHOICES = ['', 'off', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+/**
+ * 运行时开关节(0.1.7 声明式设置面的唯一事实源)。
+ *
+ * **整个对象一个 `.volatile()`**:宿主把它投影成设置表单,运行时变更只提交引用
+ * (不 remount 插件),读侧用 `config.live.get()` 取冻结快照。键集与默认值是
+ * v0.9.0 契约(含远程嵌入覆盖四键 embedRemote* 与写删门 memoryMutate,自 dist
+ * 逆向补全——缺一个键 = 用户已存值被静默丢弃,红线,contract-keys.test.ts 守卫)。
+ *
+ * ⚠️ 不得在节内再标 `.volatile()`(volatile 嵌套 volatile 会被宿主拒绝)。
+ */
+export function liveSettingsSchema() {
+    const budget = () => Schema.number().min(0).max(1_000_000).default(0);
+    // 层链条目形状与 distillChain 相同(档位必填、'' = 跟随);写入校验另在
+    // settings-set 门做逐层 requireExplicitHead(schema 层只管形状默认,语义门在 host)
+    const chainEntry = () => Schema.object({
+        provider: Schema.string().default(''),
+        model: Schema.string().default(''),
+        reasoningEffort: Schema.union([...EFFORT_CHOICES]).default(''),
+    });
+    return Schema.object({
+        enabled: Schema.boolean().default(true),
+        capture: Schema.boolean().default(true),
+        distill: Schema.boolean().default(true),
+        recall: Schema.boolean().default(true),
+        reasoningEffort: Schema.union([...EFFORT_CHOICES]).default(''),
+        distillProvider: Schema.string().default(''),
+        distillModel: Schema.string().default(''),
+        distillChain: Schema.array(chainEntry()).default([]),
+        distillLayerChains: Schema.object({
+            l1: Schema.array(chainEntry()).default([]),
+            l2: Schema.array(chainEntry()).default([]),
+            l3: Schema.array(chainEntry()).default([]),
+        }).default({ l1: [], l2: [], l3: [] }),
+        distillBudgets: Schema.object({
+            extract: budget(),
+            dedup: budget(),
+            l2: budget(),
+            l3: budget(),
+            // 图谱投影输出预算(投影 job 单批 ≤8 条记录,默认 8000)
+            graph: budget(),
+        }).default({ extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }),
+        distillMaxInputChars: Schema.number().min(0).max(1_000_000).default(0),
+        // 蒸馏通道运行时覆盖:'' = 跟随部署 config / 'host' = 复用宿主 / 'direct' = 原生直连
+        distillMode: Schema.union(['', 'host', 'direct']).default(''),
+        directBaseURL: Schema.string().default(''),
+        // 直连 apiKey 属机密:schema 只接受字符串,不回读到 UI、不落日志
+        directApiKey: Schema.string().default(''),
+        // 远程嵌入连接运行时覆盖(设置 UI 可编辑,替代部署 YAML;dimension 上限与部署 schema 一致)
+        embedRemoteBaseURL: Schema.string().default(''),
+        embedRemoteApiKey: Schema.string().default(''),
+        embedRemoteModel: Schema.string().default(''),
+        embedRemoteDimensions: Schema.number().min(0).max(8192).default(0),
+        // 记忆写删权限门:默认 false(模型写删风险高,须显式在面板开启高权限模式)
+        memoryMutate: Schema.boolean().default(false),
+        // §C 人工冲突裁决总开关:默认 false(冻结消耗注意力,不可默认全开)
+        conflictFreeze: Schema.boolean().default(false),
+    }).volatile();
+}
 export const memorySchema = Schema.object({
     dataDir: Schema.string().default(''),
     family: Schema.union(['auto', 'chat', 'work']).default('auto'),
@@ -147,6 +205,8 @@ export const memorySchema = Schema.object({
     }),
     tools: Schema.boolean().default(true),
     benchControl: Schema.boolean().default(false),
+    // 运行时开关:整个 volatile 节,设置页自动成表(0.1.7 起,见 liveSettingsSchema)
+    live: liveSettingsSchema(),
 });
 export function resolveDataDir(cfg) {
     if (cfg.dataDir)

@@ -223,6 +223,23 @@ describe('memory live settings key registry', () => {
     expect(defaults.benchControl).toBe(false);
     // §C 矛盾冻结:新功能默认关(冻结消耗人的注意力,不可默认全开)
     expect((defaults.conflictFreeze as Record<string, unknown>).enabled).toBe(false);
+    // 0.1.7 迁移:运行时开关整节迁入 Config 的 live volatile 节(原 settings
+    // 服务 dsh-memory 命名空间)——节缺键 = 用户已存开关值被静默丢弃,红线。
+    // 注意:volatile 节解析出来是**引用**(有 .get()),先解引用再比对键集
+    const rawLive = defaults.live as { get?: () => Record<string, unknown> } | undefined;
+    const live = typeof rawLive?.get === 'function' ? rawLive.get() : (rawLive as Record<string, unknown>);
+    expect(live).toBeDefined();
+    for (const k of MEMORY_LIVE_SETTINGS_KEYS) {
+      expect(live).toHaveProperty(k);
+    }
+    // 开关默认值抽查:总/捕获/蒸馏/召回默认开,高权限门与冻结裁决默认关
+    expect(live.enabled).toBe(true);
+    expect(live.capture).toBe(true);
+    expect(live.distill).toBe(true);
+    expect(live.recall).toBe(true);
+    expect(live.memoryMutate).toBe(false);
+    expect(live.conflictFreeze).toBe(false);
+    expect(live.embedRemoteDimensions).toBe(0);
   });
 
   it('resolveDataDir falls back to dshHomePath("memory") shape', () => {
