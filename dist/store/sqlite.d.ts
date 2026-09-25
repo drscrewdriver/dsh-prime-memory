@@ -16,7 +16,8 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
-import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
+import { type SupersedeInfo } from './supersede.js';
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
     id: string;
@@ -145,6 +146,48 @@ export declare class MemoryDb {
     /** 批量删除 L1(元数据 + 向量 + FTS),返回删除条数。IN 按 ≤900 分块(避变量数上限)。
      *  删除成功后触发图谱删除传播(来源全失效的节点/边惰性标 archived;失败不影响删除结果)。 */
     deleteL1Batch(ids: string[]): number;
+    /**
+     * **软删**(记忆退场):保留主表行,撤出检索面。
+     *
+     * 与 `deleteL1Batch` 的差别**只有一处**:不动 `l1_records` 行本身。
+     * `valid_to` 闭合 + `metadata_json` 写取代标记 → 记录仍能被 `listL1` 列出、
+     * 能被 `clearRetireMarker` + upsert 恢复;而 FTS 与向量行照旧删除,于是检索面
+     * (含去重候选召回)自然看不到它 —— **检索 SQL 一行都不用改**,活动记录零漂移
+     * 因此是构造性的,不是比对出来的。
+     *
+     * 顺序刻意如此:先打标记(可逆的那一半),再撤检索面,且整体在一个事务里。
+     * 反过来先撤索引而打标记失败,记录会落在"检索不到、也没被标记"的状态 ——
+     * 既查不出来也恢复不了,是最坏的一种中间态。
+     *
+     * **幂等**:已退场(`valid_to` 非空或已有标记)的 id 不再重复写标记,
+     * 保留首次退场的原因与时刻(「谁先取代了它」不该被后一次调用改写)。
+     *
+     * **不调** `graphStore.markSourcesDeleted`:那是"来源已物理消失"的传播,
+     * 而软删的记录仍活在主表里 —— 图谱侧的退役语义另计(见计划 findings R-a)。
+     */
+    retireL1Batch(ids: string[], info: SupersedeInfo): number;
+    /**
+     * 撤出检索面(删 FTS + 向量行,**主表保留**)。
+     * 与 `deleteL1Batch` 的删除面同源,只是不动 `l1_records`。
+     */
+    private detachL1FromRetrieval;
+    /**
+     * 清掉退场标记(恢复的**前半**)。返回清完标记的记录,供调用方 re-upsert 以重建
+     * FTS/向量 —— 那条路径(`upsertL1InTx`)已存在,不在这里重复实现。
+     *
+     * 只清 `valid_to` 与标记键,**不碰内容**:恢复不该修改记忆本身。
+     * 返回的 `validTo` 显式置 `undefined`(而非留着旧 epoch),否则 upsert 会
+     * 用 `toIso(旧值)` 把 `valid_to` 又写回去,恢复静默失败。
+     */
+    clearRetireMarker(ids: string[]): MemoryRecord[];
+    /** 已退场记录列表(面板用):`valid_to` 非空即已退场。失败返回空。 */
+    listRetiredL1(opts: {
+        limit: number;
+        offset: number;
+    }): {
+        items: MemoryRecord[];
+        total: number;
+    };
     private inStatement;
     /**
      * 清空 L1 检索库全部数据(重建用)。records/FTS 直接 DELETE;
@@ -155,6 +198,26 @@ export declare class MemoryDb {
      */
     clearL1(): boolean;
     countL1(): number;
+    /**
+     * 游标分批取 L1 元信息(**仅三列**):后台巡检专用。
+     *
+     * 为什么不复用 `getAllL1()`:后者会连 `content` 全文一起拉,且是一次性全量同步反序列化——
+     * 记录数随使用单调增长,后台任务在事件循环里做这件事会阻塞所有 RPC。
+     * 巡检(反刍重标定 / wing 回填)只需要 `id / type / metadata` 三列。
+     *
+     * `ORDER BY record_id` 而非 `updated_time`:record_id 是主键(唯一且不变),
+     * 巡检期间即使有写回也不会有分页漂移;updated_time 会被写回改动。
+     */
+    getAllL1Lite(limit: number, offset: number): L1MetaLite[];
+    /**
+     * **只**更新 metadata_json(顺带 updated_time),绝不碰 content 或其它列。
+     *
+     * 为什么需要它:分批巡检后调用方手里**没有 content**(L1MetaLite 只有三列),
+     * 若沿用 `upsert({...lite, metadata})` 会把正文写成空 —— 这是分页改造最危险的坑。
+     *
+     * 返回 false 表示 id 不存在或写入失败(调用方据此记账,不静默)。
+     */
+    patchL1Metadata(id: string, metadata: Record<string, unknown>): boolean;
     /** 全量读取(调试/迁移/重嵌入用;检索请走 FTS/向量)。 */
     getAllL1(): MemoryRecord[];
     getL1ByIds(ids: string[]): MemoryRecord[];
@@ -196,8 +259,15 @@ export declare class MemoryDb {
     /**
      * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
      * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+     *
+     * Phase 3(task_3.4):`conflictType` 可选过滤——**默认不带**(返回全部未裁决数),
+     * 只有队列上限判据传 `{ conflictType: 'hard' }`(额度只按 hard 计)。
+     * 刻意用**选项对象**而非位置参数:位置参数会被下一个调用点无声漏传,
+     * 而"漏传 ⇒ 额度把非 hard 也算进去"正是这条轴要修的病。
      */
-    countConflictPendingUnresolved(): number;
+    countConflictPendingUnresolved(opts?: {
+        conflictType?: ConflictType;
+    }): number;
     /**
      * §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。
      *
@@ -207,7 +277,41 @@ export declare class MemoryDb {
     listConflictPending(opts?: {
         createdBefore?: string;
         limit?: number;
+        /**
+         * R1(task_2.3):把已达复看上限(`DEFER_MAX`)的对**排除出超时扫描**。
+         * **显式可选、默认关**——哈希输入、队列列出与人工裁决查找**绝不**能受它影响:
+         * ① 否则快照哈希会随 `defer_count` 变化,旧 manifest 永久失配;
+         * ② 否则钉子户将无法被 `resolveConflictPair` 找到,而人工裁决是它们**唯一**的出口。
+         */
+        excludeDeferExhausted?: boolean;
     }): ConflictPair[];
+    /**
+     * §C Phase 3(task_3.3):把未裁决对**按 `claim_key` 归并**后返回。
+     *
+     * 分组是**读取面的派生**,不是新状态:故它不从库外引入任何字段、不进快照哈希,
+     * 只把 {@link listConflictPending} 的结果按轴归并(空键那组恒排最后)。
+     * 归并逻辑在 `conflicts.ts` 的纯函数里(可单测、无 I/O),这里只负责取行。
+     */
+    listConflictGroupedByClaim(opts?: {
+        limit?: number;
+    }): ConflictClaimGroup[];
+    /**
+     * §C Phase 2(task_2.0):写入「已复看」痕迹——**不写 `resolved_at`**。
+     *
+     * `defer`(看过、暂不裁决)不是裁决结论,故它**不能**碰 `resolved_at` / `resolution`:
+     * 那两列一旦写上,该对就退出待裁决队列了,而 `defer` 的语义恰恰是
+     * 「还在队列里,只是我看过了」。这是 R1 与 R2 的分界(审计 N1)。
+     *
+     * `WHERE pair_id = ? AND resolved_at = ''` 保证**已裁决的对不被写回**
+     * ——与 {@link resolveConflictPending} 同款的单向性。
+     *
+     * @returns 受影响行数(0 = 该对已裁决或不存在)。
+     */
+    markConflictReviewed(pairId: string, next: {
+        reviewedAt: string;
+        deferredAt: string;
+        deferCount: number;
+    }): number;
     /**
      * §C 打上裁决结论。
      *
@@ -217,6 +321,25 @@ export declare class MemoryDb {
      * @returns 受影响行数(0 = 该对被裁决过或不存在)。
      */
     resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;
+    /**
+     * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策。
+     *
+     * `INSERT OR IGNORE` + 主键 `reject_id` ⇒ 同一决策重复登记只留一行
+     * (与 {@link recordConflictPending} 同款幂等,幂等来自主键而非调用方自觉)。
+     *
+     * @returns 实际新插入的行数。
+     */
+    recordConflictRejected(rows: readonly ConflictRejected[]): number;
+    /**
+     * §C 读取丢弃留痕(为审计/诊断出口预留)。
+     *
+     * `createdBefore` 为**排他上界**(ISO 串);定序 `created_at ASC, reject_id ASC`
+     * —— 先来先服务且同一毫秒内确定可复现(与 {@link listConflictPending} 同口径)。
+     */
+    listConflictRejected(opts?: {
+        createdBefore?: string;
+        limit?: number;
+    }): ConflictRejected[];
     /**
      * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
      * 返回被删除的行数。
@@ -258,7 +381,19 @@ export declare class MemoryDb {
         scene?: string;
         family?: string;
         hall?: string;
+        halls?: readonly string[];
+        /** Room 过滤(metadata.tags 含该 slug)。 */
+        tag?: string;
         workspaceId?: string;
+        /**
+         * 退场(软删)筛查:三态。
+         * - 省略(undefined):不过滤,活跃+已退场都列(快照导出/重建需要全量;面板「全部」同此);
+         * - `false`:只列**活跃**记录(`valid_to` 为空);
+         * - `true`:只列**已退场**记录(`valid_to` 非空)——与 `listRetiredL1` 同口径。
+         * 面板默认不过滤而是靠徽标区分(「退场了」与「根本没这条」必须能分辨),
+         * 筛查只是把混排的两种态**分开看**,不改变"浏览路径不隐藏退场记录"的设计。
+         */
+        retired?: boolean;
         limit: number;
         offset: number;
     }): {
@@ -267,6 +402,38 @@ export declare class MemoryDb {
     };
     /** 场景名去重列表(UI 筛选器数据源)。失败返回空。 */
     distinctL1Scenes(): string[];
+    /**
+     * 主表全量元数据扫描(单一所有者共享函数):对 l1_records **全表**(含 retired 行,
+     * 不加 valid_to 过滤——退场判定见 retireL1Batch,restore 后行仍须可解析)逐行回调
+     * metadata。并行计划的引用门禁(如 multimodal 的 image_refs 清理判据)必须复用本函数,
+     * 不得各写一份"活跃面扫描"——口径漂移会造成 restore 后死链。
+     * 返回扫描行数;存储降级返回 0。
+     */
+    scanL1Metadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number;
+    /** retired 行计数(退场判定与 listRetiredL1 同口径:valid_to 非空)。失败返回 0。 */
+    retiredL1Count(): number;
+    /**
+     * Room 计数(**标签自生长分类**):展开 `metadata.tags` 聚合,1 个 slug tag = 1 个 Room。
+     *
+     * 零 schema 变更——tags 落库即自动成为新 Room,无需注册表/迁移,这就是"自生长"。
+     *
+     * **口径与 `wingL1Counts()` 一致(不过滤 retired)**:两者常在同一面板相邻展示,
+     * 口径不一会出现互相矛盾的数字。
+     *
+     * `json_valid` 守卫:单行 metadata 损坏时 `json_each` 会抛「malformed JSON」并连带
+     * 整条聚合失败——宁可跳过该行,也不能让整个 Room 列表空掉。
+     *
+     * 失败返回空数组(存储降级或聚合异常都按"暂无 Room"处理,不报错)。
+     */
+    l1RoomCounts(): Array<{
+        room: string;
+        count: number;
+    }>;
+    /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
+    wingL1Counts(): {
+        counts: Record<string, number>;
+        unlabeled: number;
+    };
     /** FTS5 BM25 检索(family / workspaceId 缺省不过滤)。失败返回空数组(调用方降级)。 */
     searchL1Fts(query: string, limit: number, family?: string, workspaceId?: string): L1SearchHit[];
     /**
@@ -296,6 +463,20 @@ export declare class MemoryDb {
     /** 按会话取最近消息(时间升序返回;走 idx_l0_session_id 索引)。
      *  蒸馏背景参考专用——按会话现查替代全局内存数组(ADR-0003)。 */
     recentL0BySession(sessionId: string, limit: number): L0MessageRecord[];
+    /**
+     * 锚点定向取消息(R7):按 `(session_id, turn[, step])` 取该回合的 L0 消息。
+     *
+     * 与 `recentL0BySession` 的区别是**按坐标而非按时间**:证据读取器(R2)手上
+     * 只有锚点,没有"最近"的概念。`step` 缺省即整轮(不过滤 step)。
+     *
+     * 返回按 `timestamp, rowid` 升序——同一轮内的原始顺序,供下游拼回回合文本。
+     */
+    l0ByAnchor(sessionId: string, turn: number, step?: number): L0MessageRecord[];
+    /**
+     * L0 行 → 记录的统一映射。turn/step 为 NULL(旧行 / 无坐标)时**不写键**,
+     * 使"无锚点"与"锚点为空"在类型层就是两件事。
+     */
+    private toL0Record;
     /** L0 全量列举(重建快照用;按时间升序,事务一致性避开 JSONL 追加竞态)。 */
     listL0All(): L0MessageRecord[];
     /** 重建成本预估(一次全表聚合:会话数 / 消息数 / 字符量)。 */
@@ -350,5 +531,16 @@ export declare class MemoryDb {
         embedding: Float32Array;
     }>, recordedAt: string): number;
     close(): void;
+}
+/**
+ * 后台巡检用的 L1 最小投影(**不含 content**)。
+ *
+ * 刻意与 `MemoryRecord` 分开:`MemoryRecord.content` 是必填的,若把三列投影硬塞进该类型,
+ * 调用方会在写回时把正文写成空。用独立的窄类型 + `patchL1Metadata` 才能让"不碰正文"成为类型层面的约束。
+ */
+export interface L1MetaLite {
+    id: string;
+    type: string;
+    metadata: Record<string, unknown>;
 }
 export { isZeroVector, vecToBuffer };

@@ -6,6 +6,7 @@ import { applyRecallBudget, raceRecallTimeout, RECALL_EMBED_CAP_MS } from '../ut
 import { clearProfileShare, emptyOccupancyLedger, estimateInjectedMessageTokens, estimateStableSectionTokens, recordProfileShare, recordRecallInjection, resetForCompaction, } from '../util/context-occupancy.js';
 import { errDetail } from '../util/filelog.js';
 import { blocksToText } from '../util/text.js';
+import { domainGate, formatWeights, hardFilterByWingLock, sortByDomainWeight, WING_ANCHORS } from '../domain-gate.js';
 const PROFILE_TTL = 60_000;
 /** 存储回填缓存上限(超过即按插入序淘汰最旧;查看会话数为百级,500 足够)。 */
 const STORED_ESTIMATE_CACHE_CAP = 500;
@@ -94,6 +95,36 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
         chat: { persona: '', nav: '' },
         work: { persona: '', nav: '' },
     };
+    // ── 域软门禁(task_19)的锚向量缓存:8 条锚文本静态不变,进程内嵌一次 ──
+    // 嵌入未就绪/失败 → null(降级关键词路径),不重试以免每轮付出失败代价
+    let anchorVecs = null;
+    let anchorVecsTried = false;
+    const ensureAnchorVecs = async () => {
+        if (anchorVecsTried)
+            return anchorVecs;
+        anchorVecsTried = true;
+        if (!stores.l1.vectorsReady())
+            return anchorVecs;
+        try {
+            const vecs = [];
+            for (const a of WING_ANCHORS)
+                vecs.push(await stores.l1.embedText(a.anchor));
+            anchorVecs = vecs.every((v) => v !== undefined && v.length > 0) ? vecs : null;
+        }
+        catch {
+            anchorVecs = null;
+        }
+        return anchorVecs;
+    };
+    /** hits 的 wing 归属表(检索命中不含 metadata,按 id 批量取回一次)。 */
+    const wingByIdOf = (hits) => {
+        const map = new Map();
+        if (hits.length === 0)
+            return map;
+        for (const r of stores.l1.getByIds(hits.map((h) => h.id)))
+            map.set(r.id, r.metadata?.hall);
+        return map;
+    };
     const refreshProfile = async () => {
         try {
             const [chat, work] = await Promise.all([
@@ -133,6 +164,35 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
             logger.info(`[memory] 召回去重与占用账本重置(agent=${payload.agent.id},source=${payload.source})`);
         }
     });
+    /** 取某个 agent 的父会话 id(结构鸭子类型,服务/字段缺失一律 undefined)。 */
+    const parentSessionOf = (agent) => agent?.session?.header
+        ?.parentSession;
+    /**
+     * **档位/锁域的会话所有者**解析:子代理会话自身没设过显式条目时,沿
+     * `session.header.parentSession` 上溯到最近的祖先——与 `src/tools/index.ts` 的
+     * `resolveModeOwner` **同一套语义**。
+     *
+     * 为什么必须上溯:修复前召回路直接读 `payload.agent.id`,于是父会话显式设的
+     * `off` 档 / 锁定域 / 注入覆盖在**子代理的 pre-step 里全部不生效**(工具路修过
+     * "用户显式 off 被绕过",召回与注入路漏了同一修) —— 表现为子代理照旧跨域召回。
+     *
+     * 降级(全 fail-open,不新增拒绝路径):`agents` 服务缺失 / 链断 → 用自身 id
+     * (与修复前一致);环检测保证自环与成环都能终止。
+     */
+    const resolveModeOwner = (agentId, agent) => {
+        if (modes.hasEntry(agentId))
+            return agentId;
+        const seen = new Set([agentId]);
+        let cur = parentSessionOf(agent);
+        while (cur !== undefined && !seen.has(cur)) {
+            if (modes.hasEntry(cur))
+                return cur;
+            seen.add(cur);
+            const upstream = ctx.get?.('agents');
+            cur = parentSessionOf(upstream?.get?.(cur));
+        }
+        return agentId;
+    };
     // ── 1. pre-step 消息侧注入:记忆先行于每一条新的用户输入(ADR-0001) ──
     // prepend 注册 + 先 next() 再改写:不劫持其他监听器(dsh-time-context 官方范式)。
     if (cfg.recall.enabled) {
@@ -142,9 +202,11 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                 return decision;
             try {
                 const s = live.get();
-                const mode = modes.get(payload.agent.id);
+                // 档位/锁域读**所有者**(子代理上溯父链);统计与去重仍按各自 agent(上下文独立)
+                const ownerId = resolveModeOwner(payload.agent.id, payload.agent);
+                const mode = modes.get(ownerId);
                 // 三级读闸:主闸 → off 档(完全隐身)→ 注入开关(会话覆盖 ?? 全局)
-                if (!s.enabled || mode === 'off' || !modes.resolvedRecall(payload.agent.id, s.recall))
+                if (!s.enabled || mode === 'off' || !modes.resolvedRecall(ownerId, s.recall))
                     return decision;
                 // 只在有新的用户来源消息的步骤注入(轮首 claim 或 steering 插话);纯工具步透传
                 const hasNewUserMessage = decision.messages.some((m) => m.source?.kind === 'user');
@@ -178,16 +240,41 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                     return decision;
                 }
                 st.lastDurationMs = Date.now() - searchStart;
+                // ── wing 域范围(Phase 1c,R2/R12):锁角 = 硬过滤(手动挡);
+                // 中心 = 软门禁(域相关度加权,task_19)。写侧零感知(蒸馏/打标不过此路)。 ──
+                let scoped = hits;
+                const wingLocks = modes.getWings(ownerId);
+                if (wingLocks.length > 0) {
+                    // 手动挡:只召回锁定域;未打标默认包含(524/994,默认排除会静默丢一半),
+                    // general(跨域)默认不含;两个边界均可由会话开关切换
+                    const { includeUnlabeled, includeGeneral } = modes.wingBoundaries(ownerId);
+                    scoped = hardFilterByWingLock(hits, (id) => wingByIdOf(hits).get(id), wingLocks, includeUnlabeled, includeGeneral);
+                    logger.debug?.(`[memory] 域硬过滤 wing=${wingLocks.join('+')}:${hits.length} → ${scoped.length} 条(未打标${includeUnlabeled ? '含' : '不含'}/跨域${includeGeneral ? '含' : '不含'})`);
+                }
+                else {
+                    // 智能档(中心):域相关度 → 每域权重,加权排序 + 预算截断实现"低相关域降权
+                    // 而非消失";嵌入不可用降级关键词,再退化为无偏置(零干预)。零额外 LLM。
+                    const anchorVecsReady = await ensureAnchorVecs();
+                    const queryVec = anchorVecsReady && stores.l1.vectorsReady()
+                        ? await stores.l1.embedText(query, RECALL_EMBED_CAP_MS)
+                        : undefined;
+                    const gate = domainGate(query, { queryVec, anchorVecs: anchorVecsReady ?? undefined });
+                    if (gate.source !== 'none' && scoped.length > 1) {
+                        const wingById = wingByIdOf(scoped);
+                        scoped = sortByDomainWeight(scoped, (id) => wingById.get(id), gate.weights);
+                        logger.info(`[memory] 域软门禁(source=${gate.source}) ${formatWeights(gate.weights)} agent=${payload.agent.id}`);
+                    }
+                }
                 // 召回去重:同会话已注入过的记录不再重复注入(模型上下文已持有,省 token)。
                 // 纯过滤——剩几条注几条,全量压制(0 条新鲜命中)是正确状态而非未命中。
                 const seen = dedupe.seen(payload.agent.id);
-                const fresh = hits.filter((h) => !seen.has(h.id));
-                const suppressed = hits.length - fresh.length;
+                const fresh = scoped.filter((h) => !seen.has(h.id));
+                const suppressed = scoped.length - fresh.length;
                 st.suppressedRecalls += suppressed;
                 if (suppressed > 0) {
                     logger.debug?.(`[memory] 召回去重:压制 ${suppressed} 条已注入记忆(agent=${payload.agent.id},余 ${fresh.length} 条新鲜命中)`);
                 }
-                if (hits.length > 0) {
+                if (scoped.length > 0) {
                     // 全量压制轮也计入命中:相关记忆已在模型上下文里,本质是命中
                     st.hitTurns++;
                     st.totalHits += fresh.length;

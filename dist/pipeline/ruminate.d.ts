@@ -15,11 +15,13 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
 import type { L1Store } from '../store/l1.js';
+import { type MemoryBackend } from '../store/memory-backend.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { StateStore } from '../store/state.js';
 import type { LiveSettingsHandle } from '../settings.js';
 import type { MemoryFamily, MemoryLogger } from '../types.js';
+import { type RelabelStats } from './relabel.js';
 import type { MemoryRunner } from './runner.js';
 export interface RuminateStatus {
     running: boolean;
@@ -33,6 +35,14 @@ export interface RuminateStatus {
     recordsBuilt: number;
     /** 当前动作的人类可读描述(L2/L3 单次可达分钟级) */
     detail: string | null;
+    /** 标注校验/重标定结果(最后一次反刍/轻量刷新;未执行或旧版为 null)。 */
+    relabel: RelabelStats | null;
+    /** 子进度:非会话阶段(relabeling)的批次进度,由重标定批回调驱动;离开阶段即清空。 */
+    sub: {
+        done: number;
+        total: number;
+        label: string;
+    } | null;
     /** 取消请求标志 */
     cancelRequested: boolean;
     /** 开始时间 */
@@ -56,8 +66,12 @@ export declare class RuminateController {
     private sessions;
     private totalL1;
     private pendingFile;
+    /** 记忆后端:未注入时包 l1(进程内,行为与改造前等价)。 */
+    private backend;
     constructor(ctx: Context, cfg: MemoryConfig, runner: Pick<MemoryRunner, 'enqueue' | 'states'>, stores: {
         l1: L1Store;
+        /** 记忆后端(后台边界);缺省 = 包 l1 的进程内实现(行为等价)。 */
+        backend?: MemoryBackend;
         scenes: Record<MemoryFamily, SceneStore>;
         persona: Record<MemoryFamily, PersonaStore>;
         state: StateStore;

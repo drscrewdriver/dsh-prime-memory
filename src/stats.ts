@@ -31,13 +31,20 @@ import type { L0Store } from './store/l0.js';
 import type { L1Store } from './store/l1.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
 import type { ReceiptQuery, ReceiptsView } from './store/receipts.js';
-import { resolveConflictPair } from './conflict-service.js';
+import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
+import { sourceAnchorLabels } from './pipeline/anchors.js';
+import { readSupersedeMarker } from './store/supersede.js';
+import { isSnapshotName } from './store/l1-snapshot.js';
 import type { PersonaStore } from './store/persona.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
-import type { MemoryFamily, MemoryLogger, MemoryMode } from './types.js';
+import { WING_CATALOG, WING_FALLBACK, type MemoryFamily, type MemoryLogger, type MemoryMode } from './types.js';
+import { isTag } from './metadata-validators.js';
+import { InProcMemoryBackend, type MemoryBackend } from './store/memory-backend.js';
+import { isWingCorner } from './store/session-modes.js';
+import { startWingBackfill } from './wing-backfill.js';
 import { errDetail } from './util/filelog.js';
 import { snapshotTokenCost } from './token-cost.js';
 
@@ -53,7 +60,7 @@ export interface MemoryStatusSource {
 }
 
 /**
- * 端点全集运行时清单(31 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(36 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -68,13 +75,18 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/token-cost',
   'dsh-memory/session-mode-get',
   'dsh-memory/session-mode-set',
+  'dsh-memory/wing-overview',
+  'dsh-memory/rooms-get',
+  'dsh-memory/wing-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
   'dsh-memory/settings-set',
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
   'dsh-memory/receipts',
+  'dsh-memory/conflicts',
   'dsh-memory/conflict-resolve',
+  'dsh-memory/conflicts-rejected',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
@@ -94,7 +106,13 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/embedding-download-cancel',
   'dsh-memory/embedding-model-delete',
   'dsh-memory/embedding-runtime-cancel',
+  'dsh-memory/embedding-reindex',
   'dsh-memory/embedding-reindex-cancel',
+  'dsh-memory/records-retired',
+  'dsh-memory/records-restore',
+  'dsh-memory/cleanup-retired',
+  'dsh-memory/snapshots-list',
+  'dsh-memory/snapshot-restore',
 ];
 
 /** HTTP 路由前缀(客户端 fetch `/dsh-memory/rpc/<短方法名>`)。 */
@@ -202,6 +220,12 @@ import type {
   EmbeddingStateResponse,
   LayerChainView,
   ListRecordsResponse,
+  CleanupRetiredResponse,
+  RecordsRestoreResponse,
+  RecordsRetiredResponse,
+  RetiredRecordView,
+  SnapshotsListResponse,
+  SnapshotRestoreResponse,
   LlmModelsResponse,
   LlmProvidersResponse,
   DirectChannelView,
@@ -213,6 +237,9 @@ import type {
   RecallDisabledReason,
   RuminateStatusResponse,
   ScenesResponse,
+  WingBackfillResponse,
+  WingOverviewResponse,
+  RoomsGetResponse,
   SessionModeGetResponse,
   SessionModeSetResponse,
   SessionStatsResponse,
@@ -275,6 +302,8 @@ export function registerMemoryRpc(
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 记忆后端(后台边界);未装配时回退为包 l1 的进程内实现。 */
+    backend?: MemoryBackend;
     /** 图谱存储(可选:未装配时图谱端点返空,不报错)。 */
     graph?: GraphStore;
   },
@@ -458,6 +487,8 @@ export interface EndpointDeps {
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 记忆后端(后台边界);未装配时回退为包 l1 的进程内实现。 */
+    backend?: MemoryBackend;
     graph?: GraphStore;
   };
   status?: MemoryStatusSource;
@@ -511,19 +542,33 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // 注入解析权威在 host:recall 是原始覆盖(null=跟随全局),recallResolved 是生效值
       const s = live?.get();
       const globalRecall = s?.recall ?? true;
+      const bounds = modes.wingBoundaries(sessionId);
+      const locked = modes.getWings(sessionId);
       const v: SessionModeGetResponse = {
         sessionId,
         mode: modes.get(sessionId),
         defaultMode: modes.default,
         recall: modes.getRecall(sessionId) ?? null,
         recallResolved: modes.resolvedRecall(sessionId, globalRecall),
+        hall: locked[0] ?? null,
+        halls: locked,
+        hallIncludeUnlabeled: bounds.includeUnlabeled,
+        hallIncludeGeneral: bounds.includeGeneral,
       };
       return v;
     }
 
     case 'dsh-memory/session-mode-set': {
       if (!modes) throw new Error('档位存储未初始化');
-      const p = (payload ?? {}) as { sessionId?: string; mode?: string; recall?: boolean | null };
+      const p = (payload ?? {}) as {
+        sessionId?: string;
+        mode?: string;
+        recall?: boolean | null;
+        hall?: string | null;
+        halls?: readonly string[] | null;
+        hallIncludeUnlabeled?: boolean;
+        hallIncludeGeneral?: boolean;
+      };
       const sessionId = expectSessionId(p.sessionId);
       const allowed: MemoryMode[] = ['auto', 'chat', 'work', 'off'];
       if (typeof p.mode !== 'string' || !allowed.includes(p.mode as MemoryMode)) {
@@ -535,23 +580,90 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       if (p.recall !== undefined && typeof p.recall !== 'boolean' && p.recall !== null) {
         throw new Error(`非法注入覆盖: ${String(p.recall)}(允许 true/false/null)`);
       }
+      // 域锁定可选同车:角 id = 锁定;显式 null/空数组 = 回中心;缺省 = 不动。
+      // 只认 8 角 id(general 是兜底值不是角,不可锁定),非法值整体拒绝(不做部分提交)
+      if (p.hall !== undefined && p.hall !== null && !isWingCorner(p.hall)) {
+        throw new Error(`非法 Wing 锁定: ${String(p.hall)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
+      }
+      if (p.halls !== undefined && p.halls !== null) {
+        const bad = Array.from(p.halls).find((x) => !isWingCorner(x));
+        if (bad !== undefined) {
+          throw new Error(`非法 Wing 锁定: ${String(bad)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
+        }
+      }
       modes.set(sessionId, p.mode as MemoryMode);
       if (typeof p.recall === 'boolean') {
         modes.setRecall(sessionId, p.recall);
       } else if (p.recall === null) {
         modes.setRecall(sessionId, undefined);
       }
+      if (
+        p.hall !== undefined ||
+        p.halls !== undefined ||
+        p.hallIncludeUnlabeled !== undefined ||
+        p.hallIncludeGeneral !== undefined
+      ) {
+        // wing/halls 都没传 = 只改边界开关 → 传 undefined，由 store 保留现锁域
+        //（旧写法在这条分支算出 undefined 并在 store 侧被当"回中心"，会静默清掉锁定）
+        const nextWings =
+          p.hall === undefined && p.halls === undefined
+            ? undefined
+            : p.halls === null || p.hall === null
+              ? []
+              : p.halls !== undefined
+                ? p.halls
+                : [p.hall as string];
+        modes.setWing(sessionId, nextWings, {
+          includeUnlabeled: p.hallIncludeUnlabeled,
+          includeGeneral: p.hallIncludeGeneral,
+        });
+      }
       deps.logger.info(
-        `[memory] 会话档位设置 session=${sessionId} mode=${p.mode} recall=${JSON.stringify(modes.getRecall(sessionId) ?? null)}`,
+        `[memory] 会话档位设置 session=${sessionId} mode=${p.mode} recall=${JSON.stringify(modes.getRecall(sessionId) ?? null)} wing=${JSON.stringify(modes.getWing(sessionId) ?? null)}`,
       );
       const s = live?.get();
+      const bounds = modes.wingBoundaries(sessionId);
+      const locked = modes.getWings(sessionId);
       const v: SessionModeSetResponse = {
         sessionId,
         mode: p.mode as MemoryMode,
         recall: modes.getRecall(sessionId) ?? null,
         recallResolved: modes.resolvedRecall(sessionId, s?.recall ?? true),
+        hall: locked[0] ?? null,
+        halls: locked,
+        hallIncludeUnlabeled: bounds.includeUnlabeled,
+        hallIncludeGeneral: bounds.includeGeneral,
       };
       return v;
+    }
+
+    // ── Hall 八边形角计数(WingWheel 打开时拉取;非热路径,组查询一条 SQL) ──
+    case 'dsh-memory/wing-overview': {
+      const { counts, unlabeled } = stores.l1.wingCounts();
+      const v: WingOverviewResponse = {
+        corners: WING_CATALOG.map((h) => ({ id: h.id, label: h.label, count: counts[h.id] ?? 0 })),
+        general: counts[WING_FALLBACK] ?? 0,
+        unlabeled,
+      };
+      return v;
+    }
+
+    // ── Room 分类计数(标签自生长分类;展开 metadata.tags 聚合,零 schema) ──
+    case 'dsh-memory/rooms-get': {
+      const rooms = stores.l1.listRooms();
+      const v: RoomsGetResponse = { rooms, total: rooms.length };
+      return v;
+    }
+
+    // ── 一键回填(task_15):后台任务,单飞;端点立即返回,进度看 wing-overview ──
+    case 'dsh-memory/wing-backfill': {
+      const r = startWingBackfill({
+        ctx: deps.ctx,
+        cfg: deps.cfg,
+        backend: stores.backend ?? new InProcMemoryBackend(stores.l1),
+        logger: deps.logger,
+      });
+      return r;
     }
 
     // ── 会话级统计(悬浮卡信息区;热路径端点,见 SessionInfoSource 的零 I/O 硬规则) ──
@@ -653,6 +765,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           distillMode: '', directBaseURL: '', directApiKey: '',
           embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
           memoryMutate: false,
+          conflictFreeze: live?.get()?.conflictFreeze === true,
         }),
         // 静态部署上限(cordis.patch.yml):运行时开关与它取 AND
         ceilings: { capture: cfg.capture.enabled, distill: cfg.extract.enabled, recall: cfg.recall.enabled },
@@ -690,8 +803,8 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       if (!live) throw new Error('开关通道未初始化');
       const patch = (payload ?? {}) as Record<string, unknown>;
       const clean: Record<string, boolean | string | number | DistillChainEntry[] | { extract: number; dedup: number; l2: number; l3: number; graph: number } | { l1: DistillChainEntry[]; l2: DistillChainEntry[]; l3: DistillChainEntry[] }> = {};
-      // 布尔开关组:memoryMutate(高权限写删门)与主开关同列
-      for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate'] as const) {
+      // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
+      for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
       }
       // 运行时统一路由链:结构校验后整体写入(空数组 = 回到跟随部署配置)
@@ -812,26 +925,58 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     }
 
     case 'dsh-memory/list-records': {
-      const p = (payload ?? {}) as { query?: string; type?: string; scene?: string; hall?: string; limit?: number; offset?: number };
+      const p = (payload ?? {}) as { query?: string; type?: string; scene?: string; hall?: string; halls?: unknown; tag?: string; retired?: unknown; limit?: number; offset?: number };
       if (p.query !== undefined && p.query.length > 4096) throw new Error('query 过长(≤4096 字符)');
+      // 退场筛查:三态(缺省=全部混排/false=仅活跃/true=仅已退场)。显式布尔才透传,
+      // 其余值(字符串/数字等)一律视为缺省——宁可宽看,不可静默筛掉一半。
+      const retiredSel = typeof p.retired === 'boolean' ? p.retired : undefined;
+      // Room 过滤:tag 是**自生长**的 slug(无枚举),只做形状与长度校验(SQL 侧参数化)
+      const tagSel = typeof p.tag === 'string' ? p.tag.trim().slice(0, 64) : '';
+      if (tagSel && !isTag(tagSel)) throw new Error('tag 非法(需小写字母数字连字符,1-32 字符)');
+      // R13 多值归一: halls 数组只留非空字符串(≤40 字符),去重,上限 8(角数);
+      // wing 单值保留兼容,归一后与 halls 合并
+      const wingSel = Array.from(
+        new Set(
+          [
+            ...(Array.isArray(p.halls) ? p.halls.filter((x): x is string => typeof x === 'string' && x.trim() !== '').map((x) => x.trim().slice(0, 40)) : []),
+            ...(p.hall ? [p.hall.trim().slice(0, 40)] : []),
+          ].slice(0, WING_CATALOG.length + 1),
+        ),
+      );
       const limit = Math.min(Math.max(Number(p.limit) || 50, 1), 200);
       const offset = Math.min(Math.max(Number(p.offset) || 0, 0), 1_000_000);
-      // 关键词路径:复用检索唯一缝(与召回同源),取回后做场景/Hall 过滤 + 手工分页。
+      // Wing 词表随首屏下发(R8 单一事实源,client 不手抄);常量拼接,零 I/O,不触碰热路径规则
+      const wingCatalog =
+        offset === 0
+          ? [...WING_CATALOG.map((h) => ({ id: h.id, label: h.label })), { id: WING_FALLBACK, label: '跨域' }]
+          : undefined;
+      // 关键词路径:复用检索唯一缝(与召回同源),取回后做场景/Wing 过滤 + 手工分页。
       // 检索侧单次上限 200:分页窗口触达上限时显式标记 truncated(结果可能不完整)。
       if (p.query && p.query.trim()) {
         const SEARCH_CAP = 200;
         const wanted = offset + limit + 1;
         const hits = await stores.l1.search(p.query, Math.min(wanted, SEARCH_CAP), { type: p.type || undefined });
         let filtered = p.scene ? hits.filter((h) => h.scene_name === p.scene) : hits;
-        // Hall 过滤(检索命中不含 metadata):按 id 批量取回元数据后过滤
+        // Wing / Room 过滤(检索命中不含 metadata):按 id 批量取回元数据后过滤
         let metaById: Map<string, Record<string, unknown>> | null = null;
-        if (p.hall && filtered.length > 0) {
+        if ((wingSel.length > 0 || tagSel) && filtered.length > 0) {
           const meta = new Map<string, Record<string, unknown>>();
           for (const r of stores.l1.getByIds(filtered.map((h) => h.id))) {
             if (r.metadata) meta.set(r.id, r.metadata);
           }
           metaById = meta;
-          filtered = filtered.filter((h) => (meta.get(h.id)?.hall) === p.hall);
+          filtered = filtered.filter((h) => {
+            const m = meta.get(h.id);
+            if (wingSel.length > 0) {
+              const wing = m?.hall;
+              if (!(typeof wing === 'string' && wing !== '' && wingSel.includes(wing))) return false;
+            }
+            if (tagSel) {
+              const tags = m?.tags;
+              if (!Array.isArray(tags) || !tags.some((t) => t === tagSel)) return false;
+            }
+            return true;
+          });
         }
         const resp: ListRecordsResponse = {
           items: filtered.slice(offset, offset + limit).map((h) => hitToUiRecord({ ...h, metadata: metaById?.get(h.id) })),
@@ -839,16 +984,20 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           total: null,
           truncated: wanted > SEARCH_CAP,
           scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
+          wingCatalog,
         };
         return resp;
       }
-      const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, limit, offset });
+      // 退场筛查仅浏览路径透传;检索路径不接——FTS/向量里本就没有已退场行,
+      // 接了只会让「仅退场+关键词」永远空结果,不如如实不筛。
+      const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, retired: retiredSel, limit, offset });
       const resp: ListRecordsResponse = {
         items: items.map(hitToUiRecord),
         hasMore: offset + items.length < total,
         total,
         truncated: false,
         scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
+        wingCatalog,
       };
       return resp;
     }
@@ -874,33 +1023,269 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       return resp;
     }
 
+    // ── §C 矛盾冻结的**读**方向:与 memory_conflicts 工具共用同一形状 ──
+    // 裁决端点(conflict-resolve)早就在,但只有"写"没有"读" —— 于是 pair_id
+    // 无处可得:模型被指到不存在的 memory_conflicts 工具,人也没有面板。
+    // 未开启冻结时同样走返回体(enabled:false + notice)而非抛错,理由同上。
+    case 'dsh-memory/conflicts': {
+      const p = (payload ?? {}) as { limit?: unknown };
+      // 冻结开关只有**一个**事实源:与去重管线同一套 effectiveCfg 解析
+      // (live.conflictFreeze 覆盖静态 cfg.conflictFreeze.enabled)。此前这里直接读
+      // cfg.conflictFreeze.enabled —— 面板开关写的是 live,而部署静态值恒 false,
+      // 于是开关已开、settings.yaml 已落 true,本页仍报"矛盾冻结未开启"。
+      return listConflictPairs(
+        { l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true },
+        { limit: Number(p.limit) || undefined },
+      );
+    }
+
     // ── §C 矛盾冻结裁决(task_25):与 memory_resolve_conflict 工具共用同一形状 ──
     // 端点层同样不给"提示文案"出口的例外只有一条:**队列未开启**不是调用错误而是
     // 部署状态,故它走返回体(带 notice)而非抛错;pair_id/outcome 缺参才抛。
+    // 开关判定与上面 conflicts 同源(effectiveCfg):读端与写端必须看同一份状态,
+    // 否则会出现"列表说开着、裁决说没开"的自相矛盾。
     case 'dsh-memory/conflict-resolve': {
       const p = (payload ?? {}) as { pairId?: unknown; outcome?: unknown };
       const pairId = typeof p.pairId === 'string' ? p.pairId.trim() : '';
       const outcome = typeof p.outcome === 'string' ? p.outcome.trim() : '';
       if (!pairId) throw new Error('需要 pairId(待裁决对的 pair_id)');
-      if (!outcome) throw new Error('需要 outcome(winner | loser | both)');
+      if (!outcome) throw new Error('需要 outcome(winner | loser | both | defer)');
       return await resolveConflictPair(
-        { l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true },
+        { l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true },
         pairId,
         outcome,
       );
     }
 
+    // ── §C 丢弃留痕:被 LLM 输出不合法的冲突决策记录(task_1.1) ──
+    // 与 `dsh-memory/conflicts` 同模式:读方向,不涉及裁决。
+    case 'dsh-memory/conflicts-rejected': {
+      const p = (payload ?? {}) as { limit?: unknown; created_before?: unknown };
+      const limit = typeof p.limit === 'number' ? p.limit : undefined;
+      const createdBefore = typeof p.created_before === 'string' ? p.created_before : undefined;
+      const items = stores.l1.listConflictRejected({ limit, createdBefore });
+      return {
+        items: items.map((r) => ({
+          reject_id: r.rejectId,
+          run_id: r.runId,
+          record_id: r.recordId,
+          winner_raw: r.winnerRaw,
+          loser_raw: r.loserRaw,
+          reason: r.reason,
+          created_at: r.createdAt,
+        })),
+      };
+    }
+
     case 'dsh-memory/records-delete': {
-      // 面板高权限删除指定记忆;写入删权限门(memoryMutate)防御
+      // 面板高权限删除指定记忆;写入删权限门(memoryMutate)防御。
+      //
+      // **软删**(退场),不是物理删除:与裁决 / 取代共用同一原语。面板上的"删除"
+      // 因此可撤销;真要抹掉数据只能走 `cleanup-retired`(先落快照 + 校验通过才删)。
+      // 这样 `deleteL1Batch` 在整个代码里**只有一个调用方**(exportThenPurge),
+      // "物理删除必须先有可信导出物"就成了结构性事实,而不是一句约定。
       if (!live?.get().memoryMutate) {
         throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
       }
       const p = (payload ?? {}) as { ids?: unknown };
       const ids = (Array.isArray(p.ids) ? p.ids : []).filter((x): x is string => typeof x === 'string').slice(0, 200);
       if (ids.length === 0) throw new Error('ids 缺失');
-      await stores.l1.deleteBatch(ids);
-      deps.logger.info(`[memory] 高权限删除记忆 ${ids.length} 条(${ids.join('，')})`);
-      return { deleted: ids.length };
+      const n = stores.l1.retire(ids, { at: new Date().toISOString(), reason: 'manual' });
+      deps.logger.info(`[memory] 高权限退场(软删)记忆 ${n} 条(${ids.join('，')})`);
+      return { deleted: n };
+    }
+
+    // ── 记忆退场(软删)与清理:已退场列表 / 恢复 / 物理清理 ──
+    // 读方向**不开**权限门(与 conflicts 一致:看得见才知道要不要恢复);
+    // 恢复与物理清理由 memoryMutate 门控。
+    case 'dsh-memory/records-retired': {
+      const p = (payload ?? {}) as { limit?: unknown; offset?: unknown };
+      const limit = Math.min(Math.max(Math.floor(Number(p.limit)) || 50, 1), 200);
+      const offset = Math.min(Math.max(Math.floor(Number(p.offset)) || 0, 0), 1_000_000);
+      const { items, total } = stores.l1.listRetired({ limit, offset });
+      const resp: RecordsRetiredResponse = {
+        items: items.map((r) => {
+          const mark = readSupersedeMarker(r.metadata);
+          const view = hitToUiRecord(r) as RetiredRecordView;
+          return {
+            ...view,
+            // 标记缺失时退回 `valid_to`(软删的两条判据任一成立即算已退场)
+            retiredAt: mark?.at ?? (r.validTo !== undefined ? new Date(r.validTo).toISOString() : ''),
+            retiredReason: mark?.reason ?? 'unknown',
+            ...(mark?.verdict ? { verdict: mark.verdict } : {}),
+            ...(mark?.by ? { supersededBy: mark.by } : {}),
+          };
+        }),
+        total,
+      };
+      return resp;
+    }
+
+    case 'dsh-memory/records-restore': {
+      if (!live?.get().memoryMutate) {
+        throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+      }
+      const p = (payload ?? {}) as { ids?: unknown };
+      const ids = (Array.isArray(p.ids) ? p.ids : [])
+        .filter((x): x is string => typeof x === 'string' && x !== '')
+        .slice(0, 200);
+      if (ids.length === 0) throw new Error('ids 缺失');
+      const r = await stores.l1.restore(ids);
+      deps.logger.info(`[memory] 恢复已退场记忆 ${r.restored} 条(补向量 ${r.vectorsWritten} 条)`);
+      const resp: RecordsRestoreResponse = r;
+      return resp;
+    }
+
+    case 'dsh-memory/cleanup-retired': {
+      if (!live?.get().memoryMutate) {
+        throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+      }
+      const p = (payload ?? {}) as { ids?: unknown; dryRun?: unknown };
+      // **默认干跑**:省略 `dryRun` 即视为 true。物理删除是本插件唯一不可逆的动作,
+      // 必须由调用方显式要求才做(与"所有破坏性动作必须默认可回滚"同一条纪律)。
+      const dryRun = p.dryRun !== false;
+      const explicit = (Array.isArray(p.ids) ? p.ids : [])
+        .filter((x): x is string => typeof x === 'string' && x !== '')
+        .slice(0, 500);
+      let targets: string[];
+      if (explicit.length > 0) {
+        // 显式 id 也要**复核**是否真的处于已退场态:防止调用方用一个 id 列表
+        // 把活动记忆绕过软删直接物理抹掉(那等于给了一条硬删后门)。
+        targets = explicit.filter((id) => stores.l1.getByIds([id]).some((r) => r.validTo !== undefined));
+      } else {
+        targets = [];
+        for (let offset = 0; ; offset += 200) {
+          const page = stores.l1.listRetired({ limit: 200, offset });
+          targets.push(...page.items.map((r) => r.id));
+          if (page.items.length < 200) break;
+        }
+      }
+      if (dryRun) {
+        const resp: CleanupRetiredResponse = {
+          dryRun: true,
+          targets: targets.length,
+          purged: 0,
+          aborted: false,
+          dir: '',
+          name: '',
+          diffs: [],
+        };
+        return resp;
+      }
+      if (targets.length === 0) {
+        const resp: CleanupRetiredResponse = { dryRun: false, targets: 0, purged: 0, aborted: false, dir: '', name: '', diffs: [] };
+        return resp;
+      }
+      const r = await stores.l1.purgeRetired(targets, 'cleanup-retired');
+      const resp: CleanupRetiredResponse = {
+        dryRun: false,
+        targets: targets.length,
+        purged: r.purged,
+        aborted: r.aborted,
+        dir: r.dir,
+        name: r.name,
+        diffs: r.diffs,
+      };
+      return resp;
+    }
+
+    // ── 快照(清单 / 回灌):`cleanup-retired` 与「重建」的**回程票** ──
+    // 在此之前 `restoreL1Snapshot` 只有测试调用:导出物会落盘,却没有任何出口能
+    // 装回去 —— "清理是本插件唯一不可逆的动作"这句话因此只成立了一半。
+    // 读方向(列表)不开权限门(看得见才知道要不要恢复);回灌由 memoryMutate 门控。
+    case 'dsh-memory/snapshots-list': {
+      const p = (payload ?? {}) as { limit?: unknown };
+      const raw = Math.floor(Number(p.limit));
+      const limit = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 200) : 50;
+      const { items, total } = await stores.l1.listSnapshots({ limit });
+      const resp: SnapshotsListResponse = { items, total };
+      return resp;
+    }
+
+    case 'dsh-memory/snapshot-restore': {
+      if (!live?.get().memoryMutate) {
+        throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+      }
+      const p = (payload ?? {}) as { name?: unknown; ids?: unknown; dryRun?: unknown; unretire?: unknown };
+      const name = typeof p.name === 'string' ? p.name.trim() : '';
+      if (!name) throw new Error('需要 name(快照目录名,见 dsh-memory/snapshots-list)');
+      // 只收名字、不收路径:恢复入口若接受任意路径,就等于顺带给这条 RPC 开放了
+      // "读任意目录并把内容写进检索库"的能力。非法名一律拒绝而不是静默返零。
+      if (!isSnapshotName(name)) {
+        throw new Error('name 非法:只接受快照目录名(形如 l1-<时间戳>-<原因>),不接受路径');
+      }
+      // **默认干跑**:省略 `dryRun` 即视为 true(与 cleanup-retired 同一条纪律)。
+      const dryRun = p.dryRun !== false;
+      const unretire = p.unretire === true;
+      const ids = (Array.isArray(p.ids) ? p.ids : [])
+        .filter((x): x is string => typeof x === 'string' && x !== '')
+        .slice(0, 2000);
+      if (dryRun) {
+        const plan = await stores.l1.planSnapshotRestore(name, ids);
+        const resp: SnapshotRestoreResponse = {
+          name,
+          dir: plan.dir,
+          dryRun: true,
+          inSnapshot: plan.inSnapshot,
+          targets: plan.targets,
+          missing: plan.missing,
+          restored: 0,
+          failed: 0,
+          vectorsWritten: 0,
+          unretired: 0,
+          stillRetired: unretire ? [] : plan.stillRetired,
+          notFound: plan.notFound,
+          ...(plan.found ? {} : { notice: `找不到快照 ${name}:snapshots/ 下没有同名目录,或它的 manifest.json 缺失/版本不符` }),
+        };
+        return resp;
+      }
+      const r = await stores.l1.restoreFromSnapshot(name, { ids, unretire });
+      if (!r.found) {
+        const resp: SnapshotRestoreResponse = {
+          name,
+          dir: '',
+          dryRun: false,
+          inSnapshot: 0,
+          targets: 0,
+          missing: 0,
+          restored: 0,
+          failed: 0,
+          vectorsWritten: 0,
+          unretired: 0,
+          stillRetired: [],
+          notFound: [],
+          notice: `找不到快照 ${name}:snapshots/ 下没有同名目录,或它的 manifest.json 缺失/版本不符`,
+        };
+        return resp;
+      }
+      deps.logger.info(
+        `[memory] 快照恢复 ${name}:写回 ${r.restored} 条(补向量 ${r.vectorsWritten} 条,失败 ${r.failed} 条,放回检索面 ${r.unretired} 条)`,
+      );
+      const resp: SnapshotRestoreResponse = {
+        name,
+        dir: r.dir,
+        dryRun: false,
+        inSnapshot: r.inSnapshot,
+        targets: r.targets,
+        missing: r.missing,
+        restored: r.restored,
+        failed: r.failed,
+        vectorsWritten: r.vectorsWritten,
+        unretired: r.unretired,
+        stillRetired: r.stillRetired,
+        notFound: r.notFound,
+        // 写回主表 ≠ 回到检索面:清理快照里的记录都带退场标记,不明说会让人以为
+        // "恢复完了"而记忆其实仍不可见。这是本次接线最容易漏掉的一跳。
+        ...(r.stillRetired.length > 0
+          ? {
+              notice:
+                `已写回主表,但其中 ${r.stillRetired.length} 条仍处于退场态、不会出现在召回里` +
+                `(清理只清理已退场记录,快照拍在删除之前)。要放回检索面:` +
+                `再调 dsh-memory/records-restore(或本次改用 unretire:true)。`,
+            }
+          : {}),
+      };
+      return resp;
     }
 
     // ── 知识图谱(面板图谱视图;graph 未装配时返空不报错) ──
@@ -1193,6 +1578,18 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       return { cancelled: embedManager.cancelRuntimeInstall() };
     }
 
+    case 'dsh-memory/embedding-reindex': {
+      // 手动触发重建(契约:`EmbeddingReindexStartResponse`,受理即返回,进度照旧轮询
+      // embedding-state-get 的 reindex 字段)。此前只登记了 -cancel:start 既不在白名单
+      // 也没有 case,于是 startReindex() 成了够不着的死代码,端点在面板上静默 404
+      // (契约门禁 tests/contract-keys.test.ts 早已为此标红)。
+      // 拒绝语义交给 startReindex 自己抛(已卸载/在跑/切源占锁/源未就绪),不在端点层复述。
+      if (!embedManager) throw new Error('嵌入管理器未初始化(存储不可用)');
+      const r = embedManager.startReindex();
+      deps.logger.info('[memory] 收到嵌入重建指令(设置页按钮)');
+      return r;
+    }
+
     case 'dsh-memory/embedding-reindex-cancel': {
       if (!embedManager) throw new Error('嵌入管理器未初始化');
       return { cancelled: embedManager.cancelReindex() };
@@ -1204,7 +1601,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
 }
 
 /** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
-function hitToUiRecord(r: {
+export function hitToUiRecord(r: {
   id: string;
   content: string;
   type: string;
@@ -1218,7 +1615,11 @@ function hitToUiRecord(r: {
   metadata?: Record<string, unknown>;
   score?: number;
   family?: string;
+  /** 退场判据:`valid_to` 闭合即已退场(软删)。由 `listL1`/`getByIds` 透传。 */
+  validTo?: number;
 }): UiRecord {
+  const retired = r.validTo !== undefined;
+  const mark = retired ? readSupersedeMarker(r.metadata) : undefined;
   return {
     id: r.id,
     content: r.content,
@@ -1231,8 +1632,17 @@ function hitToUiRecord(r: {
     createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
     updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : null,
     version: r.version ?? 0,
-    sourceMessageIds: r.source_message_ids ?? [],
+    // R7 来源锚点:契约字段是**标签数组**(`t12 s3`),由 metadata 的保留键读出。
+    // 此前这里仍在填已废弃的 `sourceMessageIds`——`l1_records` 从不存那一列,
+    // 该字段恒为 `[]`(死字段),而契约早已换成 `sourceAnchors`,于是
+    // `sourceAnchors` 永远缺失、来源行在 UI 上从未显示过。
+    sourceAnchors: sourceAnchorLabels(r.metadata),
     score: r.score ?? null,
+    // 退场态透传:活动列表据此渲染「已退场」徽标 + 行内恢复,而非让记录静默停留在
+    // 原样(那样用户会以为「点了删除没反应」)。面板浏览路径**仍列出**退场记录(软删可恢复),
+    // 但必须给出可见差异。
+    retired,
+    retiredReason: retired ? (mark?.reason ?? 'unknown') : null,
   };
 }
 

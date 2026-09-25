@@ -1,5 +1,7 @@
 import type { MemoryLogger, MemoryMode } from '../types.js';
 export declare function isMemoryMode(v: unknown): v is MemoryMode;
+/** 合法角 id 判定(锁域只认 8 角;general 是兜底值不是角,不可锁定)。 */
+export declare function isWingCorner(v: unknown): v is string;
 export declare class SessionModeStore {
     private readonly defaultMode;
     private readonly logger?;
@@ -7,12 +9,23 @@ export declare class SessionModeStore {
     private readonly entries;
     private readonly loaded;
     private persistFailed;
+    /** 只读降级原因(undefined = 正常):非空时内存态照常生效,但停止回写。 */
+    private degraded;
+    private degradedLogged;
+    /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据:磁盘与它不同 = 别人写过。 */
+    private lastPersisted;
     /** 档位切换回调(index.ts 装配 runner 的同步动作:切片落袋/挂起,ADR-0003)。 */
     private onModeChange?;
     /** 串行化持久化写(避免并发原子写撞临时文件名)。 */
     private writeChain;
     constructor(dataDir: string, defaultMode: Extract<MemoryMode, 'auto' | 'chat' | 'work'>, logger?: MemoryLogger | undefined);
-    /** 载入持久化映射(index.ts 启动时 await;失败降级内存态)。 */
+    /**
+     * 载入持久化映射(index.ts 启动时 await;失败降级内存态)。
+     *
+     * **读侧分类**(文件层加固 T2):缺失合法;损坏/不可读 → 告警 + 只读降级;
+     * 未知版本 → **仍按当前形状读取**(本 store 无迁移路径,一律拒载会让档位在
+     * 版本回退后全部失效)+ 只读降级(禁写)。
+     */
     init(): Promise<void>;
     get default(): MemoryMode;
     /** 同步读取:未设置过的会话返回默认档。 */
@@ -31,6 +44,23 @@ export declare class SessionModeStore {
     resolvedRecall(sessionId: string, globalRecall: boolean): boolean;
     /** 设置会话级注入覆盖(undefined = 清除覆盖跟随全局。写穿持久化)。 */
     setRecall(sessionId: string, recall: boolean | undefined): void;
+    /** 会话级域锁定(多选):空数组 = 中心(智能档,无锁域)。 */
+    getWings(sessionId: string): string[];
+    /** 兼容读取(单选口径,取第一个锁定域):undefined = 中心。 */
+    getWing(sessionId: string): string | undefined;
+    /** 锁定域边界开关:未打标是否包含(缺省 true)/ general 是否包含(缺省 false)。 */
+    wingBoundaries(sessionId: string): {
+        includeUnlabeled: boolean;
+        includeGeneral: boolean;
+    };
+    /** 设置会话级域锁定(多选:角 id 数组;`[]` = 明确回中心清除锁定。写穿持久化)。
+     *  **`undefined` = 本轮不动锁域**(例如只更新边界开关,见 stats.ts)——不再把"没传"
+     *  误当"回中心",否则只切边界开关会把已锁定的域悄悄清掉。
+     *  单角时镜像写 `wing` 兼容键,多角时置空(旧读者按无锁域读)。 */
+    setWing(sessionId: string, halls: readonly string[] | undefined, boundaries?: {
+        includeUnlabeled?: boolean;
+        includeGeneral?: boolean;
+    }): void;
     /** 注册档位切换回调(同步调用;回调异常只记日志不阻断写穿)。 */
     setModeChangeHandler(cb: (sessionId: string, oldMode: MemoryMode, newMode: MemoryMode) => void): void;
     /** 设置会话档位(写穿持久化;持久化失败保持内存态生效)。 */

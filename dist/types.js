@@ -4,17 +4,27 @@
  * 覆盖:记忆族/档位、Hall 目录、L0/L1 记录形状、抽取产出与族判定三级兜底、
  * L2 场景摘要与 L1 检索命中。字段名与取值是磁盘/管线两侧的既定契约,不可更名。
  */
-export const HALL_CATALOG = [
+export const WING_CATALOG = [
     { id: 'work', label: '工作' },
-    { id: 'relationships', label: '人际关系' },
-    { id: 'general', label: '通用' },
-    { id: 'finance', label: '财务', experimental: true },
-    { id: 'journey', label: '旅程', experimental: true },
+    { id: 'relationships', label: '人际' },
+    { id: 'learning', label: '学习' },
+    { id: 'creative', label: '创作娱乐' },
+    // 居家在健康之前(八边形顺时针序,用户 2026-09-23 对调)
+    { id: 'home', label: '居家' },
+    { id: 'health', label: '健康' },
+    { id: 'finance', label: '财务' },
+    { id: 'journey', label: '出行' },
 ];
-/** 默认启用的 Hall id(主线 3;实验性条目要用户写进 config hall.enabled 才生效)。 */
-export const HALL_DEFAULT_ENABLED = ['work', 'relationships', 'general'];
-export function hallLabel(id) {
-    const h = HALL_CATALOG.find((x) => x.id === id);
+/** 跨域兜底值:移出角集,仅作为"无法归入任何角"的中心专属产出(不再进角集/门面)。 */
+export const WING_FALLBACK = 'general';
+/** 八边形角集 = 全目录(角集固定,不随 wing.enabled 开关改变形状;开关只把角画灰)。 */
+export const HALL_CORNERS = WING_CATALOG;
+/** 默认启用的 Hall id(打标候选集,默认 8 角全集;归一化规则见 config.normWingEnabled)。 */
+export const WING_DEFAULT_ENABLED = WING_CATALOG.map((h) => h.id);
+export function wingLabel(id) {
+    if (id === WING_FALLBACK)
+        return '跨域';
+    const h = WING_CATALOG.find((x) => x.id === id);
     return h ? h.label : id;
 }
 /** 记录族标签推断:work_* 前缀 → work,其余(含 auto 档兜底)→ chat。 */

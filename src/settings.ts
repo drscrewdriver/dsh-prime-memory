@@ -117,6 +117,7 @@ const ALWAYS_ON: MemoryLiveSettings = {
   embedRemoteModel: '',
   embedRemoteDimensions: 0,
   memoryMutate: false,
+  conflictFreeze: false,
 };
 
 /**
@@ -177,6 +178,8 @@ export function liveSettingsSchema(): Schema<MemoryLiveSettings> {
     embedRemoteDimensions: Schema.number().min(0).max(8192).default(0),
     // 记忆写删权限门:默认 false(模型写删风险高,须显式在面板开启高权限模式)
     memoryMutate: Schema.boolean().default(false),
+    // §C 人工冲突裁决总开关:默认 false(冻结消耗注意力,不可默认全开)
+    conflictFreeze: Schema.boolean().default(false),
   });
 }
 
@@ -404,5 +407,7 @@ function resolveSettings(value: unknown): MemoryLiveSettings {
         : 0,
     // 写删门:严格 === true(任何异常值都视为关,模型写删风险宁紧勿松)
     memoryMutate: v.memoryMutate === true,
+    // §C 人工冲突裁决:严格 === true(默认关,冻结消耗注意力)
+    conflictFreeze: v.conflictFreeze === true,
   };
 }

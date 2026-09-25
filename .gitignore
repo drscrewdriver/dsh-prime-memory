@@ -29,3 +29,6 @@ registry-save.json
 
 # CodePlan / agent 本地规划产物（同 .scratch/、wayfinder/，不入库）
 .agents/
+
+# 审计 worktree(嵌套 git 仓库,永不入库)
+_wt-audit/

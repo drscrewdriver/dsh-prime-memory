@@ -1,12 +1,28 @@
 # pill-spec — 输入栏记忆 pill + 侧边栏 icon 补丁
 
-组件：`MemoryModePill`（`conversation.input.left` 槽位的会话档位按钮）及其驱动的
-侧边栏书本 icon 补丁。全局令牌与守则见 `global-spec.md`。
+组件：`MemoryModePill`（`conversation.input.left` 槽位的会话记忆按钮）及其驱动的
+侧边栏书本 icon 补丁。点击展开**八边形域轮**（`hall-wheel-spec.md`）。
+全局令牌与守则见 `global-spec.md`。
 
-## 档位显示名与色阶
+> v5（hall 八边形，2026-09-19）：档位退居后台、hall 主题轴成为唯一门面（R1/R4）。
+> pill 面文随**域锁定**切换；浮层由 ModeSlider 悬浮板改为 HallWheel 域轮。
+> v6（2026-09-23）：`ModeSlider` 整组件删除（`slider-spec.md` 随之删除），浮层内只剩
+> 会话闸 / 注入三态 / 边界开关 / 回填行；档位经 UI 只能取「智能 / 关闭」两态。
 
-显示名：**关闭 / 日常 / 工作 / 智能**（配置键与英文层保留 off/chat/work/auto）。
-色阶 = **灰 → 品牌蓝** 的渐变过渡（旧绿/橙已废）；关闭档无专属色（透明按钮，文字走 text-2）。
+## 面文
+
+pill 文本格式：`记忆 · <值>`。取值优先序：
+
+1. **关闭**（off 档，完全隐身）；
+2. **只写**（非 off 且会话注入生效值为否——host 下发 `recallResolved=false`；
+   解析权威在 host，client 不另知全局开关）；
+3. **域名**（会话级域锁定，Phase 2 起多选：单选显词表下发显示名，多选显「N 域」）；
+4. **档位名**（智能 / 日常 / 工作）——浮层覆写滑轨已删除，UI 只能取「智能 / 关闭」两态；
+   日常 / 工作 仅在配置默认档或历史持久化值下出现。
+
+`--dsh-mem-mode-*` 档位色令牌与文字对比度依据（≥4.6:1，按 pill 真实底色复算）不变；
+pill 半透明衍生色一律 `color-mix(in srgb, <档位色> N%, transparent)`——
+**var() 引用不能拼 hex alpha 后缀**。
 
 | 令牌 | 浅色 | 暗色 | 语义 |
 |---|---|---|---|
@@ -23,13 +39,6 @@ pill 半透明衍生色一律 `color-mix(in srgb, <档位色> N%, transparent)`�
 
 pill 文本格式：`记忆 · 档位名`（全角间隔两侧各一空格）。
 
-**只写面文（#38，方案 A 面文换字）**：非 off 档且会话注入生效值为否（host 下发
-`recallResolved=false`，即会话覆盖关或全局关+会话未强制开）时，面文整词换作
-`记忆 · 只写`——族名收进浮层滑轨，注入态优先上脸（复合状态一控件的官方语法，
-同输入栏「模型名 + effort ▾」先例）。流光形态、档位色与光晕不变（词承载状态，
-色仍随底层档位弱暗示）；off 档维持「关闭」灰态优先（完全隐身不含只写）。
-解析权威在 host（`session-mode-get/set` 响应的 `recallResolved`），client 不另知全局开关。
-
 **关闭 / 未加载（`mode === null`）= dsh 透明按钮**：
 
 - `.dsh-mem-pill-off`：`border: none; background: transparent`——裸 `<button>` 会露出
@@ -37,7 +46,8 @@ pill 文本格式：`记忆 · 档位名`（全角间隔两侧各一空格）。
 - hover 才出 `--dsh-mem-bg-hover` 淡底（dsh 透明按钮同款交互）；
 - `:focus-visible` 品牌蓝 2px 环；文字 text-2，无光晕无流光。
 
-**日常 / 工作 / 智能 = 同款流光 + 光晕**（`isFlow = loaded && !isOff`）：
+**日常 / 工作 / 智能 / 锁域 = 同款流光 + 光晕**（`isFlow = loaded && !isOff`；锁域时
+文字色仍随底层档位，域状态由面文词承载）：
 
 - `.dsh-mem-flow`：border 区画品牌蓝族 conic 旋转光带（`rgba(61,91,224,0.9)` /
   `rgba(77,107,254,0.95)` / `rgba(147,168,255,1)` / `rgba(110,133,255,0.9)`，
@@ -52,10 +62,12 @@ pill 文本格式：`记忆 · 档位名`（全角间隔两侧各一空格）。
 
 ## 行为
 
-- 点击 pill 开/关 `ModeSlider` 悬浮板（见 `slider-spec.md`）；读取失败时点击重试
+- 点击 pill 开/关 `HallWheel` 域轮浮层（见 `hall-wheel-spec.md`）；读取失败时点击重试
   （title 提示 + `⚠` 占位）。
-- 档位提交乐观更新：RPC 失败回滚 + 错误行。
+- 档位/注入/域锁定提交乐观更新：RPC 失败回滚 + 错误行（域锁定经 `session-mode-set`
+  的 `halls` 数组,与 `recall` 覆盖正交）。
 - 快速切换会话时用请求序列号丢弃过期响应。
+- 浮层壳定位与水平视口夹持（`useViewportClamp`）在 pill 内完成,域轮只管内容。
 
 ## 侧边栏书本 icon 补丁（受控 DOM 补丁）
 

@@ -77,14 +77,24 @@ export class L0Store {
     async append(sessionId, messages) {
         if (messages.length === 0)
             return;
-        const records = messages.map((m) => ({
-            sessionId,
-            recordedAt: nowIso(),
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            timestamp: m.timestamp,
-        }));
+        const records = messages.map((m) => {
+            const rec = {
+                sessionId,
+                recordedAt: nowIso(),
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                timestamp: m.timestamp,
+            };
+            // R7:锚点摊平到事实源与 DB 两处(事实源可跨进程重建,DB 供按坐标查询)。
+            // 无锚点时**不写键**——旧行与新增的无坐标消息保持同形。
+            if (m.anchor !== undefined) {
+                rec.turn = m.anchor.turn;
+                if (m.anchor.step !== undefined)
+                    rec.step = m.anchor.step;
+            }
+            return rec;
+        });
         // 事实源:按天追加
         const byDay = new Map();
         for (const r of records) {
@@ -139,6 +149,12 @@ export class L0Store {
     setEmbeddingService(svc) {
         this.embedSvc = svc;
         this.helper.setService(svc);
+    }
+    /** 向量写入能力是否就绪。`reindex` 在未就绪时**静默短路**成 0/0/0
+     *  (见本文件 `reindex` 首行),调用方必须自己问这里——否则"根本没跑"
+     *  会长得和"跑完了、零条待补"一模一样。 */
+    vectorsReady() {
+        return this.helper.vectorReady();
     }
     /**
      * 增量重嵌入(同 L1Store.reindex:只补缺失向量,零向量记 skipped 并入 skip 集,

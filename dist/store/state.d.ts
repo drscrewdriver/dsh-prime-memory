@@ -1,4 +1,4 @@
-import type { MemoryFamily } from '../types.js';
+import type { MemoryFamily, MemoryLogger } from '../types.js';
 export interface MemoryState {
     /** 上次 L1 抽取时间(epoch ms)。 */
     lastExtractAt: number;
@@ -22,9 +22,22 @@ export interface MemoryState {
 export declare function defaultState(): MemoryState;
 export declare class StateStore {
     private readonly file;
+    private readonly logger?;
     private buckets;
     private migrated;
-    constructor(file: string);
+    /** 只读降级原因(非空 = 拒绝加载且禁止回写)。 */
+    private degradedReason;
+    private saveBlockedLogged;
+    /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据。 */
+    private lastPersisted;
+    constructor(file: string, logger?: MemoryLogger | undefined);
+    /**
+     * 只读降级原因(undefined = 正常)。
+     *
+     * 降级时 `forFamily` 仍返回默认空态——记忆功能继续可用(只是丢 checkpoint),
+     * 但**绝不回写**,以免把用户磁盘上那份读不懂/已损坏的文件洗掉。
+     */
+    get degraded(): string | undefined;
     load(): Promise<void>;
     /** v1 → v2 迁移发生时为 true(调用方记日志/落盘)。 */
     get didMigrate(): boolean;

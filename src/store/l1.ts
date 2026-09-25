@@ -8,18 +8,23 @@
  */
 import { existsSync, promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
+import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord, RoomCount } from '../types.js';
 import { familyForType, isScopeVisible } from '../types.js';
 import type { GraphNodeSearchResult } from '../graph/types.js';
 import { graphHitRecordIds } from '../graph/search.js';
 import type { L1Receipt, ReceiptQuery } from './receipts.js';
-import type { ConflictPair, ConflictResolution } from './conflicts.js';
+import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
+import { isRetired, type SupersedeInfo } from './supersede.js';
+import { exportThenPurge, readSnapshotManifest, readSnapshotRecords, restoreL1Snapshot, selectSnapshotTargets, snapshotDirFor, listSnapshots as listSnapshotsIn, type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { EmbedHelper, NoopEmbeddingService, type EmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
 import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
-import { isZeroVector, type MemoryDb } from './sqlite.js';
+import { isZeroVector, type L1MetaLite, type MemoryDb } from './sqlite.js';
 
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
+
+/** Room 计数缓存 TTL(tags 只在反刍标签段变化;面板常开也不必每次敲库)。 */
+const ROOM_CACHE_TTL_MS = 30_000;
 
 /**
  * 图谱路提供者(§D 第 3 路):按查询返回图谱命中(已按 score 降序)。
@@ -53,7 +58,27 @@ export interface L1SearchOptions {
 /** 官方过度召回倍数:候选池 = limit × 3(官方 tool 路径同款)。 */
 const CANDIDATE_MULTIPLIER = 3;
 
+/** 快照回灌的结果(在 `RestoreResult` 之上补"从哪来"与"找回了多少")。 */
+export interface SnapshotRestoreOutcome extends RestoreResult {
+  /** 解析出的快照目录;名字非法或快照不存在时为空串。 */
+  dir: string
+  /** 这个名字是否指向一份真实存在且清单合法的快照。 */
+  found: boolean
+  /** 其中当前**不在库**、本次被找回的条数(写库前算出)。 */
+  missing: number
+  /** 本次顺手放回检索面的条数(仅 `unretire: true` 时可能非零)。 */
+  unretired: number
+  notFound: string[]
+  /**
+   * 回到主表但**仍未回到检索面**的 id(见 `SnapshotRestorePlan.stillRetired`)。
+   * `unretire: true` 且放回成功时为空数组。
+   */
+  stillRetired: string[]
+}
+
 export class L1Store {
+  /** 记忆库根目录(`records/` 与 `snapshots/` 都在它下面)。 */
+  private readonly dataDir: string;
   private readonly recordsDir: string;
   private readonly legacyFile: string;
   private readonly helper: EmbedHelper;
@@ -63,6 +88,8 @@ export class L1Store {
   private readonly decayHalfLifeDays: number;
   /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
   private readonly graphLaneProvider?: GraphLaneProvider;
+  /** Room 计数缓存(见 `listRooms()`:tags 仅随反刍变化,不必每次敲库)。 */
+  private roomCache: { at: number; list: RoomCount[] } | null = null;
 
   constructor(
     dataDir: string,
@@ -75,6 +102,7 @@ export class L1Store {
     /** 图谱路提供者(§D 第 3 路);不传则该路不存在,融合退回双路。 */
     graphLane?: GraphLaneProvider,
   ) {
+    this.dataDir = dataDir;
     this.recordsDir = path.join(dataDir, 'records');
     this.legacyFile = path.join(dataDir, 'l1', 'records.jsonl');
     this.embedSvc = embed;
@@ -131,6 +159,26 @@ export class L1Store {
     return this.db.getAllL1();
   }
 
+  /**
+   * 游标分批取元信息(**只三列**,不含 content):后台巡检专用。
+   *
+   * 与 `all()` 的区别是结构性的:`all()` 一次性全量同步反序列化(含正文),
+   * 记录数随使用增长后会在事件循环里阻塞 RPC;巡检只需要 id/type/metadata。
+   *
+   * 配套写回必须用 `patchMetadata()` —— 本方法拿不到 content,用 upsert 会把正文清空。
+   */
+  allLite(limit: number, offset: number): L1MetaLite[] {
+    return this.db.getAllL1Lite(limit, offset);
+  }
+
+  /**
+   * 只更新 metadata_json 的最小写回(不动 content 与其它列)。
+   * 返回 false 表示 id 不存在或写入失败——调用方须记账,不许静默。
+   */
+  patchMetadata(id: string, metadata: Record<string, unknown>): boolean {
+    return this.db.patchL1Metadata(id, metadata);
+  }
+
   /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
   getByIds(ids: string[]): MemoryRecord[] {
     return this.db.getL1ByIds(ids);
@@ -168,6 +216,31 @@ export class L1Store {
   }
 
   /**
+   * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策(薄包装)。
+   * 与 `recordConflictPending` 同层同理由:管线已持有 L1Store,不新增构造参数;
+   * 同时它是「留痕写失败不得中断蒸馏」可注入的测试缝。
+   */
+  recordConflictRejected(rows: readonly ConflictRejected[]): number {
+    return this.db.recordConflictRejected(rows);
+  }
+
+  /** §C 读取丢弃留痕(为审计/诊断出口预留;薄包装)。 */
+  listConflictRejected(opts: { createdBefore?: string; limit?: number } = {}): ConflictRejected[] {
+    return this.db.listConflictRejected(opts);
+  }
+
+  /**
+   * §C Phase 2(task_2.0):写入「已复看」痕迹(薄包装)。
+   * **不写 `resolved_at`** —— `defer` 不是裁决结论,该对必须留在待裁决队列里。
+   */
+  markConflictReviewed(
+    pairId: string,
+    next: { reviewedAt: string; deferredAt: string; deferCount: number },
+  ): number {
+    return this.db.markConflictReviewed(pairId, next);
+  }
+
+  /**
    * §C 冻结的图谱侧同步:把 `disputed` 状态重算到给定冲突集(命中标记 / 不再命中复原)。
    * 经 store 而非直取 `db.graphStore`,与图谱路 provider 的注入式设计同一理由
    * (见本文件头部注释):图谱是**可选**的派生投影,开关关闭时必须是 no-op。
@@ -176,13 +249,25 @@ export class L1Store {
     return this.db.syncGraphDisputed(disputedRecordIds);
   }
 
-  /** §C 待裁决队列的未裁决条数(task_24 队列上限判据)。 */
-  countConflictPendingUnresolved(): number {
-    return this.db.countConflictPendingUnresolved();
+  /**
+   * §C 待裁决队列的未裁决条数(task_24 队列上限判据)。
+   * Phase 3(task_3.4):`conflictType` 可选过滤,只有额度判据传 `{ conflictType: 'hard' }`。
+   */
+  countConflictPendingUnresolved(opts: { conflictType?: ConflictType } = {}): number {
+    return this.db.countConflictPendingUnresolved(opts);
+  }
+
+  /** §C Phase 3(task_3.3):未裁决对按 `claim_key` 归并(薄包装)。 */
+  listConflictGroupedByClaim(opts: { limit?: number } = {}): ConflictClaimGroup[] {
+    return this.db.listConflictGroupedByClaim(opts);
   }
 
   /** §C 取未裁决冲突对(task_24 超时扫描 / task_25 裁决工具)。 */
-  listConflictPending(opts: { createdBefore?: string; limit?: number } = {}): ConflictPair[] {
+  listConflictPending(opts: {
+    createdBefore?: string;
+    limit?: number;
+    excludeDeferExhausted?: boolean;
+  } = {}): ConflictPair[] {
     return this.db.listConflictPending(opts);
   }
 
@@ -237,8 +322,178 @@ export class L1Store {
     this.helper.setService(svc);
   }
 
-  async deleteBatch(ids: string[]): Promise<void> {
-    this.db.deleteL1Batch(ids);
+  /** 向量写入能力是否就绪。`reindex` 在未就绪时**静默短路**成 0/0/0
+   *  (见本文件 `reindex` 首行),调用方必须自己问这里——否则"根本没跑"
+   *  会长得和"跑完了、零条待补"一模一样。 */
+  vectorsReady(): boolean {
+    return this.helper.vectorReady();
+  }
+
+  // 这里**刻意没有** `deleteBatch`:物理删除(L1 三表同清)是不可逆的,
+  // 故它只能经由 `purgeRetired` → `exportThenPurge`(先落快照 + 校验通过)抵达。
+  // 曾经的 `deleteBatch(ids)` 是个无门禁的硬删入口,裁决 / 取代 / 面板删除都直接
+  // 调它 —— 那正是"删错了只能去 records/*.jsonl 手工捞"的根源。
+  // 若将来确需新增强删路径,请复用它下面的门禁,而不是重新暴露一个裸入口。
+
+  /**
+   * **软删**(记忆退场):保留主表行 + 撤出检索面,可被 `restore` 找回。
+   *
+   * 三条退场路径 —— 裁决判负 / 去重取代(`update`/`merge`) / 人工删除 ——
+   * **共用这一个入口**。分成三份实现迟早会出现"某条路径还在硬删"的不一致语义,
+   * 而那种不一致只有在误删发生时才暴露。
+   */
+  retire(ids: string[], info: SupersedeInfo): number {
+    return this.db.retireL1Batch(ids, info);
+  }
+
+  /** 已退场(可恢复)记录列表(面板用)。 */
+  listRetired(opts: { limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
+    return this.db.listRetiredL1(opts);
+  }
+
+  /**
+   * 恢复:清退场标记 → 重新 upsert 以重建 FTS(与向量)。
+   *
+   * 嵌入不可用/超时时**不抛**:向量补不上只是"暂时只能关键词召回",而"恢复失败"
+   * 会让人以为记录丢了 —— 后者严重得多。记录先回到检索面,向量留给后续 `reindex`。
+   */
+  async restore(ids: string[]): Promise<{ restored: number; vectorsWritten: number }> {
+    const records = this.db.clearRetireMarker(ids);
+    let vectorsWritten = 0;
+    for (const rec of records) {
+      if (!rec.family) rec.family = familyForType(rec.type);
+      let vec: Float32Array | undefined;
+      try {
+        vec = (await this.helper.batch([rec.content]))[0];
+      } catch (err) {
+        this.logger?.warn(
+          `[memory] 恢复时向量计算失败,先回关键词检索面(日后重建可补齐): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      if (vec && !isZeroVector(vec)) vectorsWritten++;
+      this.db.upsertL1(rec, vec);
+    }
+    return { restored: records.length, vectorsWritten };
+  }
+
+  /**
+   * 已退场记录的**物理清理**(不可逆):先落快照 + 校验,门禁不过即中止。
+   *
+   * 门禁本体在 `l1-snapshot.exportThenPurge`(与"重建前必快照"同一套设施);
+   * 这里只把 L1Store 已知的 dataDir 与 logger 接上去,避免端点层自己去推路径。
+   */
+  async purgeRetired(ids: string[], reason: string): Promise<ExportThenPurgeResult> {
+    // **只清理确实处于退场态的记录**。这道复核必须在删除发生的地方(而不是调用方):
+    // 否则任何调用方传一个 id 列表就能绕过软删、把活动记忆直接物理抹掉——
+    // 那等于给"先导出后清理"留了一条硬删后门。
+    const known = new Map(this.db.getL1ByIds(ids).map((r) => [r.id, r]));
+    const retiredIds = ids.filter((id) => known.get(id)?.validTo !== undefined);
+    return exportThenPurge(this.db, this.dataDir, retiredIds, reason, this.logger);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 快照的**读与回灌**(task_27):`purgeRetired` 会先落快照,但只落不接等于
+  // 后悔药只做了一半——"清理不可逆"这句话必须配一条能走回去的路,否则
+  // `exportThenPurge` 的导出物就只是给人手工解析的 JSON。
+  //
+  // 恢复走 `restoreL1Snapshot`(本文件的 `restore` 管的是**软删**退场,
+  // 两者不是一件事:软删的行一直在主表里,快照恢复要管的是**已被物理删除**的行)。
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** 可用快照列表(按时间倒序;面板/工具据此选一份来恢复)。 */
+  listSnapshots(opts: { limit?: number } = {}): Promise<{ items: SnapshotSummary[]; total: number }> {
+    return listSnapshotsIn(this.dataDir, { ...opts, logger: this.logger });
+  }
+
+  /**
+   * 名字 → 真实快照。
+   *
+   * 两道判定合一:名字合法(`snapshotDirFor`)且**清单存在且版本相符**
+   * (`readSnapshotManifest`)。只有前者会被"目录里有个同名空目录"骗过——
+   * 而那正是半截写入的产物,选中它恢复会得到 0 条却报成功。
+   */
+  private async resolveSnapshot(name: string): Promise<{ dir: string; records: MemoryRecord[] } | undefined> {
+    const dir = snapshotDirFor(this.dataDir, name);
+    if (dir === undefined) return undefined;
+    if ((await readSnapshotManifest(dir)) === undefined) return undefined;
+    return { dir, records: await readSnapshotRecords(dir) };
+  }
+
+  /**
+   * 干跑:算出"这份快照恢复下去会发生什么",**不写库**。
+   *
+   * `missing` 才是真正被找回的条数——快照里绝大多数记录今天仍在库里(快照是
+   * **全库**拷贝,而被清掉的只是其中几条)。只报 `targets` 会让人以为"要恢复 787 条",
+   * 从而不敢按下去。
+   */
+  async planSnapshotRestore(name: string, ids?: readonly string[]): Promise<SnapshotRestorePlan> {
+    const resolved = await this.resolveSnapshot(name);
+    if (resolved === undefined) {
+      return { name, dir: '', found: false, inSnapshot: 0, targets: 0, missing: 0, stillRetired: [], notFound: [] };
+    }
+    const { targets, notFound } = selectSnapshotTargets(resolved.records, ids);
+    const targetIds = targets.filter((r) => typeof r?.id === 'string').map((r) => r.id);
+    const current = this.existingIds(targetIds);
+    return {
+      name,
+      dir: resolved.dir,
+      found: true,
+      inSnapshot: resolved.records.length,
+      targets: targets.length,
+      missing: targetIds.filter((id) => !current.has(id)).length,
+      // 目标里带退场标记的那些:它们即便回到主表也仍不在检索面(见字段说明)。
+      stillRetired: targets.filter((r) => isRetired(r)).map((r) => r.id),
+      notFound,
+    };
+  }
+
+  /**
+   * 从快照恢复(不可逆动作的**回程票**;本身幂等,可安全重跑)。
+   *
+   * 向量按整批补算(`helper.batch`),失败即降级成"暂时只走关键词召回"而不中止——
+   * 与 `restore` 同一条纪律:补不上向量是小事,让人以为记录丢了是大事。
+   *
+   * @param opts.unretire - 顺手把带退场标记的记录放回检索面(走既有 `restore`,
+   *   不新开写路径)。默认 `false`:只回主表,与"恢复的是当时的状态"一致。
+   */
+  async restoreFromSnapshot(name: string, opts: { ids?: readonly string[]; unretire?: boolean } = {}): Promise<SnapshotRestoreOutcome> {
+    const resolved = await this.resolveSnapshot(name);
+    if (resolved === undefined) {
+      return { dir: '', found: false, inSnapshot: 0, targets: 0, missing: 0, unretired: 0, stillRetired: [], restored: 0, failed: 0, vectorsWritten: 0, notFound: [] };
+    }
+    // `missing` 必须在写库**之前**算:写完再算恒为 0,那这个字段就废了。
+    const { targets } = selectSnapshotTargets(resolved.records, opts.ids);
+    const targetIds = targets.filter((r) => typeof r?.id === 'string').map((r) => r.id);
+    const current = this.existingIds(targetIds);
+    const missing = targetIds.filter((id) => !current.has(id)).length;
+    const retired = targets.filter((r) => isRetired(r)).map((r) => r.id);
+    const r = await restoreL1Snapshot(this.db, resolved.dir, {
+      logger: this.logger,
+      ids: opts.ids,
+      vectorize: async (records) => {
+        const vecs = await this.helper.batch(records.map((x) => x.content));
+        // 零向量 = "嵌入其实没算出来",按未补上计(与 `restore` 的判据一致)。
+        return vecs.map((v) => (v && !isZeroVector(v) ? v : undefined));
+      },
+    });
+    let unretired = 0;
+    let stillRetired = retired;
+    if (opts.unretire && retired.length > 0) {
+      // 复用已验收的 `restore`(清标记 + 重算向量 + 重建 FTS),不另开一条写路径。
+      const back = await this.restore(retired);
+      unretired = back.restored;
+      stillRetired = [];
+    }
+    return { ...r, dir: resolved.dir, found: true, missing, unretired, stillRetired };
+  }
+
+  /** 这批 id 里当前**在库**的集合(分块查,避免一次 IN 太多参数)。 */
+  private existingIds(ids: readonly string[]): Set<string> {
+    const out = new Set<string>();
+    for (let i = 0; i < ids.length; i += 400) {
+      for (const r of this.db.getL1ByIds(ids.slice(i, i + 400))) out.add(r.id);
+    }
+    return out;
   }
 
   /**
@@ -384,13 +639,60 @@ export class L1Store {
   }
 
   /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall / 可见范围过滤。 */
-  list(opts: { type?: string; scene?: string; family?: string; hall?: string; workspaceId?: string; limit: number; offset: number }): { items: MemoryRecord[]; total: number } {
+  list(opts: {
+    type?: string;
+    scene?: string;
+    family?: string;
+    hall?: string;
+    halls?: readonly string[];
+    /** Room 过滤(metadata.tags 含该 slug)。 */
+    tag?: string;
+    workspaceId?: string;
+    /** 退场筛查:三态(`undefined` 全部 / `false` 仅活跃 / `true` 仅已退场)。 */
+    retired?: boolean;
+    limit: number;
+    offset: number;
+  }): { items: MemoryRecord[]; total: number } {
     return this.db.listL1(opts);
   }
 
   /** 场景名去重列表(UI 筛选器数据源)。 */
   distinctScenes(): string[] {
     return this.db.distinctL1Scenes();
+  }
+
+  /** Hall 域计数(八边形角上"该域 N 条 / 未打标 M"数据源):按 metadata.hall 分组计数。 */
+  wingCounts(): { counts: Record<string, number>; unlabeled: number } {
+    return this.db.wingL1Counts();
+  }
+
+  /**
+   * Room 计数(标签自生长分类):展开 metadata.tags 聚合,1 tag = 1 Room。
+   *
+   * tags 只在反刍的标签段变化,故带 30s TTL 缓存;反刍收尾显式 `invalidateRooms()`
+   * 保证新涌现的 Room 立刻可见。降级时返回空数组(面板显示"暂无"而非报错)。
+   */
+  listRooms(): RoomCount[] {
+    const now = Date.now();
+    if (this.roomCache && now - this.roomCache.at < ROOM_CACHE_TTL_MS) return this.roomCache.list;
+    const list = this.db.l1RoomCounts();
+    this.roomCache = { at: now, list };
+    return list;
+  }
+
+  /** 丢弃 Room 计数缓存(tags 写入侧调用:反刍标签段收尾 / 手工打标)。 */
+  invalidateRooms(): void {
+    this.roomCache = null;
+  }
+
+  /** 主表全量元数据扫描(单一所有者共享函数,供并行计划引用门禁复用;见 MemoryDb.scanL1Metadata)。 */
+  scanAllMetadata(cb: (recordId: string, metadata: Record<string, unknown> | null) => void): number {
+    return this.db.scanL1Metadata(cb);
+  }
+
+  /** 查询向量(域软门禁用):复用既有嵌入源;失败/未就绪返回 undefined,调用方降级。 */
+  embedText(text: string, timeoutMs?: number): Promise<Float32Array | undefined> {
+    return this.helper.query(text, timeoutMs);
   }
 
   /**

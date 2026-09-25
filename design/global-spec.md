@@ -11,7 +11,7 @@
 
 - `global-spec.md`（本文件）——主题机制 / 令牌 / 圆角 / 排版 / 动效 / 无障碍 / 限制 / 守则
 - `pill-spec.md`——输入栏记忆 pill + 侧边栏 icon 补丁
-- `slider-spec.md`——悬浮板滑动选择器（滑轨 / 填充 / 拖动气泡）
+- `hall-wheel-spec.md`——八边形域轮（hall 主题轴门面 / 浮层内全部控件）
 - `settings-spec.md`——设置页记忆浏览器（原生复用 / 标签 tint / 重建面板）
 
 ## 主题机制（两层令牌）
@@ -36,8 +36,9 @@ body[data-ds-dark-theme] { --dsh-mem-...: <暗色值> }  /* 暗色整组覆盖 *
 - **强调色不链 dsw**（宿主交互令牌不是品牌蓝），由本层自定义，见下文"品牌强调色"。
 - 组件内联样式一律写 `var(--dsh-mem-*)` → **主题切换时无需 React 重渲染**，
   CSS 变量就地换值，且 `.dsh-mem-root *` 上挂了 0.18s 颜色过渡（见"动效"）。
-- 样式表由 `ensureThemeStyle()` 惰性注入（`<style id="dsh-mem-theme-style">`，幂等），
-  四个渲染入口都调用：`MemoryPanel` / `MemoryModePill` / `ModeSlider` / `RebuildPanel`。
+-   样式表由 `ensureThemeStyle()` 惰性注入（`<style id="dsh-mem-theme-style">`，幂等），
+  五个渲染入口都调用：`MemoryPanel`（`panel.tsx`）/ `MemoryModePill` / `HallWheel` /
+  `RebuildPanel` / `RuminatePanel`。
   `@keyframes`/`@property`/伪类/媒体查询进不了 inline style，只能走这张表。
 
 ## 中性与状态令牌
@@ -60,14 +61,21 @@ body[data-ds-dark-theme] { --dsh-mem-...: <暗色值> }  /* 暗色整组覆盖 *
 | `--dsh-mem-text-2` | dsw label-secondary，fallback `#61666b` | 同左，fallback `#cfd3d6` | 次文字 / detail |
 | `--dsh-mem-text-3` | dsw label-tertiary，fallback `#6e7781` | 同左，fallback `#8892a6` | 提示 / 标签 / muted |
 | `--dsh-mem-danger` | dsw state-error-primary，fallback `#d0403f` | 同左，fallback `#f4707b` | 错误文字 / 危险动作 |
-| `--dsh-mem-thumb` | `#ffffff` | `#e8ebf5` | 滑块圆球 / 开关旋钮 |
-| `--dsh-mem-track` | `rgba(128,140,150,0.32)` | `rgba(148,160,180,0.30)` | 滑轨 / 进度条底 |
-| `--dsh-mem-dot` | `rgba(128,140,150,0.55)` | `rgba(148,160,180,0.5)` | 滑轨停点 |
+| `--dsh-mem-thumb` | `#ffffff` | `#e8ebf5` | 开关旋钮（Switch） |
+| `--dsh-mem-track` | `rgba(128,140,150,0.32)` | `rgba(148,160,180,0.30)` | 进度条底 / 分级条底 |
 | `--dsh-mem-shadow-card` | dsw shadow-lv1，fallback `0 2px 4px rgba(0,0,0,.05)` | 同左，fallback `0 2px 4px rgba(0,0,0,.3)` | 卡片浅投影 |
 | `--dsh-mem-shadow-pop` | dsw shadow-lv3，fallback `0 0 1px rgba(0,0,0,.2), 0 0 4px rgba(0,0,0,.02), 0 12px 32px rgba(0,0,0,.08)`（双主题同值） | 同左 | 浮层投影（原生菜单同款） |
-| `--dsh-mem-fill-1/2` | `#7b93ff` → `#3d5be0` | `#8fa0ff` → `#465ce8` | 滑轨填充渐变（左浅右深、球侧最深；浅端为可见性下限，勿再调浅） |
 
 会话档位色令牌（`--dsh-mem-mode-chat/work/auto`）归 `pill-spec.md`。
+
+hall 八边形域轮令牌（`hall-wheel-spec.md`，v5 新增；引用既有中性色与品牌蓝，双主题成对）：
+
+| 令牌 | 取值 | 语义 |
+|---|---|---|
+| `--dsh-mem-hall-line` | `rgba(128,140,150,0.35)` / 暗 `rgba(148,160,180,0.32)` | 连线与八边形外框 |
+| `--dsh-mem-hall-corner` | `var(--dsh-mem-text-2)` | 角默认文字 |
+| `--dsh-mem-hall-corner-on` | `var(--dsh-mem-accent)` | 选中角/中心文字与描边 |
+| `--dsh-mem-hall-empty` | `var(--dsh-mem-text-3)` | 空角（0 条）与未打标态 |
 
 ## 品牌强调色：三档语义
 
@@ -116,7 +124,7 @@ DeepSeek 品牌蓝拆三档，各司其职，**双主题 WCAG AA 全部达标**�
 | `8px` | **控件** | 按钮 / 输入框 / 下拉 / 分段选择器 |
 | `10px` | **卡片** | 记忆卡 / 场景卡 / 开关面板 / 统计瓦片 / 代码块 |
 | `12px` | **浮层** | 悬浮板 / 重建模态框 |
-| `999px` | **胶囊** | pill / 标签 / 开关轨道 / 滑轨 |
+| `999px` | **胶囊** | pill / 标签 / 开关轨道 |
 
 smoke 第 21 节机械断言：inline `borderRadius` 与 CSS `border-radius` 只允许
 `{4, 8, 10, 12, 999, 50%}`（`50%` 为圆点/圆头）。**加新组件必须落进这个集合。**
@@ -137,8 +145,8 @@ smoke 第 21 节机械断言：inline `borderRadius` 与 CSS `border-radius` 只
 | 主题切换过渡 | `.dsh-mem-root, .dsh-mem-root *` 上 `background-color/border-color/color/box-shadow .18s ease`（只挂 paint 属性，不碰 transform） | `prefers-reduced-motion` → `none` |
 | 按压反馈 | `transform .08s ease`（`.dsh-mem-btn` 自有 transition） | 同上（reduced-motion 块末置压制） |
 | 流光 | `dshMemFlow 3s linear infinite`（`@property --dsh-mem-angle` 注册角度插值） | 同上 → `animation: none` |
-| 滑块吸附 | 圆球 `left` 与填充 `width` 同步 `120ms ease`（拖拽中两者 `transition: none` 保 1:1 跟手） | inline 优先级高于样式表媒体查询，无法被压制（已知限制） |
-| 开关旋钮 | inline `left .15s` | 同上（无法压制，同滑块） |
+| 开关旋钮 | inline `left .15s` | inline 优先级高于样式表媒体查询，无法被压制（已知限制） |
+| 域轮激活块 | HallWheel 蓝块位置走 JS rAF 指数逼近（`*0.2`，无速度项、不过冲不弹动） | `prefers-reduced-motion` → 组件读 `matchMedia` 直接吸附终点（静帧） |
 | 重建进度 | `.dsh-mem-rb-fill` `width .4s ease` | `prefers-reduced-motion` → `none` |
 | 场景卡折叠箭头 | `.dsh-mem-scene-chev` `transform .15s ease`（展开态 rotate(90deg)） | 同上（兜底块名单内） |
 | 下拉触发钮箭头 | `.dsh-mem-sel-chev` `transform .12s ease`（展开态 rotate(225deg)；CSS 描边画法，无位图/SVG 资产） | 同上（兜底块名单内） |
@@ -158,9 +166,10 @@ smoke 第 21 节机械断言：inline `borderRadius` 与 CSS `border-radius` 只
 
 ## 已知限制（改动前必读）
 
-1. **inline transition 不受 reduced-motion 压制**：开关旋钮（`S.knob`）、滑块圆头与
-   滑轨填充（width）的 transition 是 React inline style，样式表媒体查询物理上盖不过
-   行内优先级。修复需要组件侧读 `matchMedia`，当前接受（位移动画幅度小、时长短）。
+1. **inline transition 不受 reduced-motion 压制**：开关旋钮（`S.knob`）的 transition 是
+   React inline style，样式表媒体查询物理上盖不过行内优先级。域轮激活块已修
+   （组件读 `matchMedia`，reduce 下静帧吸附终点）；旋钮要修同样需要组件侧读
+   `matchMedia`，当前接受（位移动画幅度小、时长短）。
 2. **浅色三级灰 `#6e7781` 余量薄**（4.547:1）：GitHub 标准灰，当前合规；
    宿主背景若比纯白略暗需复核。
 3. **dsw 令牌缺失时 fallback 自负**：中性色链 dsw 是"信任宿主"设计；宿主未定义
@@ -186,6 +195,7 @@ smoke 第 21 节机械断言：inline `borderRadius` 与 CSS `border-radius` 只
 6. **带 transition 的新类**：同步加进末尾 reduced-motion 压制名单（"动效"节）。
 7. ~~ES5 纯度~~（已废除：client 已迁 TS/TSX + esbuild，见 AGENTS.md 代码约定）。
 8. **可见文案零 em-dash**；中文注释；RPC 端点/载荷类型一律取 `src/contract.ts` 契约。
-9. 改完跑全链：`npm run typecheck`（client 侧 strict 双检）→ 重建 dist-smoke →
-   `npm run smoke`（第 21 节对 dist/client.js 产物拦令牌 / 圆角 / em-dash / 类接线 /
-   档位名 / handoff 协议回归）→ `npm run build` 产出最新 dist/client.js。
+9. 改完跑全链：`npm run typecheck`（client 侧 strict 双检）→ `npm test`（vitest，含读
+   `dist/client.js` 产物的 `client-entry.test.ts`）→ `npm run smoke`（产物就位 / client
+   handoff 协议 / worker 协议头 / 包入口与导出面 / 契约端点面 / 包元数据）→ `npm run build`
+   → 把 `dist/` **整目录**同步到宿主 profile 安装副本。

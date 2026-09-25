@@ -12,20 +12,36 @@ export type MemoryMode = 'auto' | 'chat' | 'work' | 'off';
 export type ExtractMode = 'auto' | 'chat' | 'work';
 /**
  * Hall(粗分类属性通道,与 family/type 正交):给 L1 记忆加一个跨族的可检索标签。
- * 主线 3 个默认启用;finance/journey 为实验性(默认不进 hall.enabled,显式加入才参与
- * 自动打标)。细粒度归属由 prompt 语义判断,拿不准时省略 hall(不进 General 兜底,避免噪声)。
+ * 8 角全为主线(experimental 字段已退休);`general` 不占角,降为中心专属兜底值
+ * (WING_FALLBACK:跨域/无法归类时由智能档产出)。细粒度归属由 prompt 语义判断,
+ * 跨域或实在无法归类时落 general(唯一允许的兜底)。
  */
-export interface HallDef {
+export interface WingDef {
     id: string;
     label: string;
-    /** 实验性(默认不进 hall.enabled,需用户显式开启才参与自动打标/过滤)。 */
-    experimental?: boolean;
 }
-export declare const HALL_CATALOG: HallDef[];
-/** 默认启用的 Hall id(主线 3;实验性条目要用户写进 config hall.enabled 才生效)。 */
-export declare const HALL_DEFAULT_ENABLED: string[];
-export type HallId = (typeof HALL_CATALOG)[number]['id'];
-export declare function hallLabel(id: string): string;
+export declare const WING_CATALOG: WingDef[];
+/** 跨域兜底值:移出角集,仅作为"无法归入任何角"的中心专属产出(不再进角集/门面)。 */
+export declare const WING_FALLBACK = "general";
+/** 八边形角集 = 全目录(角集固定,不随 wing.enabled 开关改变形状;开关只把角画灰)。 */
+export declare const HALL_CORNERS: readonly WingDef[];
+/** 默认启用的 Hall id(打标候选集,默认 8 角全集;归一化规则见 config.normWingEnabled)。 */
+export declare const WING_DEFAULT_ENABLED: string[];
+export type WingId = (typeof WING_CATALOG)[number]['id'];
+export declare function wingLabel(id: string): string;
+/**
+ * Room(房间)= **标签类自生长分类**的构成单元:1 个 slug tag = 1 个 Room。
+ *
+ * MemPalace 五层映射里 Room 位于 Wing/Hall 之下、Closet/Drawer 之上:
+ * Wing(生活域)与认知 hall(类型轴)都是**固定枚举**,而 Room **没有枚举**——
+ * 它由记录上涌现的 `metadata.tags` 直接派生,新 tag 落库即成为新 Room(零注册、零迁移)。
+ */
+export interface RoomCount {
+    /** Room 名 = 归一化后的 slug tag(小写字母数字连字符)。 */
+    room: string;
+    /** 该 Room 下的记录数(与 `wingL1Counts()` 同口径:含 retired 行)。 */
+    count: number;
+}
 /** 记录族标签推断:work_* 前缀 → work,其余(含 auto 档兜底)→ chat。 */
 export declare function familyForType(type: string): MemoryFamily;
 /**
@@ -48,6 +64,23 @@ export interface MemoryLogger {
     warn(msg: string): void;
     error(msg: string): void;
 }
+/**
+ * 会话位置锚点(R7):一条 L0 消息在内核会话日志里的精确坐标。
+ *
+ * 与 `source_message_ids` 的区别是本类型的**存在理由**:后者是 L0 消息 id
+ * (`msg_<epoch_ms>_<hex>`),而 L0 表没有 turn/step 列 → 从一条记忆**跳不到**
+ * 会话里的位置。锚点直接记录内核给出的 `(turn, step)`,与会话日志同一坐标系。
+ *
+ * **降级语义(红线)**:`turn` 拿不到时**整个锚点不成立**(`turn` 非可选);
+ * `step` 拿不到(如 `user/message` 事件本身不带 step)时留空,**不得推算**。
+ */
+export interface ConversationAnchor {
+    sessionId: string;
+    /** 内核轮次号。缺它则该锚点无意义 → 由调用方直接不构造锚点。 */
+    turn: number;
+    /** 内核步骤号;`user/message` 等事件不带该字段时为 undefined(显式留空,不推算)。 */
+    step?: number;
+}
 /** L0 会话消息(管线内的运行时形态)。 */
 export interface ConversationMessage {
     /** 唯一消息 ID(L1 prompt 的 source_message_ids 追踪用)。 */
@@ -56,6 +89,8 @@ export interface ConversationMessage {
     content: string;
     /** epoch ms */
     timestamp: number;
+    /** 会话位置锚点(R7;捕获侧带上,老数据/无锚点场景缺省)。 */
+    anchor?: ConversationAnchor;
 }
 /** L0 JSONL 记录(一条消息一行,磁盘事实源形状)。 */
 export interface L0MessageRecord {
@@ -65,6 +100,10 @@ export interface L0MessageRecord {
     role: 'user' | 'assistant';
     content: string;
     timestamp: number;
+    /** 内核轮次(= anchor.turn);旧数据缺省。 */
+    turn?: number;
+    /** 内核步骤(= anchor.step);`user/message` 无 step 时缺省,不推算。 */
+    step?: number;
 }
 /** L1 抽取产出(LLM 返回的记忆条目,尚未分配 record id)。 */
 export interface ExtractedMemory {
@@ -140,6 +179,17 @@ export interface MemoryRecord {
     version?: number;
     /** 来源消息 id(JSONL 事实源保留;检索库不存该列)。 */
     source_message_ids?: string[];
+    /**
+     * 来源锚点集合(R7):本记忆**由哪些会话位置**蒸馏而来。
+     *
+     * 取值 = 该批 `source_message_ids` 逐个映射到的 `ConversationAnchor`,去重后按
+     * `(turn, step)` 升序 —— 由 `pipeline/anchors.ts::resolveSourceAnchors` 计算。
+     *
+     * **落库位置**:与 `source_message_ids` 一样,检索库**不加列**;写入侧把它放进
+     * `metadata_json` 的保留键 `dsh_source_anchors`(见 `ANCHOR_METADATA_KEY`),
+     * 因为锚点是**派生元数据**而非事实列,而 `l1_records` 的 DDL 是磁盘契约。
+     */
+    sourceAnchors?: ConversationAnchor[];
     /** 类型附加信息(episodic 的活动起止时间等)。 */
     metadata?: Record<string, unknown>;
     /** 来源会话(缺省 default;跨会话记忆共享)。 */

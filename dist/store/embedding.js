@@ -158,14 +158,55 @@ export class EmbedHelper {
     embed;
     logger;
     warned = false;
+    // ── 慢调用断路器(背压):本地 embedding 卡顿/远端变慢时快速降级 FTS-only,
+    //    不让每条写入都干等一次慢嵌入。熔断期间 query/batch 直接 undefined,
+    //    冷却后半开探测一次;恢复即回常态。所有调用方本就有 undefined 降级路径。
+    emaMs = null;
+    failStreak = 0;
+    openUntil = 0;
+    openWarned = false;
     constructor(embed, logger) {
         this.embed = embed;
         this.logger = logger;
+    }
+    static SLOW_MS = 5_000;
+    static COOLDOWN_MS = 60_000;
+    static EMA_ALPHA = 0.3;
+    observe(ms, ok) {
+        if (ok) {
+            this.failStreak = 0;
+            this.emaMs = this.emaMs == null ? ms : Math.round(this.emaMs * (1 - EmbedHelper.EMA_ALPHA) + ms * EmbedHelper.EMA_ALPHA);
+        }
+        else {
+            this.failStreak++;
+        }
+        const slow = ok && this.emaMs != null && this.emaMs > EmbedHelper.SLOW_MS;
+        if ((!ok && this.failStreak >= 2) || slow) {
+            this.openUntil = Date.now() + EmbedHelper.COOLDOWN_MS;
+            if (!this.openWarned) {
+                this.openWarned = true;
+                this.logger?.warn(`[memory] 嵌入${slow ? `持续过慢(EMA ${this.emaMs}ms)` : '连续失败'},熔断 ${EmbedHelper.COOLDOWN_MS / 1000}s 降级 FTS-only(后台 backfill 会补向量)`);
+            }
+        }
+    }
+    get tripped() {
+        if (Date.now() >= this.openUntil) {
+            if (this.openWarned && this.openUntil !== 0) {
+                this.openWarned = false; // 冷却结束,半开:放行一次探测,失败会再次熔断
+                this.openUntil = 0;
+            }
+            return false;
+        }
+        return true;
     }
     /** 活切换嵌入源:换掉底层服务并复位一次性告警(新服务重新获得告警机会)。 */
     setService(svc) {
         this.embed = svc;
         this.warned = false;
+        this.emaMs = null;
+        this.failStreak = 0;
+        this.openUntil = 0;
+        this.openWarned = false;
     }
     vectorReady() {
         return this.embed.isReady();
@@ -173,11 +214,16 @@ export class EmbedHelper {
     /** 查询向量;失败或空向量返回 undefined(调用方降级 FTS)。
      *  timeoutMs 为内层钳制(仅缩短服务超时),召回路径使用。 */
     async query(text, timeoutMs) {
+        if (this.tripped)
+            return undefined; // 熔断中:FTS-only,不让召回干等慢嵌入
+        const t0 = Date.now();
         try {
             const vec = await this.embed.embed(text, timeoutMs != null ? { timeoutMs } : undefined);
+            this.observe(Date.now() - t0, true);
             return vec.length > 0 ? vec : undefined;
         }
         catch (err) {
+            this.observe(Date.now() - t0, false);
             this.warn(`查询向量计算失败,降级 FTS: ${errMsg(err)}`);
             return undefined;
         }
@@ -186,10 +232,16 @@ export class EmbedHelper {
     async batch(texts) {
         if (!this.embed.isReady())
             return texts.map(() => undefined);
+        if (this.tripped)
+            return texts.map(() => undefined); // 熔断中:只写元数据/FTS
+        const t0 = Date.now();
         try {
-            return await this.embed.embedBatch(texts);
+            const rows = await this.embed.embedBatch(texts);
+            this.observe(Date.now() - t0, true);
+            return rows;
         }
         catch (err) {
+            this.observe(Date.now() - t0, false);
             this.warn(`批量嵌入失败,本批暂不写向量(后台 backfill 会补齐): ${errMsg(err)}`);
             return texts.map(() => undefined);
         }

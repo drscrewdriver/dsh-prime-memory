@@ -4,7 +4,8 @@
  * 目的:防止重写过程中 settings/端点/词汇表键集缩水——dsh-settings 按命名空间
  * 持久化用户已有值,schema 缺一个键 = 用户配置被静默丢弃。
  * - EFFORT_CHOICES / Hall 目录:运行时词汇表,逐值比对;
- * - 端点全集:24 个(含面板高权限删除 records-delete);
+ * - 端点全集:38 个(含面板高权限删除 records-delete、§C 冲突队列读写两端点、
+ *   记忆退场三端点与快照两端点);
  * - MemoryLiveSettings 键注册表:完整 20 键清单在此固化,slice 12 落地
  *   liveSettingsSchema 后由键集 diff 测试对 schema 运行时复核;
  * - 占用账本算术:stock = recall + profile 恒等式与迁移函数语义(context-occupancy
@@ -14,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { EFFORT_CHOICES, memorySchema, resolveDataDir } from '../src/config.js';
 import { MEMORY_ENDPOINTS } from '../src/stats.js';
-import { HALL_CATALOG, HALL_DEFAULT_ENABLED, familyForType, resolveRecordFamily } from '../src/types.js';
+import { WING_CATALOG, HALL_CORNERS, WING_DEFAULT_ENABLED, WING_FALLBACK, wingLabel, familyForType, resolveRecordFamily } from '../src/types.js';
 import {
   CHARS_PER_TOKEN,
   CONTEXT_METER_CIRCUMFERENCE,
@@ -54,19 +55,24 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'memoryMutate',
 ] as const;
 
-/** 端点全集(31 个;含 records-delete / 图谱两端点 / receipts / conflict-resolve / ruminate 三端点)。 */
+/** 端点全集(40 个;含 records-delete / 图谱两端点 / receipts / §C 冲突队列读写+丢弃留痕三端点 / ruminate 三端点 / 退场与快照五端点)。 */
 const ENDPOINTS = [
   'dsh-memory/stats',
   'dsh-memory/token-cost',
   'dsh-memory/session-mode-get',
   'dsh-memory/session-mode-set',
+  'dsh-memory/wing-overview',
+  'dsh-memory/rooms-get',
+  'dsh-memory/wing-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
   'dsh-memory/settings-set',
   'dsh-memory/list-records',
   'dsh-memory/records-delete',
   'dsh-memory/receipts',
+  'dsh-memory/conflicts',
   'dsh-memory/conflict-resolve',
+  'dsh-memory/conflicts-rejected',
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/scenes',
@@ -86,7 +92,13 @@ const ENDPOINTS = [
   'dsh-memory/embedding-download-cancel',
   'dsh-memory/embedding-model-delete',
   'dsh-memory/embedding-runtime-cancel',
+  'dsh-memory/embedding-reindex',
   'dsh-memory/embedding-reindex-cancel',
+  'dsh-memory/records-retired',
+  'dsh-memory/records-restore',
+  'dsh-memory/cleanup-retired',
+  'dsh-memory/snapshots-list',
+  'dsh-memory/snapshot-restore',
 ] as const;
 
 describe('effort vocabulary', () => {
@@ -95,18 +107,42 @@ describe('effort vocabulary', () => {
   });
 });
 
-describe('hall catalog', () => {
-  it('keeps the 5-entry catalog and mainline defaults', () => {
-    expect(HALL_CATALOG.map((h) => h.id)).toEqual(['work', 'relationships', 'general', 'finance', 'journey']);
-    expect(HALL_CATALOG.filter((h) => h.experimental).map((h) => h.id)).toEqual(['finance', 'journey']);
-    expect([...HALL_DEFAULT_ENABLED]).toEqual(['work', 'relationships', 'general']);
+describe('wing catalog', () => {
+  it('keeps the 8-corner catalog and mainline defaults', () => {
+    expect(WING_CATALOG.map((h) => h.id)).toEqual([
+      'work',
+      'relationships',
+      'learning',
+      'creative',
+      // 居家在健康之前(2026-09-23 用户要求对调,三处断言同步)
+      'home',
+      'health',
+      'finance',
+      'journey',
+    ]);
+    // experimental 字段已退休(8 角全主线);角集 = 全目录,general 移出角集作跨域兜底
+    expect(HALL_CORNERS.map((h) => h.id)).toEqual(WING_CATALOG.map((h) => h.id));
+    expect(WING_CATALOG.some((h) => h.id === 'general')).toBe(false);
+    expect(WING_FALLBACK).toBe('general');
+    expect(wingLabel('general')).toBe('跨域');
+    expect([...WING_DEFAULT_ENABLED]).toEqual([
+      'work',
+      'relationships',
+      'learning',
+      'creative',
+      // 居家在健康之前(2026-09-23 用户要求对调,三处断言同步)
+      'home',
+      'health',
+      'finance',
+      'journey',
+    ]);
   });
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 31 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(31);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(31);
+  it('exposes exactly the 42 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(42);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(42);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
@@ -171,7 +207,17 @@ describe('memory live settings key registry', () => {
     expect((defaults.llm as Record<string, unknown>).mode).toBe('host');
     expect((defaults.llm as Record<string, unknown>).maxTokens).toBe(65_536);
     expect((defaults.llm as Record<string, unknown>).maxInputChars).toBe(700_000);
-    expect((defaults.hall as Record<string, unknown>).enabled).toEqual(['work', 'relationships', 'general']);
+    expect((defaults.hall as Record<string, unknown>).enabled).toEqual([
+      'work',
+      'relationships',
+      'learning',
+      'creative',
+      // 居家在健康之前(2026-09-23 用户要求对调,三处断言同步)
+      'home',
+      'health',
+      'finance',
+      'journey',
+    ]);
     expect((defaults.tokenCost as Record<string, unknown>).retentionDays).toBe(365);
     expect(defaults.tools).toBe(true);
     expect(defaults.benchControl).toBe(false);

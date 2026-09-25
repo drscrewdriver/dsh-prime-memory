@@ -20,6 +20,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 
+const { readSupersedeMarker } = await import('../src/store/supersede.js');
+
 const extractQueue: string[] = [];
 const actionQueue: string[] = [];
 
@@ -159,8 +161,12 @@ describe('task_24 安全阀:队列上限', () => {
       expect(auto[0].loser_id).toBe(s.oldId);
       // ② "不再停放"的实质:未裁决数没有增加
       expect(rows.filter((r) => r.resolved_at === '')).toHaveLength(1);
-      // ③ 自动裁决真的执行了:LLM 的 loser 已从检索库退场
-      expect(s.store.getByIds([s.oldId])).toHaveLength(0);
+      // ③ 自动裁决真的执行了:LLM 的 loser 已**退场(软删)**——主表保留但退出检索面
+      const [autoGone] = s.store.getByIds([s.oldId]);
+      expect(autoGone, '软删:主表行保留').toBeDefined();
+      expect(autoGone.validTo).toBeDefined();
+      expect(readSupersedeMarker(autoGone.metadata)).toMatchObject({ reason: 'conflict', verdict: 'auto' });
+      expect(s.store.listRetired({ limit: 10, offset: 0 }).items.map((r) => r.id)).toContain(s.oldId);
       // ④ winner(新记忆)在库
       expect(s.store.getByIds([out.newRecords[0]?.id ?? ''])).toHaveLength(1);
     } finally {
@@ -209,8 +215,10 @@ describe('task_24 安全阀:超时降级', () => {
       expect(after).toHaveLength(1);
       expect(after[0].resolved_at).not.toBe('');
       expect(after[0].resolution).toBe('auto');
-      // loser 已从检索库退场,winner 仍在
-      expect(s.store.getByIds([after[0].loser_id])).toHaveLength(0);
+      // loser 已**退场(软删)**,winner 仍在
+      const [timeoutGone] = s.store.getByIds([after[0].loser_id]);
+      expect(timeoutGone, '软删:主表行保留').toBeDefined();
+      expect(timeoutGone.validTo).toBeDefined();
       expect(s.store.getByIds([after[0].winner_id])).toHaveLength(1);
     } finally {
       s.close();

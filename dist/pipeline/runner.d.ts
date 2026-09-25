@@ -70,6 +70,9 @@ export declare class MemoryRunner {
     /** 停止标志(dispose 序置位):不再取新任务;进行中任务自然收尾。 */
     private stopped;
     private pending;
+    /** pending.json 的只读降级原因(undefined = 正常):非空时不再回写缓冲。 */
+    private pendingDegraded;
+    private pendingDegradedLogged;
     /** 各档位桶渐进阈值(1 起步翻倍至稳态毕业;随 pending.json 持久化)。 */
     private warmup;
     /** 每会话最后活动时间(闲置兜底判定用)。 */

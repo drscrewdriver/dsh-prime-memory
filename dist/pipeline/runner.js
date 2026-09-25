@@ -5,6 +5,7 @@ import { errDetail } from '../util/filelog.js';
 import { sessionWorkspaceIdOf } from '../workspace.js';
 import { advanceWarmupThreshold, effectiveExtractThreshold, extractionBackoffMs, idleSessionsToFlush, modeSwitchAction, pickSessionBackground, } from './trigger.js';
 import { runExtraction } from './l1.js';
+import { buildAnchorMap } from './anchors.js';
 import { runGraphProjection } from './graph.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
@@ -115,11 +116,16 @@ export function effectiveCfg(cfg, live) {
             },
         }
         : null;
-    if (!override && !budgets && !maxInput && !fallbacksTakeover && !chainEffort && !chainFallbacks && !effortInject && !layerChains && !hasChannel && !embedOverride)
+    // §C 人工冲突裁决运行时覆盖:live.conflictFreeze 覆盖静态 cfg.conflictFreeze.enabled
+    const cfOverride = s?.conflictFreeze !== undefined
+        ? { conflictFreeze: { ...(cfg.conflictFreeze ?? {}), enabled: s.conflictFreeze } }
+        : null;
+    if (!override && !budgets && !maxInput && !fallbacksTakeover && !chainEffort && !chainFallbacks && !effortInject && !layerChains && !hasChannel && !embedOverride && !cfOverride)
         return cfg;
     return {
         ...cfg,
         ...(embedOverride ?? {}),
+        ...(cfOverride ?? {}),
         llm: {
             ...cfg.llm,
             ...(effortInject ?? {}),
@@ -156,6 +162,9 @@ export class MemoryRunner {
     /** 停止标志(dispose 序置位):不再取新任务;进行中任务自然收尾。 */
     stopped = false;
     pending = emptyPending();
+    /** pending.json 的只读降级原因(undefined = 正常):非空时不再回写缓冲。 */
+    pendingDegraded;
+    pendingDegradedLogged = false;
     /** 各档位桶渐进阈值(1 起步翻倍至稳态毕业;随 pending.json 持久化)。 */
     warmup = freshWarmup();
     /** 每会话最后活动时间(闲置兜底判定用)。 */
@@ -193,7 +202,8 @@ export class MemoryRunner {
         }
         // 恢复未蒸馏缓冲(上次进程退出前未蒸馏的消息,含失败待重试与攒阈值中途的)
         try {
-            const { buckets: loaded, warmup } = await loadPending(this.pendingFile, this.logger);
+            const { buckets: loaded, warmup, degraded } = await loadPending(this.pendingFile, this.logger);
+            this.pendingDegraded = degraded;
             for (const key of PENDING_MODES) {
                 if (loaded[key].length > PENDING_BUCKET_CAP)
                     loaded[key] = loaded[key].slice(-PENDING_BUCKET_CAP);
@@ -480,6 +490,16 @@ export class MemoryRunner {
      *  非重建轮持久化前按桶截断到上限:重建取消后的大桶不至于在后续每次
      *  蒸馏尝试时反复整量序列化落盘(多 MB 级 IO);重建轮豁免维持。 */
     async persistPending(noBufferCap = false) {
+        // 只读降级(pending.json 损坏或版本未知):缓冲不再落盘,但**蒸馏照常跑**——
+        // 缓冲只是"待蒸馏队列",丢了不回写最多是重启后重蒸馏一轮,
+        // 而按旧解释覆盖新格式会真的弄坏文件。
+        if (this.pendingDegraded !== undefined) {
+            if (!this.pendingDegradedLogged) {
+                this.pendingDegradedLogged = true;
+                this.logger.warn(`[memory] 未蒸馏缓冲处于只读降级(${this.pendingDegraded}),已停止回写(磁盘文件保持不变)`);
+            }
+            return;
+        }
         try {
             if (!noBufferCap) {
                 for (const key of PENDING_MODES) {
@@ -600,11 +620,14 @@ export class MemoryRunner {
                 ? pickSessionBackground(await this.stores.l0.recentBySession(sessionId, cfg.extract.backgroundMessages + slice.length), new Set(slice.map((m) => m.id)), cfg.extract.backgroundMessages)
                 : [];
             const t = Date.now();
+            // R7:锚点映射同时收切片与背景——模型偶尔会引用背景消息的 id,收了它
+            // 就能追溯到正确坐标;不收则那条被静默丢弃(丢弃是可接受降级,比编坐标好)。
+            const anchorMap = buildAnchorMap([...slice, ...background]);
             const result = await runExtraction(this.ctx, cfg, this.stores.l1, this.states, slice, background, this.logger, mode, 
             // §E 写入侧工作区:后台蒸馏手上只有 sessionId(没有 exec),经
             // `ctx.get('agents')` 宽容解析——与 §A 的多级父链解析同一招。
             // 拿不到 → undefined → 归属回落 global(pipeline 侧 `resolveRecordScope` 兜底)。
-            sessionWorkspaceIdOf(this.ctx, sessionId));
+            sessionWorkspaceIdOf(this.ctx, sessionId), anchorMap);
             if (!result.skipped) {
                 this.pending[mode] = rest;
                 // 重建轮(force)不是有机对话,不推进爬坡

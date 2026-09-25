@@ -1,6 +1,6 @@
-/** Tab：L1 记忆浏览器（搜索/筛选/分页 + 展开详情 + 高权限删除：单条与批量勾选）。 */
+/** Tab：L1 记忆浏览器（搜索/筛选/分页 + 展开详情 + 高权限**退场(软删)** + 已退场区恢复）。 */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { ListRecordsRequest, UiRecord } from '../../../src/contract.js';
+import type { ListRecordsRequest, RetiredRecordView, RoomCount, UiRecord } from '../../../src/contract.js';
 import { TYPE_LABELS, fmtTime } from '../format.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
@@ -11,7 +11,18 @@ interface QueryConds {
   query: string;
   type: string;
   scene: string;
-  hall: string;
+  halls: string[];
+  /** Room 过滤(自生长 slug tag;空 = 不过滤)。 */
+  tag: string;
+  /** 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场。 */
+  retired: '' | 'active' | 'retired';
+}
+
+/** 退场筛查 → 契约三态布尔('' 不传 = 全部)。 */
+function retiredSelOf(r: '' | 'active' | 'retired'): boolean | undefined {
+  if (r === 'active') return false;
+  if (r === 'retired') return true;
+  return undefined;
 }
 
 // 两族混合视图：筛选器提供全部 7 种类型
@@ -25,15 +36,8 @@ const TYPE_CHOICES = [
   'work_artifact',
 ];
 
-// Hall 属性通道筛选项（粗分类；与 host types.ts 的 HALL_CATALOG 对齐，client 侧不 import 运行时代码）
-const HALL_CHOICES = [
-  { id: 'work', label: '工作' },
-  { id: 'relationships', label: '人际关系' },
-  { id: 'general', label: '通用' },
-  { id: 'finance', label: '财务' },
-  { id: 'journey', label: '旅程' },
-];
-const HALL_LABEL: Record<string, string> = Object.fromEntries(HALL_CHOICES.map((h) => [h.id, h.label]));
+// Hall 属性通道筛选项(R8 单一事实源):随 list-records 首屏由服务端下发(8 角 + general 跨域),
+// client 不再手抄词表。下发缺失(旧服务端)时降级为从已加载记录的 wing 值派生选项(只显示已有标签)。
 
 /** records-delete 单次上限（契约：ids ≤200）。 */
 const DELETE_LIMIT = 200;
@@ -59,10 +63,17 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [sceneFilter, setSceneFilter] = useState('');
-  const [hallFilter, setHallFilter] = useState('');
+  const [hallFilter, setHallFilter] = useState<string[]>([]);
+  // Room 过滤(标签自生长分类):点分类 chip 即按该 tag 筛选记录
+  const [tagFilter, setTagFilter] = useState('');
+  // 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场
+  const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
+  const [rooms, setRooms] = useState<RoomCount[]>([]);
+  // Wing 词表(服务端下发,R8);null = 未下发(降级:从已加载记录派生)
+  const [wingCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
 
   // 上一次实际生效的查询条件（「加载更多」按它续页）
-  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', hall: '' });
+  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [], tag: '', retired: '' });
 
   // 请求序号：快速搜索/翻页时旧响应过期即弃，避免慢响应覆盖新结果
   const seqRef = useRef(0);
@@ -76,7 +87,10 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       if (conds.query) payload.query = conds.query;
       if (conds.type) payload.type = conds.type;
       if (conds.scene) payload.scene = conds.scene;
-      if (conds.hall) payload.hall = conds.hall;
+      if (conds.halls.length > 0) payload.halls = conds.halls;
+      if (conds.tag) payload.tag = conds.tag;
+      const retiredSel = retiredSelOf(conds.retired);
+      if (retiredSel !== undefined) payload.retired = retiredSel;
       rpc('dsh-memory/list-records', payload)
         .then((r) => {
           if (token !== seqRef.current) return;
@@ -93,6 +107,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           setTotal(v.total === undefined || v.total === null ? null : v.total);
           setTruncated(!!v.truncated);
           if (v.scenes) setSceneOptions(v.scenes);
+          if (v.wingCatalog) setHallCatalog(v.wingCatalog);
         })
         .catch((e: unknown) => {
           if (token !== seqRef.current) return;
@@ -104,14 +119,34 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   );
 
   const search = () => {
-    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, hall: hallFilter };
+    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: retiredFilter };
     setLast(conds);
     fetchPage(conds, 0, false);
   };
 
+  /** 切换退场筛查(全部/仅活跃/仅退场)并立即重查第一页。 */
+  const applyRetiredFilter = (next: '' | 'active' | 'retired') => {
+    setRetiredFilter(next);
+    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: next };
+    setLast(conds);
+    fetchPage(conds, 0, false);
+  };
+
+  // Room 分类(标签自生长):tags 只在反刍里变,首屏拉一次 + 手动刷新时重拉
+  const loadRooms = useCallback(() => {
+    rpc('dsh-memory/rooms-get', {})
+      .then((r) => {
+        if (r && r.ok) setRooms(r.value.rooms ?? []);
+      })
+      .catch(() => {
+        /* 端点不可用时静默:Room 区块降级为不显示,不影响列表主功能 */
+      });
+  }, [rpc]);
+
   useEffect(() => {
-    fetchPage({ query: '', type: '', scene: '', hall: '' }, 0, false);
-  }, [fetchPage]);
+    fetchPage({ query: '', type: '', scene: '', halls: [], tag: '', retired: '' }, 0, false);
+    loadRooms();
+  }, [fetchPage, loadRooms]);
 
   // 读当前写删门状态（settings-get 的 key 均脱敏，memoryMutate 布尔原样）
   const loadHiPriv = useCallback(() => {
@@ -151,34 +186,35 @@ export function RecordsTab(props: { rpc: RpcFn }) {
     });
   };
 
-  /** 批量删除勾选记忆（records-delete，ids 数组一次 ≤200）。
+  /** 批量退场勾选记忆（records-delete = **软删**，ids 数组一次 ≤200）。
    *  写删门关闭时不动手：给提示引导先开高权限模式。 */
   const deleteSelected = () => {
     const ids = Array.from(sel);
     if (ids.length === 0) return;
     if (!hiPriv) {
-      setError('高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再删除记忆。');
+      setError('高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。');
       return;
     }
     if (ids.length > DELETE_LIMIT) {
-      setError('一次最多删除 ' + DELETE_LIMIT + ' 条（当前勾选 ' + ids.length + ' 条），请分批操作。');
+      setError('一次最多退场 ' + DELETE_LIMIT + ' 条（当前勾选 ' + ids.length + ' 条），请分批操作。');
       return;
     }
-    if (!window.confirm('删除勾选的 ' + ids.length + ' 条记忆？本操作不可逆（完整重建可能从 L0 复活，为已知边界）。')) return;
+    if (!window.confirm('退场勾选的 ' + ids.length + ' 条记忆？\n\n它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。')) return;
     rpc('dsh-memory/records-delete', { ids })
       .then((r) => {
         if (r && r.ok) {
           setSel(new Set());
           if (expandedId && ids.indexOf(expandedId) >= 0) setExpandedId(null);
           fetchPage(last, 0, false);
-        } else if (r) setError(r.error ? r.error.message : '删除失败');
+          if (showRetired) loadRetired();
+        } else if (r) setError(r.error ? r.error.message : '退场失败');
       })
       .catch((e: unknown) => setError(String((e && (e as Error).message) || e)));
   };
 
-  /** 单条删除（二次确认；host 侧同样有 memoryMutate 门兜底）。 */
+  /** 单条退场（软删，可恢复；host 侧同样有 memoryMutate 门兜底）。 */
   const deleteRecord = (id: string) => {
-    if (!window.confirm('删除该条记忆？本操作不可逆（完整重建可能从 L0 复活，为已知边界）。')) return;
+    if (!window.confirm('退场该条记忆？\n\n它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。')) return;
     rpc('dsh-memory/records-delete', { ids: [id] })
       .then((r) => {
         if (r && r.ok) {
@@ -189,9 +225,55 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           });
           if (expandedId === id) setExpandedId(null);
           fetchPage(last, 0, false);
-        } else if (r) setError(r.error ? r.error.message : '删除失败');
+          if (showRetired) loadRetired();
+        } else if (r) setError(r.error ? r.error.message : '退场失败');
       })
       .catch((e: unknown) => setError(String((e && (e as Error).message) || e)));
+  };
+
+  /** 已退场（软删）记录：可恢复。默认折叠，展开时才拉取——不让它拖慢正常浏览。 */
+  const [retired, setRetired] = useState<RetiredRecordView[]>([]);
+  const [retiredTotal, setRetiredTotal] = useState(0);
+  const [showRetired, setShowRetired] = useState(false);
+  const [retiredBusy, setRetiredBusy] = useState(false);
+
+  const loadRetired = useCallback(() => {
+    setRetiredBusy(true);
+    rpc('dsh-memory/records-retired', { limit: 100, offset: 0 })
+      .then((r) => {
+        if (r && r.ok) {
+          setRetired(r.value.items);
+          setRetiredTotal(r.value.total);
+        } else if (r) setError(r.error ? r.error.message : '已退场列表加载失败');
+      })
+      .catch((e: unknown) => setError(String((e && (e as Error).message) || e)))
+      .finally(() => setRetiredBusy(false));
+  }, [rpc]);
+
+  useEffect(() => {
+    if (showRetired) loadRetired();
+  }, [showRetired, loadRetired]);
+
+  /** 恢复：送回检索面（向量不可用时仅回关键词检索，不视为失败）。 */
+  const restoreRecords = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setRetiredBusy(true);
+    rpc('dsh-memory/records-restore', { ids })
+      .then((r) => {
+        if (r && r.ok) {
+          loadRetired();
+          fetchPage(last, 0, false);
+        } else if (r) setError(r.error ? r.error.message : '恢复失败');
+      })
+      .catch((e: unknown) => setError(String((e && (e as Error).message) || e)))
+      .finally(() => setRetiredBusy(false));
+  };
+
+  const RETIRE_REASON_LABEL: Record<string, string> = {
+    conflict: '裁决退场',
+    superseded: '被取代',
+    manual: '人工退场',
+    unknown: '已退场',
   };
 
   const countText = total !== null ? '共 ' + total + ' 条' : items.length + ' 条' + (hasMore ? '+' : '');
@@ -231,14 +313,12 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           value={sceneFilter}
           onChange={setSceneFilter}
         />
-        <NSel
-          style={{ maxWidth: 150 }}
-          options={([{ id: '', label: '全部 Hall' }] as NSelOption[]).concat(
-            HALL_CHOICES.map((h) => {
-              return { id: h.id, label: h.label };
-            }),
-          )}
-          value={hallFilter}
+        <WingMultiSelect
+          options={
+            wingCatalog ??
+            Array.from(new Set(items.map((m) => m.hall).filter((h): h is string => !!h))).map((id) => ({ id, label: id }))
+          }
+          selected={hallFilter}
           onChange={setHallFilter}
         />
         <NButton onClick={search}>搜索</NButton>
@@ -254,8 +334,77 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           {hiPriv ? '高权限：开' : '高权限：关'}
         </NButton>
       </div>
+      {/* ── Room 分类(标签自生长):点 chip 按该 tag 筛选,再点取消 ── */}
+      {rooms.length > 0 ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
+          <span style={S.muted}>Room 分类</span>
+          {rooms.slice(0, 40).map((r) => {
+            const on = tagFilter === r.room;
+            return (
+              <button
+                key={r.room}
+                type="button"
+                title={on ? '取消按该 Room 筛选' : '按该 Room 筛选记录'}
+                onClick={() => {
+                  const next = on ? '' : r.room;
+                  setTagFilter(next);
+                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, retired: retiredFilter };
+                  setLast(conds);
+                  fetchPage(conds, 0, false);
+                }}
+                style={{
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+                  background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+                  color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+                }}
+              >
+                {r.room + ' · ' + r.count}
+              </button>
+            );
+          })}
+          {rooms.length > 40 ? <span style={S.muted}>{'（仅显示前 40 / 共 ' + rooms.length + '）'}</span> : null}
+        </div>
+      ) : (
+        <div style={{ ...S.muted, marginBottom: 10 }}>
+          Room 分类：暂无（由反刍涌现的标签自动生成，无需手工建立）
+        </div>
+      )}
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>{loading ? '加载中…' : countText}</span>
+        {/* 退场筛查:三态分开看——软删记录不隐藏(可恢复),但混排时可一键分流 */}
+        <span style={S.muted}>退场筛查</span>
+        {([['', '全部'], ['active', '仅活跃'], ['retired', '仅退场']] as const).map(([val, label]) => {
+          const on = retiredFilter === val;
+          return (
+            <button
+              key={val}
+              type="button"
+              title={
+                val === ''
+                  ? '活跃与已退场混排（已退场的带徽标）'
+                  : val === 'active'
+                    ? '只看未退场的记忆'
+                    : '只看已退场（软删）的记忆，可在此恢复'
+              }
+              onClick={() => applyRetiredFilter(val)}
+              style={{
+                cursor: 'pointer',
+                fontSize: 12,
+                padding: '2px 10px',
+                borderRadius: 999,
+                border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+                background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+                color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
         {/* 批量删除：勾选后成组调 records-delete；写删门关闭时点击给提示 */}
         <NButton
           style={selCount > 0 ? { color: 'var(--dsh-mem-danger)' } : undefined}
@@ -278,6 +427,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         <NButton
           onClick={() => {
             fetchPage(last, 0, false);
+            loadRooms();
           }}
         >
           刷新
@@ -298,7 +448,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
             <div
               key={m.id}
               className="dsh-mem-card dsh-mem-card-hover"
-              style={{ ...S.card, cursor: 'pointer', ...(checked ? { borderLeft: '3px solid var(--dsh-mem-danger)' } : null) }}
+              style={{ ...S.card, cursor: 'pointer', ...(checked ? { borderLeft: '3px solid var(--dsh-mem-danger)' } : null), ...(m.retired ? { opacity: 0.62 } : null) }}
               onClick={() => {
                 setExpandedId(open ? null : m.id);
               }}
@@ -318,14 +468,44 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                   }}
                 />
                 <span className={'dsh-mem-tag dsh-mem-tag-' + m.type}>{TYPE_LABELS[m.type] || m.type}</span>
-                {m.hall ? <span className="dsh-mem-tag dsh-mem-tag-work-fact">{'Hall · ' + (HALL_LABEL[m.hall] || m.hall)}</span> : null}
+                {m.hall ? (
+                  <span className="dsh-mem-tag dsh-mem-tag-work-fact">
+                    {"Wing · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
+                  </span>
+                ) : null}
+                {m.retired ? (
+                  <span
+                    title="该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除"
+                    style={{
+                      fontSize: 11,
+                      padding: '1px 6px',
+                      borderRadius: 999,
+                      border: '1px solid var(--dsh-mem-danger)',
+                      color: 'var(--dsh-mem-danger)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {'已退场' + (m.retiredReason ? ' · ' + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : '')}
+                  </span>
+                ) : null}
                 <span style={S.muted}>{'优先级 ' + m.priority}</span>
                 {m.score !== null && m.score !== undefined ? (
                   <span style={S.muted}>{'相关度 ' + Number(m.score).toFixed(2)}</span>
                 ) : null}
                 <div style={S.grow} />
                 <span style={S.muted}>{fmtTime(m.updatedAt)}</span>
-                {hiPriv ? (
+                {m.retired ? (
+                  <NButton
+                    style={{ padding: '0 7px', minWidth: 26, height: 26, fontSize: 12, color: 'var(--dsh-mem-accent)' }}
+                    title="恢复该记忆到检索面（可撤销退场）"
+                    onClick={(e: { stopPropagation(): void }) => {
+                      e.stopPropagation();
+                      restoreRecords([m.id]);
+                    }}
+                  >
+                    恢复
+                  </NButton>
+                ) : hiPriv ? (
                   <NButton
                     style={{ padding: '0 7px', minWidth: 26, height: 26, fontSize: 12, color: 'var(--dsh-mem-danger)' }}
                     title="删除该记忆（高权限）"
@@ -358,15 +538,52 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                     '活跃时间: ' +
                     (m.timestamps && m.timestamps.length > 0 ? m.timestamps.map(fmtTime).join(' → ') : '-') +
                     '\n' +
-                    (m.sourceMessageIds && m.sourceMessageIds.length > 0
-                      ? '来源消息: ' + m.sourceMessageIds.join(', ')
-                      : '来源消息: -')}
+                    (m.sourceAnchors && m.sourceAnchors.length > 0
+                      ? '来源锚点: ' + m.sourceAnchors.join(', ')
+                      : '来源锚点: -')}
                 </div>
               ) : null}
             </div>
           );
         })
       )}
+      {/* 已退场（软删）区：与活动记忆**分开呈现**——"退场了"与"根本没这条"必须能分辨 */}
+      <div style={{ ...S.flexRow, marginTop: 12 }}>
+        <NButton onClick={() => setShowRetired((v) => !v)}>
+          {(showRetired ? '收起' : '展开') + '「已退场」（可恢复）'}
+        </NButton>
+        {showRetired && retiredBusy ? <span style={S.muted}>加载中…</span> : null}
+        {showRetired && !retiredBusy && retiredTotal > 0 ? (
+          <span style={S.muted}>{'共 ' + retiredTotal + ' 条可恢复'}</span>
+        ) : null}
+      </div>
+      {showRetired ? (
+        <div style={{ marginTop: 8 }}>
+          {retired.length === 0 ? (
+            <p style={S.hint}>{retiredBusy ? ' ' : '没有已退场的记忆。'}</p>
+          ) : (
+            <div>
+              {retired.map((m) => (
+                <div key={m.id} className="dsh-mem-card" style={S.card}>
+                  <div style={S.cardHead}>
+                    <span style={S.muted}>{RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason}</span>
+                    {m.verdict ? <span style={S.muted}>{'结论 ' + m.verdict}</span> : null}
+                    <div style={S.grow} />
+                    <span style={S.muted}>{fmtTime(m.retiredAt)}</span>
+                    <NButton disabled={retiredBusy} title="恢复到检索面" onClick={() => restoreRecords([m.id])}>
+                      恢复
+                    </NButton>
+                  </div>
+                  <div style={S.content}>{m.content}</div>
+                </div>
+              ))}
+              {retiredTotal > retired.length ? (
+                <p style={S.hint}>{'共 ' + retiredTotal + ' 条，此处显示 ' + retired.length + ' 条'}</p>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
       {hasMore ? (
         <div style={S.flexRow}>
           <div style={S.grow} />
@@ -378,6 +595,79 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           >
             {loading ? '加载中…' : '加载更多'}
           </NButton>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
+/** Hall 筛选多选下拉（R13 查询侧多选；选项 = 服务端下发的词表，缺失时降级为已有标签）。
+ *  触发钮沿用 .dsh-mem-select 观感；面板复用 .dsh-mem-pop 材质，行内勾选即时切换。 */
+function WingMultiSelect(props: {
+  options: Array<{ id: string; label: string }>;
+  selected: string[];
+  onChange(next: string[]): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+  const labelOf = (id: string) => props.options.find((o) => o.id === id)?.label ?? id;
+  const summary =
+    props.selected.length === 0
+      ? '全部 Wing'
+      : props.selected.length <= 2
+        ? props.selected.map(labelOf).join(' + ')
+        : `${labelOf(props.selected[0]!)} 等 ${props.selected.length} 域`;
+  const toggle = (id: string) => {
+    props.onChange(props.selected.includes(id) ? props.selected.filter((x) => x !== id) : [...props.selected, id]);
+  };
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', maxWidth: 150 }}>
+      <button
+        type="button"
+        className="dsh-mem-select"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="dsh-mem-select-label" title={summary}>
+          {summary}
+        </span>
+        <span className={'dsh-mem-sel-chev' + (open ? ' dsh-mem-sel-chev-open' : '')} />
+      </button>
+      {open ? (
+        <div className="dsh-mem-pop" role="listbox" style={{ left: 0, right: 'auto', minWidth: 150 }}>
+          {props.options.length === 0 ? <div className="dsh-mem-pop-empty">暂无可筛 Hall</div> : null}
+          {props.options.map((o) => {
+            const active = props.selected.includes(o.id);
+            return (
+              <button key={o.id} type="button" className="dsh-mem-pop-opt" onClick={() => toggle(o.id)} aria-selected={active}>
+                <span className="dsh-mem-pop-check">{active ? '✓' : ''}</span>
+                <span className="dsh-mem-pop-label">{o.label}</span>
+              </button>
+            );
+          })}
+          {props.selected.length > 0 ? (
+            <button type="button" className="dsh-mem-pop-opt" onClick={() => props.onChange([])}>
+              <span className="dsh-mem-pop-check" />
+              <span className="dsh-mem-pop-label">清除筛选</span>
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

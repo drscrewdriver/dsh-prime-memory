@@ -1,7 +1,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from '../store/receipts.js';
-import { renderConflictResolution, resolveConflictPair } from '../conflict-service.js';
-import { normPersistence, normScope, resolveRecordScope } from '../types.js';
+import { listConflictPairs, renderConflictResolution, renderConflicts, resolveConflictPair } from '../conflict-service.js';
+import { WING_CATALOG, WING_FALLBACK, normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
@@ -270,13 +270,13 @@ ruminate) {
         const persistence = normPersistence(item.persistence);
         const createdAt = parseTime(item.created_at) ?? now;
         const updatedAt = parseTime(item.updated_at) ?? createdAt;
-        const hall = typeof item.hall === 'string' && item.hall.trim() ? item.hall.trim().slice(0, 40) : undefined;
+        const wing = typeof item.hall === 'string' && item.hall.trim() ? item.hall.trim().slice(0, 40) : undefined;
         const origin = typeof item.origin === 'string' && item.origin.trim() ? item.origin.trim().slice(0, 200) : undefined;
         const metadata = {
             temporal: { st: persistence ?? '?', vf: toIsoOrNull(validFrom), vt: toIsoOrNull(validTo) },
         };
-        if (hall)
-            metadata.hall = hall;
+        if (wing)
+            metadata.hall = wing;
         if (origin)
             metadata.origin = origin;
         if (validFrom !== undefined)
@@ -314,7 +314,10 @@ ruminate) {
             type: 'string',
             description: '记忆类型(persona/episodic/instruction/work_fact/work_task/work_method/work_artifact;缺省 episodic)',
         },
-        hall: { type: 'string', description: '可选的粗分类 Hall(work/relationships/general/finance/journey)' },
+        hall: {
+            type: 'string',
+            description: `可选的粗分类 Wing(${[...WING_CATALOG.map((h) => h.id), WING_FALLBACK].join('/')};general = 跨域兜底)`,
+        },
         persistence: {
             type: 'string',
             description: '持续性:t 无时间性(规则/偏好/恒真事实)、o 仍在持续、s 已结束的区间、p 时点事件;缺省=未判定',
@@ -463,10 +466,18 @@ ruminate) {
     // memory_delete:显式"忘了 X"——按语义检索命中后删除(高权限门控)。
     ctx.tools.register(defineTool({
         name: 'memory_delete',
-        description: '删除与查询相关的记忆(L1)。仅当用户显式要求"忘记/删除某条记忆"时用;需高权限模式开启。按语义检索命中后删除(最多若干条),无法精确匹配时返回 zero。',
+        description: '退场(软删)与查询相关的记忆(L1)。仅当用户显式要求"忘记/删除某条记忆"时用;需高权限模式开启。' +
+            '默认只退场**最贴近的 1 条**;可用 limit 放大(上限 10)。' +
+            '退场是**软删**:记录移出检索面但保留在主表,可在记忆列表恢复,不是物理删除。' +
+            '已知确切 record_id 时应走 ids 参数(精确退场,不做语义匹配)。',
         parameters: {
-            query: { type: 'string', required: true, description: '要删除的记忆描述(自然语言,匹配最贴近的现存记忆)' },
-            limit: { type: 'number', description: '最多删除条数(默认 3,上限 10)' },
+            query: { type: 'string', description: '要退场的记忆描述(自然语言,匹配最贴近的现存记忆);给出 ids 时可省略' },
+            ids: {
+                type: 'array',
+                items: { type: 'string' },
+                description: '确切的 record_id 列表(给了它就不做语义匹配,只退场这些 id;上限同 limit)',
+            },
+            limit: { type: 'number', description: '最多退场条数(默认 1,上限 10)' },
         },
         output: {
             schema: {
@@ -479,27 +490,48 @@ ruminate) {
                 additionalProperties: false,
             },
             render: (_args, value) => [
-                { type: 'text', text: value.notice ?? `已删除 ${value.deleted ?? 0} 条记忆` },
+                {
+                    type: 'text',
+                    text: value.notice ??
+                        `已退场(软删)${value.deleted ?? 0} 条记忆` +
+                            (value.ids && value.ids.length ? `:${value.ids.join('，')}` : '') +
+                            '——它们仍在主表,可在记忆列表恢复',
+                },
             ],
         },
         execute: async (args, exec) => {
             if (!live.get().memoryMutate)
                 return { deleted: 0, ids: [], notice: MUTATE_OFF_NOTICE };
-            const query = String(args.query ?? '').trim();
-            if (!query)
-                return { deleted: 0, ids: [], notice: 'query 为空,未删除' };
             const family = familyOfCaller(exec);
-            const limit = Math.min(Math.max(args.limit ?? 3, 1), 10);
-            const hits = await stores.l1.search(query, limit, {
-                family: family && family !== null ? family : undefined,
-                workspaceId: scopeFilterOf(cfg.scope, exec),
-            });
-            const ids = hits.map((h) => h.id);
+            // 默认 1(原为 3):"忘记某条记忆"是一对一的意图,而 limit=3 会顺带退场
+            // 两条语义邻近但无关的记忆 —— 实测已发生过一次真实误删。
+            const limit = Math.min(Math.max(args.limit ?? 1, 1), 10);
+            // 精确路径优先:给了 ids 就**不做语义匹配**。语义匹配的"顺带多删几条"
+            // 正是误删的来源,而调用方一旦能给出 id,就没有理由再走模糊匹配。
+            const explicit = Array.isArray(args.ids)
+                ? args.ids.filter((x) => typeof x === 'string' && x.trim() !== '').slice(0, limit)
+                : [];
+            let ids;
+            if (explicit.length > 0) {
+                ids = explicit;
+            }
+            else {
+                const query = String(args.query ?? '').trim();
+                if (!query)
+                    return { deleted: 0, ids: [], notice: 'query 与 ids 均为空,未删除' };
+                const hits = await stores.l1.search(query, limit, {
+                    family: family && family !== null ? family : undefined,
+                    workspaceId: scopeFilterOf(cfg.scope, exec),
+                });
+                ids = hits.map((h) => h.id);
+            }
             if (ids.length === 0)
                 return { deleted: 0, ids: [], notice: '未找到匹配的记忆,未删除' };
-            await stores.l1.deleteBatch(ids);
-            logger.info(`[memory] 高权限删除记忆 ${ids.length} 条(${ids.join('，')})`);
-            return { deleted: ids.length, ids };
+            // **软删**(退场),不是物理删除:与裁决 / 取代共用同一原语,故"删错了"
+            // 可以在记忆列表里恢复,而不必去 records/*.jsonl 事实源手工捞。
+            const n = stores.l1.retire(ids, { at: new Date().toISOString(), reason: 'manual' });
+            logger.info(`[memory] 高权限退场(软删)记忆 ${n} 条(${ids.join('，')})`);
+            return { deleted: n, ids };
         },
     }));
     // ── 图谱工具(读;受与 memory_search 同款的档位/注入拒读门 + 族过滤) ──
@@ -816,16 +848,150 @@ ruminate) {
             return { dimension, items: rows.map(toReceiptView), total: stores.l1.countReceipts(query) };
         },
     }));
+    // ── memory_conflicts: §C 待裁决队列的**读**出口 ──
+    // `memory_resolve_conflict` 的描述里早就写着"待裁决对可用 memory_conflicts 查看",
+    // 但那个工具**一直不存在** —— 模型照着描述调用只会拿到"工具不存在"。
+    // 裁决端点在、读端点与读工具两端都缺,队列于是成了只进不出的黑洞
+    // (安全阀超时自动了结会成为唯一出路,那正是 §C 想避免的)。
+    ctx.tools.register(defineTool({
+        name: 'memory_conflicts',
+        description: '列出**矛盾冻结**的待裁决对(§C)。冻结不自动裁决:新记忆照常入库,与它冲突的旧记忆作为**一对**停在队列里,双方内容都不被改写,直到人给出结论。返回每对的 pair_id、**双方正文**与 LLM 建议的胜负方(id 只是进入队列时的排序位,不代表结论)。看完用 memory_resolve_conflict 给出结论:winner / loser / both。',
+        parameters: {
+            limit: { type: 'number', description: '最多返回多少对(默认 50,上限 200)' },
+        },
+        output: {
+            schema: {
+                type: 'object',
+                properties: {
+                    enabled: { type: 'boolean', description: '矛盾冻结是否开启;关闭时队列恒空,与"开启但没有待裁决"是两回事' },
+                    total: { type: 'number', description: '未裁决总数(可能大于 items.length)' },
+                    items: {
+                        type: 'array',
+                        description: '待裁决对(最多 limit 条)',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                pair_id: { type: 'string' },
+                                run_id: { type: 'string', description: '产生该冻结的蒸馏批次 id(可交给 memory_receipts 追该轮判了什么)' },
+                                winner_id: { type: 'string' },
+                                winner_content: { type: 'string', description: 'LLM 建议胜方的正文;空串 = 该记录已不在检索库' },
+                                loser_id: { type: 'string' },
+                                loser_content: { type: 'string', description: '同上' },
+                                created_at: { type: 'string' },
+                                // 以下 10 项与 conflict-service.listConflictPairs 视图逐一对齐(task 三轴/R1/Phase3):
+                                // execute 直接返回该视图,additionalProperties:false 下少声明任何一个,
+                                // 宿主无损校验即拒("not a declared property"),整工具读不出——schema 必须跟视图同步。
+                                winner_valid_from_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+                                winner_valid_to_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+                                winner_persistence: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                                loser_valid_from_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+                                loser_valid_to_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+                                loser_persistence: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                                review_state: { type: 'string', enum: ['unseen', 'deferred'], description: '没看过 / 看过未决(R1:两者必须可区分)' },
+                                defer_count: { type: 'number', description: '复看次数(defer 上限 3)' },
+                                conflict_type: { type: 'string', description: '冲突类型(默认 hard)' },
+                                claim_key: { type: 'string', description: '同主题多对冲突的归并键(空串=未分组)' },
+                            },
+                            additionalProperties: false,
+                        },
+                    },
+                    notice: { type: 'string', description: '非结果的状态提示(如冻结未开启 / 本会话记忆已关闭)' },
+                },
+                additionalProperties: false,
+            },
+            render: (_args, value) => [{ type: 'text', text: value.notice ?? renderConflicts(value) }],
+        },
+        execute: async (args, exec) => {
+            // 档位拒读门与 memory_receipts 同款:off 会话对记忆系统完全隐身,
+            // 不该反过来能内省"库里有哪些自相矛盾的记忆"。
+            const family = familyOfCaller(exec);
+            if (family === null) {
+                return { enabled: false, total: 0, items: [], notice: blockNoticeOf(exec) };
+            }
+            return listConflictPairs({ l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true }, { limit: typeof args.limit === 'number' ? args.limit : undefined });
+        },
+    }));
+    // ── memory_conflicts_rejected: §C 丢弃留痕的读出口 ──
+    // LLM 输出不满足 pair 格式的冲突决策会被记入 `conflict_rejected` 表,
+    // 但此前只有写入没有读取——人无法知道"哪些冲突被判定为不合法"。
+    // 本工具补上读方向,与 `dsh-memory/conflicts-rejected` RPC 端点共用同一形状。
+    ctx.tools.register(defineTool({
+        name: 'memory_conflicts_rejected',
+        description: '列出被**丢弃**的冲突决策(§C 丢弃留痕)。LLM 输出不满足 pair 格式(缺 winner/loser id、无法配对等)时,该决策会被记入丢弃表而非停到待裁决队列。返回每条的 reject_id、原始正文、丢弃原因与所属蒸馏批次。可用 limit / created_before 分页。',
+        parameters: {
+            limit: { type: 'number', description: '最多返回多少条(默认 50,上限 200)' },
+            created_before: { type: 'string', description: '排他上界:created_at < 此值(ISO);不给则从最新开始' },
+        },
+        output: {
+            schema: {
+                type: 'object',
+                properties: {
+                    items: {
+                        type: 'array',
+                        description: '被丢弃的冲突决策',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                reject_id: { type: 'string' },
+                                run_id: { type: 'string', description: '所属蒸馏批次 id' },
+                                record_id: { type: 'string' },
+                                winner_raw: { type: 'string', description: 'LLM 原始输出的胜方正文' },
+                                loser_raw: { type: 'string', description: 'LLM 原始输出的败方正文' },
+                                reason: { type: 'string', description: '丢弃原因(如 not-pair)' },
+                                created_at: { type: 'string' },
+                            },
+                            additionalProperties: false,
+                        },
+                    },
+                    notice: { type: 'string', description: '非结果的状态提示' },
+                },
+                additionalProperties: false,
+            },
+            render: (_args, value) => {
+                const v = value;
+                if (v.notice)
+                    return [{ type: 'text', text: v.notice }];
+                const items = v.items ?? [];
+                if (items.length === 0)
+                    return [{ type: 'text', text: '没有被丢弃的冲突决策。' }];
+                const rows = items.map((r, i) => `${i + 1}. ${r.reject_id}  (${r.created_at}) · 原因 ${r.reason}`);
+                return [{ type: 'text', text: `被丢弃的冲突决策 ${items.length} 条\n\n${rows.join('\n')}` }];
+            },
+        },
+        execute: async (args, exec) => {
+            const family = familyOfCaller(exec);
+            if (family === null) {
+                return { items: [], notice: blockNoticeOf(exec) };
+            }
+            const limit = typeof args.limit === 'number' ? args.limit : undefined;
+            const createdBefore = typeof args.created_before === 'string' ? args.created_before : undefined;
+            const items = stores.l1.listConflictRejected({ limit, createdBefore });
+            return {
+                items: items.map((r) => ({
+                    reject_id: r.rejectId,
+                    run_id: r.runId,
+                    record_id: r.recordId,
+                    winner_raw: r.winnerRaw,
+                    loser_raw: r.loserRaw,
+                    reason: r.reason,
+                    created_at: r.createdAt,
+                })),
+            };
+        },
+    }));
     // ── memory_resolve_conflict: §C 矛盾冻结的人工裁决出口 ──
     // 冻结把裁决权交还给人,那么**必须**有一个"人能把结论说回去"的出口——
     // 否则待裁决队列是个只进不出的黑洞,安全阀(task_24)会成为唯一出路,
     // 那等于把 opt-in 的冻结悄悄退回成"超时后机器自己判"。
     ctx.tools.register(defineTool({
         name: 'memory_resolve_conflict',
-        description: '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
+        description: '裁决一条**矛盾冻结**的待裁决对(§C)。冻结产生的冲突对停放在待裁决队列里,双方记忆都不被改写,直到你在这里给出结论:winner(判 LLM 建议的胜方为真,败方从检索中退场)、loser(判败方为真)、both(判定两者其实是各自独立的事实,都保留)、defer(看过但**暂不裁决**——它不关闭冲突,该对仍在待裁决队列里,会重置超时计时并累计复看次数)。需先开启 conflictFreeze 配置;待裁决对可用 memory_conflicts 查看。',
         parameters: {
             pair_id: { type: 'string', description: '待裁决对的 pair_id(来自待裁决队列)' },
-            outcome: { type: 'string', description: '裁决结论:winner | loser | both' },
+            outcome: {
+                type: 'string',
+                description: '裁决结论:winner | loser | both | defer。defer = **看过但暂不裁决**:不关闭冲突、重置超时计时、累计复看次数(达上限后不再被超时自动了结,只能人工收口)。',
+            },
         },
         output: {
             schema: {
@@ -851,7 +1017,7 @@ ruminate) {
             const outcome = typeof args.outcome === 'string' ? args.outcome.trim() : '';
             if (!pairId)
                 return { ...empty, notice: '需要 pair_id:待裁决对没有"全部裁决"这种用法。' };
-            return resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: cfg.conflictFreeze?.enabled === true }, pairId, outcome);
+            return resolveConflictPair({ l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true }, pairId, outcome);
         },
     }));
     logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_receipts / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_resolve_conflict / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');

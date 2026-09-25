@@ -12,7 +12,7 @@ import { RebuildPanel } from './RebuildPanel.js';
 import { RuminatePanel } from './RuminatePanel.js';
 
 /** 可通过开关切换的 settings 键。 */
-type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate';
+type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate' | 'conflictFreeze';
 
 export function OverviewTab(props: { rpc: RpcFn }) {
   const rpc = props.rpc;
@@ -104,6 +104,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
     if (off.length > 0) ceilingNote = '注意：部署配置已停用 ' + off.join('、') + '（运行时开关无法开启）';
   }
   const mutate = settingsData && settingsData.settings ? !!settingsData.settings.memoryMutate : false;
+  const cfEnabled = settingsData && settingsData.settings ? !!settingsData.settings.conflictFreeze : false;
 
   return (
     <div>
@@ -160,6 +161,20 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             checked={mutate}
             onChange={(v) => {
               toggle('memoryMutate', v);
+            }}
+          />
+          {/* 分组三：人工冲突裁决（§C 冻结开关）——开启后冲突对停放到待人工裁决区 */}
+          <div style={S.panelLabel}>人工冲突裁决</div>
+          <SwitchRow
+            label="人工冲突裁决"
+            desc={
+              cfEnabled
+                ? '已开启：去重判定"两边都像对的"时冻结冲突对，停放到待人工裁决区'
+                : '默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决'
+            }
+            checked={cfEnabled}
+            onChange={(v) => {
+              toggle('conflictFreeze', v);
             }}
           />
           {/* 分组三：蒸馏参数（B 形态分段：全局默认链 + 按层路由 l1/l2/l3 + 预算随层归组；

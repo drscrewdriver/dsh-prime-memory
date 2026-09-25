@@ -33,6 +33,8 @@ import { CostLedger } from './cost-ledger.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
+import { DEFER_MAX, groupConflictPairsByClaim, normalizeClaimKey, normalizeConflictType } from './conflicts.js';
+import { isRetired, readSupersedeMarker, stripSupersedeMarker, withSupersedeMarker } from './supersede.js';
 /** vec0 KNN 对遗留零向量的补偿缓冲。 */
 const ZERO_VEC_BUFFER = 10;
 /** IN 查询/删除的分块大小(保守避开 SQLite 变量数上限:现代构建 32766,老版 999)。 */
@@ -351,13 +353,58 @@ export class MemoryDb {
         loser_id TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT '',
         resolved_at TEXT NOT NULL DEFAULT '',
-        resolution TEXT NOT NULL DEFAULT ''
+        resolution TEXT NOT NULL DEFAULT '',
+        conflict_type TEXT NOT NULL DEFAULT 'hard',
+        claim_key TEXT NOT NULL DEFAULT ''
       )
     `);
         // 未裁决索引:队列上限(task_24,取最旧的未裁决行)与裁决工具(task_25,取单条未裁决对)
         // 都只关心未裁决行——"查未裁决"须走索引。偏索引同时覆盖 created_at 排序。
         this.db.exec(`CREATE INDEX IF NOT EXISTS idx_conflict_pending_unresolved
          ON conflict_pending(created_at) WHERE resolved_at = ''`);
+        // ── §C 丢弃留痕(DDL 同为磁盘契约) ──
+        // 此前「conflict 决策配不成对」**完全静默**:既不停放也不落库,只在日志里留一行 warn,
+        // 于是"模型明确说了判不了、而这一跳没接住"在库里查不到(§C 的可审计性依赖能回看)。
+        // 本表**只追加、不改写**;不进 l1-snapshot 的哈希投影(见 task_2.8)。
+        this.db.exec(`
+      CREATE TABLE IF NOT EXISTS conflict_rejected (
+        reject_id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL DEFAULT '',
+        record_id TEXT NOT NULL DEFAULT '',
+        winner_raw TEXT NOT NULL DEFAULT '',
+        loser_raw TEXT NOT NULL DEFAULT '',
+        reason TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT ''
+      )
+    `);
+        this.db.exec(`CREATE INDEX IF NOT EXISTS idx_conflict_rejected_created ON conflict_rejected(created_at)`);
+        // ── §C Phase 2(task_2.1):conflict_pending 加"未决态"三列 ──
+        // 三列承载 R1:`reviewed_at` 区分"没看"与"看了没判",`deferred_at` 是**超时基准的重置点**
+        // (见 task_2.3:超时看 `deferred_at ?? created_at`,`defer` 重置计时而非豁免计时),
+        // `defer_count` 是复看次数(上限 3,fail-loud)。
+        // 必须走 ALTER:`CREATE TABLE IF NOT EXISTS` 对**已存在**的表不会补列;
+        // 而 ALTER 重复执行会报错,故先用 `PRAGMA table_info` 判存在 ⇒ 迁移可重复执行。
+        const conflictCols = new Set(this.db.prepare('PRAGMA table_info(conflict_pending)').all().map((r) => String(r.name ?? '')));
+        if (!conflictCols.has('reviewed_at')) {
+            this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN reviewed_at TEXT NOT NULL DEFAULT ''`);
+        }
+        if (!conflictCols.has('deferred_at')) {
+            this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN deferred_at TEXT NOT NULL DEFAULT ''`);
+        }
+        if (!conflictCols.has('defer_count')) {
+            this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN defer_count INTEGER NOT NULL DEFAULT 0`);
+        }
+        // ── §C Phase 3(task_3.3):类型轴与 claim 键两列 ──
+        // 同款存在性判据:`CREATE TABLE IF NOT EXISTS` 对**已存在**的表不补列,故必须 ALTER;
+        // 而 ALTER 重复执行会报错 ⇒ 先 `PRAGMA table_info` 判存在,迁移可重复执行。
+        // 两列的默认值刻意与读取面兜底一致('hard' / ''):旧行回填后即"未分类的硬冲突",
+        // 不需要任何一次性数据迁移。
+        if (!conflictCols.has('conflict_type')) {
+            this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN conflict_type TEXT NOT NULL DEFAULT 'hard'`);
+        }
+        if (!conflictCols.has('claim_key')) {
+            this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN claim_key TEXT NOT NULL DEFAULT ''`);
+        }
         this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
         record_id, content, type, priority, scene_name, session_id, version,
@@ -402,20 +449,37 @@ export class MemoryDb {
         timestamp INTEGER DEFAULT 0
       )
     `);
+        // R7(2026-09-17):补 turn/step 两列,给 L1 锚点提供**可落库的坐标**。
+        // 加列不改语义;旧行留 NULL ⇒ 读侧一律视作「无锚点」,不伪造回填。
+        // 沿用本文件既有的 hasColumn 幂等补列范式(family / scope / workspace_id 同款)。
+        if (!this.hasColumn('l0_conversations', 'turn')) {
+            this.db.exec('ALTER TABLE l0_conversations ADD COLUMN turn INTEGER');
+            this.logger?.info(`${TAG} l0_conversations 补 turn 列(旧行留空=无锚点)`);
+        }
+        if (!this.hasColumn('l0_conversations', 'step')) {
+            this.db.exec('ALTER TABLE l0_conversations ADD COLUMN step INTEGER');
+            this.logger?.info(`${TAG} l0_conversations 补 step 列(旧行留空=无锚点)`);
+        }
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l0_session_id ON l0_conversations(session_id)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l0_recorded ON l0_conversations(recorded_at)');
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_l0_timestamp ON l0_conversations(timestamp)');
+        // 锚点定位的唯一命中路径是 (session_id, turn[, step]) —— 无索引时按锚点取消息要全扫。
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_l0_session_turn ON l0_conversations(session_id, turn)');
+        // turn/step 用 ON CONFLICT **保留旧值**:老写路径(不带锚点)覆盖同一 record_id 时
+        // 不得把已落库的坐标抹成 NULL —— 坐标丢了就再也补不回来。
         this.stmtUpsertL0 = this.db.prepare(`
-      INSERT INTO l0_conversations (record_id, session_id, role, message_text, recorded_at, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO l0_conversations (record_id, session_id, role, message_text, recorded_at, timestamp, turn, step)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         session_id=excluded.session_id,
         role=excluded.role,
         message_text=excluded.message_text,
         recorded_at=excluded.recorded_at,
-        timestamp=excluded.timestamp
+        timestamp=excluded.timestamp,
+        turn=COALESCE(excluded.turn, l0_conversations.turn),
+        step=COALESCE(excluded.step, l0_conversations.step)
     `);
-        this.stmtGetL0 = this.db.prepare('SELECT session_id, role, message_text, recorded_at, timestamp FROM l0_conversations WHERE record_id = ?');
+        this.stmtGetL0 = this.db.prepare('SELECT session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE record_id = ?');
         this.stmtL0Exists = this.db.prepare('SELECT 1 FROM l0_conversations WHERE record_id = ?');
         this.prepareL0VecStatements();
         // ── token_cost:蒸馏成本明细表(成本账本自治) ──
@@ -809,20 +873,28 @@ export class MemoryDb {
         // 全扫(批量写整体 O(N²))。只有主表已有该行(覆盖/合并)才可能有旧 FTS 行需要删。
         // 同批重复 id 也能正确处理:首条插入后,第二条的点查在同一事务内已见新行。
         const ftsExisted = this.ftsAvailable ? this.stmtL1Exists.get(record.id) !== undefined : false;
+        // **退场不变量必须在写入漏斗上强制**:已退场的记录(valid_to 闭合或带取代标记)
+        // 永不出现在检索面。只靠 `retireL1Batch` 保证是不够的——快照恢复 / 重建 /
+        // 旧版导入都会经这里写回记录,若照常重建 FTS/向量行,一条带退场标记的记录
+        // 会**悄悄回到检索结果里**(而检索侧刻意不看 valid_to,正是为了零漂移)。
+        const retiredNow = record.validTo !== undefined || readSupersedeMarker(record.metadata) !== undefined;
         this.stmtUpsertL1.run(record.id, record.content, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, toIso(record.createdAt), toIso(record.updatedAt), JSON.stringify(record.metadata ?? {}), family, toIso(record.validFrom), toIso(record.validTo), normPersistence(record.persistence) ?? '', scope, workspaceId);
-        // vec0 不支持 ON CONFLICT → 先删后插;零向量跳过(cosine 未定义)
+        // vec0 不支持 ON CONFLICT → 先删后插;零向量跳过(cosine 未定义)。
+        // 已退场则**只删不插**(见上方 retiredNow 的说明)。
         if (this.stmtDeleteL1Vec && this.stmtInsertL1Vec) {
             this.stmtDeleteL1Vec.run(record.id);
-            if (embedding && !isZeroVector(embedding)) {
+            if (!retiredNow && embedding && !isZeroVector(embedding)) {
                 this.stmtInsertL1Vec.run(record.id, vecToBuffer(embedding), toIso(record.updatedAt));
             }
         }
         // FTS 删除/插入与元数据同事务:失败必须整体回滚——若只吞 FTS 错误照常 COMMIT,
         // 已执行的 DELETE 会让该 id 的索引行被删未补,记录从此全文检索不可见(静默丢数据)。
         if (this.ftsAvailable) {
-            if (ftsExisted)
+            if (ftsExisted || retiredNow)
                 this.stmtL1FtsDelete.run(record.id);
-            this.stmtL1FtsInsert.run(tokenizeForFts(record.content), record.content, record.id, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, JSON.stringify(record.metadata ?? {}), family, scope, workspaceId);
+            if (!retiredNow) {
+                this.stmtL1FtsInsert.run(tokenizeForFts(record.content), record.content, record.id, type, priority, sceneName, record.sessionId ?? 'default', record.version ?? 0, ts.str, ts.start, ts.end, JSON.stringify(record.metadata ?? {}), family, scope, workspaceId);
+            }
         }
     }
     /** 批量删除 L1(元数据 + 向量 + FTS),返回删除条数。IN 按 ≤900 分块(避变量数上限)。
@@ -849,6 +921,114 @@ export class MemoryDb {
         catch (err) {
             this.logger?.warn(`${TAG} L1 批量删除失败: ${err instanceof Error ? err.message : String(err)}`);
             return 0;
+        }
+    }
+    /**
+     * **软删**(记忆退场):保留主表行,撤出检索面。
+     *
+     * 与 `deleteL1Batch` 的差别**只有一处**:不动 `l1_records` 行本身。
+     * `valid_to` 闭合 + `metadata_json` 写取代标记 → 记录仍能被 `listL1` 列出、
+     * 能被 `clearRetireMarker` + upsert 恢复;而 FTS 与向量行照旧删除,于是检索面
+     * (含去重候选召回)自然看不到它 —— **检索 SQL 一行都不用改**,活动记录零漂移
+     * 因此是构造性的,不是比对出来的。
+     *
+     * 顺序刻意如此:先打标记(可逆的那一半),再撤检索面,且整体在一个事务里。
+     * 反过来先撤索引而打标记失败,记录会落在"检索不到、也没被标记"的状态 ——
+     * 既查不出来也恢复不了,是最坏的一种中间态。
+     *
+     * **幂等**:已退场(`valid_to` 非空或已有标记)的 id 不再重复写标记,
+     * 保留首次退场的原因与时刻(「谁先取代了它」不该被后一次调用改写)。
+     *
+     * **不调** `graphStore.markSourcesDeleted`:那是"来源已物理消失"的传播,
+     * 而软删的记录仍活在主表里 —— 图谱侧的退役语义另计(见计划 findings R-a)。
+     */
+    retireL1Batch(ids, info) {
+        if (this.degraded || ids.length === 0)
+            return 0;
+        try {
+            const existing = new Map(this.getL1ByIds(ids).map((r) => [r.id, r]));
+            const update = this.db.prepare('UPDATE l1_records SET valid_to = ?, metadata_json = ? WHERE record_id = ?');
+            const retired = [];
+            this.withTransaction(() => {
+                for (const id of ids) {
+                    const rec = existing.get(id);
+                    // 不存在的 id 静默跳过;已退场的跳过以保幂等
+                    if (!rec || isRetired(rec))
+                        continue;
+                    update.run(info.at, JSON.stringify(withSupersedeMarker(rec.metadata, info)), id);
+                    retired.push(id);
+                }
+                if (retired.length > 0)
+                    this.detachL1FromRetrieval(retired);
+            });
+            return retired.length;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L1 软删(退场)失败: ${err instanceof Error ? err.message : String(err)}`);
+            return 0;
+        }
+    }
+    /**
+     * 撤出检索面(删 FTS + 向量行,**主表保留**)。
+     * 与 `deleteL1Batch` 的删除面同源,只是不动 `l1_records`。
+     */
+    detachL1FromRetrieval(ids) {
+        if (this.stmtDeleteL1Vec) {
+            for (const chunk of chunkIds(ids))
+                this.inStatement('l1_vec', 'delete', chunk.length).run(...chunk);
+        }
+        if (this.ftsAvailable) {
+            for (const chunk of chunkIds(ids))
+                this.inStatement('l1_fts', 'delete', chunk.length).run(...chunk);
+        }
+    }
+    /**
+     * 清掉退场标记(恢复的**前半**)。返回清完标记的记录,供调用方 re-upsert 以重建
+     * FTS/向量 —— 那条路径(`upsertL1InTx`)已存在,不在这里重复实现。
+     *
+     * 只清 `valid_to` 与标记键,**不碰内容**:恢复不该修改记忆本身。
+     * 返回的 `validTo` 显式置 `undefined`(而非留着旧 epoch),否则 upsert 会
+     * 用 `toIso(旧值)` 把 `valid_to` 又写回去,恢复静默失败。
+     */
+    clearRetireMarker(ids) {
+        if (this.degraded || ids.length === 0)
+            return [];
+        try {
+            const existing = this.getL1ByIds(ids);
+            const update = this.db.prepare('UPDATE l1_records SET valid_to = ?, metadata_json = ? WHERE record_id = ?');
+            const restored = [];
+            this.withTransaction(() => {
+                for (const rec of existing) {
+                    const metadata = stripSupersedeMarker(rec.metadata);
+                    if (isRetired(rec))
+                        update.run('', JSON.stringify(metadata), rec.id);
+                    restored.push({ ...rec, metadata, validTo: undefined });
+                }
+            });
+            return restored;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L1 恢复(清退场标记)失败: ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+    }
+    /** 已退场记录列表(面板用):`valid_to` 非空即已退场。失败返回空。 */
+    listRetiredL1(opts) {
+        if (this.degraded)
+            return { items: [], total: 0 };
+        try {
+            const totalRow = this.db
+                .prepare("SELECT COUNT(*) AS n FROM l1_records WHERE COALESCE(valid_to, '') <> ''")
+                .get();
+            const rows = this.db
+                .prepare(`SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id
+           FROM l1_records WHERE COALESCE(valid_to, '') <> '' ORDER BY updated_time DESC LIMIT ? OFFSET ?`)
+                .all(opts.limit, opts.offset);
+            return { items: rows.map(rowToRecord), total: Number(totalRow?.n ?? 0) };
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} 已退场列表查询失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
+            return { items: [], total: 0 };
         }
     }
     inStatement(table, action, size) {
@@ -920,6 +1100,58 @@ export class MemoryDb {
             return 0;
         }
     }
+    /**
+     * 游标分批取 L1 元信息(**仅三列**):后台巡检专用。
+     *
+     * 为什么不复用 `getAllL1()`:后者会连 `content` 全文一起拉,且是一次性全量同步反序列化——
+     * 记录数随使用单调增长,后台任务在事件循环里做这件事会阻塞所有 RPC。
+     * 巡检(反刍重标定 / wing 回填)只需要 `id / type / metadata` 三列。
+     *
+     * `ORDER BY record_id` 而非 `updated_time`:record_id 是主键(唯一且不变),
+     * 巡检期间即使有写回也不会有分页漂移;updated_time 会被写回改动。
+     */
+    getAllL1Lite(limit, offset) {
+        if (this.degraded)
+            return [];
+        if (limit <= 0)
+            return [];
+        try {
+            const rows = this.db
+                .prepare('SELECT record_id, type, metadata_json FROM l1_records ORDER BY record_id LIMIT ? OFFSET ?')
+                .all(limit, offset);
+            return rows.map((r) => ({
+                id: r.record_id,
+                type: r.type,
+                metadata: parseMetadataJson(r.metadata_json),
+            }));
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L1 分批读取失败(返回空,本轮跳过): ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+    }
+    /**
+     * **只**更新 metadata_json(顺带 updated_time),绝不碰 content 或其它列。
+     *
+     * 为什么需要它:分批巡检后调用方手里**没有 content**(L1MetaLite 只有三列),
+     * 若沿用 `upsert({...lite, metadata})` 会把正文写成空 —— 这是分页改造最危险的坑。
+     *
+     * 返回 false 表示 id 不存在或写入失败(调用方据此记账,不静默)。
+     */
+    patchL1Metadata(id, metadata) {
+        if (this.degraded)
+            return false;
+        try {
+            const r = this.db
+                .prepare('UPDATE l1_records SET metadata_json = ?, updated_time = ? WHERE record_id = ?')
+                .run(JSON.stringify(metadata), new Date().toISOString(), id);
+            return Number(r.changes) > 0;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} patchL1Metadata 失败(id=${id}): ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
     /** 全量读取(调试/迁移/重嵌入用;检索请走 FTS/向量)。 */
     getAllL1() {
         if (this.degraded)
@@ -987,11 +1219,14 @@ export class MemoryDb {
         if (this.degraded || rows.length === 0)
             return 0;
         const stmt = this.db.prepare(`INSERT OR IGNORE INTO conflict_pending
-         (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`);
+         (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution, conflict_type, claim_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         let n = 0;
         for (const r of rows) {
-            n += Number(stmt.run(r.pairId, r.runId, r.winnerId, r.loserId, r.createdAt, r.resolvedAt, r.resolution).changes);
+            n += Number(stmt.run(r.pairId, r.runId, r.winnerId, r.loserId, r.createdAt, r.resolvedAt, r.resolution, 
+            // Phase 3(task_3.3):两轴在这里归一后落库——**写侧也 fail-closed**,
+            // 不指望调用方都记得传(normalizeConflictType 对畸形输入返回 'hard')。
+            normalizeConflictType(r.conflictType), normalizeClaimKey(r.claimKey)).changes);
         }
         return n;
     }
@@ -1004,11 +1239,20 @@ export class MemoryDb {
     /**
      * §C 冻结队列的**未裁决**条数(task_24 队列上限判据)。
      * 走 `idx_conflict_pending_unresolved` 偏索引,不是全表扫描。
+     *
+     * Phase 3(task_3.4):`conflictType` 可选过滤——**默认不带**(返回全部未裁决数),
+     * 只有队列上限判据传 `{ conflictType: 'hard' }`(额度只按 hard 计)。
+     * 刻意用**选项对象**而非位置参数:位置参数会被下一个调用点无声漏传,
+     * 而"漏传 ⇒ 额度把非 hard 也算进去"正是这条轴要修的病。
      */
-    countConflictPendingUnresolved() {
+    countConflictPendingUnresolved(opts = {}) {
         if (this.degraded)
             return 0;
-        const row = this.db.prepare(`SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = ''`).get();
+        const type = opts.conflictType;
+        const sql = type === undefined
+            ? `SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = ''`
+            : `SELECT COUNT(*) AS n FROM conflict_pending WHERE resolved_at = '' AND conflict_type = ?`;
+        const row = (type === undefined ? this.db.prepare(sql).get() : this.db.prepare(sql).get(type));
         return Number(row?.n ?? 0);
     }
     /**
@@ -1024,15 +1268,52 @@ export class MemoryDb {
         const params = [];
         let where = `resolved_at = ''`;
         if (opts.createdBefore) {
-            where += ` AND created_at < ?`;
+            // R1(task_2.3):超时基准 = `deferred_at ?? created_at` —— **defer 重置计时**,
+            // 而不是豁免计时(豁免会让钉子户永久占额度,破坏 config.ts 的有界性契约)。
+            // `deferred_at` 为空串时 `COALESCE(NULLIF(...,''), created_at)` 退化为 `created_at`
+            // ⇒ 未 defer 过的行的行为与升级前**逐字等价**。
+            where += ` AND COALESCE(NULLIF(deferred_at, ''), created_at) < ?`;
             params.push(opts.createdBefore);
         }
+        if (opts.excludeDeferExhausted) {
+            where += ` AND defer_count < ${DEFER_MAX}`;
+        }
         const rows = this.db
-            .prepare(`SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution
+            .prepare(`SELECT pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution,
+                reviewed_at, deferred_at, defer_count, conflict_type, claim_key
            FROM conflict_pending WHERE ${where}
           ORDER BY created_at ASC, pair_id ASC LIMIT ?`)
             .all(...params, limit);
         return rows.map(toConflictPair);
+    }
+    /**
+     * §C Phase 3(task_3.3):把未裁决对**按 `claim_key` 归并**后返回。
+     *
+     * 分组是**读取面的派生**,不是新状态:故它不从库外引入任何字段、不进快照哈希,
+     * 只把 {@link listConflictPending} 的结果按轴归并(空键那组恒排最后)。
+     * 归并逻辑在 `conflicts.ts` 的纯函数里(可单测、无 I/O),这里只负责取行。
+     */
+    listConflictGroupedByClaim(opts = {}) {
+        return groupConflictPairsByClaim(this.listConflictPending(opts));
+    }
+    /**
+     * §C Phase 2(task_2.0):写入「已复看」痕迹——**不写 `resolved_at`**。
+     *
+     * `defer`(看过、暂不裁决)不是裁决结论,故它**不能**碰 `resolved_at` / `resolution`:
+     * 那两列一旦写上,该对就退出待裁决队列了,而 `defer` 的语义恰恰是
+     * 「还在队列里,只是我看过了」。这是 R1 与 R2 的分界(审计 N1)。
+     *
+     * `WHERE pair_id = ? AND resolved_at = ''` 保证**已裁决的对不被写回**
+     * ——与 {@link resolveConflictPending} 同款的单向性。
+     *
+     * @returns 受影响行数(0 = 该对已裁决或不存在)。
+     */
+    markConflictReviewed(pairId, next) {
+        if (this.degraded)
+            return 0;
+        const stmt = this.db.prepare(`UPDATE conflict_pending SET reviewed_at = ?, deferred_at = ?, defer_count = ?
+        WHERE pair_id = ? AND resolved_at = ''`);
+        return Number(stmt.run(next.reviewedAt, next.deferredAt, next.deferCount, pairId).changes);
     }
     /**
      * §C 打上裁决结论。
@@ -1048,6 +1329,49 @@ export class MemoryDb {
         const stmt = this.db.prepare(`UPDATE conflict_pending SET resolved_at = ?, resolution = ?
         WHERE pair_id = ? AND resolved_at = ''`);
         return Number(stmt.run(resolvedAt, resolution, pairId).changes);
+    }
+    /**
+     * §C 丢弃留痕:登记被判为「配不成对」的 conflict 决策。
+     *
+     * `INSERT OR IGNORE` + 主键 `reject_id` ⇒ 同一决策重复登记只留一行
+     * (与 {@link recordConflictPending} 同款幂等,幂等来自主键而非调用方自觉)。
+     *
+     * @returns 实际新插入的行数。
+     */
+    recordConflictRejected(rows) {
+        if (this.degraded || rows.length === 0)
+            return 0;
+        const stmt = this.db.prepare(`INSERT OR IGNORE INTO conflict_rejected
+         (reject_id, run_id, record_id, winner_raw, loser_raw, reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`);
+        let n = 0;
+        for (const r of rows) {
+            n += Number(stmt.run(r.rejectId, r.runId, r.recordId, r.winnerRaw, r.loserRaw, r.reason, r.createdAt).changes);
+        }
+        return n;
+    }
+    /**
+     * §C 读取丢弃留痕(为审计/诊断出口预留)。
+     *
+     * `createdBefore` 为**排他上界**(ISO 串);定序 `created_at ASC, reject_id ASC`
+     * —— 先来先服务且同一毫秒内确定可复现(与 {@link listConflictPending} 同口径)。
+     */
+    listConflictRejected(opts = {}) {
+        if (this.degraded)
+            return [];
+        const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.floor(opts.limit) : 200;
+        const params = [];
+        let where = `1 = 1`;
+        if (opts.createdBefore) {
+            where += ` AND created_at < ?`;
+            params.push(opts.createdBefore);
+        }
+        const rows = this.db
+            .prepare(`SELECT reject_id, run_id, record_id, winner_raw, loser_raw, reason, created_at
+           FROM conflict_rejected WHERE ${where}
+          ORDER BY created_at ASC, reject_id ASC LIMIT ?`)
+            .all(...params, limit);
+        return rows.map(toConflictRejected);
     }
     /**
      * §B 凭证保留策略(task_18):只保留**最新**的 `maxRuns` 个 run,更老的整批删除。
@@ -1149,10 +1473,26 @@ export class MemoryDb {
                 where.push("(scope = 'global' OR workspace_id = ?)");
                 params.push(opts.workspaceId);
             }
-            if (opts.hall) {
-                // Hall 存于 metadata_json,用 json_extract 过滤(表小,逐行代价可接受)
-                where.push(`json_extract(metadata_json, '$.hall') = ?`);
-                params.push(opts.hall);
+            if (opts.hall || (opts.halls && opts.halls.length > 0)) {
+                // Hall 存于 metadata_json,用 json_extract 过滤(表小,逐行代价可接受);
+                // R13 多值:IN (?,?,…),命中任一即可
+                const values = opts.halls && opts.halls.length > 0 ? opts.halls : [opts.hall];
+                where.push(`json_extract(metadata_json, '$.hall') IN (${values.map(() => '?').join(',')})`);
+                params.push(...values);
+            }
+            if (opts.tag) {
+                // Room 过滤:tags 是 JSON 数组,用 json_each 展开判等(表小,逐行代价可接受)。
+                // 与 l1RoomCounts() 同一展开口径,保证「点某个 Room → 条数」与该 Room 的计数一致。
+                where.push(`EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END, '$.tags') j WHERE j.value = ?)`);
+                params.push(opts.tag);
+            }
+            // 退场筛查(三态,见 opts.retired 注释):与 listRetiredL1 同一判据,保证
+            // 「仅退场」视图与「已退场」区看到同一批行。
+            if (opts.retired === false) {
+                where.push("COALESCE(valid_to, '') = ''");
+            }
+            else if (opts.retired === true) {
+                where.push("COALESCE(valid_to, '') <> ''");
             }
             const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
             const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params);
@@ -1178,6 +1518,110 @@ export class MemoryDb {
         }
         catch {
             return [];
+        }
+    }
+    /**
+     * 主表全量元数据扫描(单一所有者共享函数):对 l1_records **全表**(含 retired 行,
+     * 不加 valid_to 过滤——退场判定见 retireL1Batch,restore 后行仍须可解析)逐行回调
+     * metadata。并行计划的引用门禁(如 multimodal 的 image_refs 清理判据)必须复用本函数,
+     * 不得各写一份"活跃面扫描"——口径漂移会造成 restore 后死链。
+     * 返回扫描行数;存储降级返回 0。
+     */
+    scanL1Metadata(cb) {
+        if (this.degraded)
+            return 0;
+        try {
+            const rows = this.db
+                .prepare('SELECT record_id, metadata_json FROM l1_records')
+                .all();
+            for (const r of rows) {
+                let meta = null;
+                if (typeof r.metadata_json === 'string' && r.metadata_json !== '') {
+                    try {
+                        const parsed = JSON.parse(r.metadata_json);
+                        if (parsed && typeof parsed === 'object')
+                            meta = parsed;
+                    }
+                    catch {
+                        meta = null; // 损坏行:回调 null,由调用方计入异常计数
+                    }
+                }
+                cb(r.record_id, meta);
+            }
+            return rows.length;
+        }
+        catch {
+            return 0;
+        }
+    }
+    /** retired 行计数(退场判定与 listRetiredL1 同口径:valid_to 非空)。失败返回 0。 */
+    retiredL1Count() {
+        if (this.degraded)
+            return 0;
+        try {
+            const row = this.db
+                .prepare("SELECT COUNT(*) AS n FROM l1_records WHERE COALESCE(valid_to, '') <> ''")
+                .get();
+            return Number(row?.n ?? 0);
+        }
+        catch {
+            return 0;
+        }
+    }
+    /**
+     * Room 计数(**标签自生长分类**):展开 `metadata.tags` 聚合,1 个 slug tag = 1 个 Room。
+     *
+     * 零 schema 变更——tags 落库即自动成为新 Room,无需注册表/迁移,这就是"自生长"。
+     *
+     * **口径与 `wingL1Counts()` 一致(不过滤 retired)**:两者常在同一面板相邻展示,
+     * 口径不一会出现互相矛盾的数字。
+     *
+     * `json_valid` 守卫:单行 metadata 损坏时 `json_each` 会抛「malformed JSON」并连带
+     * 整条聚合失败——宁可跳过该行,也不能让整个 Room 列表空掉。
+     *
+     * 失败返回空数组(存储降级或聚合异常都按"暂无 Room"处理,不报错)。
+     */
+    l1RoomCounts() {
+        if (this.degraded)
+            return [];
+        try {
+            const rows = this.db
+                .prepare(`SELECT j.value AS room, COUNT(*) AS n
+           FROM l1_records r,
+                json_each(CASE WHEN json_valid(r.metadata_json) THEN r.metadata_json ELSE '{}' END, '$.tags') j
+           WHERE j.value IS NOT NULL AND j.value <> ''
+           GROUP BY j.value
+           ORDER BY n DESC, j.value ASC`)
+                .all();
+            return rows
+                .filter((r) => typeof r.room === 'string' && r.room !== '')
+                .map((r) => ({ room: r.room, count: Number(r.n) }));
+        }
+        catch {
+            return [];
+        }
+    }
+    /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
+    wingL1Counts() {
+        if (this.degraded)
+            return { counts: {}, unlabeled: 0 };
+        try {
+            const rows = this.db
+                .prepare("SELECT json_extract(metadata_json, '$.hall') AS hall, COUNT(*) AS n FROM l1_records GROUP BY hall")
+                .all();
+            const counts = {};
+            let unlabeled = 0;
+            for (const r of rows) {
+                const n = Number(r.n);
+                if (typeof r.hall === 'string' && r.hall !== '')
+                    counts[r.hall] = n;
+                else
+                    unlabeled += n;
+            }
+            return { counts, unlabeled };
+        }
+        catch {
+            return { counts: {}, unlabeled: 0 };
         }
     }
     // ============================
@@ -1269,9 +1713,13 @@ export class MemoryDb {
                     const content = rec.content ?? '';
                     const recordedAt = rec.recordedAt ?? '';
                     const timestamp = rec.timestamp ?? 0;
+                    // R7:锚点两列。缺省给 **null**(不是 0)——0 是一个真实的轮次号,
+                    // 用它冒充"没有坐标"会让读侧以为存在第 0 轮。
+                    const turn = typeof rec.turn === 'number' && Number.isFinite(rec.turn) ? rec.turn : null;
+                    const step = typeof rec.step === 'number' && Number.isFinite(rec.step) ? rec.step : null;
                     // 同 upsertL1 的点查预判:全新增路径跳过 UNINDEXED 列的 FTS 全扫删除
                     const ftsExisted = this.ftsAvailable ? this.stmtL0Exists.get(rec.id) !== undefined : false;
-                    this.stmtUpsertL0.run(rec.id, sessionId, role, content, recordedAt, timestamp);
+                    this.stmtUpsertL0.run(rec.id, sessionId, role, content, recordedAt, timestamp, turn, step);
                     if (this.stmtDeleteL0Vec && this.stmtInsertL0Vec) {
                         this.stmtDeleteL0Vec.run(rec.id);
                         const vec = embeddings?.[i];
@@ -1356,23 +1804,57 @@ export class MemoryDb {
             return [];
         try {
             const rows = this.db
-                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp FROM l0_conversations WHERE session_id = ? ORDER BY timestamp DESC, rowid DESC LIMIT ?')
+                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE session_id = ? ORDER BY timestamp DESC, rowid DESC LIMIT ?')
                 .all(sessionId, limit);
-            return rows
-                .map((r) => ({
-                sessionId: r.session_id,
-                recordedAt: r.recorded_at,
-                id: r.record_id,
-                role: r.role,
-                content: r.message_text,
-                timestamp: r.timestamp ?? 0,
-            }))
-                .reverse();
+            return rows.map((r) => this.toL0Record(r)).reverse();
         }
         catch (err) {
             this.logger?.warn(`[memory] L0 按会话取最近消息失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
             return [];
         }
+    }
+    /**
+     * 锚点定向取消息(R7):按 `(session_id, turn[, step])` 取该回合的 L0 消息。
+     *
+     * 与 `recentL0BySession` 的区别是**按坐标而非按时间**:证据读取器(R2)手上
+     * 只有锚点,没有"最近"的概念。`step` 缺省即整轮(不过滤 step)。
+     *
+     * 返回按 `timestamp, rowid` 升序——同一轮内的原始顺序,供下游拼回回合文本。
+     */
+    l0ByAnchor(sessionId, turn, step) {
+        if (this.degraded || !Number.isFinite(turn))
+            return [];
+        try {
+            const sql = step === undefined
+                ? 'SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE session_id = ? AND turn = ? ORDER BY timestamp ASC, rowid ASC'
+                : 'SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE session_id = ? AND turn = ? AND step = ? ORDER BY timestamp ASC, rowid ASC';
+            const stmt = this.db.prepare(sql);
+            const rows = (step === undefined ? stmt.all(sessionId, turn) : stmt.all(sessionId, turn, step));
+            return rows.map((r) => this.toL0Record(r));
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L0 按锚点取消息失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+    }
+    /**
+     * L0 行 → 记录的统一映射。turn/step 为 NULL(旧行 / 无坐标)时**不写键**,
+     * 使"无锚点"与"锚点为空"在类型层就是两件事。
+     */
+    toL0Record(r) {
+        const rec = {
+            sessionId: r.session_id,
+            recordedAt: r.recorded_at,
+            id: r.record_id,
+            role: r.role,
+            content: r.message_text,
+            timestamp: r.timestamp ?? 0,
+        };
+        if (typeof r.turn === 'number')
+            rec.turn = r.turn;
+        if (typeof r.step === 'number')
+            rec.step = r.step;
+        return rec;
     }
     /** L0 全量列举(重建快照用;按时间升序,事务一致性避开 JSONL 追加竞态)。 */
     listL0All() {
@@ -1380,16 +1862,9 @@ export class MemoryDb {
             return [];
         try {
             const rows = this.db
-                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp FROM l0_conversations ORDER BY timestamp ASC')
+                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations ORDER BY timestamp ASC')
                 .all();
-            return rows.map((r) => ({
-                sessionId: r.session_id,
-                recordedAt: r.recorded_at,
-                id: r.record_id,
-                role: r.role,
-                content: r.message_text,
-                timestamp: r.timestamp ?? 0,
-            }));
+            return rows.map((r) => this.toL0Record(r));
         }
         catch (err) {
             this.logger?.warn(`${TAG} L0 全量列举失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
@@ -1472,7 +1947,7 @@ export class MemoryDb {
                 const row = this.stmtGetL0.get(record_id);
                 if (!row)
                     continue;
-                hits.push({
+                const hit = {
                     sessionId: row.session_id,
                     recordedAt: row.recorded_at,
                     id: record_id,
@@ -1480,7 +1955,13 @@ export class MemoryDb {
                     content: row.message_text,
                     timestamp: row.timestamp ?? 0,
                     score: 1.0 - distance,
-                });
+                };
+                // R7:坐标随命中一起带出(向量路命中同样需要可回溯)
+                if (typeof row.turn === 'number')
+                    hit.turn = row.turn;
+                if (typeof row.step === 'number')
+                    hit.step = row.step;
+                hits.push(hit);
             }
             return hits.slice(0, topK);
         }
@@ -1704,6 +2185,15 @@ export class MemoryDb {
         }
     }
 }
+/** 容忍坏 JSON 的 metadata 解析(与 rowToRecord 同口径:解析失败退化为空对象,不抛)。 */
+function parseMetadataJson(raw) {
+    try {
+        return JSON.parse(raw || '{}');
+    }
+    catch {
+        return {};
+    }
+}
 function rowToRecord(row) {
     let metadata = {};
     try {
@@ -1762,6 +2252,28 @@ function toConflictPair(r) {
         createdAt: String(r.created_at ?? ''),
         resolvedAt: String(r.resolved_at ?? ''),
         resolution: String(r.resolution ?? ''),
+        // Phase 2 新增列(task_2.0):**只做读取投影,不进快照哈希**
+        // (哈希走 l1-snapshot.ts 的 projectConflictsForHash 列投影,见 task_2.8)
+        reviewedAt: String(r.reviewed_at ?? ''),
+        deferredAt: String(r.deferred_at ?? ''),
+        deferCount: Number(r.defer_count ?? 0),
+        // Phase 3 新增列(task_3.2/3.3):同样**只做读取投影,不进快照哈希**。
+        // 读侧再归一一次:旧行经 ALTER 回填的是默认值,手工改过库的脏值也会被收敛到
+        // 三枚举内 —— 读取面不该把库里的任意字符串当契约往外抛。
+        conflictType: normalizeConflictType(r.conflict_type),
+        claimKey: normalizeClaimKey(r.claim_key),
+    };
+}
+/** `conflict_rejected` 行 → {@link ConflictRejected}(snake_case 只活在这一层)。 */
+function toConflictRejected(r) {
+    return {
+        rejectId: String(r.reject_id ?? ''),
+        runId: String(r.run_id ?? ''),
+        recordId: String(r.record_id ?? ''),
+        winnerRaw: String(r.winner_raw ?? ''),
+        loserRaw: String(r.loser_raw ?? ''),
+        reason: (String(r.reason ?? '') || 'not-pair'),
+        createdAt: String(r.created_at ?? ''),
     };
 }
 /** epoch 数组 → {逗号连接 ISO, 首尾 ISO}(磁盘格式契约:逗号连接、升序、ISO)。 */ function timestampsToDb(ts) {

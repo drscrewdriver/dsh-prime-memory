@@ -6,6 +6,108 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [Unreleased]
+
+### 新增
+
+- **激活槽位（Active Slot）——把「每次都该生效的约定」从语义召回里拿出来，变成可跨会话持久的常驻上下文。** 起因是一次真实失效：网络访问总则（上传走官方、下载走镜像）已写进记忆，下一轮对话里却**没有被召回**，于是旧的错误习惯继续生效。语义召回是概率性的，而这类规则需要的恰恰是确定性——所以给它们一条机械通道。
+  - **存储**：`<dataDir>/slots.json`，独立于 `state.json`（槽位是高频小改，不能把 checkpoint 的原子写拖着变频），复用 `util/io.ts` 的 `atomicWriteJson`；内存态只原地改，`list()/open()/alwaysOn()` 一律返回副本（对齐 `StateStore.reset()` 的活引用教训）。
+  - **工具面三件**：`memory_slot_write` / `memory_slot_list` / `memory_slot_close`。写入与关闭受既有的高权限门控 `live.memoryMutate`（默认关）——状态变更强风控；读取受会话档位门控，与 `memory_search` 同语义。新 registrar 独立成文件，`tools/index.ts`（1156 行）零侵入。
+  - **常驻注入**：`hooks/slot-recall.ts` 独立注册 `agent/pre-step`（waterfall prepend），与既有 `recall.ts` 可组合（两段注入顺序有测试钉住）。`pinned && open` 槽位按 priority 降序、按字节预算截断；超预算的以 `… 另有 N 个` 明示并给出找回路径——**截断不静默**。`validUntil` 由注入前的一次机械清算转 `expired`（纯时间戳比较，不引入任何 LLM），否则「有效期」只是装饰。
+  - **服务端投影 `memorySlots`**：经 `ctx.inject(['sessionProjections'])` 注册——宿主没有该服务时**静默不注册**，而不是让整行 profile 加载失败。`apply` 闭包 `SlotStore` 并以 `revision()` 判脏：**只在 `tool/result`（settled、非 error）且 rev 变化时重建**（`tool/call` 提交在 `execute()` 变更 store 之前，按 call 折会读到 stale），无关事件返回**同引用**；`view` 用 `WeakMap` 保引用稳定，且**不含 body**（判定与生成正交，正文按需再取）。本轮不含任何 client 代码：展示留给下一轮 brief。
+  - **schema 零新依赖**：`stateSchema` / `viewSchema` 自实现 `parse`（注册表运行时只调这一个方法），合法态**原样返回同一引用**、非法态抛错；不引 zod（`package.json` 与锁文件不在本轮改动白名单内）。
+  - 上限：≤8 槽（可配）/ 常驻 ≤2048 字节 / body ≤512 / title ≤60。
+- **来源锚点（R7）——记忆现在能追回会话里的**真实位置**。** 在此之前溯源链是断的：L1 带着 `source_message_ids`，但那些是 **L0 消息 id**（`msg_<epoch_ms>_<hex>`），而 L0 表没有 `turn`/`step` 列；且该 id 列表**根本没写进检索库**（写入侧只取 `metadata`，字段被静默丢弃）。结果是**任何一条记忆都无法定位到原文**。
+  - `l0_conversations` 补 `turn`/`step` 两列（幂等 `ALTER TABLE`；旧行保持 NULL = 无锚点，**绝不猜测回填**），并新增 `(session_id, turn)` 索引。
+  - 捕获侧新增 `step/start` fold：`user/message` 在内核负载里**不带** `step`，靠同轮 `step/start` 推出；`assistant/message` 用事件自带的 `{turn, step}`。**首个 `step/start` 之前的消息 step 留空**——缺坐标时不编坐标，这是红线。
+  - 锚点存在 `metadata_json` 的保留键 `dsh_source_anchors`（UI 显示为 `t12 s3`）。不加列、不动磁盘契约。**新建与「合并/更新」两条写入路径都带锚点**——否则合并一次就丢坐标，而合并是长会话里最常发生的动作。
+  - 新增宿主取数接口 `MemoryDb.l0ByAnchor(sessionId, turn, step?)`：**按坐标**（而非按时间）取 L0 消息，是后续「证据读取器」的唯一入口。
+- **记录面板显示来源锚点**（此前该行永远是「-」）。
+- **证据读取器（R1）——把锚点还原成会话原文。** 取原文走**内核 `ctx.sessionQuery`** 直连（`readSession` / `listEvents`），不再等外部索引插件的 HTTP 端点：本插件是宿主插件，手里就有 `ctx`，少一层进程边界与失败点。本轮落地**纯函数层**（装配接线与真机实调见后续条目）。
+  - 会话 id **两种形态都试**：实测索引里 `session_id` 有带 `session-` 前缀与纯 uuid 两种，只试一种会**静默漏掉 124 个会话**（不报错，只是永远查不到）。
+  - `foldEventAnchors` 在读取侧复用**与捕获侧同一条 fold 规则**，保证写入的坐标与读回的坐标是同一套语义。
+  - **忠实投影**：不 `stripCodeBlocks`、不按长度截断、不做「值不值得记」筛选——**捕获可以为省 token 丢东西，取证不行**。唯一保留的过滤是「插件注入的上下文不算用户发言」。
+  - **失败可分类**（这是本节的重点）：`no-service` / `no-anchor` / `session-unreadable` / `anchor-not-found` / `timeout` / `error`。前四类的区分是必需的——把「读不到」当成「没谈过」会让已归档会话的记忆被系统性误判。
+
+- **记忆退场（软删）与清理闭环：删除不再等于丢数据。** 此前"删除"是**物理删除**——一次误删只能去 `records/*.jsonl` 事实源里手工捞。现在删除分两档，**可逆的那档是默认**，不可逆的那档需要显式要求且自带导出物。
+  - **退场（软删）**：保留主表行 + 闭合 `valid_to` + 写取代标记（`metadata` 保留键 `dsh_superseded`，含时刻 / 原因 / 裁决结论 / 冲突对 id），只撤掉 `l1_fts` 与 `l1_vec` 行。**检索侧 SQL 一字未改**——不引入任何查询漂移。三条退场路径（裁决判负 / 去重取代 `update`·`merge` / 人工删除）**共用同一个原语**，否则迟早出现"某条路径还在硬删"的不一致语义，而那种不一致只在误删发生时才暴露。
+  - **端点 33 → 38**：`records-retired`（已退场列表）/ `records-restore`（找回）/ `cleanup-retired`（物理清理）/ `snapshots-list`（快照清单）/ `snapshot-restore`（从快照回灌）。三处清单（`contract.ts` 映射表 / `stats.ts` 的 `MEMORY_ENDPOINTS` 白名单 / 分发 `case`）与端点总数断言同步更新——少改任一处都会让端点恒返 404，而客户端 `rpc` 的 catch 会静默吞掉异常、面板整块消失。
+  - **`memory_delete` 默认只退场 1 条**（原为 3），并新增 `ids` **精确路径**（跳过语义匹配）。原实现用语义 top-N 批量删，实测**误删过两条无关的真实记忆**——"删得准"必须由精确 ID 保证，而不是靠相似度。
+  - **物理清理默认干跑**：省略 `dryRun` 即视为 `true`。即便显式执行，也先落**全库快照**并**按内容哈希**校验，不一致即中止且一条不删。为此把 `deleteL1Batch` 收敛到**唯一调用方**（`exportThenPurge`），并由源码守卫测试钉住——"没有绕过导出的物理删除路径"由此成为结构事实，而不是一句约定。
+  - **补上回程票**：`restoreL1Snapshot` 此前**只有测试在调用**，于是"先有导出物再清理"只成立了一半——导出物在、回灌出口不在，真出事只能人工解析 `l1-records.json`。现接上 `snapshots-list` / `snapshot-restore`：只收快照**目录名**（拒绝路径与 `..`）、默认干跑、并如实报出 `stillRetired`。这一条是必需的：清理只清理**已退场**记录，而快照拍在删除**之前**，所以找回的每一条都带退场标记——**写回主表 ≠ 回到召回**，不说明就会让人以为"恢复完了"。要一步完成真正的回滚用 `unretire: true`（复用既有 `restore`，不新开写路径）。
+  - **面板**：记录页新增「已退场（可恢复）」区（默认折叠、展开时才拉取，不让它拖慢正常浏览）；删除确认文案改为明确"可恢复"。**物理清理刻意不做面板入口**——不可逆动作只留 RPC / 模型出口。
+- **§C 矛盾冻结：同批次矛盾现在也能冻结（修掉"模型唯一会说的话恰好被拒收"）。** 取证发现 `validateConflictPair` 的第③条硬性要求"另一方必须是候选池里的已知记录"，而**同批次新记忆的 id 不在其中**（它们是本轮刚生成的、尚未入库）。于是"本轮两条新记忆互相矛盾"这种最典型的"机器判不了"情形，模型即便正确 emit 了 `conflict`，也**必然被判不成对而回落 `store`**。证据：模型层 7/7 会 emit，但那一跳从未落库（`conflict_pending` 建库以来 0 行、`l1_receipts` 里 `conflict` 凭证 0 条，而 `store 381 / merge 204 / update 172 / skip 7`）。修法：`validateConflictPair` 新增可选 `batchIds`（缺省 = 旧行为），仍要求"恰有一方是本条记忆"以保证配对唯一；并补队列满护栏——**败方属本轮新记忆时不做自动了结**，否则刚抽取的产出会立刻退场且没有任何人被告知，改为不停放、照常入库。
+
+- **§C 矛盾冻结现在看得懂「三轴时间」——内容矛盾但时间上有先后的,不再一律塞给人工。** 记忆记录本就有三条互不替代的时间轴(记录时刻 `createdAt/updatedAt`、事实有效期 `validFrom/validTo`、持续性 `persistence`),但矛盾检测只用了记录时刻:检测器判 `conflict` 时看不到有效期与持续性,往往把「旧事实被新事实取代」误判成需要人裁决的对;裁决面板也只显示双方正文,人看不到有效期对比只能盲判。本轮把三轴接进冻结的两端:
+  - **检测侧**:统一候选池**在冻结开启时**向检测器透传每条记忆的 `valid_from_ms` / `valid_to_ms` / `persistence`;`conflict` 动作条款新增「三轴辅助判定」——内容矛盾时先比有效期/持续性,一方已过期或明显更晚的,引导走 `update`/`merge` 而非 `conflict`。**三键与条款一律受 `conflictFreeze` 门控**:关闭态 user prompt 与升级前**逐字节相同**(见下方「修复」与 [ADR-0012](./docs/adr/0012-conflict-3axis-advisory-time-axes.md))。
+  - **裁决侧**:`ConflictPairView` 新增可选的 `winner_*` / `loser_*` 三轴字段(向后兼容);待裁决列表与渲染为每条对附上「有效期起/止、持续性」对比,帮人一眼看出谁更新、谁已过期。
+  - 机器**仍不自动裁决**:三轴只是辅助事实,最终结论仍由人工(或安全阀超时/满队列自动了结)写——`ConflictResolution` 取值不变。
+
+- **§C 三类冲突 + claim 分组 + 丢弃留痕（Phase 3-4）。** 冲突不再只有一种"硬矛盾"——LLM 现在能判定 `hard`（事实互斥）、`conditional`（前提不同才矛盾）、`supersession`（新旧取代）三类。面板按三类分段显示，每段有独立标题与说明；`defer` 按钮支持"看过但暂不裁决"（重置超时、累计复看次数）。`claim_key` 列允许标记同一主题的多对冲突，面板据此分组。被丢弃的不合法冲突决策可通过 `memory_conflicts_rejected` 工具与 `dsh-memory/conflicts-rejected` 端点查询。
+  - `conflict_pending` 新增 `conflict_type` / `claim_key` 两列（幂等 `ALTER TABLE` 迁移）。
+  - 额度计数只计 `hard`：`pendingHardTotal` 按类型过滤；`conditional` / `supersession` 不占额度。
+  - 投影哈希冻结：7 字段列投影 `projectConflictsForHash` 不含新列，存量快照校验不变。
+  - 面板：`ConflictsTab` 三类分段 + defer 按钮 + 三轴文案 + 复看次数 + claim 键显示。
+
+### 修复
+
+- **关闭态 prompt 曾悄悄多出三轴字段(默认关闭的部署受影响)。** 首版把 `valid_from_ms` / `valid_to_ms` / `persistence` **无条件**注入候选池,而这条 LLM 调用只对 system prompt 读了开关 ⇒ `conflictFreeze=false`(部署默认)时,模型每条候选多看 3 个**没有任何条款解释**的键:既费 token,又改变了输入。现已把三键纳入 `conflictFreeze` 门控,关闭态 user prompt 与升级前**逐字节相同**;判据同时从「不含某子串」升级为 **sha1 golden 锚 + 反向验证**(改坏门控该用例必红)。
+- **面板说"矛盾冻结未开启"，而开关明明是开的。** `conflicts` / `conflict-resolve` 端点读的是**部署静态配置** `cfg.conflictFreeze.enabled`，而面板写入的是**运行时设置**（live）。部署默认恒 `false`，于是开关已开、`settings.yaml` 已落 `true`，本页仍报未开启。改走 `effectiveCfg(cfg, live)`，与去重管线同一套解析——开关只有**一个**事实源，读端与写端必须看同一份状态，否则会出现"列表说开着、裁决说没开"的自相矛盾。
+- **`dsh-memory/embedding-reindex` 声明了却恒返 404。** 端点写在契约里，但既缺席 `MEMORY_ENDPOINTS` 白名单、也没有分发 `case`；同时 `startReindex()` 是**死代码**，设置页「向量索引」区块因此只有"取消"没有"开始"。补白名单 + `case` + 用例。
+- **`UiRecord.sourceMessageIds` 是死字段。** 它读的是 `l1_records` **从不存在的列**，永远回退 `[]`，于是记录面板的来源行**从未渲染过**。已替换为读真实数据的 `sourceAnchors`。
+
+## [0.16.1] — 2026-09-24
+
+### 新增
+
+- **记录面板「退场筛查」**：软删记录按设计不隐藏（可恢复），但与活跃记录混排不便分辨——现在列表工具行加了三态筛选「**全部 / 仅活跃 / 仅退场**」。后端 `listL1` 补同口径三态过滤（缺省全量，快照/重建不受影响；`retired:true` 与 `listRetiredL1` 同一判据，两份视图看到同一批行）；契约 `ListRecordsRequest.retired?: boolean`。筛查仅浏览路径生效——关键词检索只覆盖检索面，已退场记录本就不在其中。「加载更多」与删除/恢复后的自动刷新都会保持当前筛查态。
+
+### 修复
+
+- **面板「删除记忆」确认后看似毫无反应——退场态没有透传给 UI。** 软删（retire）在服务端一直正常（`valid_to` 闭合 + 撤出检索面 + 可恢复），但按设计活动列表**保留**退场记录（`l1-retire` 测试钉死「面板浏览路径不隐藏退场记录」），而 `UiRecord` 契约里根本没有"是否已退场"字段、活动列表的记录行也没有任何视觉差异，"已退场"区又默认折叠——用户确认删除后看到的是**一条一模一样的记录**，自然以为"删除没生效"。
+  - 契约补 `UiRecord.retired` / `retiredReason`：`hitToUiRecord` 从 `valid_to` + 取代标记推导，活动列表与检索命中统一透传。
+  - 活动列表对退场记录渲染**「已退场 · 原因」徽标 + 整卡置灰**，行内按钮从「✕ 删除」换成「恢复」（走 `records-restore`，成功后自动刷新）——删除的瞬间界面立刻可见变化，且二次点删的困惑（幂等 no-op）不复存在。
+  - 新增 `tests/ui-retired-flag.test.ts` 钉死映射行为（活跃 / 人工退场 / 取代退场 / 无 `validTo` 形态各一）。
+
+## [0.16.0] — 2026-09-24
+
+### 修复
+
+- **重标定/一键回填的 Wing 打标整段是废的**：提示词要求模型返回 `{"id":…,"wing":…}`，解析却读 `item.hall` → 永远取不到 → 整批静默丢弃**（实测 `wingLabeled=0 / tagged=0 / llmSkipped=60`，而日志里 LLM 明明成功）。这是 hall→Wing 改名的**第 3 次同类误伤**（前两次 `cfg.hall`、session-modes 的 `hall`）——提示词里的 JSON 字段名属于 **wire 协议**，不该跟着 UI 文案改名。现解析读 `wing` 并加枚举校验；**丢弃必须留日志**（id 配对失败 / 非法值各一条 warn），删掉永不触发的死 `catch`。
+- **`embedding-state-get` 从 2.5–3.1s 降到毫秒级**。它每次现场跑 6 次 COUNT，其中两次是 `l1_records LEFT JOIN l1_vec … IS NULL`——`l1_vec` 是 **vec0 虚拟表(1024 维)**，普通谓词下退化成逐行 probe。改为「总数 − 已嵌入 − skip」相减（实测 L1 55ms→0ms、L0 371ms→3ms），并加**分级 TTL 缓存**（忙时 1s / 空闲 30s + 重建/切换/补齐收尾显式失效）。
+- **重标定机械段不再一次性全量加载** `l1.all()`。改游标分页 + 只取 `id/type/metadata` 三列（`getAllL1Lite`），每批 200 条后让位；写回走 `patchL1Metadata`（**只改 metadata，绝不动正文**，有测试钉死）。
+
+### 新增
+
+- **Room 层：标签类自生长分类**。MemPalace 五层里 Room 位于 Wing/认知 hall 之下，由 `metadata.tags` **动态派生**（`json_each` 聚合，零 schema、零注册表）——新 tag 落库即成为新 Room。新增 `rooms-get` 端点与记录面板的 Room 分类区块（点击按该 tag 筛选，`list-records` 新增 `tag` 过滤通道）。实测本机已有 **78 个 Room**（聚合 2ms）。
+- **共享校验模块 `src/metadata-validators.ts`**：`isWingId` / `isCognitiveHall` / `isTag` / `normTags` 集中一处。此前 Wing 侧**完全没有校验**（任何非空字符串都能写进 `metadata.hall`），而认知 hall 侧有 `isCognitiveHall()` 严格校验——两处枚举不对称是数据完整性缺口。
+- **后台处理 worker 隔离（B 窄切）**：抽出 `MemoryBackend` 边界，后台批处理（反刍/回填/重标定）的 SQLite 访问搬进 `worker_threads`，不再占住宿主主事件循环；起不来自动退回进程内并留 warn（**隔离失败绝不让后台处理失效**）。热路径（召回/捕获）一行未动——它们每轮调 DB，线程化会付 IPC 税。
+- **批次进度可按段区分**：机械巡检 / 补 Wing / 提炼标签各带独立 label 与批次进度（此前 `sub` 只在 LLM 段有值，机械段 1439 条写回期间面板全空白）。
+
+### 变更
+
+- 重标定的 metadata 写回从 `l1.upsert` 改为 `patchMetadata`。**只改 metadata 原本就不该重算嵌入**——此前每条记录写回都在跑一次 embedding，单次重标定最多浪费 900 次嵌入调用。
+
+
+## [0.12.0] — 2026-09-17
+
+### 新增
+
+- **手动重建向量索引（端点 `dsh-memory/embedding-reindex` + 设置页「向量索引」区块）**。此前重建只有两条路：启动时的 `db.init` 变更检测链，与周期 backfill 的缺失补齐——**用户没有任何手动入口**。设置页里能看到的只有「取消」（且只在重建进行中才出现），既看不到「开始」，也看不到当前嵌了多少、还缺多少。现在补齐：
+  - **端点面 31 → 32**。新增 `EmbeddingReindexStartResponse`（`{accepted:true}`），**受理即返回，进度不在此回传**——客户端照旧轮询 `embedding-state-get` 的 `reindex` 字段。两套进度语义各说各话是迟早要出事的，所以刻意只留一套。三处清单（`contract.ts` 映射表 / `stats.ts` 的 `MEMORY_ENDPOINTS` 白名单 / 分发 `case`）与端点总数断言同步更新；这四处**少改任何一处都会让端点恒返 404**，而客户端 `rpc` 的 catch 会静默吞掉异常、面板整块消失。
+  - **`EmbeddingStateView` 新增 `vectors`**：L1 / L0 各自的 `embedded` / `total` / `missing` / `skipped`。「已嵌入 X / 总 Y」由此而来。db 层的 **`-1` 哨兵原样透传**——「向量能力不可用」与「一条都没嵌」在界面上必须是两句不同的话；折叠成一个数字，用户就会去点一个永远没反应的按钮。
+
+### 修复
+
+- **拒绝「受理了但根本不会跑」的重建请求**。`L1Store.reindex` / `L0Store.reindex` 首行在向量能力未就绪时**静默短路**成 `0/0/0`。入口若不设门槛，UI 会显示「重建完成、零条待补」——而真相是它**根本没开始**。该陷阱在 `src/index.ts:240` 早有注释，但那只覆盖启动链，手动入口是新开的破口。`startReindex()` 现将五道门槛全部前置，且各自给出**可行动的**文案：已卸载 / 重建已在进行中 / 嵌入源切换占用 / **嵌入源已关闭**（`currentInfo` 为空）/ **嵌入服务未就绪**（「先启用」与「再等等」是两句不同的话，不能合并成一句）。为此给两个 store 补了 `vectorsReady()` 访问器——`helper` 是私有的，外部无从询问。
+- **`embedding-subsystem.test.ts` 的 `db` 桩件不完整**。它只有 `swapProvider` / `markEmbeddingSynced` 两个方法，靠 `as never` 绕过类型检查，因此从未被检出；`snapshot()` 开始附带向量计数后即崩（`getVecSkipSet is not a function`）。**补桩件，而不是把 `vectorCounts` 改成防御式**：类型签名声明的是完整 `MemoryDb`，把缺失方法吞掉，等于把真实接线错误一并藏起来。
+
+### 测试
+
+- 新增 5 个用例：关闭态拒绝 / 未就绪拒绝 / 受理并驱动 L1+L0 且并发第二次立即被拒 / 卸载后拒绝 / `snapshot` 计数口径。**每条拒绝路径都同时断言「抛错」与「下游一次都没被调用」**——只断言抛错的话，一个「先调用下游、再抛错」的实现照样能过。
+- **反证**：临时摘除就绪守卫后，`向量能力未就绪 → 拒绝，不谎报「已受理」` 确实变红（`expected [Function] to throw an error`），还原后复绿。
+- 全量 **39 文件 / 403 用例**通过；`typecheck`（三份 tsconfig）、`build`、`smoke` 均绿。
+
 ## [0.11.0] — 2026-09-13
 
 ### 兼容性（按 DSH 插件框架文档适配）

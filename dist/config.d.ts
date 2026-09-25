@@ -160,7 +160,7 @@ export interface MemoryConfig {
             graph: number;
         }>;
     };
-    /** Hall(粗分类属性通道):参与 L1 自动打标与记忆库过滤的 Hall id 列表。
+    /** Hall(粗分类属性通道):参与 L1 自动打标与记忆库过滤的 Wing id 列表。
      *  空数组 = 关闭 Hall 功能(不自动打标)。 */
     hall: {
         enabled: string[];
@@ -168,6 +168,19 @@ export interface MemoryConfig {
     tokenCost: {
         /** token_cost 明细保留天数;写入时滚动清理更早行。0 = 永久保留。 */
         retentionDays: number;
+    };
+    /** 激活槽位(active slot):可跨会话持久的结构化提示,pinned 的 open 槽位常驻注入每轮对话上下文。 */
+    slots: {
+        /** 总开关:读/注入是否开启(写仍由 live.memoryMutate 门控)。默认开。 */
+        enabled: boolean;
+        /** 常驻注入开关:pinned 槽位是否进 agent/pre-step 上下文。默认开。 */
+        inject: boolean;
+        /** 槽位数量上限(条)。 */
+        maxSlots: number;
+        /** 常驻注入字节预算(UTF-8)。 */
+        maxAlwaysOnBytes: number;
+        /** 槽位正文最大字符数。 */
+        maxBodyChars: number;
     };
     /** 是否注册模型可调用的记忆工具。 */
     tools: boolean;
@@ -444,6 +457,19 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
     }>, Schemastery.ObjectT<{
         retentionDays: Schema<number, number>;
     }>>;
+    slots: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+        inject: Schema<boolean, boolean>;
+        maxSlots: Schema<number, number>;
+        maxAlwaysOnBytes: Schema<number, number>;
+        maxBodyChars: Schema<number, number>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
+        inject: Schema<boolean, boolean>;
+        maxSlots: Schema<number, number>;
+        maxAlwaysOnBytes: Schema<number, number>;
+        maxBodyChars: Schema<number, number>;
+    }>>;
     tools: Schema<boolean, boolean>;
     benchControl: Schema<boolean, boolean>;
 }>, Schemastery.ObjectT<{
@@ -715,7 +741,29 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
     }>, Schemastery.ObjectT<{
         retentionDays: Schema<number, number>;
     }>>;
+    slots: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+        inject: Schema<boolean, boolean>;
+        maxSlots: Schema<number, number>;
+        maxAlwaysOnBytes: Schema<number, number>;
+        maxBodyChars: Schema<number, number>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
+        inject: Schema<boolean, boolean>;
+        maxSlots: Schema<number, number>;
+        maxAlwaysOnBytes: Schema<number, number>;
+        maxBodyChars: Schema<number, number>;
+    }>>;
     tools: Schema<boolean, boolean>;
     benchControl: Schema<boolean, boolean>;
 }>>;
 export declare function resolveDataDir(cfg: MemoryConfig): string;
+/**
+ * `wing.enabled` 归一化(R14 三条规则,唯一实现点):
+ * ① **空数组保持为空** = 关闭 wing 打标(既有语义,`pipeline/l1.ts` 据此整段省略打标指令)
+ *    ——不得被归一化补全吃掉,否则用户显式关闭的意图被静默撤销;
+ * ② **含退休 id `general` → 补全 8 角全集**:含 `general` 的配置必然是旧默认
+ *    (v0.12 词表),按子集解读会被静默缩到 2 角,故补全而非过滤;
+ * ③ **不含 `general` 的其他子集原样保留**(尊重显式配置,不悄悄扩写)。
+ */
+export declare function normWingEnabled(raw: unknown): string[];

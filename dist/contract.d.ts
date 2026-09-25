@@ -12,7 +12,8 @@
  *   不同,不合并;
  * - 端点全集为 26 个(含面板高权限删除 records-delete 与图谱两端点)。
  */
-import type { MemoryFamily, MemoryMode } from './types.js';
+import type { MemoryFamily, MemoryMode, RoomCount } from './types.js';
+export type { RoomCount };
 import type { GraphEdge, GraphNode } from './graph/types.js';
 /** 蒸馏思考档位:'' = 自动(模型默认档 → high)。运行时词汇表源是 config.ts 的
  *  EFFORT_CHOICES(satisfies readonly EffortChoice[] 反向锁定防漂移)。 */
@@ -93,6 +94,9 @@ export interface MemoryLiveSettings {
     /** 记忆写删权限门:true 才允许写删记忆工具(memory_add/memory_delete)与面板高权限删除
      *  (records-delete)。默认 false(模型写删风险高,须显式在面板开启高权限模式)。 */
     memoryMutate: boolean;
+    /** §C 人工冲突裁决总开关:true = 去重判定"两边都像对的"时冻结冲突对,停放到待人工裁决区;
+     *  false = 默认,冲突按 LLM 的 winner/loser 自动了结。运行时覆盖静态 config 的 conflictFreeze.enabled。 */
+    conflictFreeze: boolean;
 }
 /** 召回停用原因(session-stats recall.enabled=false 时带出;短路序第一个为假的因子)。 */
 export type RecallDisabledReason = 'deploy' | 'global' | 'session' | 'mode';
@@ -143,9 +147,17 @@ export interface RebuildStatus {
     error: string | null;
     /** 归档产物名(提示用户可手工找回)。 */
     archiveNote: string | null;
+    /**
+     * 保留集说明(无 L0 来源、清空前被保全的记忆;task_8c)。
+     *
+     * 与 `archiveNote` 并列暴露,是因为"重建后导入记忆还在不在"必须**可观测** ——
+     * 只写日志的话,用户看到"重建完成"根本无从得知那些外部记忆是被保住了还是被清掉了。
+     * null 表示尚未进入准备阶段。
+     */
+    preserveNote: string | null;
 }
 /** 反刍阶段。 */
-export type RuminatePhase = 'idle' | 'refreshing' | 'distilling' | 'consolidating' | 'updating' | 'done' | 'cancelled' | 'failed';
+export type RuminatePhase = 'idle' | 'refreshing' | 'distilling' | 'consolidating' | 'updating' | 'relabeling' | 'done' | 'cancelled' | 'failed';
 /** 反刍状态(ruminate-status/start/cancel 端点返回值)。 */
 export interface RuminateStatus {
     running: boolean;
@@ -158,6 +170,23 @@ export interface RuminateStatus {
     recordsBuilt: number;
     /** 当前动作的人类可读描述(L2/L3 单次调用可达分钟级,无此字段界面只能显示"运行中")。 */
     detail?: string | null;
+    /** 标注校验/重标定结果(relabeling 阶段的产出;未执行或旧版省略)。 */
+    relabel?: {
+        checked: number;
+        cogHallFixed: number;
+        wingInvalidFixed: number;
+        wingLabeled: number;
+        tagged: number;
+        llmSkipped: number;
+        /** 时间预算用尽未处理、留待下次反刍的条数。 */
+        deferred: number;
+    } | null;
+    /** 子进度:非会话阶段(relabeling)的批次进度;离开阶段即清空,旧版/其他阶段省略。 */
+    sub?: {
+        done: number;
+        total: number;
+        label: string;
+    } | null;
     cancelRequested: boolean;
     startedAt: number | null;
     finishedAt: number | null;
@@ -374,7 +403,26 @@ export interface EmbeddingStateView {
         error: string | null;
     } | null;
     reindex: ReindexProgressState;
+    /** 向量索引概况（"已嵌入 X / 总 Y"的数据源）。 */
+    vectors: VectorIndexView;
     activeNote?: string;
+}
+/** 单层（L1 / L0）的向量索引计数。
+ *  不可用哨兵统一为 **-1**（沿用 db 层 `countL1Vec` / `countL1VecMissing` 的约定），
+ *  与"真的是 0 条"区分——`嵌入能力挂掉` 和 `一条都没嵌` 在 UI 上是两句不同的话。 */
+export interface VectorCountView {
+    /** 向量表行数（已嵌入）。 */
+    embedded: number;
+    /** 元数据行数（嵌入分母）。 */
+    total: number;
+    /** 缺向量且可补齐的条数（已排除 skip 集）。 */
+    missing: number;
+    /** 内容不可嵌入、已进 skip 集的条数（重试无意义）。 */
+    skipped: number;
+}
+export interface VectorIndexView {
+    l1: VectorCountView;
+    l0: VectorCountView;
 }
 /** dsh-memory/stats */
 export interface StatsResponse extends MemoryStats {
@@ -399,6 +447,15 @@ export interface SessionModeGetResponse {
     recall: boolean | null;
     /** host 解析后的注入生效值(会话覆盖 ?? 全局开关):pill 面文直接消费。 */
     recallResolved: boolean;
+    /** 会话级域锁定(wing 八边形手动挡):角 id = 锁定单域;null = 中心(智能档)。
+     *  Phase 2 多选:完整选择集在 halls,本字段取第一个锁定域(兼容)。 */
+    hall: string | null;
+    /** 多选域锁定:命中任一锁定域即通过硬过滤;空数组 = 中心。 */
+    halls: string[];
+    /** 锁定域边界开关:未打标记忆是否参与召回(默认包含)。 */
+    hallIncludeUnlabeled: boolean;
+    /** 锁定域边界开关:跨域兜底 general 是否参与召回(默认不含)。 */
+    hallIncludeGeneral: boolean;
 }
 export interface SessionModeSetRequest {
     sessionId: string;
@@ -406,6 +463,14 @@ export interface SessionModeSetRequest {
     /** 会话级注入覆盖:布尔 = 设置覆盖;显式 null = 清除(跟随全局);缺省 = 不动
      *  (旧 client 纯切档兼容,覆盖不丢)。mode 与 recall 可独立设置。 */
     recall?: boolean | null;
+    /** 会话级域锁定:角 id = 锁定;显式 null = 回中心(清除锁定);缺省 = 不动。
+     *  单值保留兼容;多选传 halls。 */
+    hall?: string | null;
+    /** 多选域锁定:角 id 数组(去重,非法 id 整体拒绝);显式 null/空数组 = 回中心;缺省 = 不动。 */
+    halls?: readonly string[] | null;
+    /** 锁定域边界开关(缺省 = 不动)。 */
+    hallIncludeUnlabeled?: boolean;
+    hallIncludeGeneral?: boolean;
 }
 export interface SessionModeSetResponse {
     sessionId: string;
@@ -414,6 +479,44 @@ export interface SessionModeSetResponse {
     recall: boolean | null;
     /** 设置后的注入生效值(client 面文直接消费;清除覆盖后由 host 告知解析结果)。 */
     recallResolved: boolean;
+    /** 设置后的域锁定(null = 中心);多选完整集在 halls。 */
+    hall: string | null;
+    halls: string[];
+    hallIncludeUnlabeled: boolean;
+    hallIncludeGeneral: boolean;
+}
+/** dsh-memory/wing-overview(八边形角计数;WingWheel 打开时拉取,非热路径)。 */
+export interface WingOverviewResponse {
+    /** 8 角逐域计数(词表顺序)。 */
+    corners: Array<{
+        id: string;
+        label: string;
+        count: number;
+    }>;
+    /** 跨域兜底值(general)计数。 */
+    general: number;
+    /** 未打标(metadata 无 wing)计数——角上"另有 N 条未打标"与一键回填的数据源。 */
+    unlabeled: number;
+}
+/**
+ * dsh-memory/rooms-get(Room 分类计数)。
+ *
+ * Room = 标签类**自生长**分类:由 `metadata.tags` 直接派生,1 个 slug tag = 1 个 Room。
+ * 无枚举、无注册表、无 schema —— 反刍涌现出新 tag 即自动出现新 Room。
+ *
+ * 降级/无 tags 时 `rooms` 为空数组(面板显示"暂无"),不报错。
+ */
+export interface RoomsGetResponse {
+    /** Room 列表(按记录数降序,同数按名升序)。 */
+    rooms: RoomCount[];
+    /** Room 总数(= rooms.length,冗余只为前端少写一次 .length)。 */
+    total: number;
+}
+/** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */
+export interface WingBackfillResponse {
+    /** true = 本次触发启动了新任务;false = 已有任务在跑(单飞,不叠加)。 */
+    started: boolean;
+    running: boolean;
 }
 /** dsh-memory/session-stats(悬浮卡信息区;热路径端点)。 */
 export interface SessionStatsRequest {
@@ -525,6 +628,8 @@ export interface SettingsSetRequest {
     embedRemoteApiKey?: string;
     /** 记忆写删权限门(true = 允许写删工具与面板高权限删除)。 */
     memoryMutate?: boolean;
+    /** §C 人工冲突裁决总开关(true = 冻结冲突对,停放到待人工裁决区)。 */
+    conflictFreeze?: boolean;
 }
 export interface SettingsSetResponse {
     ok: true;
@@ -535,8 +640,22 @@ export interface ListRecordsRequest {
     query?: string;
     type?: string;
     scene?: string;
-    /** Hall 过滤(metadata.hall == 该值;空 = 不过滤)。 */
+    /** Wing 过滤(metadata.hall == 该值;空 = 不过滤)。单值保留兼容;多选走 halls。 */
     hall?: string;
+    /** Wing 过滤多值(R13):命中任一即可;查询可多选,记录打标仍单值。 */
+    halls?: readonly string[];
+    /**
+     * Room 过滤(metadata.tags 含该 slug;空 = 不过滤)。
+     *
+     * Room 由 tags 派生(自生长),故这里传的是**具体 tag 名**而非枚举 id。
+     */
+    tag?: string;
+    /**
+     * 退场(软删)筛查:三态。省略 = 全部(活跃+已退场混排,靠 `UiRecord.retired`
+     * 徽标区分);`false` = 仅活跃;`true` = 仅已退场。
+     * **仅浏览路径生效**:关键词检索只覆盖检索面,已退场记录本就不在其中。
+     */
+    retired?: boolean;
     /** 1~200,默认 50。 */
     limit?: number;
     /** 0~1_000_000。 */
@@ -550,15 +669,31 @@ export interface UiRecord {
     priority: number;
     scene: string;
     family: MemoryFamily | null;
-    /** Hall 标签(metadata.hall,可空)。 */
+    /** Wing 标签(metadata.hall,可空)。 */
     hall: string | null;
     timestamps: string[];
     createdAt: string | null;
     updatedAt: string | null;
     version: number;
-    sourceMessageIds: string[];
+    /**
+     * 来源锚点(R7):形如 `t12 s3`(无 step 时为 `t12`),来自
+     * `metadata.dsh_source_anchors`。**空数组 = 该记忆无锚点**(老数据 / 捕获侧
+     * 未打戳 / 解析不到坐标),不是"没有来源"。
+     *
+     * 2026-09-17 替换原 `sourceMessageIds`:`l1_records` 从不存该列,原字段
+     * 永远是 `[]`(死字段,UI 因此从未显示过来源行)。锚点是同一意图的**活实现**。
+     */
+    sourceAnchors: string[];
     /** 检索相关度(列表路径无 score → null)。 */
     score: number | null;
+    /**
+     * 是否已退场(软删)。`true` 时该记录在活动列表里仍以「已退场」态呈现(置灰 + 徽标),
+     * 可被 `records-restore` 找回——这正是设计要的「不静默消失、可恢复」,而非真删。
+     * 缺省/ `false` 表示活跃。
+     */
+    retired?: boolean;
+    /** 退场原因:`conflict`(裁决) / `superseded`(取代) / `manual`(人工) / `unknown`。未退场为 null。 */
+    retiredReason?: string | null;
 }
 export interface ListRecordsResponse {
     items: UiRecord[];
@@ -569,14 +704,166 @@ export interface ListRecordsResponse {
     truncated: boolean;
     /** 场景筛选下拉选项(仅 offset===0 时附带)。 */
     scenes?: string[];
+    /**
+     * Wing 词表(R8 单一事实源:服务端随 list-records 下发,client 不再手抄;仅 offset===0 时附带)。
+     * 含 8 角 + `general`(跨域兜底,存量大 reserved 值仍可筛)。缺省(旧服务端)时 client
+     * 降级为从已加载记录的 wing 值派生选项。
+     */
+    wingCatalog?: Array<{
+        id: string;
+        label: string;
+    }>;
 }
-/** dsh-memory/records-delete(面板高权限删除指定记忆;须 memoryMutate 开启)。 */
+/** dsh-memory/records-delete(面板高权限退场指定记忆;须 memoryMutate 开启)。 */
 export interface RecordsDeleteRequest {
-    /** 要删除的 L1 record id 列表(≤200)。 */
+    /** 要**退场(软删)**的 L1 record id 列表(≤200)。不是物理删除,可恢复。 */
     ids: string[];
 }
 export interface RecordsDeleteResponse {
     deleted: number;
+}
+/**
+ * 已退场记录的一条(在浏览卡片之上补退场信息)。
+ *
+ * `retiredReason` 用宽松 `string` 而非字面量联合:契约要能在**客户端**那一档
+ * (`types: []`)独立编译,不该反向依赖宿主 store 的类型;严格联合留在 store 侧,
+ * 面板只做展示。新增原因时面板不认识也能照常显示,不会编译失败。
+ */
+export interface RetiredRecordView extends UiRecord {
+    /** 退场时刻(ISO 8601)。 */
+    retiredAt: string;
+    /** 退场原因:`conflict`(裁决) / `superseded`(去重取代) / `manual`(人工)。 */
+    retiredReason: string;
+    /** 裁决结论(仅 reason=conflict)。 */
+    verdict?: string;
+    /** 取代它的新记录 id(仅 reason=superseded)。 */
+    supersededBy?: string;
+}
+/** dsh-memory/records-retired(已退场列表;面板据此展示"可恢复"区)。 */
+export interface RecordsRetiredRequest {
+    limit?: number;
+    offset?: number;
+}
+export interface RecordsRetiredResponse {
+    items: RetiredRecordView[];
+    total: number;
+}
+/** dsh-memory/records-restore(把已退场记录送回检索面)。 */
+export interface RecordsRestoreRequest {
+    /** 要恢复的 record id 列表(≤200)。 */
+    ids: string[];
+}
+export interface RecordsRestoreResponse {
+    restored: number;
+    /** 成功补回向量的条数(嵌入不可用时可能小于 `restored`)。 */
+    vectorsWritten: number;
+}
+/**
+ * dsh-memory/cleanup-retired(物理清理已退场记录)。
+ *
+ * **默认干跑**:`dryRun` 省略即视为 `true`,只报"将要清理多少条"。
+ * 真要物理删除必须显式 `dryRun:false` —— 这是本插件唯一不可逆的动作。
+ * 即便显式执行,也要先落快照并校验通过,否则中止(`aborted:true`)。
+ */
+export interface CleanupRetiredRequest {
+    /** 限定要清理的 id;省略 = 全部已退场记录。 */
+    ids?: string[];
+    /** 默认 true(干跑)。显式 false 才真正删除。 */
+    dryRun?: boolean;
+}
+export interface CleanupRetiredResponse {
+    dryRun: boolean;
+    /** 本次涉及(干跑)或实际处理(真跑)的条数。 */
+    targets: number;
+    /** 真正物理删除的条数(干跑恒为 0;中止恒为 0)。 */
+    purged: number;
+    /** 门禁未通过而中止。 */
+    aborted: boolean;
+    /** 快照目录(真跑时非空)。 */
+    dir: string;
+    /**
+     * 快照**目录名**(真跑时非空)。
+     *
+     * `dir` 是给人看的绝对路径;`name` 是给 `snapshot-restore` 用的**唯一寻址口径**
+     * ——恢复入口只收名字、不收路径(见 `isSnapshotName`)。没有它,调用方就得自己
+     * 从 `dir` 里切最后一段,还要同时兼容 `/` 与 `\` 两种分隔符。
+     */
+    name: string;
+    /** 中止原因(仅 aborted 时非空)。 */
+    diffs: string[];
+}
+/** dsh-memory/snapshots-list(可用快照清单;恢复前先看有哪些)。 */
+export interface SnapshotsListRequest {
+    /** 最多返回几份(1~200,默认 50)。 */
+    limit?: number;
+}
+/** 一份快照的摘要(与 `l1-snapshot.SnapshotSummary` 同形)。 */
+export interface SnapshotSummaryView {
+    /** 目录名——恢复时传它。 */
+    name: string;
+    /** 绝对路径(给人看/给运维定位)。 */
+    dir: string;
+    createdAt: string;
+    /** 建它的原因(如 `cleanup-retired` / `pre-rebuild`)。 */
+    reason: string;
+    /** `l1_records` 条数。 */
+    records: number;
+    receipts: number;
+    conflicts: number;
+    /** `l1_vec` 行数(派生投影,不落快照,只记数)。 */
+    vecCount: number;
+}
+export interface SnapshotsListResponse {
+    /** 按时间**倒序**(最新的在前)。 */
+    items: SnapshotSummaryView[];
+    total: number;
+}
+/**
+ * dsh-memory/snapshot-restore(从快照把已物理删除的记录灌回检索库)。
+ *
+ * **默认干跑**:`dryRun` 省略即视为 `true`。恢复本身是幂等的 upsert(不删任何东西),
+ * 但它是"把历史状态写回当前库",仍须调用方显式要求才做——与 `cleanup-retired` 同一条纪律。
+ */
+export interface SnapshotRestoreRequest {
+    /** 快照**目录名**(见 snapshots-list)。**不接受路径**。 */
+    name: string;
+    /** 只恢复这些 id(≤2000);省略 = 快照内全部。 */
+    ids?: string[];
+    /** 默认 true(干跑)。显式 false 才真正写库。 */
+    dryRun?: boolean;
+    /**
+     * 顺手把带回的记录**放回检索面**(清退场标记 + 重建索引)。默认 `false`。
+     *
+     * 为什么默认关:`cleanup-retired` 只清理**已退场**记录,快照又拍在删除**之前**
+     * ——所以清理快照找回的每一条都带退场标记,只回主表、不回召回。默认关 = 恢复
+     * 的是"当时的状态";要一步到位(真正的回滚)再显式打开。两种情形都会在
+     * `stillRetired` / `unretired` 里如实报出,不存在"悄悄复活"。
+     */
+    unretire?: boolean;
+}
+export interface SnapshotRestoreResponse {
+    name: string;
+    dir: string;
+    dryRun: boolean;
+    /** 快照里的记录总数(过滤前)。 */
+    inSnapshot: number;
+    /** 本次涉及(过滤后)的条数。 */
+    targets: number;
+    /** 其中当前**不在库**的条数——真正被找回的条数。 */
+    missing: number;
+    /** 实际写回条数(干跑恒为 0)。 */
+    restored: number;
+    failed: number;
+    /** 成功补回向量的条数(干跑恒为 0;嵌入不可用时可能为 0)。 */
+    vectorsWritten: number;
+    /** 本次顺手放回检索面的条数(仅 `unretire:true` 时可能非零)。 */
+    unretired: number;
+    /** 回到主表但**仍不在检索面**的 id(再调 `records-restore` 可放回)。 */
+    stillRetired: string[];
+    /** 请求了但该快照里没有的 id。 */
+    notFound: string[];
+    /** 提示(如名字非法/快照不存在,或"还有记录没回到检索面")。 */
+    notice?: string;
 }
 /** dsh-memory/graph-search(图谱节点检索;紧凑节点卡)。 */
 export interface GraphSearchRequest {
@@ -746,6 +1033,12 @@ export interface EmbeddingDownloadStartResponse {
 export interface EmbeddingCancelResponse {
     cancelled: boolean;
 }
+/** dsh-memory/embedding-reindex（手动触发重建）。
+ *  受理即返回，**不在此回传进度**——客户端照旧轮询 embedding-state-get 的 reindex 字段，
+ *  否则"受理响应"与"进度快照"会各有一套进度语义，两边迟早对不上。 */
+export interface EmbeddingReindexStartResponse {
+    accepted: true;
+}
 /** dsh-memory/embedding-model-delete */
 export interface EmbeddingModelDeleteRequest {
     modelId: string;
@@ -754,16 +1047,126 @@ export interface EmbeddingModelDeleteResponse {
     ok: boolean;
     error?: string;
 }
+/** 一条待裁决冲突对(与 `ConflictPair` 同源,但只暴露人要看的那几个字段)。 */
+export interface ConflictPairView {
+    pair_id: string;
+    /** 产生该冻结的 L1 蒸馏批次 id(接 §B 凭证链)。 */
+    run_id: string;
+    /** LLM 建议的胜方 id。**只是进入队列时的排序位,不代表结论**。 */
+    winner_id: string;
+    /** 胜方正文;**空串 = 该记录已不在检索库**(被合并/删掉了),不是"内容为空"。 */
+    winner_content: string;
+    loser_id: string;
+    loser_content: string;
+    created_at: string;
+    winner_valid_from_ms?: number | null;
+    winner_valid_to_ms?: number | null;
+    winner_persistence?: string | null;
+    loser_valid_from_ms?: number | null;
+    loser_valid_to_ms?: number | null;
+    loser_persistence?: string | null;
+    review_state?: 'unseen' | 'deferred';
+    /** R1:复看次数(面板据此显示"已复看 N 次");达 `DEFER_MAX` 即钉子户。 */
+    defer_count?: number;
+    conflict_type?: 'hard' | 'conditional' | 'supersession';
+    /** Phase 3:同一 claim 的多对冲突共用的稳定标识;空串 = 未分组。 */
+    claim_key?: string;
+}
+/** `dsh-memory/conflicts` 请求(读待裁决队列)。 */
+export interface ConflictsRequest {
+    /** 最多返回多少对(默认 50,上限 200)。 */
+    limit?: number;
+}
+/** `dsh-memory/conflicts` 响应。 */
+export interface ConflictsResponse {
+    /**
+     * `conflictFreeze.enabled`。**必须与 `items: []` 分开呈现** ——
+     * "开关没开"与"开了但没有待裁决"在面板上是两件不同的事。
+     */
+    enabled: boolean;
+    /** 未裁决总数(可能大于 `items.length`)。 */
+    total: number;
+    items: ConflictPairView[];
+    notice?: string;
+}
+/** `dsh-memory/conflict-resolve` 请求。 */
+export interface ConflictResolveRequest {
+    pairId: string;
+    /** `winner` | `loser` | `both`。 */
+    outcome: string;
+}
+/** `dsh-memory/conflict-resolve` 响应(与 `memory_resolve_conflict` 工具同形状)。 */
+export interface ConflictResolveResponse {
+    pair_id: string;
+    outcome: string;
+    /** 裁决时刻(ISO);空串 = 未生效。 */
+    resolved_at: string;
+    /** 因裁决从检索中退场的记录 id(无则空串)。 */
+    removed_record_id: string;
+    notice?: string;
+}
+/** 一条被丢弃的冲突决策(task_1.1: LLM 输出不满足 pair 格式、已被记录为"不合法")。 */
+export interface ConflictRejectedView {
+    reject_id: string;
+    run_id: string;
+    record_id: string;
+    winner_raw: string;
+    loser_raw: string;
+    reason: string;
+    created_at: string;
+}
+/** `dsh-memory/conflicts-rejected` 请求。 */
+export interface ConflictRejectedRequest {
+    /** 最多返回多少条(默认 50,上限 200)。 */
+    limit?: number;
+    /** 排他上界:created_at < 此值的记录(ISO);不给则从最新开始。 */
+    created_before?: string;
+}
+/** `dsh-memory/conflicts-rejected` 响应。 */
+export interface ConflictRejectedResponse {
+    items: ConflictRejectedView[];
+    notice?: string;
+}
+/** `dsh-memory/receipts` 请求(两维回溯,至少给一个)。 */
+export interface ReceiptsRequest {
+    recordId?: string;
+    runId?: string;
+    limit?: number;
+}
+/** 一条决策凭证(与 `memory_receipts` 工具同形状)。 */
+export interface ReceiptItemView {
+    receipt_id: string;
+    run_id: string;
+    record_id: string;
+    /** `store` / `update` / `merge` / `skip` / `conflict` / `skip_missing`。 */
+    kind: string;
+    input_digest: string;
+    decided_at: string;
+}
+/** `dsh-memory/receipts` 响应。 */
+export interface ReceiptsResponse {
+    /** `record` / `run` / `both` / `none`。 */
+    dimension: string;
+    items: ReceiptItemView[];
+    total: number;
+}
 export interface DshMemoryRequestMap {
     'dsh-memory/stats': Record<string, never>;
     'dsh-memory/token-cost': TokenCostRequest;
     'dsh-memory/session-mode-get': SessionModeGetRequest;
     'dsh-memory/session-mode-set': SessionModeSetRequest;
+    'dsh-memory/wing-overview': Record<string, never>;
+    'dsh-memory/rooms-get': Record<string, never>;
+    'dsh-memory/wing-backfill': Record<string, never>;
     'dsh-memory/session-stats': SessionStatsRequest;
     'dsh-memory/settings-get': Record<string, never>;
     'dsh-memory/settings-set': SettingsSetRequest;
     'dsh-memory/list-records': ListRecordsRequest;
     'dsh-memory/records-delete': RecordsDeleteRequest;
+    'dsh-memory/receipts': ReceiptsRequest;
+    'dsh-memory/conflicts': ConflictsRequest;
+    'dsh-memory/conflict-resolve': ConflictResolveRequest;
+    'dsh-memory/conflicts-rejected': ConflictRejectedRequest;
     'dsh-memory/graph-search': GraphSearchRequest;
     'dsh-memory/graph-node-get': GraphNodeGetRequest;
     'dsh-memory/scenes': Record<string, never>;
@@ -783,18 +1186,31 @@ export interface DshMemoryRequestMap {
     'dsh-memory/embedding-download-cancel': Record<string, never>;
     'dsh-memory/embedding-model-delete': EmbeddingModelDeleteRequest;
     'dsh-memory/embedding-runtime-cancel': Record<string, never>;
+    'dsh-memory/embedding-reindex': Record<string, never>;
     'dsh-memory/embedding-reindex-cancel': Record<string, never>;
+    'dsh-memory/records-retired': RecordsRetiredRequest;
+    'dsh-memory/records-restore': RecordsRestoreRequest;
+    'dsh-memory/cleanup-retired': CleanupRetiredRequest;
+    'dsh-memory/snapshots-list': SnapshotsListRequest;
+    'dsh-memory/snapshot-restore': SnapshotRestoreRequest;
 }
 export interface DshMemoryResponseMap {
     'dsh-memory/stats': StatsResponse;
     'dsh-memory/token-cost': TokenCostResponse;
     'dsh-memory/session-mode-get': SessionModeGetResponse;
     'dsh-memory/session-mode-set': SessionModeSetResponse;
+    'dsh-memory/wing-overview': WingOverviewResponse;
+    'dsh-memory/rooms-get': RoomsGetResponse;
+    'dsh-memory/wing-backfill': WingBackfillResponse;
     'dsh-memory/session-stats': SessionStatsResponse;
     'dsh-memory/settings-get': SettingsGetResponse;
     'dsh-memory/settings-set': SettingsSetResponse;
     'dsh-memory/list-records': ListRecordsResponse;
     'dsh-memory/records-delete': RecordsDeleteResponse;
+    'dsh-memory/receipts': ReceiptsResponse;
+    'dsh-memory/conflicts': ConflictsResponse;
+    'dsh-memory/conflict-resolve': ConflictResolveResponse;
+    'dsh-memory/conflicts-rejected': ConflictRejectedResponse;
     'dsh-memory/graph-search': GraphSearchResponse;
     'dsh-memory/graph-node-get': GraphNodeGetResponse;
     'dsh-memory/scenes': ScenesResponse;
@@ -814,7 +1230,13 @@ export interface DshMemoryResponseMap {
     'dsh-memory/embedding-download-cancel': EmbeddingCancelResponse;
     'dsh-memory/embedding-model-delete': EmbeddingModelDeleteResponse;
     'dsh-memory/embedding-runtime-cancel': EmbeddingCancelResponse;
+    'dsh-memory/embedding-reindex': EmbeddingReindexStartResponse;
     'dsh-memory/embedding-reindex-cancel': EmbeddingCancelResponse;
+    'dsh-memory/records-retired': RecordsRetiredResponse;
+    'dsh-memory/records-restore': RecordsRestoreResponse;
+    'dsh-memory/cleanup-retired': CleanupRetiredResponse;
+    'dsh-memory/snapshots-list': SnapshotsListResponse;
+    'dsh-memory/snapshot-restore': SnapshotRestoreResponse;
 }
 /** 全部端点名(client 调用与 host case 表的共用字面量来源)。 */
 export type DshMemoryEndpoint = keyof DshMemoryResponseMap;

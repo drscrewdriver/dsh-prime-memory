@@ -107,8 +107,12 @@ describe('memory tools', () => {
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
     // 这份清单是**有意**穷举的:新增工具必须在此显式登记,避免"悄悄多了一个模型可见
     // 的能力"(§B 的 memory_receipts 即在此处被拦下一次,确认后才加入)。
+    //
+    // §C 的 memory_conflicts 则是反过来的一次:`memory_resolve_conflict` 的描述里
+    // 早就写着"待裁决对可用 memory_conflicts 查看",而那个工具**一直不存在** ——
+    // 模型照着描述调用只会拿到"工具不存在"。本次补上读出口,故在此登记。
     expect(h.registered.map((t) => t.name).sort()).toEqual([
-      'conversation_search', 'memory_add', 'memory_delete', 'memory_expand_graph_node', 'memory_import', 'memory_read_scene', 'memory_receipts', 'memory_resolve_conflict', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
+      'conversation_search', 'memory_add', 'memory_conflicts', 'memory_conflicts_rejected', 'memory_delete', 'memory_expand_graph_node', 'memory_import', 'memory_read_scene', 'memory_receipts', 'memory_resolve_conflict', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph',
     ]);
     stores.db.close();
   });
@@ -283,7 +287,7 @@ describe('memory tools', () => {
     stores.db.close();
   });
 
-  it('memory_delete: gated, semantic search then batch delete', async () => {
+  it('memory_delete: gated, semantic search then **soft-delete**(可恢复)', async () => {
     const stores = await setupStores();
     const h2 = harness({ liveMutate: true });
     registerMemoryTools(h2.ctx, h2.cfg, stores, noopLogger, h2.modes, h2.liveHandle);
@@ -292,13 +296,52 @@ describe('memory tools', () => {
     expect(noMatch.deleted).toBe(0);
     const ok = (await del.execute({ query: '手冲咖啡', limit: 1 }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
     expect(ok.deleted).toBe(1);
-    expect(stores.l1.getByIds(ok.ids).length).toBe(0); // 已从检索库删除
+    // **软删**:主表仍在(可恢复的载体),但已退出检索面
+    const [retired] = stores.l1.getByIds(ok.ids);
+    expect(retired, '退场不该让记录消失').toBeDefined();
+    expect(retired.validTo).toBeDefined();
+    expect(stores.db.searchL1Fts('手冲咖啡', 5).map((h) => h.id)).not.toContain(ok.ids[0]);
+    expect(stores.l1.listRetired({ limit: 10, offset: 0 }).items.map((r) => r.id)).toEqual(ok.ids);
+    // 恢复闭环:回到检索面
+    expect((await stores.l1.restore(ok.ids)).restored).toBe(1);
+    expect(stores.l1.getByIds(ok.ids)[0]?.validTo).toBeUndefined();
     // 关门拒绝
     const h1 = harness({ liveMutate: false });
     registerMemoryTools(h1.ctx, h1.cfg, stores, noopLogger, h1.modes, h1.liveHandle);
     const del1 = h1.registered.find((t) => t.name === 'memory_delete')!;
     const denied = (await del1.execute({ query: '咖啡' }, {})) as { notice: string };
     expect(denied.notice).toContain('高权限');
+    stores.db.close();
+  });
+
+  it('memory_delete: 默认只退场 1 条(复刻真实误删事故)', async () => {
+    // 事故原样:调用方只想忘掉 1 条,默认 limit=3 却按语义邻近连带退场了 3 条
+    // (memory.log 实测「高权限删除记忆 3 条(...)」其中 2 条与本意无关)。
+    const stores = await setupStores();
+    const h = harness({ liveMutate: true });
+    registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
+    const del = h.registered.find((t) => t.name === 'memory_delete')!;
+    const r = (await del.execute({ query: '手冲咖啡' }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
+    expect(r.deleted).toBe(1); // 默认 limit=1,不再是 3
+    expect(r.ids).toHaveLength(1);
+    expect(stores.l1.listRetired({ limit: 10, offset: 0 }).total).toBe(1);
+    // 另一条记忆完全没被牵连
+    expect(stores.l1.getByIds(['r2'])[0]?.validTo).toBeUndefined();
+    stores.db.close();
+  });
+
+  it('memory_delete: ids 精确路径**跳过**语义匹配', async () => {
+    const stores = await setupStores();
+    const h = harness({ liveMutate: true });
+    registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
+    const del = h.registered.find((t) => t.name === 'memory_delete')!;
+    // query 故意与目标无关:精确路径不得受它影响
+    const r = (await del.execute({ ids: ['r2'], query: '手冲咖啡' }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
+    expect(r.ids).toEqual(['r2']);
+    expect(r.deleted).toBe(1);
+    expect(stores.l1.getByIds(['r2'])[0]?.validTo).toBeDefined();
+    // 与 query 匹配的 r1 未被牵连(语义匹配根本没跑)
+    expect(stores.l1.getByIds(['r1'])[0]?.validTo).toBeUndefined();
     stores.db.close();
   });
 

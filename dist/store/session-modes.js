@@ -5,13 +5,19 @@
  * 存储失败只降级为内存态(warn 不崩),与插件的存储降级不变量一致。
  */
 import * as path from 'node:path';
+import { WING_CATALOG } from '../types.js';
 import { errDetail } from '../util/filelog.js';
-import { atomicWriteJson, ensureDir, readJsonIfExists } from '../util/io.js';
+import { ensureDir, readJsonStrict, rmwJson } from '../util/io.js';
+import { SESSION_MODES_FILE_VERSION } from './file-versions.js';
 const MODES = ['auto', 'chat', 'work', 'off'];
 const PRUNE_MS = 90 * 24 * 3600_000;
 const MAX_ENTRIES = 500;
 export function isMemoryMode(v) {
     return typeof v === 'string' && MODES.includes(v);
+}
+/** 合法角 id 判定(锁域只认 8 角;general 是兜底值不是角,不可锁定)。 */
+export function isWingCorner(v) {
+    return typeof v === 'string' && WING_CATALOG.some((h) => h.id === v);
 }
 export class SessionModeStore {
     defaultMode;
@@ -20,6 +26,11 @@ export class SessionModeStore {
     entries = new Map();
     loaded;
     persistFailed = false;
+    /** 只读降级原因(undefined = 正常):非空时内存态照常生效,但停止回写。 */
+    degraded;
+    degradedLogged = false;
+    /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据:磁盘与它不同 = 别人写过。 */
+    lastPersisted;
     /** 档位切换回调(index.ts 装配 runner 的同步动作:切片落袋/挂起,ADR-0003)。 */
     onModeChange;
     /** 串行化持久化写(避免并发原子写撞临时文件名)。 */
@@ -30,9 +41,35 @@ export class SessionModeStore {
         this.file = path.join(dataDir, 'session-modes.json');
         this.loaded = defaultMode;
     }
-    /** 载入持久化映射(index.ts 启动时 await;失败降级内存态)。 */
+    /**
+     * 载入持久化映射(index.ts 启动时 await;失败降级内存态)。
+     *
+     * **读侧分类**(文件层加固 T2):缺失合法;损坏/不可读 → 告警 + 只读降级;
+     * 未知版本 → **仍按当前形状读取**(本 store 无迁移路径,一律拒载会让档位在
+     * 版本回退后全部失效)+ 只读降级(禁写)。
+     */
     async init() {
-        const data = await readJsonIfExists(this.file);
+        const r = await readJsonStrict(this.file, { expectedVersion: SESSION_MODES_FILE_VERSION });
+        let data;
+        if (r.ok) {
+            data = r.value;
+        }
+        else if (r.reason === 'missing') {
+            return;
+        }
+        else {
+            const lenient = await readJsonStrict(this.file);
+            if (!lenient.ok) {
+                this.degraded = lenient.reason;
+                this.logger?.warn(`[memory] 会话档位文件${lenient.reason === 'corrupt' ? '损坏' : '不可读'}(${this.file}): ` +
+                    `按默认档起步且**不回写**,原文件已保留${lenient.detail ? ` — ${lenient.detail}` : ''}`);
+                return;
+            }
+            data = lenient.value;
+            this.degraded = `未知版本(${lenient.version ?? '无 version 字段'})`;
+            this.logger?.warn(`[memory] 会话档位文件版本未知(${lenient.version ?? '无'}):按当前形状读取并进入只读降级(不回写)`);
+        }
+        this.lastPersisted = JSON.stringify(data);
         if (!data?.sessions || typeof data.sessions !== 'object')
             return;
         const now = Date.now();
@@ -46,6 +83,15 @@ export class SessionModeStore {
                 mode: entry.mode,
                 // 非布尔视为损坏丢弃(= 跟随全局);旧文件无此键同款兼容
                 recall: typeof entry.recall === 'boolean' ? entry.recall : undefined,
+                // 域锁定只认 8 角 id;非法/缺省 = 中心(智能档)。多选数组优先,单值键兜底
+                hall: isWingCorner(entry.hall) ? entry.hall : undefined,
+                halls: Array.isArray(entry.halls)
+                    ? Array.from(new Set(entry.halls.filter((x) => isWingCorner(x))))
+                    : isWingCorner(entry.hall)
+                        ? [entry.hall]
+                        : undefined,
+                hallIncludeUnlabeled: typeof entry.hallIncludeUnlabeled === 'boolean' ? entry.hallIncludeUnlabeled : undefined,
+                hallIncludeGeneral: typeof entry.hallIncludeGeneral === 'boolean' ? entry.hallIncludeGeneral : undefined,
                 updatedAt: entry.updatedAt ?? now,
             });
             count++;
@@ -84,6 +130,49 @@ export class SessionModeStore {
         this.entries.set(sessionId, {
             mode: entry?.mode ?? this.loaded,
             recall,
+            // 域锁定与注入正交:设置注入不动锁域(照抄"切档不动覆盖"模板)
+            hall: entry?.hall,
+            halls: entry?.halls,
+            hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
+            hallIncludeGeneral: entry?.hallIncludeGeneral,
+            updatedAt: Date.now(),
+        });
+        this.writeChain = this.writeChain.then(() => this.persist());
+    }
+    /** 会话级域锁定(多选):空数组 = 中心(智能档,无锁域)。 */
+    getWings(sessionId) {
+        const e = this.entries.get(sessionId);
+        if (e?.halls && e.halls.length > 0)
+            return e.halls;
+        return e?.hall ? [e.hall] : [];
+    }
+    /** 兼容读取(单选口径,取第一个锁定域):undefined = 中心。 */
+    getWing(sessionId) {
+        return this.getWings(sessionId)[0];
+    }
+    /** 锁定域边界开关:未打标是否包含(缺省 true)/ general 是否包含(缺省 false)。 */
+    wingBoundaries(sessionId) {
+        const e = this.entries.get(sessionId);
+        return {
+            includeUnlabeled: e?.hallIncludeUnlabeled ?? true,
+            includeGeneral: e?.hallIncludeGeneral ?? false,
+        };
+    }
+    /** 设置会话级域锁定(多选:角 id 数组;`[]` = 明确回中心清除锁定。写穿持久化)。
+     *  **`undefined` = 本轮不动锁域**(例如只更新边界开关,见 stats.ts)——不再把"没传"
+     *  误当"回中心",否则只切边界开关会把已锁定的域悄悄清掉。
+     *  单角时镜像写 `wing` 兼容键,多角时置空(旧读者按无锁域读)。 */
+    setWing(sessionId, halls, boundaries) {
+        const entry = this.entries.get(sessionId);
+        // undefined = 不动锁域;[]/数组 = 按显式值归一(空 = 回中心)
+        const locked = halls === undefined ? undefined : Array.from(new Set(halls.filter((x) => isWingCorner(x))));
+        this.entries.set(sessionId, {
+            mode: entry?.mode ?? this.loaded,
+            recall: entry?.recall,
+            hall: locked === undefined ? entry?.hall : locked.length === 1 ? locked[0] : undefined,
+            halls: locked === undefined ? entry?.halls : locked.length > 0 ? locked : undefined,
+            hallIncludeUnlabeled: boundaries?.includeUnlabeled ?? entry?.hallIncludeUnlabeled,
+            hallIncludeGeneral: boundaries?.includeGeneral ?? entry?.hallIncludeGeneral,
             updatedAt: Date.now(),
         });
         this.writeChain = this.writeChain.then(() => this.persist());
@@ -95,9 +184,18 @@ export class SessionModeStore {
     /** 设置会话档位(写穿持久化;持久化失败保持内存态生效)。 */
     set(sessionId, mode) {
         const old = this.get(sessionId);
-        // 已有注入覆盖跨切档保留(档位与注入正交,切档不动覆盖)
-        const recall = this.entries.get(sessionId)?.recall;
-        this.entries.set(sessionId, { mode, recall, updatedAt: Date.now() });
+        // 已有注入覆盖跨切档保留(档位与注入正交,切档不动覆盖);
+        // 域锁定同语义:跨切档保留
+        const entry = this.entries.get(sessionId);
+        this.entries.set(sessionId, {
+            mode,
+            recall: entry?.recall,
+            hall: entry?.hall,
+            halls: entry?.halls,
+            hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
+            hallIncludeGeneral: entry?.hallIncludeGeneral,
+            updatedAt: Date.now(),
+        });
         this.writeChain = this.writeChain.then(() => this.persist());
         if (old !== mode && this.onModeChange) {
             try {
@@ -113,9 +211,25 @@ export class SessionModeStore {
         return this.writeChain;
     }
     async persist() {
+        if (this.degraded !== undefined) {
+            // 只读降级:内存态照常生效(切档在本次会话内有效),但不落盘
+            if (!this.degradedLogged) {
+                this.degradedLogged = true;
+                this.logger?.warn(`[memory] 会话档位处于只读降级(${this.degraded}),已停止回写(磁盘文件保持不变)`);
+            }
+            return;
+        }
         try {
             await ensureDir(path.dirname(this.file));
-            await atomicWriteJson(this.file, this.serialize());
+            await rmwJson(this.file, async (cur) => {
+                const diskRaw = cur.ok ? JSON.stringify(cur.value) : undefined;
+                if (this.lastPersisted !== undefined && diskRaw !== undefined && diskRaw !== this.lastPersisted) {
+                    throw new Error(`会话档位文件已被其它进程更新,本次写入已取消以避免覆盖;请重试该操作`);
+                }
+                const next = this.serialize();
+                this.lastPersisted = JSON.stringify(next);
+                return { next, result: undefined };
+            }, { logger: this.logger, purpose: 'session-modes-rmw' });
             this.persistFailed = false;
         }
         catch (err) {
@@ -148,6 +262,6 @@ export class SessionModeStore {
         const sessions = {};
         for (const [sid, e] of this.entries)
             sessions[sid] = e;
-        return { version: 1, sessions };
+        return { version: SESSION_MODES_FILE_VERSION, sessions };
     }
 }

@@ -473,6 +473,31 @@ dual-write storage architecture) are modeled after **MemoryCore** from
 [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory).
 Thanks to the original project for open-sourcing its design and implementation.
 
+## Memory Retirement, Recovery, and Cleanup
+
+Deletion has **two tiers**, and the tier is chosen by cost: **the reversible one is the default**, while the irreversible one must be requested explicitly and always carries an export.
+
+| Action | Endpoint / tool | Reversible | Notes |
+| --- | --- | --- | --- |
+| Retire (soft delete) | `memory_delete` · `dsh-memory/records-delete` | ✅ | Keeps the main-table row, closes `valid_to`, writes a supersede marker, and drops only the FTS/vector rows. **Retires 1 record by default**; for batches pass exact `ids` rather than relying on semantic matching |
+| Recover | `dsh-memory/records-restore` | — | Clears the retirement marker and rebuilds indexes, returning the record to recall |
+| Physical cleanup | `dsh-memory/cleanup-retired` | ❌ | The plugin's **only irreversible** action. **Dry-run by default** (omitting `dryRun` deletes nothing); even when executed explicitly it first writes a full-library snapshot and verifies it **by content hash**, aborting with zero deletions on any mismatch |
+| List snapshots | `dsh-memory/snapshots-list` | — | Lists the snapshots under `snapshots/` that have a valid manifest, with reason and record counts |
+| Restore from snapshot | `dsh-memory/snapshot-restore` | — | Writes cleaned-up records back. **Dry-run by default**; accepts snapshot directory names only, never paths |
+
+All three retirement paths — conflict verdict, dedup supersede (`update`/`merge`), manual delete — **share one primitive**, so "delete" means the same thing in all of them: recoverable.
+
+### How the cleanup safety net is built
+
+Physical deletion must be preceded by a snapshot that passes verification (see the table above). The way back is:
+
+1. `dsh-memory/snapshots-list` — get the snapshot directory name (shaped like `l1-<timestamp>-<reason>`);
+2. `dsh-memory/snapshot-restore` — dry-run first to read `missing` (how many records would genuinely come back, not the snapshot's total), then write with an explicit `dryRun:false`.
+
+The restore entry point accepts **directory names only, never paths**: otherwise this RPC would incidentally gain the ability to read any directory and write its contents into the retrieval database. Restore itself is an idempotent upsert and can be re-run safely.
+
+> **One semantic you need to know**: `cleanup-retired` only removes **already-retired** records, and the snapshot is taken **before** deletion — so every record a cleanup snapshot can bring back carries a retirement marker. By default `snapshot-restore` only writes the row back to the main table (and reports it honestly in `stillRetired`); **"back in the main table" ≠ "back in recall"**. For a genuine one-call rollback add `unretire: true`, or call `records-restore` on that batch of ids afterwards.
+
 ## Roadmap
 
 Features under planning — feedback and priorities welcome in the

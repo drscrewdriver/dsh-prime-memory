@@ -1,0 +1,94 @@
+# WingWheel Spec — 八边形域轮（Wing 主题轴门面）
+
+> 组件组：`client/src/pill/WingWheel.tsx`（域轮本体）+ `MemoryModePill.tsx`（面文与浮层壳）。
+> 档位词表 `client/src/pill/modes.ts` 现在只服务 pill 面文。全局令牌与守则见 `global-spec.md`。
+>
+> **v9（2026-09-23）Wing 升格**：采纳 MemPalace 五层理念（Wing/Hall/Room/Closet/Drawer），
+> 8 生活域概念由 hall **升格改名为 Wing**（最宽泛组织单元，轮盘八顶点天然适配）。
+> 代码标识符/组件/LLM 文案/RPC 端点（`dsh-memory/wing-overview`、`wing-backfill`）已全改；
+> **磁盘与 wire 兼容键保留**：`metadata.hall`（实库已落盘）、session-modes 的
+> `hall`/`halls`/`hallInclude*`、`cfg.hall`、memory_search 参数名——无数据迁移。
+> 后续立项：5 认知 hall 映射 L1 type 轴、Room 涌现 slug 层、Closet/Drawer 两级展开召回。
+>
+> **v6（2026-09-23）收敛**：状态只剩「**8 角单族 / 中心智能 / 关闭注入**」三态。
+> 删除了 `ModeSlider.tsx`（强制单族滑轨，整组件删除）、连续域权重（`hallWeights` 通道
+> 连服务端一起清掉）、粒子层、拖动气泡；`slider-spec.md` 随之删除。
+
+## 结构（图形内 / 图形外）
+
+| 区 | 内容 | 交互 |
+|---|---|---|
+| 图形内 · 中心 | 「智能」紧凑块（52×30，与角标同尺寸） | 点击 / 从角向内拖 = 回中心 = 全域（智能档软门禁） |
+| 图形内 · 8 角 | 角标（域名 + 「N 条」或「空角」），固定正八边形顶点，词表序从正上顺时针 | 点击 = 以该角为唯一主题（硬过滤）；拖过边中点 = 离散换挡到该角 |
+| 图形内 · 蓝色激活块 | 52×30 圆角块，品牌蓝描边 + `accent-weak` 底 | 阻尼滑块：沿辐条在「顶点 ↔ 中心」间缓动 |
+| 图形外 · 边界开关 | `含未打标/不含`、`含跨域/不含`（未打标默认包含；跨域 general 默认不含） | 切换即提交；**智能档 / off 时置灰占位（不卸载，保持浮层高度不跳变）** |
+| 图形外 · 会话闸 | `启用/关闭` 二态 | 关闭 = 会话隐身（不捕获 / 不蒸馏 / 不注入，数据保留，**不改全局**）；置灰八边形与其余行 |
+| 图形外 · 注入三态 | 跟随全局 / 开 / 关（只写） | off 档禁用 |
+| 图形外 · 回填行 | 未打标 M 条 + `一键回填`（后台批量补打，单飞） | M=0 时禁用；启动后轮询 `hall-overview` 渐进更新 |
+| 图形外 · 会话信息区 | SessionInfoArea（`session-stats` 端点） | 宿主不支持时整体不渲染 |
+
+层级：**设置页全局闸 ⊃ 会话闸（图形外）⊃ 域范围（图形内）**。不新建控件/RPC 语义：
+会话闸与注入三态复用 `session-modes.json` 的 `mode`/`recall` 覆盖，仅调整挂载位置。
+
+## 几何
+
+- 容器 `SIZE = 196px`（正方形）；顶点轨道半径 `R = 64`（**固定正八边形**，无鼓起、无连续半径形变）。
+- 角序 = `HALL_CATALOG` 词表序（服务端 `hall-overview.corners` 顺序），i=0 从正上开始顺时针。
+- 连线（中心→角）与外框八边形是纯装饰 SVG 层，`pointer-events: none`。
+- **8 条辐条中性静态**：统一 `--dsh-mem-hall-line`，不参与动画、不强调颜色。
+- 层级：蓝色激活块 `z-index: 1`；角标与中心块 `z-index: 2`（文字始终压在块之上）。
+
+## 交互（离散换挡 + 径向二分）
+
+- **换挡**：指针角度经 `angleIndex` 取整到 0–7，**档位永不落在边中**。
+  边中点只留 `DEAD = 3°` 迟滞带（防边界抖动）；**过中点即换挡**——数值口径：
+  45° 角间隔里在 **25.5°** 处换到下一角，回挡在 **19.5°**（迟滞 6°）。
+- **中心（智能）也是可停档位**：拖进半径 `INNER = 34px` 的中心圈 → 目标切中心；
+  出圈 → 落到最近角（从中心出来时没有"原角"，直接取最近角，不走死区）。
+  于是蓝色激活块沿**辐条方向径向**来回滑动（顶点 ↔ 中心）。
+- **激活块的动效**：位置用**纯阻尼指数逼近**（`pos += (target - pos) * 0.2`），
+  无速度项 → 不过冲、不弹动。
+- **点击**：点角 = 锁定该角（**不做反向取消**——回全域只走中心，避免"点一下松开又弹回去"）。
+- **提交时机**：松手才发 RPC（不每帧打）。落中心 = `onCommitHall(null)`；落角 = `onCommitHall([id])`。
+
+## 数据通道
+
+| 数据 | 来源 | 说明 |
+|---|---|---|
+| 角计数 / 词表 label | `dsh-memory/hall-overview`（打开时拉取一次） | 词表单一事实源；未送达时角标降级为内置兜底名 |
+| 域锁定 / 边界开关 | `session-mode-get/set` 的 `halls` / `hallIncludeUnlabeled` / `hallIncludeGeneral` | 与 `mode`/`recall` 正交、写穿 `session-modes.json`、跨切档保留 |
+| 面文 | pill 侧 `hall-overview` 缓存 label | 锁角时面文 `记忆 · <域名>`（label 未送达则原样显示角 id） |
+
+召回侧接法（`src/hooks/recall.ts`）：`halls` 非空 → `hardFilterByHallLock`（**只留锁定域，
+其余域整条剔除**）；空 → `sortByDomainWeight`（按域相关度降权排序，**不剔除**）。
+档位 / 锁域 / 注入覆盖一律按**父链上溯**解析（`resolveModeOwner`，与 `src/tools/index.ts`
+同语义），子代理继承父会话设置；召回统计与去重仍按各自 agent。
+
+## 令牌（引用 global-spec，Light/Dark 双组）
+
+| 令牌 | 用途 |
+|---|---|
+| `--dsh-mem-hall-line` | 8 条辐条与外框八边形 |
+| `--dsh-mem-hall-corner` | 角默认文字 |
+| `--dsh-mem-hall-corner-on` | 选中角 / 中心块文字 |
+| `--dsh-mem-hall-empty` | 空角（0 条）文字 |
+| `--dsh-mem-accent` / `--dsh-mem-accent-weak` | 蓝色激活块的描边 / 底色 |
+
+无裸 hex。
+
+## 无障碍与动效
+
+- 角与中心均为真实 `<button>`，`title` 说明语义（"锁定 X 域：本会话只召回该域"）。
+- `prefers-reduced-motion: reduce` → 蓝色激活块**不做缓动**，直接吸附目标顶点（静帧）；
+  组件内读 `matchMedia` 并监听变化。
+- 置灰用 `opacity 0.45` + `pointer-events: none`（边界开关另加 `grayscale(1)` 表达"不适用"）。
+- 键盘：按钮原生焦点；浮层 Esc 收起、外点收起（与 pill 既有行为一致）。
+
+## 已知限制
+
+- 角计数含 retired 行（口径与迁移一致：主表全量）；不区分工作区。
+- 回填是后台任务（单飞、单次上限 300 条），计数渐进更新，非同步完成。
+- 窄栏（约 215px）：浮层经 `useViewportClamp` 水平贴边平移（边距 8px）；下部控件已改为
+  垂直堆叠，整体宽度由轮盘 196px 决定，不再被横向控件撑宽。
+- **口径变更待确认**：原 R11 要求"角上同时显示『该域 N 条』与『未打标 M』"，
+  现实现只在图形外显示一次全局未打标数。

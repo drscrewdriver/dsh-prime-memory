@@ -12,7 +12,8 @@ import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
-import type { MemoryFamily, MemoryLogger } from './types.js';
+import { type MemoryFamily, type MemoryLogger } from './types.js';
+import { type MemoryBackend } from './store/memory-backend.js';
 export declare const PLUGIN_VERSION: string;
 /** 运行态来源(index.ts 注入):避免 stats 撒谎字段。 */
 export interface MemoryStatusSource {
@@ -22,7 +23,7 @@ export interface MemoryStatusSource {
     pending(): number;
 }
 /**
- * 端点全集运行时清单(31 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(36 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -64,7 +65,7 @@ export interface SessionInfoSource {
         vectorSearch: boolean;
     };
 }
-import type { MemoryOccupancy } from './contract.js';
+import type { MemoryOccupancy, UiRecord } from './contract.js';
 export type { MemoryStats } from './contract.js';
 /** 注册状态 RPC(web 侧 connection 服务可选,缺失时跳过,不影响插件主体)。 */
 /** registerMemoryRpc 形参中需要落入端点 deps 的部分。 */
@@ -91,6 +92,8 @@ export declare function registerMemoryRpc(ctx: Context, cfg: MemoryConfig, store
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 记忆后端(后台边界);未装配时回退为包 l1 的进程内实现。 */
+    backend?: MemoryBackend;
     /** 图谱存储(可选:未装配时图谱端点返空,不报错)。 */
     graph?: GraphStore;
 }, logger: MemoryLogger, status?: MemoryStatusSource, live?: LiveSettingsHandle, modes?: SessionModeStore, dataDir?: string, rebuild?: RebuildController, embedManager?: EmbeddingManager, sessionInfo?: SessionInfoSource, 
@@ -105,6 +108,8 @@ export interface EndpointDeps {
         scenes: Record<MemoryFamily, SceneStore>;
         persona: Record<MemoryFamily, PersonaStore>;
         state: StateStore;
+        /** 记忆后端(后台边界);未装配时回退为包 l1 的进程内实现。 */
+        backend?: MemoryBackend;
         graph?: GraphStore;
     };
     status?: MemoryStatusSource;
@@ -119,3 +124,21 @@ export interface EndpointDeps {
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;
+/** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
+export declare function hitToUiRecord(r: {
+    id: string;
+    content: string;
+    type: string;
+    priority?: number;
+    scene_name: string;
+    timestamps?: number[];
+    createdAt?: number;
+    updatedAt?: number;
+    version?: number;
+    source_message_ids?: string[];
+    metadata?: Record<string, unknown>;
+    score?: number;
+    family?: string;
+    /** 退场判据:`valid_to` 闭合即已退场(软删)。由 `listL1`/`getByIds` 透传。 */
+    validTo?: number;
+}): UiRecord;

@@ -436,7 +436,7 @@ export function formatExtractionPrompt(params: {
   newMessages: ConversationMessage[];
   backgroundMessages?: ConversationMessage[];
   previousSceneName?: string;
-  /** 启用的 Hall id 列表（非空才要求 LLM 给每条记忆打 metadata.hall；空 = 关闭该功能）。 */
+  /** 启用的 Wing id 列表（非空才要求 LLM 给每条记忆打 metadata.hall；空 = 关闭该功能）。 */
   halls?: string[];
 }): string {
   const { newMessages, backgroundMessages = [], previousSceneName = '无', halls = [] } = params;
@@ -452,13 +452,19 @@ export function formatExtractionPrompt(params: {
     .map((m) => `[${m.id}] [${m.role}] [${new Date(m.timestamp).toISOString()}]: ${m.content}`)
     .join('\n\n');
 
-  // Hall 标签：粗分类属性通道（与 memory.type 正交），只要求从启用列表选一个最贴的；
-  // 无法明确归类时省略（不进 General 兜底，防强制噪声）。列表为空则整段省略（功能关）。
-  const hallText =
+  // Wing 标签：粗分类属性通道（与 memory.type 正交）。候选由调用方传入：
+  // 8 角词表 + 仅 auto 档追加的 general（跨域兜底）。必须落一个域，不能省略；
+  // 列表含 general 时，跨域/实在无法归角的内容落 general（唯一允许的兜底）。
+  // 列表为空则整段省略（功能关）。
+  const wingText =
     halls.length > 0
       ? `
 
-【Hall 标签】可选 Hall：${halls.join(' / ')}。给每条记忆的 metadata.hall 选一个最贴切的值；只能从上述列表选，无法明确归类时省略该字段（不要硬塞）。`
+【Wing 标签】可选 Wing：${halls.join(' / ')}。给每条记忆的 metadata.hall 选一个最贴切的值，**必须落一个域，不能省略**；只能从上述列表选。${
+          halls.includes('general')
+            ? '内容横跨多个角或确实无法归入任何角时，选 general（这是唯一的跨域兜底，不要硬塞进某个具体的角）。'
+            : '跨域内容也必须从上述角中选一个最贴切的。'
+        }`
       : '';
 
   return `**输出语言**：根据下方"待提取的新消息"中 user 发言的主导语言书写 \`scene_name\` 和 memory \`content\`。
@@ -471,5 +477,5 @@ ${bgText}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 【待提取的新消息】（务必结合 timestamp 推算时间，只从这里提取记忆！）：
-${newText}${hallText}`;
+${newText}${wingText}`;
 }

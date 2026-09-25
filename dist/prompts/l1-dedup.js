@@ -208,7 +208,7 @@ export const CONFLICT_ACTION_CLAUSE = `## 矛盾冻结动作（"conflict"）
 
 上面四条动作在**判定冲突**时都不可用——"update" 与 "merge" 都会由你直接改写记忆，**没有"停下来等人裁决"这个选项**。故新增第五条动作：
 
-- "conflict"：新记忆与候选池中某条已有记忆**描述同一事实/事件/工作对象，但内容互相矛盾**，且你**无法依据现有信息判定哪一方更可信**时使用。**不覆盖、不合并**：该条新记忆照常写入，与冲突的已有记忆作为**一对**停放到待人工裁决区，双方内容都不被改写。
+- "conflict"：新记忆与**另一条记忆**——候选池中的已有记忆，**或同一批次里的另一条新记忆**（它的 record_id 同样印在【新记忆】列表里）——**描述同一事实/事件/工作对象，但内容互相矛盾**，且你**无法依据现有信息判定哪一方更可信**时使用。**不覆盖、不合并**：该条新记忆照常写入，与对方作为**一对**停放到待人工裁决区，双方内容都不被改写。
 
 ### conflict 的追加输出字段
 
@@ -219,7 +219,7 @@ export const CONFLICT_ACTION_CLAUSE = `## 矛盾冻结动作（"conflict"）
   "loser": "另一方的 record_id"
 }
 
-- "winner" / "loser"：**二者必须不同**。取值均为 record_id，来自「本条新记忆的 record_id」或「候选池中的 record_id」。
+- "winner" / "loser"：**二者必须不同**，且**恰有一方必须是本条新记忆的 record_id**；另一方取自「候选池中的已有记忆 record_id」或「同一批次其它新记忆的 record_id」。指向本批次之外的、不在候选池里的 id 一律无效。
 - "winner" 只表示进入待裁决对时的排序位，**不代表最终结论**；最终结论由人工裁决写入。
 - action 为 "conflict" 时**不要**输出 merged_content / merged_type / merged_priority / merged_timestamps——它们只属于 update / merge。
 
@@ -228,8 +228,51 @@ export const CONFLICT_ACTION_CLAUSE = `## 矛盾冻结动作（"conflict"）
 - 新记忆更具体、更新、更权威，或能明确纠正旧记忆的错误 → 仍用 "update"。
 - 新旧记忆信息互补且**不矛盾** → 仍用 "merge"。
 - 只是同属一个主题但描述对象不同 → 仍用 "store"。
+- 同批次两条新记忆只是**同一事实的不同表述**（互补、粒度不同、不互斥）→ 仍各自 "store"。**只有互相矛盾才算 conflict。**
 
-conflict 只留给"两边都像是对的、机器判不了"的情况——它消耗人的注意力，不可滥用。`;
+### 用三轴时间维度先做一次"时间先后/过期"判定(conflict-3axis)
+
+候选池每条记忆现在带 "valid_from_ms" / "valid_to_ms"(epoch ms,null=未知)与 "persistence"(t/o/s/p)。
+**两条记忆内容互相矛盾时,先按这三轴判断,能判出时间先后的就不要直接 conflict:**
+
+- 一方 "valid_to_ms" 已过期(< 当前时刻),另一方仍在有效期 → 过期的那条描述的事实已不成立,矛盾实为"旧事实被新事实取代",走 **update**(以新替旧),**不要 conflict**。
+- 一方 "valid_from_ms" 明显晚于另一方 → 晚的那条描述更晚发生的真实事实,通常应 **update/merge** 而非 conflict。
+- "persistence" 线索:"t"(恒真事实/规则/偏好)被 "o"(仍在持续)或 "s"(已结束)的矛盾记忆指向时,优先采信与事实时间线一致的那个;"p"(时点事件)是历史事实,**永不被"取代",只能 both 保留或交人工裁决**。
+- 三轴都缺失/都判不了(双方都无有效期、持续性未判定、时间上无法分先后) → 才是真正的 conflict。
+
+三轴是**辅助事实**,不是自动结论:即便三轴指向某一方更可信,只要存在"内容层面无法调和"的疑点,仍可交 conflict 由人裁决。三轴的作用是把"明显有时间先后的伪矛盾"从队列里筛掉,让人只看到真正需要判断的对。
+
+conflict 只留给"两边都像是对的、机器判不了"的情况——它消耗人的注意力,不可滥用。`;
+/**
+ * §C Phase 3(task_3.1):conflict 决策的「类型」与「claim 键」两条追加字段。
+ *
+ * 与 {@link CONFLICT_ACTION_CLAUSE} **同款门控**(仅 `opts.conflictFreeze` 为真时追加),
+ * 且**只追加、不改写**:上面那块(首行 `- "conflict"：`、`winner`/`loser` 必须不同、
+ * `不覆盖|不合并`)的措辞逐字不变——关闭态零漂移的判据因此不受本块影响。
+ *
+ * 分工:类型决定这条冲突**占不占**人的注意力额度(task_3.4),claim 键把"同一事实的
+ * 多对冲突"归并成一组(task_3.3)。两条都只是**辅助事实**,不改变"机器不自动裁决"。
+ * 措辞里刻意点明"拿不准填 hard / 空键":畸形或不填**不影响配对**——把它们写成
+ * 硬条件,模型一旦漏字段就会整条 conflict 决策被丢弃,那是拿辅助轴破坏主轴的可用性。
+ */
+export const CONFLICT_TYPE_CLAUSE = `## conflict 的类型与 claim 键（conflict-3axis 第 2/3 轴）
+
+在用 "conflict" 时，上面那个输出块**之外**再补两个：
+
+{
+  "conflict_type": "hard | conditional | supersession",
+  "claim_key": "这两条记忆共同指向的那个事实/工作对象的稳定短标识（拿不准就留空串）"
+}
+
+- "conflict_type"：这条矛盾属于哪一类。
+  - "hard"：**事实层面直接互斥**，两边不可能同时为真。**拿不准一律填 "hard"**（缺字段、填错取值都按 "hard" 处理）。
+  - "conditional"：**各自的前提不同**才显得矛盾（如不同环境 / 不同配置 / 不同工作区），在本前提下两边可以各自成立。
+  - "supersession"：**新旧取代**——按线索看新的那条更可信、旧的那条应当让位，但你仍不自行裁决。
+- "claim_key"：若这两条记忆描述的是**同一个事实、事件或工作对象**，给出一个**稳定的短标识**（建议点分小写，如 "deploy.port" / "proj-x.ci.provider"），使同一主题的多对冲突在待裁决区能被归并到一组看；**拿不准就留空串**。
+- 这两条字段**不影响这条决策是否成立**：缺字段、非字符串、取值不在枚举里，一律按 "hard" + 空键处理，冲突照样停放。它们只决定**归类**与**额度**。
+- 额度：只有 "hard" 占待裁决队列的上限；"conditional" / "supersession" 照常停放、**不占**额度——它们消耗的是存储，不是人的注意力。
+
+三轴（时间）判过之后仍拿不准的，用 conflict；类型与键是**给这份拿不准加标签**，不是让你改用别的动作。`;
 /**
  * 把注入词表后的 prompt 交给调用方。
  *
@@ -248,12 +291,12 @@ export function getConflictDetectionSystemPrompt(mode, opts) {
     const withEnum = base.includes(ACTION_ENUM_BASE)
         ? base.replace(ACTION_ENUM_BASE, ACTION_ENUM_FROZEN)
         : base;
-    return `${withEnum}\n\n${CONFLICT_ACTION_CLAUSE}`;
+    return `${withEnum}\n\n${CONFLICT_ACTION_CLAUSE}\n\n${CONFLICT_TYPE_CLAUSE}`;
 }
 /**
  * 格式化批量冲突检测 prompt（统一候选池）。
  */
-export function formatBatchConflictPrompt(matches) {
+export function formatBatchConflictPrompt(matches, opts) {
     const unifiedPool = new Map();
     const perMemoryCandidateIds = new Map();
     for (const m of matches) {
@@ -272,6 +315,18 @@ export function formatBatchConflictPrompt(matches) {
         priority: c.priority,
         scene_name: c.scene_name,
         timestamps: c.timestamps,
+        // §C 三轴(conflict-3axis):把有效期与持续性一并交给检测器,
+        // 使其能在"内容矛盾"时先按时间轴判定先后/过期,减少误判 conflict。
+        // 与 timestamps 同单位(epoch ms),缺则为 null。
+        // **门控(task_a.5)**:仅在 conflictFreeze 开启时注入候选池——关闭态输出必须与
+        // 改动前逐字节相同(spec R6 的零漂移须覆盖 system 与 user 两路 prompt)。
+        ...(opts?.conflictFreeze === true
+            ? {
+                valid_from_ms: c.validFrom ?? null,
+                valid_to_ms: c.validTo ?? null,
+                persistence: c.persistence ?? null,
+            }
+            : {}),
     }));
     let poolSection;
     if (poolList.length === 0) {

@@ -15,6 +15,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
 import type { L1Store } from '../store/l1.js';
+import { InProcMemoryBackend, type MemoryBackend } from '../store/memory-backend.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { StateStore } from '../store/state.js';
@@ -27,6 +28,7 @@ import {
 import type { ConversationMessage, ExtractMode, MemoryFamily, MemoryLogger } from '../types.js';
 import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
+import { relabelPass, type RelabelStats } from './relabel.js';
 import { runPersona } from './l3.js';
 import type { MemoryRunner } from './runner.js';
 
@@ -42,6 +44,10 @@ export interface RuminateStatus {
   recordsBuilt: number;
   /** 当前动作的人类可读描述(L2/L3 单次可达分钟级) */
   detail: string | null;
+  /** 标注校验/重标定结果(最后一次反刍/轻量刷新;未执行或旧版为 null)。 */
+  relabel: RelabelStats | null;
+  /** 子进度:非会话阶段(relabeling)的批次进度,由重标定批回调驱动;离开阶段即清空。 */
+  sub: { done: number; total: number; label: string } | null;
   /** 取消请求标志 */
   cancelRequested: boolean;
   /** 开始时间 */
@@ -58,6 +64,8 @@ const IDLE_STATUS: RuminateStatus = {
   done: 0,
   total: 0,
   recordsBuilt: 0,
+  relabel: null,
+  sub: null,
   detail: null,
   cancelRequested: false,
   startedAt: null,
@@ -93,12 +101,19 @@ export class RuminateController {
   private totalL1 = 0;
   private pendingFile: string;
 
+  /** 记忆后端:未注入时包 l1(进程内,行为与改造前等价)。 */
+  private backend(): MemoryBackend {
+    return this.stores.backend ?? new InProcMemoryBackend(this.stores.l1);
+  }
+
   constructor(
     private readonly ctx: Context,
     private readonly cfg: MemoryConfig,
     private readonly runner: Pick<MemoryRunner, 'enqueue' | 'states'>,
     private readonly stores: {
       l1: L1Store;
+      /** 记忆后端(后台边界);缺省 = 包 l1 的进程内实现(行为等价)。 */
+      backend?: MemoryBackend;
       scenes: Record<MemoryFamily, SceneStore>;
       persona: Record<MemoryFamily, PersonaStore>;
       state: StateStore;
@@ -195,18 +210,19 @@ export class RuminateController {
     const session = this.sessions[index];
     this.status.phase = 'distilling';
     this.status.detail = `L1 蒸馏中:会话 ${session.sessionId}(第 ${index + 1}/${this.sessions.length} 个)`;
-    // 真实产出计数:enqueue 只入队,产出由 onTurnDone 在任务真正跑完后回调
-    // (此前 totalL1 从不累加,recordsBuilt 与完成日志恒为 0,修复效果无法判定)
+    // 背压:上个会话真正跑完(onTurnDone)才入队下一个——队列深度 ≤1。
+    // 原先 setImmediate 连发会把全部会话一次性塞进 runner 队列(无界堆积),
+    // LLM e2e 延迟波动时既拖慢 live 任务也让取消语义变钝;链式入队后
+    // 进度(done)真实逐会话推进,取消即刻停止入队。
     this.runner.enqueue(session.sessionId, session.messages, session.mode, {
       force: true,
       onTurnDone: (records) => {
         this.totalL1 += records;
         this.status.recordsBuilt = this.totalL1;
+        this.status.done = index + 1;
+        setImmediate(() => this.doEnqueue(index + 1));
       },
     });
-
-    // runner 的 drain 是同步循环,给一个 tick 让它消费完再入队下一个
-    setImmediate(() => this.doEnqueue(index + 1));
   }
 
   /** 收尾:强制 L2 + L3。 */
@@ -257,6 +273,34 @@ export class RuminateController {
         }
       }
 
+      // 标注校验/重标定:Wing 合法性 + 认知 hall 映射 + 未打标补标 + 涌现标签
+      // 批次进度经 onProgress 写入 detail + sub 子进度(非会话阶段的进度由重标批次决定)
+      this.status.phase = 'relabeling';
+      this.status.detail = '标注校验与重标定(Wing/认知 hall/标签)';
+      try {
+        this.status.relabel = await relabelPass(
+          { ctx: this.ctx, cfg: this.cfg, backend: this.backend(), logger: this.logger },
+          {},
+          {
+            progress: (text, done, total, label) => {
+              this.status.detail = text;
+              this.status.sub = { done, total, label: label ?? '重标定批次' };
+            },
+          },
+        );
+        this.status.sub = null;
+        // tags 刚被改写 → Room 分类(由 tags 派生)必须重算,否则新 Room 要等 30s TTL
+        this.stores.l1.invalidateRooms();
+        const r = this.status.relabel;
+        this.logger.info(
+          `[memory] 反刍重标定完成:巡检 ${r.checked},补 cogHall ${r.cogHallFixed},非法 wing ${r.wingInvalidFixed},LLM 补 wing ${r.wingLabeled},打 tags ${r.tagged},跳过 ${r.llmSkipped},预算让出 ${r.deferred}`,
+        );
+      } catch (err) {
+        this.status.sub = null;
+        // 重标定失败不拖垮反刍整体(蒸馏/L2/L3 产物保留)
+        this.logger.warn(`[memory] 反刍重标定失败(不影响本次产物): ${errDetail(err)}`);
+      }
+
       this.status.phase = 'done';
       this.finish(null);
     } catch (err) {
@@ -297,12 +341,15 @@ export class RuminateController {
     }
 
     this.cancelRequested = false;
+    // 重标定固定算一步(即使无未打标也走一次机械校验),必须计进 total——
+    // 否则会出现 done > total 的荒谬计数(实测 3/2)。
+    const relabelStep = 1;
     this.status = {
       ...IDLE_STATUS,
       running: true,
       phase: 'refreshing',
       done: 0,
-      total: l2Targets.length + l3Targets.length,
+      total: l2Targets.length + l3Targets.length + relabelStep,
       detail: '准备轻量刷新(无未蒸馏缓冲)',
       startedAt: Date.now(),
     };
@@ -339,6 +386,30 @@ export class RuminateController {
       } catch (err) {
         this.logger.warn(`[memory] 反刍轻量刷新 L3 失败(family=${family}): ${errDetail(err)}`);
       }
+      this.status.done++;
+    }
+
+    // 轻量刷新同样做标注校验/重标定(有界,失败不影响刷新结果)
+    this.status.phase = 'relabeling';
+    this.status.detail = '标注校验与重标定(Wing/认知 hall/标签)';
+    try {
+      this.status.relabel = await relabelPass(
+        { ctx: this.ctx, cfg: this.cfg, backend: this.backend(), logger: this.logger },
+        {},
+        {
+          progress: (text, done, total, label) => {
+            this.status.detail = text;
+            this.status.sub = { done, total, label: label ?? '重标定批次' };
+          },
+        },
+      );
+    } catch (err) {
+      this.logger.warn(`[memory] 反刍轻量刷新重标定失败(不影响刷新结果): ${errDetail(err)}`);
+    } finally {
+      // 同全量路径:tags 可能被改写过,成败都要让 Room 缓存重算
+      this.stores.l1.invalidateRooms();
+      // 计数与成败解耦:该步已执行(无论成败都算走完),否则失败时 done 永远追不上 total
+      this.status.sub = null;
       this.status.done++;
     }
 

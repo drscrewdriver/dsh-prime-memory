@@ -13,9 +13,9 @@
  *   重嵌取消/部分失败 → 已切换(物理表即新维度,meta 已同步),缺失向量由周期
  *   backfill 补齐——不回滚(回滚需要再 drop 一次表,得不偿失)。
  */
-import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import type { MemoryConfig } from '../config.js';
+import { readJsonStrict, rmwJson } from '../util/io.js';
 import type { MemoryLogger } from '../types.js';
 import type { EmbeddingProviderInfo, EmbeddingService } from './embedding.js';
 import { NoopEmbeddingService, RemoteEmbeddingService } from './embedding.js';
@@ -30,8 +30,22 @@ import type { MemoryDb } from './sqlite.js';
 // EmbeddingSourceKind/ApplyPhase/ReindexProgressState/EmbeddingStateView 来自契约
 // 单一事实源(src/contract.ts)——embedding-state-get 端点与 client 嵌入区块共享
 // 同一形状;import type 供本地使用,re-export 不断裂既有引用。
-import type { ApplyPhase, EmbeddingSourceKind, EmbeddingStateView, ReindexProgressState } from '../contract.js';
-export type { ApplyPhase, EmbeddingSourceKind, EmbeddingStateView, ReindexProgressState } from '../contract.js';
+import type {
+  ApplyPhase,
+  EmbeddingSourceKind,
+  EmbeddingStateView,
+  ReindexProgressState,
+  VectorCountView,
+  VectorIndexView,
+} from '../contract.js';
+export type {
+  ApplyPhase,
+  EmbeddingSourceKind,
+  EmbeddingStateView,
+  ReindexProgressState,
+  VectorCountView,
+  VectorIndexView,
+} from '../contract.js';
 
 export interface EmbeddingSourceState {
   source: EmbeddingSourceKind;
@@ -41,11 +55,20 @@ export interface EmbeddingSourceState {
 
 // ── 状态存储(写穿持久化) ──
 
+/** 向量计数缓存 TTL(忙时:重建/切换进行中,进度要看得见)。 */
+const VEC_CACHE_TTL_BUSY_MS = 1_000;
+/** 向量计数缓存 TTL(空闲:面板常开也不敲库)。 */
+const VEC_CACHE_TTL_IDLE_MS = 30_000;
+
 export class EmbeddingSourceStore {
   private state: EmbeddingSourceState = { source: 'remote', activeModel: null };
   private readonly file: string;
   private writeQueue: Promise<void> = Promise.resolve();
   private readonly logger?: MemoryLogger;
+  /** 只读降级原因(undefined = 正常):文件损坏/不可读时置位,此后 `set()` 一律失败。 */
+  private degraded: string | undefined;
+  /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据。 */
+  private lastPersisted: string | undefined;
 
   constructor(dataDir: string, logger?: MemoryLogger) {
     this.file = path.join(dataDir, 'embedding-source.json');
@@ -56,33 +79,78 @@ export class EmbeddingSourceStore {
     return { ...this.state };
   }
 
+  /**
+   * 读侧 strict 化(文件层加固 T2.11)。
+   *
+   * 旧实现是「裸 readFile + 外层 `catch {}`」:那个 catch 同时吞掉 ENOENT 与
+   * **JSON 解析错误**,于是「文件损坏」与「首次运行」长得一模一样——既无告警,
+   * 也会在随后被回写覆盖。现在三态分开:
+   * - `missing` → 默认 remote(历史行为,老用户无感),**不告警**;
+   * - `corrupt` / `unreadable` → 告警 + **只读降级**(后续 `set()` 抛错,不覆盖原文件);
+   * - 形状非法(解析成功但字段不对)→ 告警,同样按默认 remote 起步。
+   */
   async init(): Promise<void> {
-    try {
-      const raw = await fs.readFile(this.file, 'utf8');
-      const parsed = JSON.parse(raw) as Partial<EmbeddingSourceState>;
-      if (
-        (parsed.source === 'remote' || parsed.source === 'local' || parsed.source === 'off') &&
-        (parsed.activeModel === null || typeof parsed.activeModel === 'string')
-      ) {
-        this.state = { source: parsed.source, activeModel: parsed.activeModel };
-      } else {
-        this.logger?.warn('[memory] 嵌入源状态文件损坏,按默认 remote 起步');
-      }
-    } catch {
-      // 无文件 = 历史行为(跟随部署配置的远程嵌入)
+    const r = await readJsonStrict<Partial<EmbeddingSourceState>>(this.file);
+    if (!r.ok) {
+      if (r.reason === 'missing') return;
+      this.degraded = r.reason;
+      this.logger?.warn(
+        `[memory] 嵌入源状态文件${r.reason === 'corrupt' ? '损坏' : '不可读'}(${this.file}): ` +
+          `按默认 remote 起步且**不回写**,原文件已保留${r.detail ? ` — ${r.detail}` : ''}`,
+      );
+      return;
+    }
+    const parsed = r.value;
+    if (
+      (parsed.source === 'remote' || parsed.source === 'local' || parsed.source === 'off') &&
+      (parsed.activeModel === null || typeof parsed.activeModel === 'string')
+    ) {
+      this.state = { source: parsed.source, activeModel: parsed.activeModel };
+      this.lastPersisted = JSON.stringify(this.state);
+    } else {
+      this.logger?.warn('[memory] 嵌入源状态文件形状非法,按默认 remote 起步');
     }
   }
 
+  /**
+   * 改状态并写穿持久化。
+   *
+   * **失败必须对调用方可观测**:旧实现是 `writeQueue.then(persist).catch(() => {})`,
+   * 写失败后 `await` 照样 resolve——调用方以为已落盘,重启却回到旧源(G6 静默失败)。
+   * 现在本次 await 直接抛出;队列本身用 `.catch()` 兜住,免得一次失败把后续
+   * set 永久钉在 rejected 链上。
+   */
   async set(next: EmbeddingSourceState): Promise<void> {
+    if (this.degraded !== undefined) {
+      // 损坏文件绝不覆盖:重启会回到旧源,但用户至少能看到这条失败(不再"改了没生效")
+      throw new Error(`嵌入源状态文件${this.degraded === 'corrupt' ? '已损坏' : '不可读'},拒绝覆盖: ${this.file}`);
+    }
     this.state = { source: next.source, activeModel: next.activeModel };
-    this.writeQueue = this.writeQueue.then(() => this.persist()).catch(() => {});
-    await this.writeQueue;
+    const write = this.writeQueue.then(() => this.persist());
+    this.writeQueue = write.catch(() => {});
+    await write;
   }
 
+  /**
+   * 落盘。走 `atomicWriteText` 而不是自研 tmp+rename:白拿文件级 fsync、
+   * 随机 tmp 名(旧实现的固定名 `*.tmp` 在多实例下会撞名)、以及失败路径清理。
+   */
   private async persist(): Promise<void> {
-    const tmp = this.file + '.tmp';
-    await fs.writeFile(tmp, JSON.stringify(this.state, null, 2), 'utf8');
-    await fs.rename(tmp, this.file);
+    // 锁内 RMW(T4.11):嵌入源是"改一次落一次"的低频写,锁开销可忽略;
+    // 两个实例并发 set 时,后写的那个会看到磁盘与自己的上次写入不同 → 显式失败。
+    await rmwJson<EmbeddingSourceState, void>(
+      this.file,
+      async (cur) => {
+        const diskRaw = cur.ok ? JSON.stringify(cur.value) : undefined;
+        if (this.lastPersisted !== undefined && diskRaw !== undefined && diskRaw !== this.lastPersisted) {
+          throw new Error(`嵌入源状态已被其它进程更新,本次写入已取消以避免覆盖;请重试该操作`);
+        }
+        const next: EmbeddingSourceState = { source: this.state.source, activeModel: this.state.activeModel };
+        this.lastPersisted = JSON.stringify(next);
+        return { next, result: undefined };
+      },
+      { logger: this.logger, purpose: 'embedding-source-rmw' },
+    );
   }
 }
 
@@ -211,6 +279,13 @@ export class EmbeddingManager {
     cancelled: false,
   };
   private reindexCancel = false;
+  /**
+   * 向量计数缓存(分级 TTL)。
+   *
+   * 见 `vectorsCached()`:`embedding-state-get` 是设置页轮询热点,
+   * 原实现每次现场跑 6 次 COUNT + 2 次 vec0 LEFT JOIN(实测 2.5–3.1s)。
+   */
+  private vecCache: { at: number; view: VectorIndexView } | null = null;
   /** 停机标志:dispose 后应用链不再推进(防卸载后的孤儿重嵌/安装)。 */
   private disposedFlag = false;
   /** 当前生效目标的 providerInfo(backfill/启动链的 meta 写入用——杜绝陈旧闭包)。 */
@@ -285,6 +360,7 @@ export class EmbeddingManager {
     this.applyMessage = '';
     void this.applyChain(state).finally(() => {
       this.applyBusy = false;
+      this.invalidateVecCache(); // 切换链含 drop 重建,计数必须重新取
     });
     return { accepted: true };
   }
@@ -339,6 +415,38 @@ export class EmbeddingManager {
     if (!this.reindex.running) return false;
     this.reindexCancel = true;
     return true;
+  }
+
+  /**
+   * 手动触发重建(RPC:`embedding-reindex`)。
+   *
+   * 受理即返回,不等跑完——进度照旧走 `snapshot().reindex` 轮询,不在这里回传。
+   * 门槛全部前置,且**宁可拒绝也不谎报**:以下四种情况直接抛错而非"成功受理":
+   *
+   * - 插件已卸载 / 重嵌已在跑 / 嵌入源切换占着锁:并发语义,重复触发无意义;
+   * - 嵌入服务未就绪:`L1Store.reindex` / `L0Store.reindex` 会**静默短路**成
+   *   `0/0/0`,受理了就等于告诉用户"重建成功、零条待补"——而真相是它根本没开始。
+   *
+   * 用抛错而不是返回 `{accepted:false, error}`:与 `embedding-model-delete` 等既有
+   * 端点一致,客户端 `call()` 已有统一的错误呈现,多一套返回形状只会多一处要维护。
+   */
+  startReindex(): { accepted: true } {
+    if (this.disposedFlag) throw new Error('插件已卸载，无法重建');
+    if (this.reindex.running) throw new Error('重建已在进行中');
+    if (this.applyBusy) throw new Error('嵌入源切换进行中，请稍后再试');
+    if (!this.currentInfo) throw new Error('嵌入源已关闭，重建无意义（请先启用嵌入）');
+    if (!this.deps.l1.vectorsReady() || !this.deps.l0.vectorsReady()) {
+      throw new Error('嵌入服务未就绪（模型加载中或推理运行时未安装），请稍后再试');
+    }
+    void this.reindexNow()
+      .then((r) => {
+        if (r.error) this.deps.logger.warn(`[memory] 手动重建失败: ${r.error}`);
+        else this.deps.logger.info(`[memory] 手动重建结束（已取消=${r.cancelled}, 失败=${r.failedTotal}）`);
+      })
+      .catch(() => {
+        /* reindexNow 内部已兜底,不外抛(否则成未处理的 rejection) */
+      });
+    return { accepted: true };
   }
 
   /** 应用链/后台任务是否在跑(backfill 并发门禁用)。 */
@@ -433,13 +541,22 @@ export class EmbeddingManager {
         if (result.error) throw new Error(result.error);
       }
 
-      await this.sourceStore.set(next);
+      // 落盘失败不等于切换失败:走到这里服务已换、物理表已按新维度重建——真相是
+      // "本次会话用新源、重启回旧源"。旧实现把失败吞掉(§6.2),UI 却显示完全成功,
+      // 于是用户以为已保存。这里如实报出来,不再把两种结果混成一个 'done'。
+      let persistNote = '';
+      try {
+        await this.sourceStore.set(next);
+      } catch (err) {
+        persistNote = ';状态持久化失败,重启将回到旧嵌入源';
+        this.deps.logger.warn(
+          `[memory] 嵌入源状态持久化失败(本次会话仍用新源): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
       this.activeNote = undefined;
       this.applyPhase = 'done';
       this.applyMessage =
-        next.source === 'off'
-          ? '已切换为关键词检索'
-          : '切换完成' + pendingNote;
+        (next.source === 'off' ? '已切换为关键词检索' : '切换完成' + pendingNote) + persistNote;
     } catch (err) {
       this.applyPhase = 'error';
       this.applyMessage = err instanceof Error ? err.message : String(err);
@@ -471,11 +588,13 @@ export class EmbeddingManager {
       const cancelled = !!(r1.cancelled || r0.cancelled);
       this.reindex.cancelled = cancelled;
       this.reindex.running = false;
+      this.invalidateVecCache(); // 收尾:计数必须立刻反映重建结果(TTL 可能还压着 1s 旧值)
       return { cancelled, failedTotal };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.reindex.running = false;
       this.reindex.error = message;
+      this.invalidateVecCache();
       return { cancelled: false, failedTotal, error: `重嵌入失败: ${message}` };
     }
   }
@@ -516,7 +635,65 @@ export class EmbeddingManager {
       apply: { phase: this.applyPhase, message: this.applyMessage, startedAt: this.applyStartedAt, busy: this.applyBusy },
       local: this.localSvc ? { state: this.localSvc.getState(), error: this.localSvc.getLoadError() } : null,
       reindex: { ...this.reindex },
+      vectors: this.vectorsCached(),
       activeNote: this.activeNote,
     };
+  }
+
+  /**
+   * 向量索引计数(设置页「已嵌入 X / 总 Y」的数据源)。
+   *
+   * **缺失数走相减,不走 `countVecMissing` 的 LEFT JOIN**。原因:vec 表是
+   * `vec0` 虚拟表,普通谓词下 `LEFT JOIN ... WHERE v.record_id IS NULL` 退化成
+   * **逐行 probe**(L0 侧驱动 24467 行),实测该接口稳定 2.5–3.1s —— 而它只是个展示用计数。
+   * 相减法的前提是「vec 表无指向已删记录的孤儿行」,已对四条写路径审计(硬删同事务删 vec /
+   * 软删走 detach / upsert 先删再插 / clearL1 DROP 重建),并以 `Math.max(0, ·)` 兜底。
+   *
+   * ⚠️ **仅用于展示**。`index.ts` 里「missing 复查 == 0 才 markEmbeddingSynced」的门控
+   * 仍走精确的 `countVecMissing` —— 那处若因孤儿行少算,会把未完成的重建误标成完成。
+   *
+   * db 层的 `-1` 哨兵原样透传(向量能力不可用),UI 据此换文案——
+   * 不在这里折叠成 0,否则"能力挂了"与"一条都没嵌"在界面上长得一样。
+   */
+  private vectorCounts(): VectorIndexView {
+    const count = (kind: 'l1' | 'l0'): VectorCountView => {
+      const skip = this.deps.db.getVecSkipSet(kind);
+      const embedded = kind === 'l1' ? this.deps.db.countL1Vec() : this.deps.db.countL0Vec();
+      const total = kind === 'l1' ? this.deps.db.countL1() : this.deps.db.countL0();
+      // 缺失数走**相减**而非 LEFT JOIN:见下方 vectorsCached 上方的说明。
+      const missing =
+        embedded < 0 || total < 0 ? -1 : Math.max(0, total - embedded - skip.size);
+      return { embedded, total, missing, skipped: skip.size };
+    };
+    return { l1: count('l1'), l0: count('l0') };
+  }
+
+  /**
+   * 快照用的向量计数(带分级 TTL 缓存)。
+   *
+   * 即便改成了相减法,`getVecSkipSet` 仍是一次读 + JSON 解析,两次 COUNT 也要扫表;
+   * 而设置页在**忙时 1s 轮询**、反刍跑起来时前端并发取数 —— 重复算没意义。
+   * 分级 TTL:忙时 1s(重建进度要看得见)、空闲 30s(面板常开也不敲库)。
+   */
+  private vectorsCached(): VectorIndexView {
+    // 忙时判定与 isBusy() 同源但排除 downloader:模型下载不改变向量计数本身
+    const busy = this.applyBusy || this.reindex.running;
+    const ttl = busy ? VEC_CACHE_TTL_BUSY_MS : VEC_CACHE_TTL_IDLE_MS;
+    const now = Date.now();
+    if (this.vecCache && now - this.vecCache.at < ttl) return this.vecCache.view;
+    const view = this.vectorCounts();
+    this.vecCache = { at: now, view };
+    return view;
+  }
+
+  /**
+   * 丢弃向量计数缓存。
+   *
+   * 向量侧的写路径大多在 store 层(L1/L0 的 reindex、删除、skip 集变更),
+   * 本管理器拿不到逐批回调,故以「忙时短 TTL + 收尾显式失效」组合保证收敛:
+   * 重建/切换期间最长落后 1s,收尾时立即失效,不会停在旧值。
+   */
+  invalidateVecCache(): void {
+    this.vecCache = null;
   }
 }
