@@ -18,10 +18,16 @@ export type WarmupState = Record<ExtractMode, number>;
 export declare function freshWarmup(): WarmupState;
 export declare function emptyPending(): PendingBuckets;
 /** 读取缓冲文件:文件缺失/损坏 → 空桶(不抛出——丢了缓冲 L0 事实源仍在)。
- *  旧格式条目(无 sessionId)归 legacy 组;warmup 缺省 = 全新起步。 */
+ *  旧格式条目(无 sessionId)归 legacy 组;warmup 缺省 = 全新起步。
+ *
+ * **读侧分类**(文件层加固 T2):`missing` 与 `corrupt`/`unreadable` 区分(本函数是
+ * 全仓最早做到这点的一处,现在改用统一的 `readJsonStrict`)。
+ * **版本**(T3.5):`version` 非 1 时**允许读**(缓冲丢了只是少蒸馏一轮)但置
+ * `degraded`——调用方据此**禁止回写**,免得按旧解释覆盖新格式。 */
 export declare function loadPending(file: string, logger?: MemoryLogger): Promise<{
     buckets: PendingBuckets;
     warmup: WarmupState;
+    degraded?: string;
 }>;
 /** 按会话分组(会话切片):组按首条时间排序、组内按时间稳定排序——
  *  蒸馏的一切触发都以切片为单位,切片内永不跨会话混装(ADR-0003)。 */

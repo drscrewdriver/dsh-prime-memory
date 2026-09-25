@@ -1,3 +1,4 @@
+import { RECONCILE_STATE_FILE_VERSION } from '../store/file-versions.js';
 import type { EvidenceSource } from '../store/evidence-source.js';
 import type { MemoryLogger } from '../types.js';
 import { type MemoryVerdict, type ReconcileDeps, type ReconcileInput, type ReconcileState } from './reconcile.js';
@@ -49,7 +50,7 @@ export interface ReconcilePlan {
 }
 /** 断点续跑状态文件。 */
 export interface ReconcileRunState {
-    version: 1;
+    version: typeof RECONCILE_STATE_FILE_VERSION;
     runId: string;
     startedAt: number;
     updatedAt: number;
@@ -62,8 +63,17 @@ export declare function contentHash(text: string): string;
 export declare function resumeKey(memory: Pick<ReconcileInput, 'id' | 'text'>): string;
 /** 状态文件路径(与 `pendingPathFor` / `state.json` 同目录)。 */
 export declare function reconcileStatePathFor(dataDir: string): string;
-/** 读状态;**文件损坏/版本不符一律当作空状态**,不抛(续跑状态坏了不该阻止运行)。 */
-export declare function loadRunState(file: string): Promise<ReconcileRunState | undefined>;
+/**
+ * 读状态。
+ *
+ * **读侧分类**(文件层加固 T2.10,审计 D2 点名补上):原注释写「文件损坏/版本不符
+ * 一律当作空状态」——损坏**不再静默**:`missing` 是首次运行(不告警),而
+ * `corrupt` / `unreadable` / `unknown_version` 一律记诊断后才按空状态继续。
+ * 「不覆盖」由 `atomicWriteJson` 的覆盖保护兜住(损坏文件写不进去,会显式报错)。
+ *
+ * 仍然**不抛**:续跑状态只是"跳过已判条目"的优化,坏了重跑一遍即可,不该阻止运行。
+ */
+export declare function loadRunState(file: string, logger?: MemoryLogger): Promise<ReconcileRunState | undefined>;
 /**
  * 预估并裁剪。
  *

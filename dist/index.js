@@ -22,7 +22,7 @@ import { NoopEmbeddingService } from './store/embedding.js';
 import { EmbeddingManager, EmbeddingSourceStore, makeLocalServiceFactory, resolveInitialEmbedding, } from './store/embedding-source.js';
 import { ModelDownloadQueue } from './store/download-queue.js';
 import { PINNED_TRANSFORMERS_VERSION, RuntimeInstaller } from './store/runtime-installer.js';
-import { ensureDir } from './util/io.js';
+import { cleanupOrphanTmp, ensureDir } from './util/io.js';
 import { L0Store } from './store/l0.js';
 import { L1Store } from './store/l1.js';
 import { PersonaStore } from './store/persona.js';
@@ -80,6 +80,17 @@ export async function apply(ctx, config) {
     catch (err) {
         storageOk = false;
         logger.error(`[memory] 数据目录不可写,记忆功能停用: ${dataDir} (${err instanceof Error ? err.message : String(err)})`);
+    }
+    // 孤儿 tmp 扫描:进程被 kill -9 / 断电时原子写会留下 tmp(写失败路径已 unlink,
+    // 只在硬中断下残留)。放在 store 载入之前——此刻还没有任何写者,清不掉"正在写"的文件。
+    // 清理失败绝不影响启动(残留 tmp 不参与任何读路径)。
+    if (storageOk) {
+        try {
+            await cleanupOrphanTmp(dataDir, logger);
+        }
+        catch (err) {
+            logger.warn(`[memory] 孤儿临时文件扫描失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
     // ── 记忆模式运行时开关(官方 settings 服务,live 生效;缺失时恒开) ──
     const live = registerLiveSettings(ctx, logger);
@@ -153,7 +164,7 @@ export async function apply(ctx, config) {
             chat: new PersonaStore(dataDir, 'chat', logger),
             work: new PersonaStore(dataDir, 'work', logger),
         },
-        state: new StateStore(StateStore.pathFor(dataDir)),
+        state: new StateStore(StateStore.pathFor(dataDir), logger),
         // 激活槽位(active slot):独立 slots.json,高频小改不拖累 checkpoint 原子写
         slots: new SlotStore(SlotStore.pathFor(dataDir), logger, {
             maxSlots: config.slots.maxSlots,

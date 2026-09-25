@@ -267,9 +267,9 @@ describe('恢复的边界', () => {
     });
   });
 
-  it('快照目录不存在时恢复为空,不抛', async () => {
+  it('快照目录不存在时拒绝恢复(缺文件不再当空快照:正文与清单成对写入,缺一即不完整)', async () => {
     await withDb('missing-snap', async (db, dir) => {
-      await expect(restoreL1Snapshot(db, join(dir, 'nope'))).resolves.toEqual({ inSnapshot: 0, targets: 0, restored: 0, failed: 0, vectorsWritten: 0, notFound: [] });
+      await expect(restoreL1Snapshot(db, join(dir, 'nope'))).rejects.toThrow('快照记录缺失');
     });
   });
 });

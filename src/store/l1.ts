@@ -402,7 +402,7 @@ export class L1Store {
 
   /** 可用快照列表(按时间倒序;面板/工具据此选一份来恢复)。 */
   listSnapshots(opts: { limit?: number } = {}): Promise<{ items: SnapshotSummary[]; total: number }> {
-    return listSnapshotsIn(this.dataDir, opts);
+    return listSnapshotsIn(this.dataDir, { ...opts, logger: this.logger });
   }
 
   /**

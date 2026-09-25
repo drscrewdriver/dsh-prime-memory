@@ -7,7 +7,8 @@
 import * as path from 'node:path';
 import { WING_CATALOG } from '../types.js';
 import { errDetail } from '../util/filelog.js';
-import { atomicWriteJson, ensureDir, readJsonIfExists } from '../util/io.js';
+import { ensureDir, readJsonStrict, rmwJson } from '../util/io.js';
+import { SESSION_MODES_FILE_VERSION } from './file-versions.js';
 const MODES = ['auto', 'chat', 'work', 'off'];
 const PRUNE_MS = 90 * 24 * 3600_000;
 const MAX_ENTRIES = 500;
@@ -25,6 +26,11 @@ export class SessionModeStore {
     entries = new Map();
     loaded;
     persistFailed = false;
+    /** 只读降级原因(undefined = 正常):非空时内存态照常生效,但停止回写。 */
+    degraded;
+    degradedLogged = false;
+    /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据:磁盘与它不同 = 别人写过。 */
+    lastPersisted;
     /** 档位切换回调(index.ts 装配 runner 的同步动作:切片落袋/挂起,ADR-0003)。 */
     onModeChange;
     /** 串行化持久化写(避免并发原子写撞临时文件名)。 */
@@ -35,9 +41,35 @@ export class SessionModeStore {
         this.file = path.join(dataDir, 'session-modes.json');
         this.loaded = defaultMode;
     }
-    /** 载入持久化映射(index.ts 启动时 await;失败降级内存态)。 */
+    /**
+     * 载入持久化映射(index.ts 启动时 await;失败降级内存态)。
+     *
+     * **读侧分类**(文件层加固 T2):缺失合法;损坏/不可读 → 告警 + 只读降级;
+     * 未知版本 → **仍按当前形状读取**(本 store 无迁移路径,一律拒载会让档位在
+     * 版本回退后全部失效)+ 只读降级(禁写)。
+     */
     async init() {
-        const data = await readJsonIfExists(this.file);
+        const r = await readJsonStrict(this.file, { expectedVersion: SESSION_MODES_FILE_VERSION });
+        let data;
+        if (r.ok) {
+            data = r.value;
+        }
+        else if (r.reason === 'missing') {
+            return;
+        }
+        else {
+            const lenient = await readJsonStrict(this.file);
+            if (!lenient.ok) {
+                this.degraded = lenient.reason;
+                this.logger?.warn(`[memory] 会话档位文件${lenient.reason === 'corrupt' ? '损坏' : '不可读'}(${this.file}): ` +
+                    `按默认档起步且**不回写**,原文件已保留${lenient.detail ? ` — ${lenient.detail}` : ''}`);
+                return;
+            }
+            data = lenient.value;
+            this.degraded = `未知版本(${lenient.version ?? '无 version 字段'})`;
+            this.logger?.warn(`[memory] 会话档位文件版本未知(${lenient.version ?? '无'}):按当前形状读取并进入只读降级(不回写)`);
+        }
+        this.lastPersisted = JSON.stringify(data);
         if (!data?.sessions || typeof data.sessions !== 'object')
             return;
         const now = Date.now();
@@ -179,9 +211,25 @@ export class SessionModeStore {
         return this.writeChain;
     }
     async persist() {
+        if (this.degraded !== undefined) {
+            // 只读降级:内存态照常生效(切档在本次会话内有效),但不落盘
+            if (!this.degradedLogged) {
+                this.degradedLogged = true;
+                this.logger?.warn(`[memory] 会话档位处于只读降级(${this.degraded}),已停止回写(磁盘文件保持不变)`);
+            }
+            return;
+        }
         try {
             await ensureDir(path.dirname(this.file));
-            await atomicWriteJson(this.file, this.serialize());
+            await rmwJson(this.file, async (cur) => {
+                const diskRaw = cur.ok ? JSON.stringify(cur.value) : undefined;
+                if (this.lastPersisted !== undefined && diskRaw !== undefined && diskRaw !== this.lastPersisted) {
+                    throw new Error(`会话档位文件已被其它进程更新,本次写入已取消以避免覆盖;请重试该操作`);
+                }
+                const next = this.serialize();
+                this.lastPersisted = JSON.stringify(next);
+                return { next, result: undefined };
+            }, { logger: this.logger, purpose: 'session-modes-rmw' });
             this.persistFailed = false;
         }
         catch (err) {
@@ -214,6 +262,6 @@ export class SessionModeStore {
         const sessions = {};
         for (const [sid, e] of this.entries)
             sessions[sid] = e;
-        return { version: 1, sessions };
+        return { version: SESSION_MODES_FILE_VERSION, sessions };
     }
 }

@@ -19,10 +19,36 @@ export declare class EmbeddingSourceStore {
     private readonly file;
     private writeQueue;
     private readonly logger?;
+    /** 只读降级原因(undefined = 正常):文件损坏/不可读时置位,此后 `set()` 一律失败。 */
+    private degraded;
+    /** 本进程上次成功写入的磁盘内容(紧凑 JSON);并发冲突判据。 */
+    private lastPersisted;
     constructor(dataDir: string, logger?: MemoryLogger);
     get(): EmbeddingSourceState;
+    /**
+     * 读侧 strict 化(文件层加固 T2.11)。
+     *
+     * 旧实现是「裸 readFile + 外层 `catch {}`」:那个 catch 同时吞掉 ENOENT 与
+     * **JSON 解析错误**,于是「文件损坏」与「首次运行」长得一模一样——既无告警,
+     * 也会在随后被回写覆盖。现在三态分开:
+     * - `missing` → 默认 remote(历史行为,老用户无感),**不告警**;
+     * - `corrupt` / `unreadable` → 告警 + **只读降级**(后续 `set()` 抛错,不覆盖原文件);
+     * - 形状非法(解析成功但字段不对)→ 告警,同样按默认 remote 起步。
+     */
     init(): Promise<void>;
+    /**
+     * 改状态并写穿持久化。
+     *
+     * **失败必须对调用方可观测**:旧实现是 `writeQueue.then(persist).catch(() => {})`,
+     * 写失败后 `await` 照样 resolve——调用方以为已落盘,重启却回到旧源(G6 静默失败)。
+     * 现在本次 await 直接抛出;队列本身用 `.catch()` 兜住,免得一次失败把后续
+     * set 永久钉在 rejected 链上。
+     */
     set(next: EmbeddingSourceState): Promise<void>;
+    /**
+     * 落盘。走 `atomicWriteText` 而不是自研 tmp+rename:白拿文件级 fsync、
+     * 随机 tmp 名(旧实现的固定名 `*.tmp` 在多实例下会撞名)、以及失败路径清理。
+     */
     private persist;
 }
 export interface InitialEmbedding {

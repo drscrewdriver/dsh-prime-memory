@@ -20,7 +20,8 @@
  */
 import { createHash } from 'node:crypto';
 import { CHARS_PER_TOKEN } from '../util/context-occupancy.js';
-import { atomicWriteJson, readJsonIfExists } from '../util/io.js';
+import { atomicWriteJson, readJsonStrict } from '../util/io.js';
+import { RECONCILE_STATE_FILE_VERSION } from '../store/file-versions.js';
 import type { EvidenceSource } from '../store/evidence-source.js';
 import type { MemoryLogger } from '../types.js';
 import {
@@ -89,7 +90,7 @@ export interface ReconcilePlan {
 
 /** 断点续跑状态文件。 */
 export interface ReconcileRunState {
-  version: 1
+  version: typeof RECONCILE_STATE_FILE_VERSION
   runId: string
   startedAt: number
   updatedAt: number
@@ -112,12 +113,35 @@ export function reconcileStatePathFor(dataDir: string): string {
   return `${dataDir.replace(/[\\/]+$/, '')}/reconcile-state.json`;
 }
 
-/** 读状态;**文件损坏/版本不符一律当作空状态**,不抛(续跑状态坏了不该阻止运行)。 */
-export async function loadRunState(file: string): Promise<ReconcileRunState | undefined> {
-  const raw = await readJsonIfExists<Partial<ReconcileRunState>>(file);
-  if (!raw || raw.version !== 1 || !Array.isArray(raw.done)) return undefined;
+/**
+ * 读状态。
+ *
+ * **读侧分类**(文件层加固 T2.10,审计 D2 点名补上):原注释写「文件损坏/版本不符
+ * 一律当作空状态」——损坏**不再静默**:`missing` 是首次运行(不告警),而
+ * `corrupt` / `unreadable` / `unknown_version` 一律记诊断后才按空状态继续。
+ * 「不覆盖」由 `atomicWriteJson` 的覆盖保护兜住(损坏文件写不进去,会显式报错)。
+ *
+ * 仍然**不抛**:续跑状态只是"跳过已判条目"的优化,坏了重跑一遍即可,不该阻止运行。
+ */
+export async function loadRunState(file: string, logger?: MemoryLogger): Promise<ReconcileRunState | undefined> {
+  const r = await readJsonStrict<Partial<ReconcileRunState>>(file, {
+    expectedVersion: RECONCILE_STATE_FILE_VERSION,
+  });
+  if (!r.ok) {
+    if (r.reason === 'missing') return undefined;
+    const why = r.reason === 'corrupt' ? '损坏' : r.reason === 'unknown_version' ? '版本未知' : '不可读';
+    logger?.warn(
+      `[memory] 冲突续跑状态${why}(本次全量重核,原文件不覆盖): ${file}${r.detail ? ` — ${r.detail}` : ''}`,
+    );
+    return undefined;
+  }
+  const raw = r.value;
+  if (!Array.isArray(raw.done)) {
+    logger?.warn(`[memory] 冲突续跑状态形状不符(缺 done 数组,本次全量重核): ${file}`);
+    return undefined;
+  }
   return {
-    version: 1,
+    version: RECONCILE_STATE_FILE_VERSION,
     runId: typeof raw.runId === 'string' ? raw.runId : '',
     startedAt: typeof raw.startedAt === 'number' ? raw.startedAt : 0,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0,
@@ -258,10 +282,10 @@ export async function executeReconcile(
   opts: ExecuteReconcileOptions = {},
 ): Promise<ExecuteReconcileResult> {
   const stateFile = opts.stateFile;
-  const previous = stateFile === undefined ? undefined : await loadRunState(stateFile);
+  const previous = stateFile === undefined ? undefined : await loadRunState(stateFile, opts.logger);
   const done = new Set(previous?.done ?? []);
   const state: ReconcileRunState = previous ?? {
-    version: 1,
+    version: RECONCILE_STATE_FILE_VERSION,
     runId: createHash('sha1').update(String(Date.now())).digest('hex').slice(0, 12),
     startedAt: Date.now(),
     updatedAt: Date.now(),
@@ -306,7 +330,13 @@ export async function executeReconcile(
 
 /** 清空续跑状态(显式动作:下次运行会重核所有条目,**会重复计费**)。 */
 export async function resetRunState(file: string): Promise<void> {
-  await atomicWriteJson(file, { version: 1, runId: '', startedAt: 0, updatedAt: 0, done: [] });
+  await atomicWriteJson(file, {
+    version: RECONCILE_STATE_FILE_VERSION,
+    runId: '',
+    startedAt: 0,
+    updatedAt: 0,
+    done: [],
+  });
 }
 
 /** 供装配层使用:把证据面与 judge 组装成 deps。 */

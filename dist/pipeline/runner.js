@@ -162,6 +162,9 @@ export class MemoryRunner {
     /** 停止标志(dispose 序置位):不再取新任务;进行中任务自然收尾。 */
     stopped = false;
     pending = emptyPending();
+    /** pending.json 的只读降级原因(undefined = 正常):非空时不再回写缓冲。 */
+    pendingDegraded;
+    pendingDegradedLogged = false;
     /** 各档位桶渐进阈值(1 起步翻倍至稳态毕业;随 pending.json 持久化)。 */
     warmup = freshWarmup();
     /** 每会话最后活动时间(闲置兜底判定用)。 */
@@ -199,7 +202,8 @@ export class MemoryRunner {
         }
         // 恢复未蒸馏缓冲(上次进程退出前未蒸馏的消息,含失败待重试与攒阈值中途的)
         try {
-            const { buckets: loaded, warmup } = await loadPending(this.pendingFile, this.logger);
+            const { buckets: loaded, warmup, degraded } = await loadPending(this.pendingFile, this.logger);
+            this.pendingDegraded = degraded;
             for (const key of PENDING_MODES) {
                 if (loaded[key].length > PENDING_BUCKET_CAP)
                     loaded[key] = loaded[key].slice(-PENDING_BUCKET_CAP);
@@ -486,6 +490,16 @@ export class MemoryRunner {
      *  非重建轮持久化前按桶截断到上限:重建取消后的大桶不至于在后续每次
      *  蒸馏尝试时反复整量序列化落盘(多 MB 级 IO);重建轮豁免维持。 */
     async persistPending(noBufferCap = false) {
+        // 只读降级(pending.json 损坏或版本未知):缓冲不再落盘,但**蒸馏照常跑**——
+        // 缓冲只是"待蒸馏队列",丢了不回写最多是重启后重蒸馏一轮,
+        // 而按旧解释覆盖新格式会真的弄坏文件。
+        if (this.pendingDegraded !== undefined) {
+            if (!this.pendingDegradedLogged) {
+                this.pendingDegradedLogged = true;
+                this.logger.warn(`[memory] 未蒸馏缓冲处于只读降级(${this.pendingDegraded}),已停止回写(磁盘文件保持不变)`);
+            }
+            return;
+        }
         try {
             if (!noBufferCap) {
                 for (const key of PENDING_MODES) {

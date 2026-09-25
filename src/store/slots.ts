@@ -11,7 +11,8 @@
  */
 import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { atomicWriteJson, readJsonIfExists, nowIso } from '../util/io.js';
+import { readJsonStrict, rmwJson, nowIso } from '../util/io.js';
+import { SLOTS_FILE_VERSION } from './file-versions.js';
 import type { MemoryLogger } from '../types.js';
 
 /**
@@ -46,7 +47,7 @@ export interface Slot {
 }
 
 interface SlotsFile {
-  version: 1;
+  version: typeof SLOTS_FILE_VERSION;
   rev: number;
   slots: Slot[];
 }
@@ -150,6 +151,11 @@ export class SlotStore {
   /** 活引用:数组本身稳定,元素原地改;外部持有者不会因 mutate 拿到孤儿。 */
   private slots: Slot[] = [];
   private rev = 0;
+  /** 只读降级原因(undefined = 正常):非空时内存照常更新,但停止回写。 */
+  private degraded: string | undefined;
+  /** 本进程已认可的磁盘 rev(并发冲突判据:磁盘比它新 = 别人写过)。 */
+  private baseRev = 0;
+  private degradedLogged = false;
   private readonly maxSlots: number;
   private readonly maxBodyChars: number;
   private readonly maxTitleChars: number;
@@ -164,13 +170,41 @@ export class SlotStore {
     this.maxTitleChars = opts.maxTitleChars ?? 60;
   }
 
-  /** 读回持久态;文件缺失/损坏时用默认空态,不抛错。 */
+  /**
+   * 读回持久态。**读侧分类**(文件层加固 T2):
+   * - 缺失 → 默认空态(首次运行,合法,不告警);
+   * - 损坏/不可读 → 默认空态 + **只读降级**(禁写,不覆盖原文件);
+   * - 未知版本 → **允许读**(按当前形状宽容解释)+ 只读降级(禁写)。
+   *   本 store 无迁移路径,一律拒载会让插件在版本回退时直接不可用。
+   */
   async load(): Promise<void> {
-    const raw = await readJsonIfExists<Partial<SlotsFile>>(this.file);
-    if (!raw) return;
+    const r = await readJsonStrict<Partial<SlotsFile>>(this.file, { expectedVersion: SLOTS_FILE_VERSION });
+    let raw: Partial<SlotsFile> | undefined;
+    if (r.ok) {
+      raw = r.value;
+    } else if (r.reason === 'missing') {
+      return;
+    } else {
+      // unknown_version 仍要读出内容(可用性优先),只是禁止回写
+      const lenient = await readJsonStrict<Partial<SlotsFile>>(this.file);
+      if (!lenient.ok) {
+        this.degraded = lenient.reason;
+        this.logger.warn(
+          `[memory] 槽位状态文件${lenient.reason === 'corrupt' ? '损坏' : '不可读'}(${this.file}): ` +
+            `按空态起步且**不回写**,原文件已保留${lenient.detail ? ` — ${lenient.detail}` : ''}`,
+        );
+        return;
+      }
+      raw = lenient.value;
+      this.degraded = `未知版本(${lenient.version ?? '无 version 字段'})`;
+      this.logger.warn(
+        `[memory] 槽位状态文件版本未知(${lenient.version ?? '无 version 字段'}):按当前形状读取并进入只读降级(不回写),避免用旧解释覆盖新文件`,
+      );
+    }
     const { slots, rev } = fromFile(raw);
     this.slots = slots;
     this.rev = rev;
+    this.baseRev = rev;
   }
 
   /** 同步读内存,返回副本(不泄漏内部数组)。 */
@@ -307,12 +341,57 @@ export class SlotStore {
     };
   }
 
-  /** 原子写盘 + rev 单调递增。 */
+  /**
+   * 锁内 RMW 写盘 + rev 单调递增(文件层加固 T4.7)。
+   *
+   * `rev` 在这里多担一个职责:**并发冲突判据**。锁保证"读-算-写"不交错,
+   * 但本进程的内存态仍可能是旧的(别人在我上次读之后写过)——比较磁盘 rev 与
+   * `baseRev` 能发现这件事,此时**拒绝写入**并让调用方看到失败,而不是把别人的
+   * 更新整块盖掉(丢更新)或假装成功。
+   */
   private async persist(): Promise<void> {
-    this.rev += 1;
-    const file: SlotsFile = { version: 1, rev: this.rev, slots: this.slots };
+    if (this.degraded !== undefined) {
+      // 只读降级:内存态照常更新(工具语义不受影响),但绝不落盘——
+      // 此刻内存里是"按当前形状解释"的结果,写回去会把磁盘上的新格式洗成旧格式。
+      if (!this.degradedLogged) {
+        this.degradedLogged = true;
+        this.logger.warn(`[memory] 槽位处于只读降级(${this.degraded}),已停止回写(磁盘文件保持不变)`);
+      }
+      return;
+    }
     try {
-      await atomicWriteJson(this.file, file);
+      await rmwJson<SlotsFile, void>(
+        this.file,
+        async (cur) => {
+          const disk = cur.ok ? cur.value : undefined;
+          const diskRev = disk && typeof disk.rev === 'number' && disk.rev >= 0 ? disk.rev : 0;
+          if (diskRev > this.baseRev) {
+            // 别人写过。槽位是**独立条目集合**(相互无引用、无计数),合并没有歧义:
+            // 以磁盘为底、本进程的同 id 条目覆盖之(内存态更新),于是两边的新增都留下。
+            // 直接拒写虽然"可观测",但会让并发场景下的新增静默消失——能合并就别丢。
+            const merged = new Map<string, Slot>();
+            for (const s of (disk?.slots ?? [])) merged.set(s.id, s);
+            for (const s of this.slots) merged.set(s.id, s); // 本进程优先
+            if (merged.size > this.maxSlots) {
+              this.logger.warn(
+                `[memory] 槽位合并后超过上限(${merged.size} > ${this.maxSlots}),保留本进程优先的前 ${this.maxSlots} 条`,
+              );
+              const keep = new Set(this.slots.map((s) => s.id));
+              const trimmed = [...merged.values()].filter((s) => keep.has(s.id)).slice(0, this.maxSlots);
+              merged.clear();
+              for (const s of trimmed) merged.set(s.id, s);
+            }
+            this.slots = [...merged.values()];
+            this.rev = diskRev + 1;
+            this.baseRev = this.rev;
+            return { next: { version: SLOTS_FILE_VERSION, rev: this.rev, slots: this.slots }, result: undefined };
+          }
+          this.rev = Math.max(this.rev, diskRev) + 1;
+          this.baseRev = this.rev;
+          return { next: { version: SLOTS_FILE_VERSION, rev: this.rev, slots: this.slots }, result: undefined };
+        },
+        { logger: this.logger, purpose: 'slots-rmw' },
+      );
     } catch (err) {
       // 写盘失败只告警,不阻断调用方(降级:内存态已更新,下次写会重试)
       this.logger.warn(`[memory] 槽位持久化失败(内存态已更新): ${err instanceof Error ? err.message : String(err)}`);

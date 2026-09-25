@@ -57,11 +57,22 @@ export declare class SlotStore {
     /** 活引用:数组本身稳定,元素原地改;外部持有者不会因 mutate 拿到孤儿。 */
     private slots;
     private rev;
+    /** 只读降级原因(undefined = 正常):非空时内存照常更新,但停止回写。 */
+    private degraded;
+    /** 本进程已认可的磁盘 rev(并发冲突判据:磁盘比它新 = 别人写过)。 */
+    private baseRev;
+    private degradedLogged;
     private readonly maxSlots;
     private readonly maxBodyChars;
     private readonly maxTitleChars;
     constructor(file: string, logger: MemoryLogger, opts?: Partial<SlotStoreOptions>);
-    /** 读回持久态;文件缺失/损坏时用默认空态,不抛错。 */
+    /**
+     * 读回持久态。**读侧分类**(文件层加固 T2):
+     * - 缺失 → 默认空态(首次运行,合法,不告警);
+     * - 损坏/不可读 → 默认空态 + **只读降级**(禁写,不覆盖原文件);
+     * - 未知版本 → **允许读**(按当前形状宽容解释)+ 只读降级(禁写)。
+     *   本 store 无迁移路径,一律拒载会让插件在版本回退时直接不可用。
+     */
     load(): Promise<void>;
     /** 同步读内存,返回副本(不泄漏内部数组)。 */
     list(): Slot[];
@@ -102,7 +113,14 @@ export declare class SlotStore {
         openCount: number;
         slots: SlotView[];
     };
-    /** 原子写盘 + rev 单调递增。 */
+    /**
+     * 锁内 RMW 写盘 + rev 单调递增(文件层加固 T4.7)。
+     *
+     * `rev` 在这里多担一个职责:**并发冲突判据**。锁保证"读-算-写"不交错,
+     * 但本进程的内存态仍可能是旧的(别人在我上次读之后写过)——比较磁盘 rev 与
+     * `baseRev` 能发现这件事,此时**拒绝写入**并让调用方看到失败,而不是把别人的
+     * 更新整块盖掉(丢更新)或假装成功。
+     */
     private persist;
     static pathFor(dataDir: string): string;
 }
