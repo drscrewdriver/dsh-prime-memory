@@ -6,7 +6,34 @@
  */
 import { randomBytes } from 'node:crypto';
 import { blocksToText } from '../util/text.js';
+import { redactSecrets } from '../util/redact.js';
 import { sanitizeText, shouldCaptureL0, stripCodeBlocks } from '../util/sanitize.js';
+<<<<<<< HEAD
+=======
+import { foldRecoverableTurns, readPersistedEventsViaServices } from './capture-recovery.js';
+/** §C 一次性告警标记:脱敏自身异常时放行原文,只提示一次(不阻断捕获)。 */
+let redactWarnedOnce = false;
+/**
+ * §C 捕获单点脱敏(memorax-absorb):`capture.redactSecrets !== false` 时把
+ * 8 类密钥替换为 `[REDACTED:<KIND>]`。位置在 sanitize 之后、L0/蒸馏分发之前——
+ * 同一份 messages 覆盖 L0 JSONL/L0 SQLite/蒸馏输入三条下游,无分裂态。
+ * 红线:脱敏失败放行原文 + 一次性 warn(不阻断捕获)。
+ */
+function redactContent(content, cfg, logger) {
+    if (cfg.capture?.redactSecrets === false)
+        return content;
+    try {
+        return redactSecrets(content).text;
+    }
+    catch (err) {
+        if (!redactWarnedOnce) {
+            redactWarnedOnce = true;
+            logger.warn(`[memory] 脱敏失败,本轮放行原文(一次性提示): ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return content;
+    }
+}
+>>>>>>> 549f63e (feat(prompts+redaction): §B 防注入边界声明 + §C 载荷脱敏(memorax-absorb Wave 2))
 /**
  * 需要进缓冲的事件类型。流式 chunk(text-delta/reasoning 等)一秒钟可达数百条,
  * 缓冲它们会把 MAX_BUFFER 撑爆、把轮次头部(turn/start + user 消息)裁掉——
@@ -164,7 +191,7 @@ function turnEventsToMessages(events, cfg, logger) {
                 logger.info(`[memory] L0 跳过非用户来源消息(source.kind=${msg.source?.kind ?? 'none'})`);
                 continue;
             }
-            const content = sanitizeText(blocksToText(msg.content));
+            const content = redactContent(sanitizeText(blocksToText(msg.content)), cfg, logger);
             if (shouldCaptureL0(content)) {
                 out.push(makeMessage('user', content, event.time, cfg.capture.maxMessageChars));
             }
@@ -174,6 +201,7 @@ function turnEventsToMessages(events, cfg, logger) {
             let content = sanitizeText(blocksToText(data.message?.content));
             if (cfg.capture.stripCodeBlocks)
                 content = stripCodeBlocks(content);
+            content = redactContent(content, cfg, logger);
             if (shouldCaptureL0(content)) {
                 out.push(makeMessage('assistant', content, event.time, cfg.capture.maxMessageChars));
             }

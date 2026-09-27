@@ -4,9 +4,30 @@ import { renderConflictResolution, resolveConflictPair } from '../conflict-servi
 import { normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
+import { redactSecrets } from '../util/redact.js';
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
 const WRITE_ONLY_NOTICE = '本会话为只写模式:记忆照常沉淀,但不读取。';
 const GLOBAL_OFF_NOTICE = '记忆注入已全局停用:本会话不读取记忆(沉淀照常)。';
+/** §C 一次性告警标记:手动写入路径的脱敏失败只提示一次(不阻断写入)。 */
+let manualRedactWarnedOnce = false;
+/**
+ * §C 手动写入路径脱敏(memorax-absorb / task_18):memory_add / memory_import
+ * 与捕获路径走同一 8 类词表,两条 L1 写入边界语义一致。
+ * 红线:脱敏失败放行原文 + 一次性 warn(不阻断写入)。
+ */
+function applyManualRedaction(record, cfg, logger) {
+    if (cfg.capture?.redactSecrets === false)
+        return;
+    try {
+        record.content = redactSecrets(record.content).text;
+    }
+    catch (err) {
+        if (!manualRedactWarnedOnce) {
+            manualRedactWarnedOnce = true;
+            logger.warn(`[memory] 手动写入脱敏失败,放行原文(一次性提示): ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+}
 export function registerMemoryTools(ctx, cfg, stores, logger, modes, live, 
 /** 反刍控制器(可选:未装配时 ruminate 工具返回未启用提示)。 */
 ruminate) {
@@ -359,6 +380,7 @@ ruminate) {
                 return { notice: 'content 为空,未写入' };
             const scene = typeof args.scene === 'string' && args.scene.trim() ? args.scene.trim().slice(0, 120) : '__manual__';
             const record = buildRecord(args, scene, Date.now(), workspaceIdOf(exec));
+            applyManualRedaction(record, cfg, logger);
             await stores.l1.appendNew([record]);
             logger.info(`[memory] 高权限写入记忆(${record.type}${record.metadata?.hall ? '/' + String(record.metadata.hall) : ''},时间轴 ${record.persistence ?? '?'}):${record.content.slice(0, 120)}`);
             return { id: record.id };
@@ -452,7 +474,9 @@ ruminate) {
                     return;
                 }
                 seen.add(key);
-                records.push(buildRecord(item, scene, now, workspaceIdOf(exec)));
+                const record = buildRecord(item, scene, now, workspaceIdOf(exec));
+                applyManualRedaction(record, cfg, logger);
+                records.push(record);
             });
             if (records.length > 0)
                 await stores.l1.appendNew(records);

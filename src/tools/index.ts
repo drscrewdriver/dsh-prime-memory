@@ -29,10 +29,31 @@ import type { MemoryFamily, MemoryLogger, MemoryRecord, Persistence } from '../t
 import { normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
+import { redactSecrets } from '../util/redact.js';
 
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
 const WRITE_ONLY_NOTICE = '本会话为只写模式:记忆照常沉淀,但不读取。';
 const GLOBAL_OFF_NOTICE = '记忆注入已全局停用:本会话不读取记忆(沉淀照常)。';
+
+/** §C 一次性告警标记:手动写入路径的脱敏失败只提示一次(不阻断写入)。 */
+let manualRedactWarnedOnce = false;
+
+/**
+ * §C 手动写入路径脱敏(memorax-absorb / task_18):memory_add / memory_import
+ * 与捕获路径走同一 8 类词表,两条 L1 写入边界语义一致。
+ * 红线:脱敏失败放行原文 + 一次性 warn(不阻断写入)。
+ */
+function applyManualRedaction(record: MemoryRecord, cfg: MemoryConfig, logger: MemoryLogger): void {
+  if (cfg.capture?.redactSecrets === false) return;
+  try {
+    record.content = redactSecrets(record.content).text;
+  } catch (err) {
+    if (!manualRedactWarnedOnce) {
+      manualRedactWarnedOnce = true;
+      logger.warn(`[memory] 手动写入脱敏失败,放行原文(一次性提示): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}
 
 /**
  * 工具执行上下文中本模块关心的字段:调用方 agent 标识 + 会话 header 的父链接。
@@ -434,6 +455,7 @@ export function registerMemoryTools(
         const scene =
           typeof args.scene === 'string' && args.scene.trim() ? args.scene.trim().slice(0, 120) : '__manual__';
         const record = buildRecord(args, scene, Date.now(), workspaceIdOf(exec));
+        applyManualRedaction(record, cfg, logger);
         await stores.l1.appendNew([record]);
         logger.info(
           `[memory] 高权限写入记忆(${record.type}${record.metadata?.hall ? '/' + String(record.metadata.hall) : ''},时间轴 ${record.persistence ?? '?'}):${record.content.slice(0, 120)}`,
@@ -534,7 +556,9 @@ export function registerMemoryTools(
             return;
           }
           seen.add(key);
-          records.push(buildRecord(item, scene, now, workspaceIdOf(exec)));
+          const record = buildRecord(item, scene, now, workspaceIdOf(exec));
+          applyManualRedaction(record, cfg, logger);
+          records.push(record);
         });
         if (records.length > 0) await stores.l1.appendNew(records);
         logger.info(`[memory] 批量导入 ${records.length} 条(跳过 ${skipped.length} 条,场景 ${scene})`);

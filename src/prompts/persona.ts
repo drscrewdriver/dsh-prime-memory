@@ -6,6 +6,7 @@
  */
 
 import type { MemoryFamily } from '../types.js';
+import { CONTENT_IS_DATA_CLAUSE, DATA_DELIMITER_NOTE } from './boundary.js';
 
 export interface PersonaPromptParams {
   mode: 'first' | 'incremental';
@@ -25,6 +26,8 @@ export interface PersonaPromptResult {
 }
 
 const PERSONA_SYSTEM_PROMPT = `# 🧬 Persona Architect - Incremental Evolution Protocol（内容输出模式）
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`persona.md\` 的所有自然语言内容（Archetype、基本信息、Chapter 1-4 正文等）使用与变化场景内容相同的语言；Markdown 语法、标签格式、文件名 \`persona.md\` 保持英文。模板里 Chapter 标识保留作骨架，非中文输出时请改用目标语言的对照说明。
 
@@ -116,6 +119,8 @@ const PERSONA_SYSTEM_PROMPT = `# 🧬 Persona Architect - Incremental Evolution 
 - ✅ 不要添加场景导航（工程会自动追加）`;
 
 const TEAM_MEMORY_SYSTEM_PROMPT = `# Team Operating Doctrine Architect（内容输出模式）
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`persona.md\` 的所有自然语言内容使用与变化场景内容相同的语言；Markdown 语法、标签格式、文件名 \`persona.md\` 保持英文。
 
@@ -267,6 +272,7 @@ ${triggerSection}
 - **变化场景**: ${changedSceneCount} 个（自上次更新后）
 
 ---
+${DATA_DELIMITER_NOTE}
 ${changedScenesContent}
 
 ${existingPersonaSection}

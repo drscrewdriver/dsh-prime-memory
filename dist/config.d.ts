@@ -28,6 +28,13 @@ export interface MemoryConfig {
         stripCodeBlocks: boolean;
         /** 单条消息内容最大字符数。 */
         maxMessageChars: number;
+        /**
+         * §C 载荷脱敏(memorax-absorb):捕获单点把 8 类密钥(PEM/Bearer/JWT/Cookie/
+         * 厂商 API key/邮箱/长号/高熵 ID)替换为 `[REDACTED:<KIND>]` 占位符,覆盖
+         * L0 JSONL/SQLite/蒸馏输入与手动 memory_add/import。**默认开启**——密钥被
+         * 逐轮召回注入的危害大于偶发误脱敏;注意开启后 L0 原文自此改变(重建不可得原文)。
+         * 决策记录见计划 spec §C;`false` 一键回到明文行为。 */
+        redactSecrets?: boolean;
     };
     extract: {
         enabled: boolean;
@@ -175,6 +182,7 @@ export interface MemoryConfig {
      *  仅供基准/调试部署,默认关——生产零表面积。 */
     benchControl: boolean;
 }
+<<<<<<< HEAD
 export declare const memorySchema: Schema<Schemastery.ObjectS<{
     dataDir: Schema<string, string>;
     family: Schema<"chat" | "work" | "auto", "chat" | "work" | "auto">;
@@ -285,6 +293,325 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
         mode: Schema<"host" | "direct", "host" | "direct">;
         baseURL: Schema<string, string>;
         apiKey: Schema<string, string>;
+=======
+/**
+ * 运行时开关节(0.1.7 声明式设置面的唯一事实源)。
+ *
+ * **整个对象一个 `.volatile()`**:宿主把它投影成设置表单,运行时变更只提交引用
+ * (不 remount 插件),读侧用 `config.live.get()` 取冻结快照。键集与默认值是
+ * v0.9.0 契约(含远程嵌入覆盖四键 embedRemote* 与写删门 memoryMutate,自 dist
+ * 逆向补全——缺一个键 = 用户已存值被静默丢弃,红线,contract-keys.test.ts 守卫)。
+ *
+ * ⚠️ 不得在节内再标 `.volatile()`(volatile 嵌套 volatile 会被宿主拒绝)。
+ */
+export declare function liveSettingsSchema(): Schema<NoInfer<Schemastery.ObjectS<NoInfer<{
+    enabled: Schema<boolean, boolean, "defined">;
+    capture: Schema<boolean, boolean, "defined">;
+    distill: Schema<boolean, boolean, "defined">;
+    recall: Schema<boolean, boolean, "defined">;
+    reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+    distillProvider: Schema<string, string, "defined">;
+    distillModel: Schema<string, string, "defined">;
+    distillChain: Schema<({
+        provider?: string | null | undefined;
+        model?: string | null | undefined;
+        reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+    } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+        provider: Schema<string, string, "defined">;
+        model: Schema<string, string, "defined">;
+        reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+    }>>[], "defined">;
+    distillLayerChains: Schema<Schemastery.ObjectS<NoInfer<{
+        l1: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        l2: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        l3: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        l1: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        l2: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        l3: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+    }>>, "defined">;
+    distillBudgets: Schema<Schemastery.ObjectS<NoInfer<{
+        extract: Schema<number, number, "defined">;
+        dedup: Schema<number, number, "defined">;
+        l2: Schema<number, number, "defined">;
+        l3: Schema<number, number, "defined">;
+        graph: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        extract: Schema<number, number, "defined">;
+        dedup: Schema<number, number, "defined">;
+        l2: Schema<number, number, "defined">;
+        l3: Schema<number, number, "defined">;
+        graph: Schema<number, number, "defined">;
+    }>>, "defined">;
+    distillMaxInputChars: Schema<number, number, "defined">;
+    distillMode: Schema<"" | "host" | "direct", "" | "host" | "direct", "defined">;
+    directBaseURL: Schema<string, string, "defined">;
+    directApiKey: Schema<string, string, "defined">;
+    embedRemoteBaseURL: Schema<string, string, "defined">;
+    embedRemoteApiKey: Schema<string, string, "defined">;
+    embedRemoteModel: Schema<string, string, "defined">;
+    embedRemoteDimensions: Schema<number, number, "defined">;
+    memoryMutate: Schema<boolean, boolean, "defined">;
+    conflictFreeze: Schema<boolean, boolean, "defined">;
+}>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
+    enabled: Schema<boolean, boolean, "defined">;
+    capture: Schema<boolean, boolean, "defined">;
+    distill: Schema<boolean, boolean, "defined">;
+    recall: Schema<boolean, boolean, "defined">;
+    reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+    distillProvider: Schema<string, string, "defined">;
+    distillModel: Schema<string, string, "defined">;
+    distillChain: Schema<({
+        provider?: string | null | undefined;
+        model?: string | null | undefined;
+        reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+    } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+        provider: Schema<string, string, "defined">;
+        model: Schema<string, string, "defined">;
+        reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+    }>>[], "defined">;
+    distillLayerChains: Schema<Schemastery.ObjectS<NoInfer<{
+        l1: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        l2: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        l3: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        l1: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        l2: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        l3: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+    }>>, "defined">;
+    distillBudgets: Schema<Schemastery.ObjectS<NoInfer<{
+        extract: Schema<number, number, "defined">;
+        dedup: Schema<number, number, "defined">;
+        l2: Schema<number, number, "defined">;
+        l3: Schema<number, number, "defined">;
+        graph: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        extract: Schema<number, number, "defined">;
+        dedup: Schema<number, number, "defined">;
+        l2: Schema<number, number, "defined">;
+        l3: Schema<number, number, "defined">;
+        graph: Schema<number, number, "defined">;
+    }>>, "defined">;
+    distillMaxInputChars: Schema<number, number, "defined">;
+    distillMode: Schema<"" | "host" | "direct", "" | "host" | "direct", "defined">;
+    directBaseURL: Schema<string, string, "defined">;
+    directApiKey: Schema<string, string, "defined">;
+    embedRemoteBaseURL: Schema<string, string, "defined">;
+    embedRemoteApiKey: Schema<string, string, "defined">;
+    embedRemoteModel: Schema<string, string, "defined">;
+    embedRemoteDimensions: Schema<number, number, "defined">;
+    memoryMutate: Schema<boolean, boolean, "defined">;
+    conflictFreeze: Schema<boolean, boolean, "defined">;
+}>>>, "volatile">;
+export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
+    dataDir: Schema<string, string, "defined">;
+    family: Schema<"chat" | "work" | "auto", "chat" | "work" | "auto", "defined">;
+    scope: Schema<string, string, "defined">;
+    capture: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        stripCodeBlocks: Schema<boolean, boolean, "defined">;
+        maxMessageChars: Schema<number, number, "defined">;
+        redactSecrets: Schema<boolean, boolean, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        stripCodeBlocks: Schema<boolean, boolean, "defined">;
+        maxMessageChars: Schema<number, number, "defined">;
+        redactSecrets: Schema<boolean, boolean, "defined">;
+    }>>, "plain">;
+    extract: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        minMessages: Schema<number, number, "defined">;
+        idleSeconds: Schema<number, number, "defined">;
+        backgroundMessages: Schema<number, number, "defined">;
+        candidatePool: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        minMessages: Schema<number, number, "defined">;
+        idleSeconds: Schema<number, number, "defined">;
+        backgroundMessages: Schema<number, number, "defined">;
+        candidatePool: Schema<number, number, "defined">;
+    }>>, "plain">;
+    l2: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        minNewMemories: Schema<number, number, "defined">;
+        maxScenes: Schema<number, number, "defined">;
+        sceneContextLimit: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        minNewMemories: Schema<number, number, "defined">;
+        maxScenes: Schema<number, number, "defined">;
+        sceneContextLimit: Schema<number, number, "defined">;
+    }>>, "plain">;
+    l3: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        interval: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        interval: Schema<number, number, "defined">;
+    }>>, "plain">;
+    graph: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+    }>>, "plain">;
+    conflictFreeze: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        maxPending: Schema<number, number, "defined">;
+        timeoutDays: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        maxPending: Schema<number, number, "defined">;
+        timeoutDays: Schema<number, number, "defined">;
+    }>>, "plain">;
+    recall: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        maxResults: Schema<number, number, "defined">;
+        maxCharsPerMemory: Schema<number, number, "defined">;
+        maxTotalRecallChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+        includePersona: Schema<boolean, boolean, "defined">;
+        includeSceneNav: Schema<boolean, boolean, "defined">;
+        strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
+        scoreThreshold: Schema<number, number, "defined">;
+        decayHalfLifeDays: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        maxResults: Schema<number, number, "defined">;
+        maxCharsPerMemory: Schema<number, number, "defined">;
+        maxTotalRecallChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+        includePersona: Schema<boolean, boolean, "defined">;
+        includeSceneNav: Schema<boolean, boolean, "defined">;
+        strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
+        scoreThreshold: Schema<number, number, "defined">;
+        decayHalfLifeDays: Schema<number, number, "defined">;
+    }>>, "plain">;
+    embedding: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        baseUrl: Schema<string, string, "defined">;
+        apiKey: Schema<string, string, "defined">;
+        model: Schema<string, string, "defined">;
+        dimensions: Schema<number, number, "defined">;
+        maxInputChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+        allowLocalModels: Schema<boolean, boolean, "defined">;
+        mirror: Schema<string, string, "defined">;
+        proxy: Schema<string, string, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        baseUrl: Schema<string, string, "defined">;
+        apiKey: Schema<string, string, "defined">;
+        model: Schema<string, string, "defined">;
+        dimensions: Schema<number, number, "defined">;
+        maxInputChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+        allowLocalModels: Schema<boolean, boolean, "defined">;
+        mirror: Schema<string, string, "defined">;
+        proxy: Schema<string, string, "defined">;
+    }>>, "plain">;
+    llm: Schema<Schemastery.ObjectS<NoInfer<{
+        provider: Schema<string, string, "defined">;
+        model: Schema<string, string, "defined">;
+        mode: Schema<"host" | "direct", "host" | "direct", "defined">;
+        baseURL: Schema<string, string, "defined">;
+        apiKey: Schema<string, string, "defined">;
+>>>>>>> 549f63e (feat(prompts+redaction): §B 防注入边界声明 + §C 载荷脱敏(memorax-absorb Wave 2))
         fallbacks: Schema<({
             provider?: string | null | undefined;
             model?: string | null | undefined;
@@ -422,6 +749,7 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
                 provider?: string | null | undefined;
                 model?: string | null | undefined;
                 reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+<<<<<<< HEAD
             } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<{
                 provider: Schema<string, string>;
                 model: Schema<string, string>;
@@ -556,6 +884,352 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
         mode: Schema<"host" | "direct", "host" | "direct">;
         baseURL: Schema<string, string>;
         apiKey: Schema<string, string>;
+=======
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+        }>>, "defined">;
+        maxTokens: Schema<number, number, "defined">;
+        reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        temperature: Schema<number, number, "defined">;
+        maxInputChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+    }>>, "plain">;
+    hall: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<string[], string[], "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<string[], string[], "defined">;
+    }>>, "plain">;
+    tokenCost: Schema<Schemastery.ObjectS<NoInfer<{
+        retentionDays: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        retentionDays: Schema<number, number, "defined">;
+    }>>, "plain">;
+    slots: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        inject: Schema<boolean, boolean, "defined">;
+        maxSlots: Schema<number, number, "defined">;
+        maxAlwaysOnBytes: Schema<number, number, "defined">;
+        maxBodyChars: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        inject: Schema<boolean, boolean, "defined">;
+        maxSlots: Schema<number, number, "defined">;
+        maxAlwaysOnBytes: Schema<number, number, "defined">;
+        maxBodyChars: Schema<number, number, "defined">;
+    }>>, "plain">;
+    tools: Schema<boolean, boolean, "defined">;
+    benchControl: Schema<boolean, boolean, "defined">;
+    live: Schema<NoInfer<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        capture: Schema<boolean, boolean, "defined">;
+        distill: Schema<boolean, boolean, "defined">;
+        recall: Schema<boolean, boolean, "defined">;
+        reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        distillProvider: Schema<string, string, "defined">;
+        distillModel: Schema<string, string, "defined">;
+        distillChain: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        distillLayerChains: Schema<Schemastery.ObjectS<NoInfer<{
+            l1: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+            l2: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+            l3: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            l1: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+            l2: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+            l3: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+        }>>, "defined">;
+        distillBudgets: Schema<Schemastery.ObjectS<NoInfer<{
+            extract: Schema<number, number, "defined">;
+            dedup: Schema<number, number, "defined">;
+            l2: Schema<number, number, "defined">;
+            l3: Schema<number, number, "defined">;
+            graph: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            extract: Schema<number, number, "defined">;
+            dedup: Schema<number, number, "defined">;
+            l2: Schema<number, number, "defined">;
+            l3: Schema<number, number, "defined">;
+            graph: Schema<number, number, "defined">;
+        }>>, "defined">;
+        distillMaxInputChars: Schema<number, number, "defined">;
+        distillMode: Schema<"" | "host" | "direct", "" | "host" | "direct", "defined">;
+        directBaseURL: Schema<string, string, "defined">;
+        directApiKey: Schema<string, string, "defined">;
+        embedRemoteBaseURL: Schema<string, string, "defined">;
+        embedRemoteApiKey: Schema<string, string, "defined">;
+        embedRemoteModel: Schema<string, string, "defined">;
+        embedRemoteDimensions: Schema<number, number, "defined">;
+        memoryMutate: Schema<boolean, boolean, "defined">;
+        conflictFreeze: Schema<boolean, boolean, "defined">;
+    }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        capture: Schema<boolean, boolean, "defined">;
+        distill: Schema<boolean, boolean, "defined">;
+        recall: Schema<boolean, boolean, "defined">;
+        reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        distillProvider: Schema<string, string, "defined">;
+        distillModel: Schema<string, string, "defined">;
+        distillChain: Schema<({
+            provider?: string | null | undefined;
+            model?: string | null | undefined;
+            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+            provider: Schema<string, string, "defined">;
+            model: Schema<string, string, "defined">;
+            reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+        }>>[], "defined">;
+        distillLayerChains: Schema<Schemastery.ObjectS<NoInfer<{
+            l1: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+            l2: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+            l3: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            l1: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+            l2: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+            l3: Schema<({
+                provider?: string | null | undefined;
+                model?: string | null | undefined;
+                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
+            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
+                provider: Schema<string, string, "defined">;
+                model: Schema<string, string, "defined">;
+                reasoningEffort: Schema<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
+            }>>[], "defined">;
+        }>>, "defined">;
+        distillBudgets: Schema<Schemastery.ObjectS<NoInfer<{
+            extract: Schema<number, number, "defined">;
+            dedup: Schema<number, number, "defined">;
+            l2: Schema<number, number, "defined">;
+            l3: Schema<number, number, "defined">;
+            graph: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            extract: Schema<number, number, "defined">;
+            dedup: Schema<number, number, "defined">;
+            l2: Schema<number, number, "defined">;
+            l3: Schema<number, number, "defined">;
+            graph: Schema<number, number, "defined">;
+        }>>, "defined">;
+        distillMaxInputChars: Schema<number, number, "defined">;
+        distillMode: Schema<"" | "host" | "direct", "" | "host" | "direct", "defined">;
+        directBaseURL: Schema<string, string, "defined">;
+        directApiKey: Schema<string, string, "defined">;
+        embedRemoteBaseURL: Schema<string, string, "defined">;
+        embedRemoteApiKey: Schema<string, string, "defined">;
+        embedRemoteModel: Schema<string, string, "defined">;
+        embedRemoteDimensions: Schema<number, number, "defined">;
+        memoryMutate: Schema<boolean, boolean, "defined">;
+        conflictFreeze: Schema<boolean, boolean, "defined">;
+    }>>>, "volatile">;
+}>>, Schemastery.ObjectT<NoInfer<{
+    dataDir: Schema<string, string, "defined">;
+    family: Schema<"chat" | "work" | "auto", "chat" | "work" | "auto", "defined">;
+    scope: Schema<string, string, "defined">;
+    capture: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        stripCodeBlocks: Schema<boolean, boolean, "defined">;
+        maxMessageChars: Schema<number, number, "defined">;
+        redactSecrets: Schema<boolean, boolean, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        stripCodeBlocks: Schema<boolean, boolean, "defined">;
+        maxMessageChars: Schema<number, number, "defined">;
+        redactSecrets: Schema<boolean, boolean, "defined">;
+    }>>, "plain">;
+    extract: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        minMessages: Schema<number, number, "defined">;
+        idleSeconds: Schema<number, number, "defined">;
+        backgroundMessages: Schema<number, number, "defined">;
+        candidatePool: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        minMessages: Schema<number, number, "defined">;
+        idleSeconds: Schema<number, number, "defined">;
+        backgroundMessages: Schema<number, number, "defined">;
+        candidatePool: Schema<number, number, "defined">;
+    }>>, "plain">;
+    l2: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        minNewMemories: Schema<number, number, "defined">;
+        maxScenes: Schema<number, number, "defined">;
+        sceneContextLimit: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        minNewMemories: Schema<number, number, "defined">;
+        maxScenes: Schema<number, number, "defined">;
+        sceneContextLimit: Schema<number, number, "defined">;
+    }>>, "plain">;
+    l3: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        interval: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        interval: Schema<number, number, "defined">;
+    }>>, "plain">;
+    graph: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+    }>>, "plain">;
+    conflictFreeze: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        maxPending: Schema<number, number, "defined">;
+        timeoutDays: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        maxPending: Schema<number, number, "defined">;
+        timeoutDays: Schema<number, number, "defined">;
+    }>>, "plain">;
+    recall: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        maxResults: Schema<number, number, "defined">;
+        maxCharsPerMemory: Schema<number, number, "defined">;
+        maxTotalRecallChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+        includePersona: Schema<boolean, boolean, "defined">;
+        includeSceneNav: Schema<boolean, boolean, "defined">;
+        strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
+        scoreThreshold: Schema<number, number, "defined">;
+        decayHalfLifeDays: Schema<number, number, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        maxResults: Schema<number, number, "defined">;
+        maxCharsPerMemory: Schema<number, number, "defined">;
+        maxTotalRecallChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+        includePersona: Schema<boolean, boolean, "defined">;
+        includeSceneNav: Schema<boolean, boolean, "defined">;
+        strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
+        scoreThreshold: Schema<number, number, "defined">;
+        decayHalfLifeDays: Schema<number, number, "defined">;
+    }>>, "plain">;
+    embedding: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        baseUrl: Schema<string, string, "defined">;
+        apiKey: Schema<string, string, "defined">;
+        model: Schema<string, string, "defined">;
+        dimensions: Schema<number, number, "defined">;
+        maxInputChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+        allowLocalModels: Schema<boolean, boolean, "defined">;
+        mirror: Schema<string, string, "defined">;
+        proxy: Schema<string, string, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        baseUrl: Schema<string, string, "defined">;
+        apiKey: Schema<string, string, "defined">;
+        model: Schema<string, string, "defined">;
+        dimensions: Schema<number, number, "defined">;
+        maxInputChars: Schema<number, number, "defined">;
+        timeoutMs: Schema<number, number, "defined">;
+        allowLocalModels: Schema<boolean, boolean, "defined">;
+        mirror: Schema<string, string, "defined">;
+        proxy: Schema<string, string, "defined">;
+    }>>, "plain">;
+    llm: Schema<Schemastery.ObjectS<NoInfer<{
+        provider: Schema<string, string, "defined">;
+        model: Schema<string, string, "defined">;
+        mode: Schema<"host" | "direct", "host" | "direct", "defined">;
+        baseURL: Schema<string, string, "defined">;
+        apiKey: Schema<string, string, "defined">;
+>>>>>>> 549f63e (feat(prompts+redaction): §B 防注入边界声明 + §C 载荷脱敏(memorax-absorb Wave 2))
         fallbacks: Schema<({
             provider?: string | null | undefined;
             model?: string | null | undefined;

@@ -10,8 +10,11 @@
  */
 
 import type { ExtractedMemory, ExtractMode, MemoryRecord } from '../types.js';
+import { CONTENT_IS_DATA_CLAUSE, DATA_DELIMITER_NOTE } from './boundary.js';
 
 export const CONFLICT_DETECTION_SYSTEM_PROMPT = `你是记忆冲突检测器。批量比较多条【新记忆】与【统一候选记忆池】中的已有记忆，逐条决定如何处理。
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`merged_content\` 使用与候选池中已有记忆相同的语言；JSON 字段名、枚举值、record_id、ISO 时间戳保持英文。
 
@@ -68,6 +71,8 @@ export const CONFLICT_DETECTION_SYSTEM_PROMPT = `你是记忆冲突检测器。�
 - merged_timestamps：合并后的时间戳数组。收集新记忆 + 所有被合并旧记忆的时间戳，去重排序。`;
 
 export const WORK_CONFLICT_DETECTION_SYSTEM_PROMPT = `你是团队工作记忆冲突检测器。批量比较多条【新记忆】与【统一候选记忆池】中的已有记忆，逐条决定如何处理。
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`merged_content\` 使用与候选池中已有记忆相同的语言；JSON 字段名、枚举值、record_id、ISO 时间戳保持英文。
 
@@ -132,6 +137,8 @@ export const WORK_CONFLICT_DETECTION_SYSTEM_PROMPT = `你是团队工作记忆�
 - merged_timestamps：合并后的时间戳数组。收集新记忆 + 所有被合并旧记忆的时间戳，去重排序。`;
 
 export const ALL_CONFLICT_DETECTION_SYSTEM_PROMPT = `你是记忆冲突检测器。批量比较多条【新记忆】与【统一候选记忆池】中的已有记忆，逐条决定如何处理。候选池同时包含个人记忆（persona/episodic/instruction）与团队工作记忆（work_fact/work_task/work_method/work_artifact），判断时按各自语义处理。
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`merged_content\` 使用与候选池中已有记忆相同的语言；JSON 字段名、枚举值、record_id、ISO 时间戳保持英文。
 
@@ -301,7 +308,7 @@ export function formatBatchConflictPrompt(matches: CandidateMatch[]): string {
     poolSection = '## 统一候选记忆池\n\n（空，没有已有记忆，所有新记忆直接 store）';
   } else {
     const poolStr = JSON.stringify(poolList, null, 2);
-    poolSection = `## 统一候选记忆池（共 ${poolList.length} 条已有记忆）\n\n${poolStr}`;
+    poolSection = `## 统一候选记忆池（共 ${poolList.length} 条已有记忆）\n\n${DATA_DELIMITER_NOTE}\n\n${poolStr}`;
   }
 
   const memoryParts = matches.map((m, idx) => {
@@ -334,6 +341,7 @@ ${'═'.repeat(50)}
 
 ## 待判断的新记忆（共 ${matches.length} 条）
 
+${DATA_DELIMITER_NOTE}
 ${newMemoriesText}
 
 请逐条判断并输出决策 JSON 数组。当某条新记忆的候选列表为空时，该条直接输出 action=store。`;

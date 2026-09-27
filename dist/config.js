@@ -26,6 +26,8 @@ export const memorySchema = Schema.object({
         enabled: Schema.boolean().default(true),
         stripCodeBlocks: Schema.boolean().default(true),
         maxMessageChars: Schema.number().min(200).max(200_000).default(4000),
+        // §C 默认开启:本地存储也不落明文密钥(决策记录见计划 spec §C)
+        redactSecrets: Schema.boolean().default(true),
     }),
     extract: Schema.object({
         enabled: Schema.boolean().default(true),
