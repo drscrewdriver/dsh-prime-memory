@@ -2028,6 +2028,41 @@ export class MemoryDb {
     }
   }
 
+  /**
+   * §A 崩溃恢复水位线(memorax-absorb):该会话 L0 已落盘的最大 turn。
+   * L0 为追加式事实源、从不裁剪 → 水位线崩溃安全;turn 空洞是常态
+   * (off 档/无消息轮),MAX 语义不受影响。空会话返回 undefined。
+   */
+  maxCapturedTurn(sessionId: string): number | undefined {
+    if (this.degraded) return undefined;
+    try {
+      const row = this.db
+        .prepare('SELECT MAX(turn) AS max_turn FROM l0_conversations WHERE session_id = ?')
+        .get(sessionId) as { max_turn: number | null };
+      return typeof row?.max_turn === 'number' ? row.max_turn : undefined;
+    } catch (err) {
+      this.logger?.warn(`[memory] L0 水位线查询失败(按空处理): ${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * §A 幂等检查:该 (session, turn) 是否已有任意 L0 行。
+   * 水位线 MAX(turn) 只判"整轮无"、判不了"部分有"——恢复窗口内逐 turn
+   * 做存在性检查,命中即整轮跳过(重放 record id 非确定,upsert 不能去重)。
+   */
+  hasAnyL0Message(sessionId: string, turn: number): boolean {
+    if (this.degraded || !Number.isFinite(turn)) return false;
+    try {
+      const row = this.db
+        .prepare('SELECT 1 FROM l0_conversations WHERE session_id = ? AND turn = ? LIMIT 1')
+        .get(sessionId, turn);
+      return row !== undefined;
+    } catch {
+      return false;
+    }
+  }
+
   /** 按会话取最近消息(时间升序返回;走 idx_l0_session_id 索引)。
    *  蒸馏背景参考专用——按会话现查替代全局内存数组(ADR-0003)。 */
   recentL0BySession(sessionId: string, limit: number): L0MessageRecord[] {

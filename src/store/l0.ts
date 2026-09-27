@@ -139,6 +139,16 @@ export class L0Store {
     return this.db.recentL0BySession(sessionId, limit);
   }
 
+  /** §A 水位线:该会话 L0 已落盘的最大 turn(空会话 undefined;委托 MemoryDb)。 */
+  maxCapturedTurn(sessionId: string): number | undefined {
+    return this.db.maxCapturedTurn(sessionId);
+  }
+
+  /** §A 幂等检查:该 (session, turn) 是否已有任意 L0 行(委托 MemoryDb)。 */
+  hasAnyL0Message(sessionId: string, turn: number): boolean {
+    return this.db.hasAnyL0Message(sessionId, turn);
+  }
+
   /** 检索:FTS + 向量 hybrid(RRF 融合),返回按相关性排序的消息。 */
   async search(query: string, limit: number): Promise<L0MessageRecord[]> {
     const caps = this.db.getCapabilities();

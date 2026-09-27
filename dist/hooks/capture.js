@@ -7,6 +7,7 @@
 import { randomBytes } from 'node:crypto';
 import { blocksToText } from '../util/text.js';
 import { sanitizeText, shouldCaptureL0, stripCodeBlocks } from '../util/sanitize.js';
+import { foldRecoverableTurns, readPersistedEventsViaServices } from './capture-recovery.js';
 /**
  * 需要进缓冲的事件类型。流式 chunk(text-delta/reasoning 等)一秒钟可达数百条,
  * 缓冲它们会把 MAX_BUFFER 撑爆、把轮次头部(turn/start + user 消息)裁掉——
@@ -70,6 +71,8 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
         return;
     const startFloor = Date.now();
     const buffers = new CaptureBuffers();
+    // task_8 一次性提示标记:宿主读日志服务不可得时只提示一次(防每次 resume 刷屏)
+    let warnedRecoveryUnavailable = false;
     // L0 即时落盘链:turn/end 立刻写,不被蒸馏队列(慢 LLM 调用)阻塞;
     // 串行化保证同轮次顺序与单次写入(进程退出时排队中的 L0 不再依赖蒸馏完成)
     let l0Queue = Promise.resolve();
@@ -122,6 +125,78 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
         }
         catch (err) {
             logger.warn(`[memory] session/event 处理失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    });
+    // ── §A 崩溃恢复(memorax-absorb Wave 1 / task_7):resume 时对账宿主持久化日志,
+    // 补收 (L0 水位线, 末尾] 内 bracket 完整的尾轮(≤2 轮)——崩溃轮在缓冲丢失后
+    // 仍可从持久化层找回(persistence 会给孤儿轮补 interrupted 闭合,探针② 实证 98 处)。
+    // fail-open 纪律:任何异常只 warn,不阻塞会话启动;幂等 = 水位线 + 逐 turn 存在性检查。
+    ctx.on('agent/session-start', (payload) => {
+        try {
+            if (payload.source !== 'resume')
+                return;
+            const s = live.get();
+            if (!s.enabled || !s.capture)
+                return;
+            const session = payload.agent?.session;
+            const sid = session?.id !== undefined && session.id !== null ? String(session.id) : '';
+            if (!sid)
+                return;
+            const mode = modes.get(sid);
+            if (mode === 'off')
+                return; // off 档对记忆系统完全隐身,对齐现行为
+            let events = session?.events;
+            if (!events || events.length === 0) {
+                // task_8 降级链:events 不可得(宿主版本偏差)时依次试
+                // ctx.sessionQuery.readSession / ctx.sessionPersistence.readFrom(守卫探针式)
+                const get = ctx.get;
+                const svcs = typeof get === 'function'
+                    ? {
+                        sessionQuery: get.call(ctx, 'sessionQuery'),
+                        sessionPersistence: get.call(ctx, 'sessionPersistence'),
+                    }
+                    : {};
+                const degraded = readPersistedEventsViaServices(svcs, sid);
+                if (degraded === undefined) {
+                    if (!warnedRecoveryUnavailable) {
+                        warnedRecoveryUnavailable = true;
+                        logger.info('[memory] resume 恢复:宿主读日志服务不可得,跳过对账(一次性提示)');
+                    }
+                    return;
+                }
+                events = degraded;
+            }
+            const watermark = l0.maxCapturedTurn(sid);
+            const brackets = foldRecoverableTurns(events, watermark);
+            if (brackets.length === 0)
+                return;
+            let recovered = 0;
+            let skipped = 0;
+            let total = 0;
+            for (const bracket of brackets) {
+                if (l0.hasAnyL0Message(sid, bracket.turn)) {
+                    // 部分写残行:水位线只判"整轮无",存在性检查兜底——整轮跳过,宁少收不重复
+                    skipped += 1;
+                    continue;
+                }
+                const messages = turnEventsToMessages(bracket.events, cfg, logger, sid, bracket.turn);
+                if (messages.length === 0)
+                    continue;
+                recovered += 1;
+                total += messages.length;
+                const n = messages.length;
+                l0Queue = l0Queue
+                    .then(() => l0.append(sid, messages))
+                    .then(() => logger.info(`[memory] L0 恢复落盘 ${n} 条`))
+                    .catch((err) => logger.warn(`[memory] L0 恢复落盘失败: ${err instanceof Error ? err.message : String(err)}`));
+                runner.enqueue(sid, messages, mode);
+            }
+            if (recovered > 0 || skipped > 0) {
+                logger.info(`[memory] resume 对账:水位线 ${watermark ?? '无'} → 恢复 ${recovered} 轮 ${total} 条,幂等跳过 ${skipped} 轮(session=${sid})`);
+            }
+        }
+        catch (err) {
+            logger.warn(`[memory] resume 恢复失败(不阻塞会话启动): ${err instanceof Error ? err.message : String(err)}`);
         }
     });
     // 冲刷 = 等待串行链排空(链上每环自带 catch,永不 reject)。
