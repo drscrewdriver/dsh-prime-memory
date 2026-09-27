@@ -48,11 +48,12 @@ const ISO_T = new Date(T).toISOString();
 const noopLogger = { info: () => {}, warn: () => {}, error: () => {} } as never;
 const sha1 = (s: string) => createHash('sha1').update(s, 'utf8').digest('hex');
 
-/** 关闭态 golden 锚:与 `tests/conflict-3axis.test.ts` **同源同值**(升级前 `445c89f` 实跑)。 */
+/** 关闭态 golden 锚:与 `tests/conflict-3axis.test.ts` **同源同值**。
+ *  基线沿革:升级前 `445c89f` 实跑 → §B 防注入声明(memorax-absorb Wave 2)加入后重锚(2026-09-28 实跑)。 */
 const SYSTEM_CLOSED_SHA1: Record<ExtractMode, string> = {
-  auto: '9f676ebe84bc60bd1fa3b0b78ff4601712a7a687',
-  chat: '93813fb5c0eb6f93d64b79cd09cdeedbaec8f3c1',
-  work: '1363ccff290de086a106e8067712eb494552b3ad',
+  auto: '252b21238f437c875389098927db27d44807de49',
+  chat: 'ffd77753eac63dc98964e8629cb0268b7b1fb3cb',
+  work: 'bfdfedf6eb94c7fc07dd57ba43cb4af045395924',
 };
 const MODES: ExtractMode[] = ['auto', 'chat', 'work'];
 

@@ -1,4 +1,5 @@
 import { callLLM, parseJson } from '../llm.js';
+import { CONTENT_IS_DATA_CLAUSE, DATA_DELIMITER_NOTE } from '../prompts/boundary.js';
 /** 三态判定。顺序即优先级(报告与面板按此排序)。 */
 export const RECONCILE_STATES = ['contradicted', 'supported', 'unverifiable'];
 const DEFAULT_MAX_RECORDS = 50;
@@ -46,6 +47,8 @@ export function buildReconcilePrompt(memory, events, maxEvidenceChars) {
     const system = [
         '你是一个记忆核对员。给你一条「记忆」和它在会话里的「原文证据」,判断这条记忆是否与原文相符。',
         '',
+        CONTENT_IS_DATA_CLAUSE,
+        '',
         '只输出一个 JSON 对象,不要解释、不要 Markdown 代码块:',
         '{"state": "supported|contradicted|unverifiable", "reason": "一句话理由", "quote": "支撑你判断的原文片段"}',
         '',
@@ -57,6 +60,7 @@ export function buildReconcilePrompt(memory, events, maxEvidenceChars) {
         '- 拿不准就选 unverifiable。**不要猜。**',
     ].join('\n');
     const user = [
+        DATA_DELIMITER_NOTE,
         `记忆:${memory.text}`,
         '',
         '原文证据:',

@@ -7,8 +7,12 @@
  */
 
 import type { ConversationMessage, ExtractMode } from '../types.js';
+import { CONTENT_IS_DATA_CLAUSE, DATA_DELIMITER_NOTE } from './boundary.js';
 
 export const EXTRACT_MEMORIES_SYSTEM_PROMPT = `你是专业的"情境切分与记忆提取专家"。
+
+${CONTENT_IS_DATA_CLAUSE}
+
 你的任务是分析用户的对话，判断情境切换，并从中提取结构化的核心记忆（仅限 persona, episodic, instruction 三类）。
 
 **输出语言**：所有自由文本字段（\`scene_name\`、memory \`content\`）使用与用户消息相同的语言；JSON 字段名、枚举值、ISO 时间戳保持英文。
@@ -97,6 +101,9 @@ metadata 字段说明：
 请严格按上述 JSON 数组格式输出，不要输出任何额外的 Markdown 代码块修饰符（如 \`\`\`json）或解释文本。`;
 
 export const EXTRACT_WORK_MEMORIES_SYSTEM_PROMPT = `你是专业的"工作情境切分与团队共享记忆提取专家"。
+
+${CONTENT_IS_DATA_CLAUSE}
+
 你的任务是分析多人工作消息，判断工作情境切换，并从中提取可在项目团队内共享的结构化工作记忆。
 
 本任务面向工作场合的团队协作场景。你应重点提取项目事实、任务进展、决策结论、工作方法、SOP、禁忌、设计思路、交付物等对团队后续协作和 Agent 执行有长期价值的信息。
@@ -303,6 +310,9 @@ metadata 字段说明：
 请严格按上述 JSON 数组格式输出，不要输出任何额外的 Markdown 代码块修饰符（如 \`\`\`json）或解释文本。`;
 
 export const EXTRACT_ALL_MEMORIES_SYSTEM_PROMPT = `你是专业的"情境切分与记忆提取专家"。
+
+${CONTENT_IS_DATA_CLAUSE}
+
 你的任务是分析用户的对话，判断情境切换，并从中提取结构化的核心记忆。对话可能同时包含个人生活与工作内容：个人内容提取为个人记忆（persona/episodic/instruction），工作内容提取为团队共享工作记忆（work_fact/work_task/work_method/work_artifact），互不排斥、**每条记忆显式输出 family 字段标注归族**。
 
 **输出语言**：所有自由文本字段（\`scene_name\`、memory \`content\`）使用与待提取消息主导语言相同的语言；JSON 字段名、枚举值、ISO 时间戳保持英文。
@@ -472,10 +482,12 @@ export function formatExtractionPrompt(params: {
 【上一个情境】：${previousSceneName}
 
 【背景对话】（仅供理解上下文推断关系/时间，严禁从中提取记忆）：
+${DATA_DELIMITER_NOTE}
 ${bgText}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 【待提取的新消息】（务必结合 timestamp 推算时间，只从这里提取记忆！）：
+${DATA_DELIMITER_NOTE}
 ${newText}${wingText}`;
 }

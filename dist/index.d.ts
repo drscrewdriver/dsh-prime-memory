@@ -23,10 +23,12 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, "plain">;
     extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -502,10 +504,12 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, "plain">;
     extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;

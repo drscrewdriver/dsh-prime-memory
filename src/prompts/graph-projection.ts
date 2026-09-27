@@ -11,6 +11,7 @@
 import { GRAPH_CAP, GRAPH_NODE_TYPES, GRAPH_RELATION_WORDS } from '../graph/constraints.js';
 import type { GraphEdge, GraphNode, GraphRecordStatus } from '../graph/types.js';
 import type { MemoryRecord } from '../types.js';
+import { CONTENT_IS_DATA_CLAUSE, DATA_DELIMITER_NOTE } from './boundary.js';
 
 /** 单条记忆在 prompt 中的字符上限(8 条/批 × 2000 字 ≈ 1.6 万字,远低于输入预算)。 */
 export const GRAPH_RECORD_TEXT_LIMIT = 2000;
@@ -64,6 +65,8 @@ export const GRAPH_PROJECTION_EXAMPLE = {
 /** 系统提示(约束常量内插;类型/关系词/上限与校验器同源)。 */
 export function getGraphProjectionSystemPrompt(): string {
   return `你是记忆系统的知识图谱投影器。输入是一批 L1 记忆记录(唯一事实来源)与图谱中已有的实体节点,你的任务是从记录中识别值得长期沉淀的实体与它们之间的有向关系,输出节点与边的提案。
+
+${CONTENT_IS_DATA_CLAUSE}
 
 ## 铁律
 
@@ -161,7 +164,7 @@ export function buildGraphProjectionPrompt(inputs: {
   const nameFor = (id: string): string => nameOf.get(id) ?? '(未知节点)';
   const sections: string[] = [];
   sections.push(
-    `## 本批记忆记录(唯一事实来源;sourceRecordIds 只能引用这些 id)\n\n${
+    `## 本批记忆记录(唯一事实来源;sourceRecordIds 只能引用这些 id)\n\n${DATA_DELIMITER_NOTE}\n\n${
       inputs.records.map(recordLine).join('\n') || '(空)'
     }`,
   );

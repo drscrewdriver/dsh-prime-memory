@@ -33,6 +33,13 @@ export interface MemoryConfig {
     stripCodeBlocks: boolean;
     /** 单条消息内容最大字符数。 */
     maxMessageChars: number;
+    /**
+     * §C 载荷脱敏(memorax-absorb):捕获单点把 8 类密钥(PEM/Bearer/JWT/Cookie/
+     * 厂商 API key/邮箱/长号/高熵 ID)替换为 `[REDACTED:<KIND>]` 占位符,覆盖
+     * L0 JSONL/SQLite/蒸馏输入与手动 memory_add/import。**默认开启**——密钥被
+     * 逐轮召回注入的危害大于偶发误脱敏;注意开启后 L0 原文自此改变(重建不可得原文)。
+     * 决策记录见计划 spec §C;`false` 一键回到明文行为。 */
+    redactSecrets?: boolean;
   };
   extract: {
     enabled: boolean;
@@ -265,6 +272,8 @@ export const memorySchema = Schema.object({
     enabled: Schema.boolean().default(true),
     stripCodeBlocks: Schema.boolean().default(true),
     maxMessageChars: Schema.number().min(200).max(200_000).default(4000),
+    // §C 默认开启:本地存储也不落明文密钥(决策记录见计划 spec §C)
+    redactSecrets: Schema.boolean().default(true),
   }),
   extract: Schema.object({
     enabled: Schema.boolean().default(true),
