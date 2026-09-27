@@ -27,6 +27,14 @@ const RECALL_QUERY_MAX_CHARS = 2_000;
  * 从会话消息构建召回查询(纯函数):末尾 N 条 + 总长截断,空输入返回空串。
  * 全史拼接会让 MATCH 表达式随会话长度线性膨胀(整会话累计二次方成本)。
  */
+/**
+ * 本插件 recall 注入的署名判据(v4 `plugin:memory` 与 v3 旧行双形状;宿主迁移负责
+ * 升格旧行)。导出供双形状单测钉住——估算函数(estimateRecallFromStorage /
+ * estimateRecallTokens)对旧形状漏判会让"记忆召回份额"静默归零。
+ */
+export function isOwnRecallSource(src) {
+    return !!src && src.form === 'recall' && (src.kind === 'plugin:memory' || (src.kind === 'plugin' && src.plugin === 'memory'));
+}
 export function buildRecallQuery(messages, tailMessages = RECALL_QUERY_TAIL_MESSAGES, maxChars = RECALL_QUERY_MAX_CHARS) {
     const tail = messages.slice(-tailMessages);
     let text = tail.map((m) => blocksToText(m.content)).join(' ').trim();
@@ -298,10 +306,11 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                 logger.info(`[memory] 召回注入 ${lines.length} 条 L1(mode=${mode},query="${query.slice(0, 30).replace(/\n/g, ' ')}…",agent=${payload.agent.id},消息侧)`);
                 const injection = createUserMessage({
                     content: [{ type: 'text', text }],
-                    // plugin 字段是宿主 UI 的署名后缀("上下文注入 · memory")——用展示友好的
-                    // 子系统名,不用 cordis id(dsh-memory);kind:'plugin' 的标题恒为通用
-                    // "上下文注入"(专用"跨会话召回"标题仅留给 session-reference 来源)
-                    source: { kind: 'plugin', plugin: 'memory', form: 'recall' },
+                    // v4（宿主 ≥0.1.7-rc.1）署名为 producer-owned kind：plugin:<子系统名>。
+                    // 用展示友好的子系统名 memory,不用 cordis id(dsh-memory);宿主 UI 标题
+                    // 规则随之变化(不再有 catch-all 'plugin' 的通用"上下文注入"标题)。
+                    // v3 旧行(kind:'plugin'+plugin 字段)由宿主 v3→v4 迁移升格,读侧双形状兼容。
+                    source: { kind: 'plugin:memory', form: 'recall' },
                 });
                 // 入账在成功构造注入消息之后、返回 enter 之前——任何前置抛错路径账目零扰动
                 const led = ledgerFor(payload.agent.id);
@@ -342,6 +351,8 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
             return '';
         return body ? `${body}\n\n${MEMORY_TOOLS_GUIDE}` : MEMORY_TOOLS_GUIDE;
     };
+    /** 本插件 recall 注入的署名判据(v4 `plugin:memory` 与 v3 旧行双形状;宿主迁移负责升格旧行)。 */
+    const isOwnRecall = isOwnRecallSource;
     async function estimateRecallFromStorage(sessionId) {
         if (storedEstimateCache.has(sessionId))
             return storedEstimateCache.get(sessionId) ?? null;
@@ -358,7 +369,7 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                     if (ev.type !== 'user/message')
                         continue;
                     const src = ev.data?.source;
-                    if (!src || src.kind !== 'plugin' || src.plugin !== 'memory' || src.form !== 'recall')
+                    if (!isOwnRecall(src))
                         continue;
                     let chars = 0;
                     for (const b of ev.data?.content ?? []) {
@@ -395,7 +406,7 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                         continue;
                     const msg = ev.data;
                     const src = msg?.source;
-                    if (!src || src.kind !== 'plugin' || src.plugin !== 'memory' || src.form !== 'recall')
+                    if (!isOwnRecall(src) || !msg)
                         continue;
                     let chars = 0;
                     for (const b of msg.content ?? []) {

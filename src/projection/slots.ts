@@ -157,10 +157,14 @@ function applySlotsEvent(
   store: SlotStore,
 ): SlotsProjectionState {
   if (event.type !== 'tool/result') return state;
-  const data = event.data as { message?: { content?: readonly { isError?: unknown }[] } } | undefined;
+  const data = event.data as
+    | { message?: { role?: unknown; isError?: unknown; content?: readonly { isError?: unknown }[] } }
+    | undefined;
+  // v4 native（宿主 ≥0.1.7-rc.1）：isError 在 message 顶层；v3 wrapper：块上 isError（历史兼容）。
   const isError =
-    Array.isArray(data?.message?.content) &&
-    data!.message!.content!.some((c) => (c as { isError?: unknown }).isError === true);
+    data?.message?.isError === true ||
+    (Array.isArray(data?.message?.content) &&
+      data!.message!.content!.some((c) => (c as { isError?: unknown }).isError === true));
   if (isError) return state;
   if (store.revision() === state.rev) return state;
   return buildState(store);

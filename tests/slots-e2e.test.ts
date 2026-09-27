@@ -87,7 +87,7 @@ async function setup() {
       async () => base,
     );
     const injected = decision.messages
-      .filter((m) => m.source?.kind === 'plugin')
+      .filter((m) => m.source?.kind === 'plugin:memory')
       .flatMap((m) => m.content ?? [])
       .map((c) => c.text)
       .join('\n');
@@ -114,7 +114,7 @@ describe('端到端 E1 → E4', () => {
     expect(injected).toContain('【激活槽位 · 常驻上下文】');
     expect(injected).toContain(`[rule] ${RULE_TITLE}: ${RULE_BODY}`);
     // 注入消息排在用户消息之前,并带插件署名来源(与 recall 同款范式)
-    expect(decision.messages[0]?.source).toEqual({ kind: 'plugin', plugin: 'memory', form: 'recall' });
+    expect(decision.messages[0]?.source).toEqual({ kind: 'plugin:memory', form: 'recall' });
     expect(decision.messages).toHaveLength(2);
   });
 

@@ -9,6 +9,14 @@
 
 本ファイルは **0.12.0** リリースノートと現在の**未リリース**変更の日本語版です。全履歴は [CHANGELOG.md](./CHANGELOG.md)（中文）を参照してください。
 
+## [0.18.2] — 2026-09-27
+
+### 修正
+
+- **セッション形式 v4 署名対応（ホスト >= 0.1.7-rc.1）**：記憶 recall 注入 2 箇所（セッション横断 recall `hooks/recall.ts`、スロット常駐注入 `hooks/slot-recall.ts`）で、v4 ホストが拒否する旧署名 `source: { kind: 'plugin', plugin: 'memory', form: 'recall' }`（`SessionFormatError` でラウンド全体が失敗——「記憶呼び出し時のエラー」の原因）を廃止し、producer-owned 署名 `{ kind: 'plugin:memory', form: 'recall' }` に変更。`form`・内容・タイミングは不変。根拠：`@deepseek-ai/dsh-session-format-v3-to-v4@0.1.7-rc.2` の `source()` は kind が非空かつ `'plugin'` でないことのみ検証し、随伴フィールドは検証しない。
+- **読み取り側の双形状互換**：recall 份额推定の署名判定 `isOwnRecallSource` は新署名と v3 旧行の両方を受け付ける——書き側だけ直すと占有パネルの「記憶 recall 份额」が静かに 0 になる。`MessageSourceMap` はモジュール拡張で `plugin:memory` を登録（dsh-llm 0.1.7 の map は `user|model|tool|'system-prompt'` で plugin catch-all なし、producer ごとの merge-extensible）。
+- **tool-result v4 native 対応（N1）**：`store/evidence-source.ts` の取证テキスト読み取りに native 分岐を追加（v4 の一等 `role:'tool'` メッセージ：content は text/reasoning ブロック直接、`isError` は message 最上位。ホストの `assertBlock` は旧 `tool-result` wrapper ブロックを硬拒否）。旧ブロック経路は歴史互換として残存——未対応だと v4 で取证テキストが静かに空になる。`projection/slots.ts` の isError ガードも native 化。
+
 ## [Unreleased]
 
 ### 追加

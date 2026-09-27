@@ -120,7 +120,21 @@ export function projectEventText(event) {
  * 也只会得到空串。必须下钻一层到 `block.content`。
  */
 function toolResultText(data) {
-    const content = data?.message?.content;
+    const message = data?.message;
+    if (message === undefined || typeof message !== 'object')
+        return '';
+    // v4 native（宿主 ≥0.1.7-rc.1）：一等 role:'tool' 消息，content 直接是
+    // text/reasoning 块、isError 提升到 message 顶层——旧块下钻路径对 native 形状
+    // 全部 continue，取证文本会静默恒空（本函数头注自证"取证不行"）。native
+    // 分支是强制新增，不是可选兼容。
+    if (message.role === 'tool') {
+        const text = blocksToText(message['content']);
+        if (text.trim() === '')
+            return '';
+        return message.isError === true ? `[工具报错] ${text}` : text;
+    }
+    // v3 wrapper（未迁移日志的历史兼容）：下钻 block.content。
+    const content = message['content'];
     if (!Array.isArray(content))
         return '';
     const parts = [];

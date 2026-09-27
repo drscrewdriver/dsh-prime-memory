@@ -6,6 +6,14 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [0.18.2] — 2026-09-27
+
+### 修复
+
+- **会话格式 v4 署名适配（宿主 ≥0.1.7-rc.1）**：两处记忆召回注入（跨会话召回 `hooks/recall.ts`、槽位常驻注入 `hooks/slot-recall.ts`）不再使用 v4 宿主拒绝的旧署名 `source: { kind: 'plugin', plugin: 'memory', form: 'recall' }`（触发 `SessionFormatError` 整轮失败——即"调用记忆时报错"的来源），改为 producer-owned 署名 `{ kind: 'plugin:memory', form: 'recall' }`。`form` 与注入内容、时机均不变。取证依据：`@deepseek-ai/dsh-session-format-v3-to-v4@0.1.7-rc.2` 的 `source()` 只查 kind 非空且 ≠ `'plugin'`，不校验伴随字段。
+- **读侧双形状兼容**：召回份额估算的署名判据 `isOwnRecallSource` 同时接受新署名与 v3 旧行——只改写侧会让占用面板"记忆召回份额"静默归零（无异常无报错）。`MessageSourceMap` 经模块增强登记 `plugin:memory`（dsh-llm 0.1.7 的 map 为 `user|model|tool|'system-prompt'`，无 plugin catch-all，merge-extensible per-producer）。
+- **tool-result v4 native 适配（N1）**：`store/evidence-source.ts` 的取证文本读取新增 native 分支（v4 一等 `role:'tool'` 消息：content 直接为 text/reasoning 块、`isError` 在 message 顶层；宿主 `assertBlock` 硬拒旧 `tool-result` wrapper 块），旧块下钻路径保留作历史兼容——否则 v4 下取证文本静默恒空。`projection/slots.ts` 的 isError 守卫同步 native 化。
+
 ## [Unreleased]
 
 ### 新增

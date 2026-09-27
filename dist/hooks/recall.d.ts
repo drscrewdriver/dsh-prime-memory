@@ -28,6 +28,16 @@ import { type OccupancyLedger } from '../util/context-occupancy.js';
  * 从会话消息构建召回查询(纯函数):末尾 N 条 + 总长截断,空输入返回空串。
  * 全史拼接会让 MATCH 表达式随会话长度线性膨胀(整会话累计二次方成本)。
  */
+/**
+ * 本插件 recall 注入的署名判据(v4 `plugin:memory` 与 v3 旧行双形状;宿主迁移负责
+ * 升格旧行)。导出供双形状单测钉住——估算函数(estimateRecallFromStorage /
+ * estimateRecallTokens)对旧形状漏判会让"记忆召回份额"静默归零。
+ */
+export declare function isOwnRecallSource(src: {
+    kind?: unknown;
+    plugin?: unknown;
+    form?: unknown;
+} | undefined | null): boolean;
 export declare function buildRecallQuery(messages: Array<{
     content: unknown;
 }>, tailMessages?: number, maxChars?: number): string;

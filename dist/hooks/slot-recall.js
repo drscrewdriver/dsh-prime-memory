@@ -30,8 +30,9 @@ export function registerSlotRecall(ctx, cfg, slots, logger, _live) {
                 return decision;
             const injection = createUserMessage({
                 content: [{ type: 'text', text }],
-                // form 受宿主类型约束(仅 recall/snapshot/notice/...),槽位常驻注入沿用 'recall' 分组
-                source: { kind: 'plugin', plugin: 'memory', form: 'recall' },
+                // v4 producer-owned kind(宿主 ≥0.1.7-rc.1);form 沿用 'recall' 分组
+                // (宿主 ContextFormed 的 recall 变体无伴随字段)
+                source: { kind: 'plugin:memory', form: 'recall' },
             });
             return { kind: 'enter', messages: [injection, ...decision.messages] };
         }

@@ -85,8 +85,10 @@ function applySlotsEvent(state, event, store) {
     if (event.type !== 'tool/result')
         return state;
     const data = event.data;
-    const isError = Array.isArray(data?.message?.content) &&
-        data.message.content.some((c) => c.isError === true);
+    // v4 native（宿主 ≥0.1.7-rc.1）：isError 在 message 顶层；v3 wrapper：块上 isError（历史兼容）。
+    const isError = data?.message?.isError === true ||
+        (Array.isArray(data?.message?.content) &&
+            data.message.content.some((c) => c.isError === true));
     if (isError)
         return state;
     if (store.revision() === state.rev)

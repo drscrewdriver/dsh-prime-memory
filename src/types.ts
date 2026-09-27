@@ -305,3 +305,21 @@ export interface L1Hit {
   priority?: number;
   family?: MemoryFamily;
 }
+
+/**
+ * dsh-llm ≥0.1.7-rc.1(会话格式 v4)的 producer-owned source kind 登记。
+ *
+ * v4 移除了 `MessageSourceMap` 的 catch-all `plugin` kind(message.d.ts 注释明言
+ * "each producer declares its own `kind` in its own module"),各生产者须在自己的
+ * 模块里以 declaration merging 登记自有 kind;未登记则 `createUserMessage({ source })`
+ * 在类型层报 TS2345(封闭联合,无 index signature)。本仓两处写侧(recall 注入 /
+ * 槽位常驻注入)使用 `plugin:memory` + `form:'recall'`(ContextFormed 的 recall
+ * 变体无伴随字段,0.1.7-rc.2 message.d.ts:75-93 实证)。
+ */
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    // ContextFormed 经包入口的类型导出(dsh-llm index re-export message.ts)以
+    // import() 类型位置引用;本文件无顶层 import,直接写 `ContextFormed` 会报 TS2304。
+    'plugin:memory': { kind: 'plugin:memory' } & import('@deepseek-ai/dsh-llm').ContextFormed;
+  }
+}

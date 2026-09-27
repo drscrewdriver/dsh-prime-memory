@@ -9,6 +9,14 @@
 
 이 파일은 **0.12.0** 릴리스 노트와 현재 **미출시** 변경 사항의 한국어판입니다. 전체 이력은 [CHANGELOG.md](./CHANGELOG.md)（中文）를 참조하세요.
 
+## [0.18.2] — 2026-09-27
+
+### 수정
+
+- **세션 포맷 v4 서명 대응(호스트 >= 0.1.7-rc.1)**: 기억 recall 주입 2곳(세션 간 recall `hooks/recall.ts`, 슬롯 상시 주입 `hooks/slot-recall.ts`)에서 v4 호스트가 거부하는 구형 서명 `source: { kind: 'plugin', plugin: 'memory', form: 'recall' }` 사용을 중단하고(`SessionFormatError`로 라운드 전체 실패——"기억 호출 시 오류"의 원인) producer-owned 서명 `{ kind: 'plugin:memory', form: 'recall' }`로 변경했습니다. `form`·내용·시점은 불변. 근거: `@deepseek-ai/dsh-session-format-v3-to-v4@0.1.7-rc.2`의 `source()`는 kind가 비어 있지 않고 `'plugin'`이 아닌지만 검증하며 수반 필드는 검증하지 않습니다.
+- **읽기 측 이중 형상 호환**: recall 점유율 추정 서명 술어 `isOwnRecallSource`는 신규 서명과 v3 구형 행을 모두 받아들입니다——쓰기 측만 고치면 점유 패널의 "기억 recall 점유율"이 조용히 0이 됩니다. `MessageSourceMap`은 모듈 병합으로 `plugin:memory`를 등록(dsh-llm 0.1.7의 map은 `user|model|tool|'system-prompt'`으로 plugin catch-all 없음, producer별 merge-extensible).
+- **tool-result v4 native 대응(N1)**: `store/evidence-source.ts`의取证 텍스트 읽기에 native 분기 추가(v4 일급 `role:'tool'` 메시지: content는 text/reasoning 블록 직접, `isError`는 message 최상위. 호스트 `assertBlock`은 구형 `tool-result` wrapper 블록을 강제 거부). 구형 블록 경로는 역사 호환으로 유지——미대응 시 v4에서取证 텍스트가 조용히 빈 값이 됩니다. `projection/slots.ts`의 isError 가드도 native화.
+
 ## [Unreleased]
 
 ### 추가

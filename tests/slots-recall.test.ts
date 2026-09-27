@@ -92,7 +92,7 @@ describe('常驻注入基本语义', () => {
     expect(decision.kind).toBe('enter');
     expect(texts(decision)).toContain('【激活槽位 · 常驻上下文】');
     expect(texts(decision)).toContain('[rule] 网络规则: 上行官方,下行镜像');
-    expect(decision.messages[0]?.source).toEqual({ kind: 'plugin', plugin: 'memory', form: 'recall' });
+    expect(decision.messages[0]?.source).toEqual({ kind: 'plugin:memory', form: 'recall' });
     expect(texts(decision)).toContain('用户问题'); // 原消息仍在(先后语义:线索在前)
   });
 

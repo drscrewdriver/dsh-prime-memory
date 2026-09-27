@@ -22,6 +22,14 @@ This file covers the **0.12.0** release notes and the current **unreleased** cha
 - **Silent first-write loss regression**: lock files are created before the write; when the target's parent directory did not exist yet, `open('wx')` failed with ENOENT and stores swallowed it as a warn. `rmwJson` now `ensureDir`s before acquiring the lock (included from the main line).
 - Also includes everything from the main line: file-layer hardening (atomic writes / read-side classification / version fail-closed / file locking / path safety — see [Unreleased] entries).
 
+## [0.18.2] — 2026-09-27
+
+### Fixed
+
+- **Session format v4 signature adaptation (host >= 0.1.7-rc.1)**: the two memory-recall injection sites (cross-session recall in `hooks/recall.ts`, slot persistent injection in `hooks/slot-recall.ts`) no longer use the legacy signature `source: { kind: 'plugin', plugin: 'memory', form: 'recall' }` that the v4 host rejects (`SessionFormatError`, whole round fails — the source of "error on memory recall"). They now use the producer-owned `{ kind: 'plugin:memory', form: 'recall' }`. `form`, content and timing unchanged. Evidence: `source()` in `@deepseek-ai/dsh-session-format-v3-to-v4@0.1.7-rc.2` only checks that kind is non-empty and not `'plugin'`; companion fields are not validated.
+- **Dual-shape read side**: the recall-share signature predicate `isOwnRecallSource` accepts both the new signature and legacy v3 rows — fixing only the write side would silently zero the "memory recall share" in the occupancy panel. `MessageSourceMap` is augmented via module merging to register `plugin:memory` (dsh-llm 0.1.7's map is `user|model|tool|'system-prompt'` with no plugin catch-all; merge-extensible per producer).
+- **tool-result v4 native adaptation (N1)**: evidence text reading in `store/evidence-source.ts` gains a native branch (v4 first-class `role:'tool'` message: content is text/reasoning blocks directly, `isError` at message top level; the host's `assertBlock` hard-rejects legacy `tool-result` wrapper blocks). The legacy block-descend path is kept for historical logs — otherwise evidence text would be silently empty on v4. The isError guard in `projection/slots.ts` is natively adapted as well.
+
 ## [Unreleased]
 
 ### Added
