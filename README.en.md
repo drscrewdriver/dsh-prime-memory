@@ -283,6 +283,10 @@ the bundle layer appends and causes `duplicate loader entry id` startup failure)
 | `capture.enabled` | `true` | L0 capture |
 | `capture.stripCodeBlocks` | `true` | Strip code blocks from assistant messages |
 | `capture.maxMessageChars` | `4000` | Max characters per message |
+| `capture.redactSecrets` | `true` | Payload redaction: 8 secret classes (PEM/Bearer/JWT/Cookie/vendor API keys/emails/long numbers/high-entropy IDs) become `[REDACTED:<KIND>]` placeholders at capture time — covers L0, distill input and manual writes; `false` restores plaintext (irreversible once enabled) |
+| `trace.enabled` | `true` | Structured trace: recall/distill events as daily JSONL under `<dataDir>/trace/`; switch sources in the Log tab |
+| `trace.retentionDays` | `14` | Trace retention in days (`0` = forever) |
+| `trace.captureContent` | `false` | `true` stores recall query text (default: length + sha256 only) |
 | `extract.enabled` | `true` | L1 extraction |
 | `extract.minMessages` | `6` | Steady-state trigger threshold: run L1 extraction once a session accumulates N new messages. The effective threshold ramps up 1→2→4→…→N (first turn yields memories immediately, then batches to save calls) |
 | `extract.idleSeconds` | `300` | Idle flush: distill a session's pending slice after N seconds of silence (catches "user left before reaching the threshold"); `0` disables |

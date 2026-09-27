@@ -227,6 +227,10 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `capture.enabled` | `true` | L0 捕捉 |
 | `capture.stripCodeBlocks` | `true` | アシスタントメッセージからコードブロックを除去 |
 | `capture.maxMessageChars` | `4000` | 単メッセージ最大文字数 |
+| `capture.redactSecrets` | `true` | ペイロード赤字化：捕获書き込み時に 8 種の秘密（PEM/Bearer/JWT/Cookie/ベンダー API キー/メール/長数字/高エントロピー ID）を `[REDACTED:<KIND>]` に置換——L0・蒸留入力・手動書き込みをカバー。`false` で平文に戻す（有効化後は原文不可逆） |
+| `trace.enabled` | `true` | 構造化トレース：リコール/蒸留イベントを日次 JSONL で保存（`<dataDir>/trace/`）、設定ページの「ログ」Tab で切替表示 |
+| `trace.retentionDays` | `14` | トレース保持日数（`0` = 無期限） |
+| `trace.captureContent` | `false` | `true` でリコール query 原文を保存（既定は長さ + sha256 のみ） |
 | `extract.enabled` | `true` | L1 抽出 |
 | `extract.minMessages` | `6` | 定常トリガ閾値：単セッションが N 件新メッセージを溜めて L1 抽出を1回実行。立ち上がりは 1→2→4→…→N と倍増 |
 | `extract.idleSeconds` | `300` | アイドル兜底：セッションが N 秒無言で未蒸留スライスを落とす。`0` で無効 |

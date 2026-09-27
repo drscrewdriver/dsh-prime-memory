@@ -227,6 +227,10 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `capture.enabled` | `true` | L0 포착 |
 | `capture.stripCodeBlocks` | `true` | 어시스턴트 메시지에서 코드 블록 제거 |
 | `capture.maxMessageChars` | `4000` | 단메시지 최대 문자 수 |
+| `capture.redactSecrets` | `true` | 페이로드 마스킹：캡처 쓰기 시 8종 시크릿(PEM/Bearer/JWT/Cookie/벤더 API 키/이메일/긴 숫자/고엔트로피 ID)을 `[REDACTED:<KIND>]`로 치환 — L0·증류 입력·수동 쓰기 커버. `false`로 평문 복귀(활성화 후 원문 비가역) |
+| `trace.enabled` | `true` | 구조화 트레이스：리콜/증류 이벤트를 일별 JSONL로 저장(`<dataDir>/trace/`), 설정 페이지 "로그" 탭에서 전환 조회 |
+| `trace.retentionDays` | `14` | 트레이스 보존 일수(`0` = 무기한) |
+| `trace.captureContent` | `false` | `true` 시 리콜 query 원문 저장(기본은 길이 + sha256만) |
 | `extract.enabled` | `true` | L1 추출 |
 | `extract.minMessages` | `6` | 정상 트리거 임계값：단세션이 N건 새 메시지 누적 시 L1 추출 1회. 시작 단계는 1→2→4→…→N 배증 |
 | `extract.idleSeconds` | `300` | 유휴兜底：세션이 N초 무음이면 미증류 슬라이스 투하. `0` 비활성 |
