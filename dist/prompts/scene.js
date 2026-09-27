@@ -4,8 +4,11 @@
  * 净室重写说明:本文件的 prompt 文案按重写规格(Phase 2 决策)逐字沿用——
  * prompt 内容直接决定蒸馏质量,是已发布行为的一部分,不属于可自由重写文本。
  */
+import { CONTENT_IS_DATA_CLAUSE, DATA_DELIMITER_NOTE } from './boundary.js';
 function buildSceneSystemPrompt(maxScenes) {
     return `# Memory Consolidation Architect（场景整合 · 操作输出模式）
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`.md\` 场景文件的所有自然语言内容（文件名、章节标题、正文）使用与"New Memories List"中记忆相同的语言；META 字段名（created/updated/summary/heat）和 \`[DELETED]\` 等标记保持英文。模板中给出的中文章节标题（\`## 用户核心特征\` 等）作为结构骨架——非中文输出时请用目标语言的等价表达替换。
 
@@ -167,6 +170,8 @@ reason: 具体原因描述
 }
 function buildWorkSceneSystemPrompt(maxScenes) {
     return `# Team Work Method Memory Consolidation Architect（场景整合 · 操作输出模式）
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`.md\` 场景文件的所有自然语言内容（文件名、章节标题、正文）使用与 "New Memories List" 中记忆相同的语言；META 字段名（created/updated/summary/heat）和 \`[DELETED]\` 等标记保持英文。模板中的中文章节标题仅作为结构骨架，非中文输出时请用目标语言的等价表达替换。
 
@@ -379,7 +384,7 @@ function getSceneSystemPrompt(maxScenes, family) {
 export function buildScenePrompt(params) {
     const { memoriesJson, sceneSummaries, sceneContents, currentTimestamp, existingSceneFiles, maxScenes, family, } = params;
     const contentsSection = sceneContents
-        ? `### 2.5 相关场景完整内容（仅供参考，write 时必须整体重写，不要只改局部）\n${sceneContents}\n`
+        ? `### 2.5 相关场景完整内容（仅供参考，write 时必须整体重写，不要只改局部）\n${DATA_DELIMITER_NOTE}\n${sceneContents}\n`
         : '';
     const fileListSection = existingSceneFiles.length > 0
         ? `### 📁 已有场景文件清单（仅以下文件可 write/delete）\n${existingSceneFiles.map((f) => `- \`${f}\``).join('\n')}\n`
@@ -387,6 +392,7 @@ export function buildScenePrompt(params) {
     const userPrompt = `**输出语言**：场景文件内容使用下方 New Memories List 中记忆的主导语言。
 
 ### 1️⃣ New Memories List
+${DATA_DELIMITER_NOTE}
 ${memoriesJson}
 
 ### 2️⃣ Existing Scene Blocks Summary

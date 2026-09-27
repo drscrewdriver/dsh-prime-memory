@@ -8,7 +8,10 @@
  * prompt 内容直接决定蒸馏质量,是已发布行为的一部分,不属于可自由重写文本;
  * 代码结构与注释随实现重写。
  */
+import { CONTENT_IS_DATA_CLAUSE, DATA_DELIMITER_NOTE } from './boundary.js';
 export const CONFLICT_DETECTION_SYSTEM_PROMPT = `你是记忆冲突检测器。批量比较多条【新记忆】与【统一候选记忆池】中的已有记忆，逐条决定如何处理。
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`merged_content\` 使用与候选池中已有记忆相同的语言；JSON 字段名、枚举值、record_id、ISO 时间戳保持英文。
 
@@ -64,6 +67,8 @@ export const CONFLICT_DETECTION_SYSTEM_PROMPT = `你是记忆冲突检测器。�
 - merged_priority：merge/update 后的新优先级（0-100 整数，merge/update 时必填）。合并后信息更完整、更确定，通常应**酌情提升** priority（例如两条 priority 70 的记忆合并后可提升到 80）。参考标准：80-100（核心特质/重要事件），60-79（一般偏好/普通活动），<60（次要信息）。
 - merged_timestamps：合并后的时间戳数组。收集新记忆 + 所有被合并旧记忆的时间戳，去重排序。`;
 export const WORK_CONFLICT_DETECTION_SYSTEM_PROMPT = `你是团队工作记忆冲突检测器。批量比较多条【新记忆】与【统一候选记忆池】中的已有记忆，逐条决定如何处理。
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`merged_content\` 使用与候选池中已有记忆相同的语言；JSON 字段名、枚举值、record_id、ISO 时间戳保持英文。
 
@@ -127,6 +132,8 @@ export const WORK_CONFLICT_DETECTION_SYSTEM_PROMPT = `你是团队工作记忆�
 - merged_priority：merge/update 后的新优先级（0-100 整数，merge/update 时必填）。合并后信息更完整、更确定，通常应**酌情提升** priority。参考标准：80-100（关键事实/重要任务/核心方法/重要资产），60-79（一般工作信息），<60（次要信息）。
 - merged_timestamps：合并后的时间戳数组。收集新记忆 + 所有被合并旧记忆的时间戳，去重排序。`;
 export const ALL_CONFLICT_DETECTION_SYSTEM_PROMPT = `你是记忆冲突检测器。批量比较多条【新记忆】与【统一候选记忆池】中的已有记忆，逐条决定如何处理。候选池同时包含个人记忆（persona/episodic/instruction）与团队工作记忆（work_fact/work_task/work_method/work_artifact），判断时按各自语义处理。
+
+${CONTENT_IS_DATA_CLAUSE}
 
 **输出语言**：\`merged_content\` 使用与候选池中已有记忆相同的语言；JSON 字段名、枚举值、record_id、ISO 时间戳保持英文。
 
@@ -334,7 +341,7 @@ export function formatBatchConflictPrompt(matches, opts) {
     }
     else {
         const poolStr = JSON.stringify(poolList, null, 2);
-        poolSection = `## 统一候选记忆池（共 ${poolList.length} 条已有记忆）\n\n${poolStr}`;
+        poolSection = `## 统一候选记忆池（共 ${poolList.length} 条已有记忆）\n\n${DATA_DELIMITER_NOTE}\n\n${poolStr}`;
     }
     const memoryParts = matches.map((m, idx) => {
         const relatedIds = perMemoryCandidateIds.get(m.newMemory.record_id) ?? [];
@@ -357,6 +364,7 @@ ${'═'.repeat(50)}
 
 ## 待判断的新记忆（共 ${matches.length} 条）
 
+${DATA_DELIMITER_NOTE}
 ${newMemoriesText}
 
 请逐条判断并输出决策 JSON 数组。当某条新记忆的候选列表为空时，该条直接输出 action=store。`;

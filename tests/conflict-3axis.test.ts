@@ -24,14 +24,15 @@ const T = 1_700_000_000_000;
 const sha1 = (s: string) => createHash('sha1').update(s, 'utf8').digest('hex');
 
 /**
- * golden 锚(task_a.7):关闭态**系统** prompt 的 sha1 常量,取自**升级前**
- * `445c89f:src/prompts/l1-dedup.ts` 的实跑输出(长度:`auto` 2735 / `chat` 2009 / `work` 2372)。
+ * golden 锚(task_a.7):关闭态**系统** prompt 的 sha1 常量。
+ * 基线沿革:升级前 `445c89f` 实跑 → §B 防注入声明(memorax-absorb Wave 2)加入后重锚
+ * (2026-09-28 实跑,长度: `auto` 2858 / `chat` 2132 / `work` 2495)。
  * 三个 mode 各一条,替代原先的负式子串断言。
  */
 const SYSTEM_CLOSED_SHA1: Record<ExtractMode, string> = {
-  auto: '9f676ebe84bc60bd1fa3b0b78ff4601712a7a687',
-  chat: '93813fb5c0eb6f93d64b79cd09cdeedbaec8f3c1',
-  work: '1363ccff290de086a106e8067712eb494552b3ad',
+  auto: '252b21238f437c875389098927db27d44807de49',
+  chat: 'ffd77753eac63dc98964e8629cb0268b7b1fb3cb',
+  work: 'bfdfedf6eb94c7fc07dd57ba43cb4af045395924',
 };
 
 function rec(
@@ -73,13 +74,13 @@ describe('检测侧:候选池透传三轴(conflict-3axis)', () => {
   ];
 
   /**
-   * golden 锚(task_a.5):关闭态 user prompt 的 sha1 常量,取自**升级前**
-   * `445c89f:src/prompts/l1-dedup.ts` 在同一夹具上的实跑输出(长度 513)。
+   * golden 锚(task_a.5):关闭态 user prompt 的 sha1 常量(同一夹具)。
+   * 基线沿革:升级前 `445c89f` 实跑(长度 513)→ §B 数据界定行加入后重锚(2026-09-28,长度 592)。
    * 这是「关闭态零漂移」的机械护栏——三轴键若漏了门控,此断言必红。
    */
-  const CLOSED_STATE_SHA1 = '249236e45a55be1c1c1c9cc553d5a85aa6872c4b';
+  const CLOSED_STATE_SHA1 = '4cb29377368db4feb3fd3f4c5181e43878422ed6';
   /** 开启态候选池的 sha1(同一夹具):与关闭态必须不同,防「门控写反/恒开」。 */
-  const ENABLED_STATE_SHA1 = '179e2c477a39e32b8082e6564b0d3aba148f5f96';
+  const ENABLED_STATE_SHA1 = 'd7641f02756565fd8e383b82c8ab8bc00a00f17e';
 
   it('关闭态候选池不含三轴键:user prompt 与改动前逐字节相同', () => {
     const off = formatBatchConflictPrompt(matches);
