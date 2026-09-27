@@ -102,6 +102,15 @@ describe('TraceStore', () => {
     expect((raw.match(/recall_turn/g) ?? []).length).toBe(1); // 第二条未写入
   });
 
+  it('写失败静默:目标路径异常不抛、不影响 flush（追踪绝不拖垮主链路）', async () => {
+    const dir = await tmpDir();
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(join(dir, 'trace'), 'not a directory', 'utf-8'); // trace 为文件 → 追加必败
+    const store = new TraceStore(dir, { retentionDays: 14 });
+    expect(() => store.append(recallEvent(Date.now()))).not.toThrow();
+    await expect(store.flush()).resolves.toBeUndefined();
+  });
+
   it('metadata-only 语义由埋点方决定:store 原样序列化(不补字段不裁字段)', async () => {
     const dir = await tmpDir();
     const store = new TraceStore(dir, { retentionDays: 14 });
