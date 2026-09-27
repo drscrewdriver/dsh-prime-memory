@@ -22,7 +22,7 @@ This file covers the **0.12.0** release notes and the current **unreleased** cha
 - **Silent first-write loss regression**: lock files are created before the write; when the target's parent directory did not exist yet, `open('wx')` failed with ENOENT and stores swallowed it as a warn. `rmwJson` now `ensureDir`s before acquiring the lock (included from the main line).
 - Also includes everything from the main line: file-layer hardening (atomic writes / read-side classification / version fail-closed / file locking / path safety — see [Unreleased] entries).
 
-## [0.18.3] — 2026-09-28
+## [0.18.4] — 2026-09-28
 
 ### Added
 
