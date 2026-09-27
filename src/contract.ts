@@ -923,6 +923,54 @@ export interface LogTailResponse {
   lines: string[];
 }
 
+/** dsh-memory/trace-tail(§F 追踪事件流,memorax-absorb Wave 4) */
+export interface RecallTraceEvent {
+  kind: 'recall_turn';
+  ts: number;
+  sessionId: string;
+  turn?: number;
+  /** metadata-only 默认:query 长度 + sha256 前 16 位;captureContent 才存原文(≤200)。 */
+  queryChars: number;
+  querySha?: string;
+  queryText?: string;
+  hitIds: string[];
+  hitScores: number[];
+  injectedIds: string[];
+  suppressedCount: number;
+  durationMs: number;
+  outcome: 'injected' | 'suppressed' | 'timeout' | 'off';
+}
+
+export interface DistillTraceEvent {
+  kind: 'distill_run';
+  ts: number;
+  layer: 'l1' | 'l2' | 'l3';
+  sessionId: string;
+  /** 仅 l1 有(与 l1_receipts 同一 runId,可交叉审计)。 */
+  runId?: string;
+  inputChars: number;
+  /** 仅 l1:决策六值词表聚合(store/update/merge/skip/conflict/skip_missing)。 */
+  byKind?: Record<string, number>;
+  newRecords?: number;
+  durationMs: number;
+  provider?: string;
+  model?: string;
+  ok: boolean;
+  errorKind?: string;
+}
+
+export type TraceEvent = RecallTraceEvent | DistillTraceEvent;
+
+export interface TraceTailRequest {
+  /** 1~500,默认 100。 */
+  lines?: number;
+  /** 缺省 = 两类都取(按时间混合)。 */
+  kind?: 'recall_turn' | 'distill_run';
+}
+export interface TraceTailResponse {
+  events: TraceEvent[];
+}
+
 /** dsh-memory/rebuild-* */
 export type RebuildStatusResponse = { supported: false; running: false; phase: 'idle' } | RebuildStatus;
 
@@ -1203,6 +1251,7 @@ export interface DshMemoryRequestMap {
   'dsh-memory/scenes': Record<string, never>;
   'dsh-memory/persona': Record<string, never>;
   'dsh-memory/log-tail': LogTailRequest;
+  'dsh-memory/trace-tail': TraceTailRequest;
   'dsh-memory/rebuild-status': Record<string, never>;
   'dsh-memory/rebuild-start': Record<string, never>;
   'dsh-memory/rebuild-cancel': Record<string, never>;
@@ -1248,6 +1297,7 @@ export interface DshMemoryResponseMap {
   'dsh-memory/scenes': ScenesResponse;
   'dsh-memory/persona': PersonaResponse;
   'dsh-memory/log-tail': LogTailResponse;
+  'dsh-memory/trace-tail': TraceTailResponse;
   'dsh-memory/rebuild-status': RebuildStatusResponse;
   'dsh-memory/rebuild-start': RebuildStatus;
   'dsh-memory/rebuild-cancel': RebuildStatus;

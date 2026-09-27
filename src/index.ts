@@ -50,6 +50,7 @@ import { buildRouteChain, resolveModelRoute, invalidateEffortCache } from './llm
 import { effectiveCfg } from './pipeline/runner.js';
 import { pendingPathFor } from './store/pending.js';
 import { initTokenCost, resetTokenCost } from './token-cost.js';
+import { initTraceStore } from './store/trace.js';
 
 export const name = 'dsh-memory-plugin';
 
@@ -156,6 +157,8 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   const embed = initial.svc;
   const db = new MemoryDb(path.join(dataDir, 'memory.db'), initial.dims, logger);
   initTokenCost(db, config.tokenCost.retentionDays);
+  // §F 追踪(trace.enabled=false 时保持未初始化,埋点零副作用)
+  if (config.trace?.enabled) initTraceStore(dataDir, { retentionDays: config.trace.retentionDays });
   // 插件卸载时关闭连接(WAL 落盘),注册一次即可
   ctx.effect(() => () => db.close());
 

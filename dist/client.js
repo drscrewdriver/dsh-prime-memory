@@ -1178,20 +1178,46 @@ var __defProp = Object.defineProperty;
 		// client/src/tabs/LogTab.tsx
 		var import_react4 = require("react");
 		var import_jsx_runtime4 = require("react/jsx-runtime");
+		var SOURCES = [
+		  { id: "", label: "系统日志" },
+		  { id: "recall_turn", label: "召回追踪" },
+		  { id: "distill_run", label: "蒸馏追踪" }
+		];
+		function fmtEvent(ev) {
+		  if (ev.kind === "recall_turn") {
+		    const outcome = String(ev.outcome ?? "?");
+		    const hits = ev.hitIds?.length ?? 0;
+		    const injected = ev.injectedIds?.length ?? 0;
+		    const q = ev.queryText ? ` query="${String(ev.queryText).slice(0, 40)}"` : ` sha=${String(ev.querySha ?? "")}`;
+		    return `[${new Date(Number(ev.ts)).toLocaleTimeString()}] recall ${outcome}${q} hits=${hits} injected=${injected} suppressed=${String(ev.suppressedCount ?? 0)} ${String(ev.durationMs ?? 0)}ms`;
+		  }
+		  if (ev.kind === "distill_run") {
+		    const by = ev.byKind ? " byKind=" + JSON.stringify(ev.byKind) : "";
+		    const err = ev.errorKind ? " error=" + String(ev.errorKind) : "";
+		    return `[${new Date(Number(ev.ts)).toLocaleTimeString()}] distill ${String(ev.layer)}${ev.runId ? " run=" + String(ev.runId) : ""} ok=${String(ev.ok)} in=${String(ev.inputChars ?? 0)}ch new=${String(ev.newRecords ?? 0)} ${String(ev.durationMs ?? 0)}ms${by}${err}`;
+		  }
+		  return JSON.stringify(ev);
+		}
 		function LogTab(props) {
 		  const rpc = props.rpc;
+		  const [source, setSource] = (0, import_react4.useState)("");
 		  const [lines, setLines] = (0, import_react4.useState)(null);
 		  const [error, setError] = (0, import_react4.useState)(null);
 		  const preRef = (0, import_react4.useRef)(null);
 		  const load = (0, import_react4.useCallback)(() => {
 		    setError(null);
-		    rpc("dsh-memory/log-tail", { lines: 200 }).then((r) => {
-		      if (r && r.ok) setLines(r.value.lines);
+		    if (source === "") {
+		      rpc("dsh-memory/log-tail", { lines: 200 }).then((r) => {
+		        if (r && r.ok) setLines(r.value.lines);
+		        else setError(r && r.error ? r.error.message : "RPC error");
+		      }).catch((e) => setError(String(e && e.message || e)));
+		      return;
+		    }
+		    rpc("dsh-memory/trace-tail", { lines: 200, kind: source }).then((r) => {
+		      if (r && r.ok) setLines(r.value.events.map(fmtEvent));
 		      else setError(r && r.error ? r.error.message : "RPC error");
-		    }).catch((e) => {
-		      setError(String(e && e.message || e));
-		    });
-		  }, [rpc]);
+		    }).catch((e) => setError(String(e && e.message || e)));
+		  }, [rpc, source]);
 		  (0, import_react4.useEffect)(() => {
 		    load();
 		  }, [load]);
@@ -1199,12 +1225,13 @@ var __defProp = Object.defineProperty;
 		    if (lines && preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
 		  }, [lines]);
 		  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: error ? "加载失败" : lines === null ? "加载中…" : "最近 " + lines.length + " 行（memory.log）" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10, gap: 8 }, children: [
+		      SOURCES.map((s) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: () => setSource(s.id), children: source === s.id ? "● " + s.label : s.label }, s.id)),
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: load, children: "刷新" })
 		    ] }),
-		    error ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: "日志读取失败：" + error + "（点右上“刷新”重试）" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("pre", { style: S.pre, ref: preRef, children: (lines || []).join("\n") || "(暂无日志)" })
+		    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: error ? "加载失败" : lines === null ? "加载中…" : `最近 ${lines.length} 条（${SOURCES.find((s) => s.id === source)?.label}）` }),
+		    error ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: "读取失败：" + error + "（点右上“刷新”重试）" }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("pre", { style: S.pre, ref: preRef, children: (lines || []).join("\n") || "(暂无记录)" })
 		  ] });
 		}
 		
