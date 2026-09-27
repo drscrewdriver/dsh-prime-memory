@@ -36,6 +36,14 @@ export interface MemoryConfig {
          * 决策记录见计划 spec §C;`false` 一键回到明文行为。 */
         redactSecrets?: boolean;
     };
+    /** §F 结构化追踪(memorax-absorb):recall/distill 事件按天 JSONL。 */
+    trace: {
+        enabled: boolean;
+        /** 事件文件保留天数(写入时切日清理;0 = 永久)。 */
+        retentionDays: number;
+        /** 默认 metadata-only(chars+sha);true 才存 query 原文(≤200 字符)。 */
+        captureContent: boolean;
+    };
     extract: {
         enabled: boolean;
         /** 稳态触发阈值:单会话攒够多少条新消息才跑一次 L1 抽取(省 token)。
@@ -513,6 +521,15 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         stripCodeBlocks: Schema<boolean, boolean, "defined">;
         maxMessageChars: Schema<number, number, "defined">;
         redactSecrets: Schema<boolean, boolean, "defined">;
+    }>>, "plain">;
+    trace: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        retentionDays: Schema<number, number, "defined">;
+        captureContent: Schema<boolean, boolean, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        retentionDays: Schema<number, number, "defined">;
+        captureContent: Schema<boolean, boolean, "defined">;
     }>>, "plain">;
     extract: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -1131,6 +1148,15 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         stripCodeBlocks: Schema<boolean, boolean, "defined">;
         maxMessageChars: Schema<number, number, "defined">;
         redactSecrets: Schema<boolean, boolean, "defined">;
+    }>>, "plain">;
+    trace: Schema<Schemastery.ObjectS<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        retentionDays: Schema<number, number, "defined">;
+        captureContent: Schema<boolean, boolean, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: Schema<boolean, boolean, "defined">;
+        retentionDays: Schema<number, number, "defined">;
+        captureContent: Schema<boolean, boolean, "defined">;
     }>>, "plain">;
     extract: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;

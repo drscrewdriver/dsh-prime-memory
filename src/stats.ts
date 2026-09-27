@@ -30,6 +30,7 @@ import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
 import type { L1Store } from './store/l1.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
+import { getTraceStore } from './store/trace.js';
 import type { ReceiptQuery, ReceiptsView } from './store/receipts.js';
 import { resolveConflictPair } from './conflict-service.js';
 import type { PersonaStore } from './store/persona.js';
@@ -80,6 +81,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/scenes',
   'dsh-memory/persona',
   'dsh-memory/log-tail',
+  'dsh-memory/trace-tail',
   'dsh-memory/rebuild-status',
   'dsh-memory/rebuild-start',
   'dsh-memory/rebuild-cancel',
@@ -958,6 +960,14 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     case 'dsh-memory/log-tail': {
       const p = (payload ?? {}) as { lines?: number };
       return { lines: readLogTail(join(dataDir, 'memory.log'), Math.min(Math.max(Number(p.lines) || 200, 1), 1000)) };
+    }
+
+    case 'dsh-memory/trace-tail': {
+      // §F 追踪尾读:未初始化(trace.enabled=false)回空集;坏行已在 store 侧跳过
+      const p = (payload ?? {}) as { lines?: number; kind?: 'recall_turn' | 'distill_run' };
+      const store = getTraceStore();
+      const events = store ? await store.tail(Math.min(Math.max(Number(p.lines) || 100, 1), 500), p.kind) : [];
+      return { events };
     }
 
     case 'dsh-memory/rebuild-status': {

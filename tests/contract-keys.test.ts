@@ -72,6 +72,7 @@ const ENDPOINTS = [
   'dsh-memory/scenes',
   'dsh-memory/persona',
   'dsh-memory/log-tail',
+  'dsh-memory/trace-tail',
   'dsh-memory/rebuild-status',
   'dsh-memory/rebuild-start',
   'dsh-memory/rebuild-cancel',
@@ -104,9 +105,9 @@ describe('hall catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 31 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(31);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(31);
+  it('exposes exactly the 32 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(32);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(32);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
@@ -152,12 +153,16 @@ describe('memory live settings key registry', () => {
   it('static config schema keeps every deploy key with defaults', () => {
     // schemastery 对象可调用:空输入产出完整默认对象——键集/默认值缩水在此暴露
     const defaults = (memorySchema as unknown as (v: unknown) => Record<string, unknown>)({});
-    for (const k of ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl', 'graph', 'conflictFreeze']) {
+    for (const k of ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl', 'graph', 'conflictFreeze', 'trace']) {
       expect(defaults[k], `config key ${k} missing`).toBeDefined();
     }
-    // 部署默认值抽查(与 0.9.0 契约逐项一致)
+    // 部署默认值抽查(与 0.9.0 契约逐项一致;§C/§F memorax-absorb 键随波追加)
     expect(defaults.family).toBe('auto');
     expect((defaults.capture as Record<string, unknown>).maxMessageChars).toBe(4000);
+    expect((defaults.capture as Record<string, unknown>).redactSecrets).toBe(true);
+    expect((defaults.trace as Record<string, unknown>).enabled).toBe(true);
+    expect((defaults.trace as Record<string, unknown>).retentionDays).toBe(14);
+    expect((defaults.trace as Record<string, unknown>).captureContent).toBe(false);
     expect((defaults.extract as Record<string, unknown>).minMessages).toBe(6);
     expect((defaults.extract as Record<string, unknown>).idleSeconds).toBe(300);
     expect((defaults.l2 as Record<string, unknown>).minNewMemories).toBe(5);

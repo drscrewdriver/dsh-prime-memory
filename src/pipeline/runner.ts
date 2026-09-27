@@ -18,6 +18,7 @@ import { GRAPH_PRIORITY_NEW } from '../graph/types.js';
 import type { GraphStore } from '../store/graph-store.js';
 import type { L0Store } from '../store/l0.js';
 import type { L1Store } from '../store/l1.js';
+import { trace } from '../store/trace.js';
 import {
   emptyPending,
   freshWarmup,
@@ -637,8 +638,29 @@ export class MemoryRunner {
             fstate.newMemoriesSinceL2 = 0;
             if (result.personaRequestedReason) fstate.personaRequestedReason = result.personaRequestedReason;
             this.logger.info(`[memory] L2 阶段完成(family=${family},${Date.now() - t}ms)`);
+            // §F 追踪:L2 run 级事件
+            trace({
+              kind: 'distill_run',
+              ts: Date.now(),
+              layer: 'l2',
+              sessionId,
+              inputChars: familyRecords.reduce((n, m) => n + m.content.length, 0),
+              durationMs: Date.now() - t,
+              newRecords: familyRecords.length,
+              ok: true,
+            });
           } catch (err) {
             this.logger.warn(`[memory] L2 场景整合失败(family=${family}): ${errDetail(err)}`);
+            trace({
+              kind: 'distill_run',
+              ts: Date.now(),
+              layer: 'l2',
+              sessionId,
+              inputChars: familyRecords.reduce((n, m) => n + m.content.length, 0),
+              durationMs: 0,
+              ok: false,
+              errorKind: err instanceof Error ? err.name : 'error',
+            });
           }
         } else {
           this.logger.debug?.(
@@ -650,10 +672,23 @@ export class MemoryRunner {
 
     if (cfg.l3.enabled && distillOn) {
       for (const family of ['chat', 'work'] as const) {
+        const tL3 = Date.now();
         try {
           await runPersona(this.ctx, cfg, this.stores.scenes[family], this.stores.persona[family], this.states[family], this.logger, family);
+          // §F 追踪:L3 run 级事件
+          trace({ kind: 'distill_run', ts: Date.now(), layer: 'l3', sessionId, inputChars: 0, durationMs: Date.now() - tL3, ok: true });
         } catch (err) {
           this.logger.warn(`[memory] L3 画像蒸馏失败(family=${family}): ${errDetail(err)}`);
+          trace({
+            kind: 'distill_run',
+            ts: Date.now(),
+            layer: 'l3',
+            sessionId,
+            inputChars: 0,
+            durationMs: 0,
+            ok: false,
+            errorKind: err instanceof Error ? err.name : 'error',
+          });
         }
       }
     }
@@ -722,6 +757,22 @@ export class MemoryRunner {
       this.logger.info(
         `[memory] L1 阶段完成(session=${sessionId},mode=${mode},切片 ${slice.length} 条,背景 ${background.length} 条,阈值 ${effectiveThreshold},${Date.now() - t}ms)`,
       );
+      // §F 追踪:L1 run 级事件(runId/byKind 与 l1_receipts 同源,可交叉审计);
+      // skipped = 蒸馏开关关闭的 no-op,不入追踪
+      if (!result.skipped) {
+        trace({
+          kind: 'distill_run',
+          ts: Date.now(),
+          layer: 'l1',
+          sessionId,
+          runId: result.runId,
+          inputChars: slice.reduce((n, m) => n + m.content.length, 0),
+          byKind: result.byKind,
+          newRecords: result.newRecords.length,
+          durationMs: Date.now() - t,
+          ok: true,
+        });
+      }
       // 缓冲与爬坡每次尝试后立即落盘:进程中途退出不丢待重试/攒阈值状态
       await this.persistPending(opts?.noBufferCap);
       // L1 计数推进后立即落盘:L2/L3 失败或进程中途退出不得回滚阈值进度
@@ -735,6 +786,17 @@ export class MemoryRunner {
     } catch (err) {
       // 保留切片下次重试(桶入口已裁到 ≤200,防无限堆积;重建轮不裁,量被会话规模约束)
       this.logger.warn(`[memory] L1 抽取失败(session=${sessionId},mode=${mode},切片 ${slice.length} 条): ${errDetail(err)}`);
+      // §F 追踪:失败也是 run 级事实(退避链路诊断)
+      trace({
+        kind: 'distill_run',
+        ts: Date.now(),
+        layer: 'l1',
+        sessionId,
+        inputChars: slice.reduce((n, m) => n + m.content.length, 0),
+        durationMs: 0,
+        ok: false,
+        errorKind: err instanceof Error ? err.name : 'error',
+      });
       // 指数退避:压制闲置兜底/补跑在 LLM 故障期间的连环重试(成功消费时清零)
       const streak = (this.extractFailures.get(sessionId)?.streak ?? 0) + 1;
       const delayMs = extractionBackoffMs(streak);

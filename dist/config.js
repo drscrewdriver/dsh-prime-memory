@@ -29,6 +29,11 @@ export const memorySchema = Schema.object({
         // §C 默认开启:本地存储也不落明文密钥(决策记录见计划 spec §C)
         redactSecrets: Schema.boolean().default(true),
     }),
+    trace: Schema.object({
+        enabled: Schema.boolean().default(true),
+        retentionDays: Schema.number().min(0).max(365).default(14),
+        captureContent: Schema.boolean().default(false),
+    }),
     extract: Schema.object({
         enabled: Schema.boolean().default(true),
         minMessages: Schema.number().min(1).max(100).default(6),
