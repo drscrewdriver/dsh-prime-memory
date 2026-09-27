@@ -185,7 +185,7 @@ export async function relabelPass(
   const chunks: MemoryRecord[][] = [];
   for (let i = 0; i < batch.length; i += LLM_CHUNK) chunks.push(batch.slice(i, i + LLM_CHUNK));
   let doneCount = 0;
-  let taggedPool: MemoryRecord[] = [];
+  const taggedPool: MemoryRecord[] = [];
   for (let i = 0; i < chunks.length; i++) {
     if (overBudget()) {
       stats.deferred += batch.length - doneCount;

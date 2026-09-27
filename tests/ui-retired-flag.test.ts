@@ -41,7 +41,7 @@ function embed(): EmbeddingService {
     getDimensions: () => DIM,
     getProviderInfo: () => ({ provider: 'probe', model: 'probe', dimensions: DIM }),
     isReady: () => true,
-    embed: async (t: string) => new Float32Array(DIM),
+    embed: async () => new Float32Array(DIM),
     embedBatch: async (ts: string[]) => ts.map(() => new Float32Array(DIM)),
   };
 }

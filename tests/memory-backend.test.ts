@@ -7,7 +7,7 @@
  * 3. **崩溃与降级可观测**:起不来退回进程内、线程崩了在途请求必须 reject 且有日志
  *    —— 静默挂起是本次「整批丢弃却无日志」的同类药物。
  */
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';

@@ -14,7 +14,6 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { MemoryDb } from '../src/store/sqlite.js';
 import { L1Store } from '../src/store/l1.js';
 import { NoopEmbeddingService } from '../src/store/embedding.js';
-import type { MemoryLogger } from '../src/types.js';
 
 const dbs: MemoryDb[] = [];
 let dir: string;
@@ -42,7 +41,6 @@ afterAll(async () => {
 
 const now = Date.now();
 const base = { priority: 60, scene_name: 's', timestamps: [now], createdAt: now, updatedAt: now };
-const noopLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as unknown as MemoryLogger;
 
 describe('getAllL1Lite 游标分批', () => {
   it('分页覆盖全部记录且不重不漏(按 record_id 稳定排序)', async () => {

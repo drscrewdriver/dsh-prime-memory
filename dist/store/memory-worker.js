@@ -24,7 +24,7 @@ if (typeof data.dbPath !== 'string' || data.dbPath === '') {
     port.close();
 }
 else {
-    let db = null;
+    let db;
     try {
         db = new MemoryDb(data.dbPath, data.dimensions ?? 0);
         db.init();

@@ -237,7 +237,6 @@ import type {
   RecallDisabledReason,
   RuminateStatusResponse,
   ScenesResponse,
-  WingBackfillResponse,
   WingOverviewResponse,
   RoomsGetResponse,
   SessionModeGetResponse,

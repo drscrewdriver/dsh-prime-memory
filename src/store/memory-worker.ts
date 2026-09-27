@@ -32,7 +32,7 @@ if (typeof data.dbPath !== 'string' || data.dbPath === '') {
   port.postMessage({ type: 'fatal', error: 'worker 未收到 dbPath' });
   port.close();
 } else {
-  let db: MemoryDb | null = null;
+  let db: MemoryDb | null;
   try {
     db = new MemoryDb(data.dbPath, data.dimensions ?? 0);
     db.init();
