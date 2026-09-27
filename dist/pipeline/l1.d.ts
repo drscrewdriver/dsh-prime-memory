@@ -8,6 +8,10 @@ export interface ExtractionResult {
     skipped: boolean;
     sceneName: string;
     newRecords: MemoryRecord[];
+    /** §F 追踪捎带:与本轮 l1_receipts 同源的 runId(可交叉审计);早退分支缺省。 */
+    runId?: string;
+    /** §F 追踪捎带:六值决策词表聚合;早退分支缺省。 */
+    byKind?: Record<string, number>;
 }
 /** 分族 checkpoint 桶(活引用,改动由调用方 save 落盘)。 */
 export type FamilyStates = Record<MemoryFamily, MemoryState>;

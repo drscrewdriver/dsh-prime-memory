@@ -23,6 +23,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent';
 // 不引用则 event.type 联合不含 'compaction/end'(TS2367)。
 import type {} from '@deepseek-ai/dsh-compaction';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
+import { createHash } from 'node:crypto';
+import { trace } from '../store/trace.js';
 import type { MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
 import type { L1Store } from '../store/l1.js';
@@ -409,6 +411,10 @@ export function registerRecall(
             degenerate.lastHits = 0;
             return decision;
           }
+          // §F 追踪字段:metadata-only 默认(chars+sha256 前 16),captureContent 才存原文
+          const queryChars = query.length;
+          const querySha = createHash('sha256').update(query).digest('hex').slice(0, 16);
+          const queryText = cfg.trace?.captureContent === true ? query.slice(0, 200) : undefined;
           const st = statFor(payload.agent.id);
           st.injectedTurns++;
           st.lastHits = 0;
@@ -430,6 +436,11 @@ export function registerRecall(
           if (hits === undefined) {
             st.timeouts++;
             logger.warn('[memory] 召回超时,跳过本轮注入(不阻塞对话)');
+            trace({
+              kind: 'recall_turn', ts: Date.now(), sessionId: sessionKey, queryChars, querySha, queryText,
+              hitIds: [], hitScores: [], injectedIds: [], suppressedCount: 0,
+              durationMs: Date.now() - searchStart, outcome: 'timeout',
+            });
             return decision;
           }
           st.lastDurationMs = Date.now() - searchStart;
@@ -479,12 +490,30 @@ export function registerRecall(
             st.hitTurns++;
             st.totalHits += fresh.length;
           }
-          if (fresh.length === 0) return decision;
+          if (fresh.length === 0) {
+            // §F 追踪:全量压制轮——零注入是正确状态,如实记录
+            trace({
+              kind: 'recall_turn', ts: Date.now(), sessionId: sessionKey, queryChars, querySha, queryText,
+              hitIds: scoped.map((h) => h.id), hitScores: scoped.map((h) => Number(h.score.toFixed(4))),
+              injectedIds: [], suppressedCount: scoped.length - fresh.length,
+              durationMs: Date.now() - searchStart, outcome: 'suppressed',
+            });
+            return decision;
+          }
           const lines = applyRecallBudget(
             fresh.map((h) => `- [${h.scene_name ? `${h.type}|${h.scene_name}` : h.type}] ${h.content}`),
             { maxCharsPerMemory: cfg.recall.maxCharsPerMemory, maxTotalRecallChars: cfg.recall.maxTotalRecallChars },
           );
-          if (lines.length === 0) return decision;
+          if (lines.length === 0) {
+            // §F 追踪:预算清零轮(截断后无完整行)
+            trace({
+              kind: 'recall_turn', ts: Date.now(), sessionId: sessionKey, queryChars, querySha, queryText,
+              hitIds: fresh.map((h) => h.id), hitScores: fresh.map((h) => Number(h.score.toFixed(4))),
+              injectedIds: [], suppressedCount: scoped.length - fresh.length,
+              durationMs: Date.now() - searchStart, outcome: 'suppressed',
+            });
+            return decision;
+          }
           st.lastHits = lines.length;
           const text = [
             '<relevant-memories>',
@@ -514,6 +543,13 @@ export function registerRecall(
             injection.id,
             fresh.slice(0, lines.length).map((h) => h.id),
           );
+          // §F 追踪:注入轮
+          trace({
+            kind: 'recall_turn', ts: Date.now(), sessionId: sessionKey, queryChars, querySha, queryText,
+            hitIds: scoped.map((h) => h.id), hitScores: scoped.map((h) => Number(h.score.toFixed(4))),
+            injectedIds: fresh.slice(0, lines.length).map((h) => h.id), suppressedCount: scoped.length - fresh.length,
+            durationMs: Date.now() - searchStart, outcome: 'injected',
+          });
           // 入账在成功构造注入消息之后、返回 enter 之前——任何前置抛错路径账目零扰动
           const led = ledgerFor(payload.agent.id);
           recordRecallInjection(led, text.length);

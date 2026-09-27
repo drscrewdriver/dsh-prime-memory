@@ -11,6 +11,12 @@
       # config:                      # 全部字段有默认值，按需覆盖：
       #   family: auto               #   新会话默认档：auto | chat | work
       #   dataDir: ''                #   默认 $DSH_HOME/memory
+      #   capture:
+      #     redactSecrets: true      #   §C 脱敏：8 类密钥→[REDACTED:KIND] 占位符（false 回明文）
+      #   trace:
+      #     enabled: true            #   §F 追踪：recall/distill 事件按天 JSONL
+      #     retentionDays: 14        #     事件保留天数（0 = 永久）
+      #     captureContent: false    #     true 才存 query 原文（默认只存 chars+sha）
       #   llm:
       #     provider: ''             #   蒸馏模型路由（默认跟随当前默认模型）
       #     model: ''

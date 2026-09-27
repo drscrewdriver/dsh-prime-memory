@@ -20,6 +20,7 @@ import { emptyRecallStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
+import { getTraceStore } from './store/trace.js';
 import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
 import { sourceAnchorLabels } from './pipeline/anchors.js';
 import { readSupersedeMarker } from './store/supersede.js';
@@ -66,6 +67,7 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/scenes',
     'dsh-memory/persona',
     'dsh-memory/log-tail',
+    'dsh-memory/trace-tail',
     'dsh-memory/rebuild-status',
     'dsh-memory/rebuild-start',
     'dsh-memory/rebuild-cancel',
@@ -1151,6 +1153,13 @@ export async function handleEndpoint(endpoint, payload, deps) {
         case 'dsh-memory/log-tail': {
             const p = (payload ?? {});
             return { lines: readLogTail(join(dataDir, 'memory.log'), Math.min(Math.max(Number(p.lines) || 200, 1), 1000)) };
+        }
+        case 'dsh-memory/trace-tail': {
+            // §F 追踪尾读:未初始化(trace.enabled=false)回空集;坏行已在 store 侧跳过
+            const p = (payload ?? {});
+            const store = getTraceStore();
+            const events = store ? await store.tail(Math.min(Math.max(Number(p.lines) || 100, 1), 500), p.kind) : [];
+            return { events };
         }
         case 'dsh-memory/rebuild-status': {
             if (!rebuild) {

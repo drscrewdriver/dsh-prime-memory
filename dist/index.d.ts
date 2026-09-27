@@ -30,6 +30,15 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, "plain">;
+    trace: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+    }>>, "plain">;
     extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         minMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
@@ -510,6 +519,15 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+    }>>, "plain">;
+    trace: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, "plain">;
     extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
