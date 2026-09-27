@@ -31,6 +31,25 @@ import { type OccupancyLedger } from '../util/context-occupancy.js';
 export declare function buildRecallQuery(messages: Array<{
     content: unknown;
 }>, tailMessages?: number, maxChars?: number): string;
+/**
+ * §E 压缩感知标记器(memorax-absorb / task_24-26):记录刚完成压缩的会话,
+ * pre-step 消费后做一次性增强召回。纯内存状态,CaptureBuffers 同款可单测导出。
+ *
+ * - `onCompactionEnd`:只认无 error 的 compaction/end(失败的压缩没有把内容逐出上下文);
+ * - `consume`:消费即清(一次性增强);容量上限淘汰最旧(积压即异常,回退路径兜底)。
+ */
+export declare class PostCompactionTracker {
+    private readonly cap;
+    private readonly map;
+    constructor(cap?: number);
+    /** @returns 是否真的置了标记(false = 非 compaction/end 或带 error)。 */
+    onCompactionEnd(sessionId: string, data?: {
+        error?: unknown;
+    }): boolean;
+    /** 消费该会话的增强标记(存在即清,返回是否存在)。 */
+    consume(sessionId: string): boolean;
+    get size(): number;
+}
 /** 单会话召回统计(悬浮卡信息区数据源;每轮 O(1) 记账,agent/disposed 清理)。
  *  口径声明:这是"注入统计"而非 bench 的离线 recall@k——运行时没有 ground truth,
  *  命中率 = hitTurns / injectedTurns。去重语义:全量压制轮计入 hitTurns

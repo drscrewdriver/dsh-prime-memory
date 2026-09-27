@@ -11,6 +11,7 @@ import { sanitizeText, shouldCaptureL0, stripCodeBlocks } from '../util/sanitize
 <<<<<<< HEAD
 =======
 import { foldRecoverableTurns, readPersistedEventsViaServices } from './capture-recovery.js';
+import { confirmInjectionByMessageId } from './recall-ack.js';
 /** §C 一次性告警标记:脱敏自身异常时放行原文,只提示一次(不阻断捕获)。 */
 let redactWarnedOnce = false;
 /**
@@ -96,6 +97,15 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
             if (!s.enabled || !s.capture)
                 return;
             const sid = String(session.id ?? session);
+            // §D 日志回执(memorax-absorb):注入消息以原样 user/message 入日志时在此确认,
+            // 才真正 dedupe.mark。**必须置于 source.kind 过滤之前**——过滤在
+            // turnEventsToMessages 内且只放行 kind='user',注入消息(kind='plugin:memory')
+            // 走不到那里;也置于 off 档返回之前(确认与档位无关,且代价是一次 Map 查找)。
+            if (event.type === 'user/message') {
+                const mid = event.data.id;
+                if (typeof mid === 'string' && mid)
+                    confirmInjectionByMessageId(mid);
+            }
             // off 档:本会话对记忆系统完全隐身(不缓冲、不写 L0、不蒸馏)
             if (modes.get(sid) === 'off')
                 return;
