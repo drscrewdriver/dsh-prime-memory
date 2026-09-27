@@ -1,6 +1,7 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import { RecallDedupeStore } from '../store/recall-dedupe.js';
 import { OccupancyStore } from '../store/occupancy.js';
+import { expirePendingInjections, registerPendingInjection, setInjectionMarker, } from './recall-ack.js';
 import { scopeFilterOf } from '../workspace.js';
 import { applyRecallBudget, raceRecallTimeout, RECALL_EMBED_CAP_MS } from '../util/recall-budget.js';
 import { clearProfileShare, emptyOccupancyLedger, estimateInjectedMessageTokens, estimateStableSectionTokens, recordProfileShare, recordRecallInjection, resetForCompaction, } from '../util/context-occupancy.js';
@@ -33,6 +34,43 @@ export function buildRecallQuery(messages, tailMessages = RECALL_QUERY_TAIL_MESS
     if (text.length > maxChars)
         text = text.slice(-maxChars);
     return text;
+}
+/**
+ * §E 压缩感知标记器(memorax-absorb / task_24-26):记录刚完成压缩的会话,
+ * pre-step 消费后做一次性增强召回。纯内存状态,CaptureBuffers 同款可单测导出。
+ *
+ * - `onCompactionEnd`:只认无 error 的 compaction/end(失败的压缩没有把内容逐出上下文);
+ * - `consume`:消费即清(一次性增强);容量上限淘汰最旧(积压即异常,回退路径兜底)。
+ */
+export class PostCompactionTracker {
+    cap;
+    map = new Map();
+    constructor(cap = 64) {
+        this.cap = cap;
+    }
+    /** @returns 是否真的置了标记(false = 非 compaction/end 或带 error)。 */
+    onCompactionEnd(sessionId, data) {
+        if (!sessionId || data?.error)
+            return false;
+        this.map.delete(sessionId); // 置尾刷新
+        this.map.set(sessionId, true);
+        while (this.map.size > this.cap) {
+            const oldest = this.map.keys().next().value;
+            if (oldest === undefined)
+                break;
+            this.map.delete(oldest);
+        }
+        return true;
+    }
+    /** 消费该会话的增强标记(存在即清,返回是否存在)。 */
+    consume(sessionId) {
+        if (!this.map.delete(sessionId))
+            return false;
+        return true;
+    }
+    get size() {
+        return this.map.size;
+    }
 }
 const MEMORY_TOOLS_GUIDE = `<memory-tools-guide>
 ## 记忆工具调用指南
@@ -152,6 +190,21 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
         recallStats.delete(payload.agent.id);
         occupancyByAgent.delete(payload.agent.id);
     });
+    // §D:绑定实际标记动作 + 超时清扫挂到 pre-step 入口(见注入点注释)。
+    setInjectionMarker((agentId, recordIds) => dedupe.mark(agentId, recordIds));
+    let ackDegradeWarned = false;
+    // §E 压缩感知(memorax-absorb):宿主 `compaction/end`(无 error)→ 该会话下一轮
+    // 做一次"定向增强召回"——跳过去重压制、画像立即重注入、占用账本归零;消费即清。
+    // 会话级回退路径保留(下方 session-start source='compact' 全量重置),两者幂等。
+    // 宿主无压缩计数器(compactionId 为 per-transaction UUID),故不做 generation 对账。
+    const postCompaction = new PostCompactionTracker();
+    ctx.on('session/event', (session, event) => {
+        if (event.type !== 'compaction/end')
+            return;
+        if (postCompaction.onCompactionEnd(String(session.id ?? session))) {
+            logger.info(`[memory] compaction/end:下一轮将做一次增强召回(session=${String(session.id ?? session)})`);
+        }
+    });
     // 上下文压缩/清空 → 已注入内容从模型上下文丢失,重置该会话的去重压制
     // (resume/startup 不重置:历史仍在,已注入的记忆模型还持有)。
     // 占用账本同步全量归零(宁低勿高;轮级粒度近似)。
@@ -197,6 +250,13 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
     // prepend 注册 + 先 next() 再改写:不劫持其他监听器(dsh-time-context 官方范式)。
     if (cfg.recall.enabled) {
         ctx.on('agent/pre-step', async (payload, next) => {
+            // §D 超时清扫:超时未确认的注入照旧标记(降级保连续,防 dedupe 失效回归);
+            // 正常确认在秒级完成,这里只是兜底。一次性提示。
+            const expiredAcks = expirePendingInjections();
+            if (expiredAcks > 0 && !ackDegradeWarned) {
+                ackDegradeWarned = true;
+                logger.warn(`[memory] 注入确认:${expiredAcks} 条 pending 超时未回执,已降级为照常标记(一次性提示)`);
+            }
             const decision = await next();
             if (decision.kind === 'reject' || payload.signal.aborted)
                 return decision;
@@ -212,6 +272,17 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                 const hasNewUserMessage = decision.messages.some((m) => m.source?.kind === 'user');
                 if (!hasNewUserMessage)
                     return decision;
+                // §E 消费增强标记:压缩后下一轮跳过去重压制(预算/档位/门控照常),
+                // 画像 TTL 失效立即重注入,占用账本归零。消费即清(一次性)。
+                const sessionKey = String(payload.agent.session?.id ?? payload.agent.id);
+                const boosted = postCompaction.consume(sessionKey);
+                if (boosted) {
+                    invalidateProfile();
+                    const led = ledgerFor(payload.agent.id);
+                    resetForCompaction(led);
+                    occupancyStore.save(payload.agent.id, led);
+                    logger.info(`[memory] 压缩后增强召回:本轮跳过去重压制 + 画像重注入(session=${sessionKey})`);
+                }
                 const query = buildRecallQuery(payload.messages);
                 // 空查询是退化轮(无用户文本),重置命中信号但不计入统计
                 if (!query) {
@@ -267,7 +338,8 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                 }
                 // 召回去重:同会话已注入过的记录不再重复注入(模型上下文已持有,省 token)。
                 // 纯过滤——剩几条注几条,全量压制(0 条新鲜命中)是正确状态而非未命中。
-                const seen = dedupe.seen(payload.agent.id);
+                // §E:压缩后增强轮跳过压制(压缩把已注入内容逐出了模型上下文)。
+                const seen = boosted ? new Set() : dedupe.seen(payload.agent.id);
                 const fresh = scoped.filter((h) => !seen.has(h.id));
                 const suppressed = scoped.length - fresh.length;
                 st.suppressedRecalls += suppressed;
@@ -284,8 +356,6 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                 const lines = applyRecallBudget(fresh.map((h) => `- [${h.scene_name ? `${h.type}|${h.scene_name}` : h.type}] ${h.content}`), { maxCharsPerMemory: cfg.recall.maxCharsPerMemory, maxTotalRecallChars: cfg.recall.maxTotalRecallChars });
                 if (lines.length === 0)
                     return decision;
-                // 预算截断只丢尾部(前缀保留):实际注入 = fresh 的前 lines.length 条——只标记模型真实看到的
-                dedupe.mark(payload.agent.id, fresh.slice(0, lines.length).map((h) => h.id));
                 st.lastHits = lines.length;
                 const text = [
                     '<relevant-memories>',
@@ -303,6 +373,11 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                     // "上下文注入"(专用"跨会话召回"标题仅留给 session-reference 来源)
                     source: { kind: 'plugin', plugin: 'memory', form: 'recall' },
                 });
+                // §D 注入确认(memorax-absorb):宿主接受 enter 后,注入消息以原样
+                // `user/message` 进入会话日志(message.id 稳定保留)——capture 侧观察到
+                // 该 id 才真正 dedupe.mark(recall-ack 两段式)。这里只登记 pending,
+                // 未确认不标记:被覆盖/取消的注入不该压制这些记忆(下轮可重注)。
+                registerPendingInjection(payload.agent.id, injection.id, fresh.slice(0, lines.length).map((h) => h.id));
                 // 入账在成功构造注入消息之后、返回 enter 之前——任何前置抛错路径账目零扰动
                 const led = ledgerFor(payload.agent.id);
                 recordRecallInjection(led, text.length);
