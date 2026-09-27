@@ -460,6 +460,18 @@ export declare class MemoryDb {
     countL0Since(iso: string): number;
     /** 统计某会话已捕获消息数(session-stats 数据源;idx_l0_session_id 索引点查)。 */
     countL0BySession(sessionId: string): number;
+    /**
+     * §A 崩溃恢复水位线(memorax-absorb):该会话 L0 已落盘的最大 turn。
+     * L0 为追加式事实源、从不裁剪 → 水位线崩溃安全;turn 空洞是常态
+     * (off 档/无消息轮),MAX 语义不受影响。空会话返回 undefined。
+     */
+    maxCapturedTurn(sessionId: string): number | undefined;
+    /**
+     * §A 幂等检查:该 (session, turn) 是否已有任意 L0 行。
+     * 水位线 MAX(turn) 只判"整轮无"、判不了"部分有"——恢复窗口内逐 turn
+     * 做存在性检查,命中即整轮跳过(重放 record id 非确定,upsert 不能去重)。
+     */
+    hasAnyL0Message(sessionId: string, turn: number): boolean;
     /** 按会话取最近消息(时间升序返回;走 idx_l0_session_id 索引)。
      *  蒸馏背景参考专用——按会话现查替代全局内存数组(ADR-0003)。 */
     recentL0BySession(sessionId: string, limit: number): L0MessageRecord[];

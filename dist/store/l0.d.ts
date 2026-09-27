@@ -19,6 +19,10 @@ export declare class L0Store {
     countBySession(sessionId: string): Promise<number>;
     /** 该会话最近 n 条消息(时间升序;蒸馏背景参考用,按会话现查——ADR-0003)。 */
     recentBySession(sessionId: string, limit: number): Promise<ConversationMessage[]>;
+    /** §A 水位线:该会话 L0 已落盘的最大 turn(空会话 undefined;委托 MemoryDb)。 */
+    maxCapturedTurn(sessionId: string): number | undefined;
+    /** §A 幂等检查:该 (session, turn) 是否已有任意 L0 行(委托 MemoryDb)。 */
+    hasAnyL0Message(sessionId: string, turn: number): boolean;
     /** 检索:FTS + 向量 hybrid(RRF 融合),返回按相关性排序的消息。 */
     search(query: string, limit: number): Promise<L0MessageRecord[]>;
     /** 活切换嵌入源:同步换底层服务(嵌入源三态切换用)。 */
