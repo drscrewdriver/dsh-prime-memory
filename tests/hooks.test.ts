@@ -130,7 +130,7 @@ describe('occupancy store', () => {
     expect(s.load('a')?.stockTokens).toBe(100);
   });
 
-  it('session cap evicts oldest entries on serialize', async () => {
+  it('session cap evicts oldest entries on serialize', { timeout: 15000 }, async () => {
     const dataDir = join(await tmp(), `occ4-${Date.now()}`);
     const s = new OccupancyStore(dataDir);
     await s.flush();

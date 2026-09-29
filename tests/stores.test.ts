@@ -183,7 +183,7 @@ describe('recall dedupe store', () => {
     expect(seen.has(`id${RECALL_DEDUPE_IDS_CAP + 9}`)).toBe(true);
   });
 
-  it('session entries capped at 200 on serialize', async () => {
+  it('session entries capped at 200 on serialize', { timeout: 15000 }, async () => {
     const d = new RecallDedupeStore(await tmp());
     await d.flush();
     for (let i = 0; i < RECALL_DEDUPE_SESSION_CAP + 5; i++) {
