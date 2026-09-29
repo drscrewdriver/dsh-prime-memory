@@ -272,7 +272,7 @@ function makeSession(events: { seq: number; type: string; data: unknown }[]) {
     header: { id: 'sess-real' },
     inheritedEventCount: 0,
     get seq() {
-      return events.length - 1;
+      return events.length;
     },
     snapshotEvents(from = 0, to = events.length) {
       return events.filter((e) => e.seq >= from && e.seq < to);
