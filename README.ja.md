@@ -10,7 +10,7 @@ alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで�
 [中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [最新リリース](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [問題を報告](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
-[![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
+[![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
 
 </div>
@@ -43,10 +43,11 @@ alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで�
 | 0.1.2-rc.1 | `settings.register()`（フォールバック可） | ⚠️ フレームワークドキュメントから推定、未実測 |
 | 0.1.3-rc.1 | `settings.register()`（フォールバック可） | ⚠️ 未実測（0.1.3+ で名前空間が文字列化、本プラグインは対応済み） |
 | 0.1.5-rc.2 | `settings.register()`（フォールバック可） | ⚠️ 未実測。Session V3 の surface セマンティクスと入力バー/設定スロットは回帰待ち |
+| 0.2.0-rc.1 | `settings.register()`（ライブスコープ） | ✅ 今回の適用ライン（イベント配線 agent/session-start → agent/created） |
 
 > 互換メカニズム：settings 登録は 3 分岐のランタイム判定（`register` → `installSection` ブリッジ → 常時オン縮退）。
 > 詳細は [CHANGELOG.md](./CHANGELOG.md) の 0.11.0 エントリ参照。`dsh.plugin.json` は
-> `engines.dsh: ">=0.1.1-rc.2 <0.2.0-0"` を宣言。
+> `engines.dsh: ">=0.2.0-rc.1 <0.2.1-0"` を宣言。
 
 ## クイックスタート
 

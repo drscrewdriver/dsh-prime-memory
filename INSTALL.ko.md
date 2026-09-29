@@ -4,7 +4,7 @@
 
 ## 환경 요구
 
-- Node.js ≥ 22.16（DSH 0.1.1-rc.2 이상）
+- Node.js ≥ 22.16（DSH 0.2.0-rc.1 이상）
 - DeepSeek Harness（이하 DSH）설치 완료, `--profile web` 사용 가능
 
 ## 설치

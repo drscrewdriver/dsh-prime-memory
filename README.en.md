@@ -10,7 +10,7 @@
 [简体中文](README.md) · [Latest release](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Report issues](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
-[![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
+[![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
 
 </div>
@@ -41,11 +41,12 @@
 | 0.1.2-rc.1 | `settings.register()` (fallback available) | ⚠️ Inferred from framework docs, not field-tested |
 | 0.1.3-rc.1 | `settings.register()` (fallback available) | ⚠️ Not field-tested (0.1.3+ namespaces became plain strings; this plugin is compatible) |
 | 0.1.5-rc.2 | `settings.register()` (fallback available) | ⚠️ Not field-tested; Session V3 surface semantics and input-bar/settings slots pending regression |
+| 0.2.0-rc.1 | `settings.register()` (live scope) | ✅ Current adaptation line (event wiring agent/session-start → agent/created) |
 
 > Compatibility mechanism: settings registration uses a three-way runtime branch
 > (`register` → `installSection` bridge → always-on degradation); see the 0.11.0 entry
 > in [CHANGELOG.md](./CHANGELOG.md). `dsh.plugin.json` declares
-> `engines.dsh: ">=0.1.1-rc.2 <0.2.0-0"`.
+> `engines.dsh: ">=0.2.0-rc.1 <0.2.1-0"`.
 
 ## Getting Started
 

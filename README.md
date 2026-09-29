@@ -10,7 +10,7 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 [English](README.en.md) · [最新发行版](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [反馈问题](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
-[![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
+[![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
 
 </div>
@@ -41,10 +41,11 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 | 0.1.2-rc.1 | `settings.register()`（回退可用） | ⚠️ 按框架文档推断，未实测 |
 | 0.1.3-rc.1 | `settings.register()`（回退可用） | ⚠️ 未实测（0.1.3+ 命名空间已改字符串，本插件已兼容） |
 | 0.1.5-rc.2 | `settings.register()`（回退可用） | ⚠️ 未实测；Session V3 surface 语义与输入栏/设置槽位待回归 |
+| 0.2.0-rc.1 | `settings.register()`（live scope） | ✅ 本次适配线（事件接线 agent/session-start → agent/created） |
 
 > 兼容机制：settings 注册走运行时三分支（`register` → `installSection` 桥接 → 恒开降级），
 > 详见 [CHANGELOG.md](./CHANGELOG.md) 的 0.11.0 条目。`dsh.plugin.json` 声明
-> `engines.dsh: ">=0.1.1-rc.2 <0.2.0-0"`。
+> `engines.dsh: ">=0.2.0-rc.1 <0.2.1-0"`。
 
 ## 快速开始
 

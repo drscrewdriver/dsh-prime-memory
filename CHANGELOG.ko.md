@@ -9,6 +9,13 @@
 
 이 파일은 **0.12.0** 릴리스 노트와 현재 **미출시** 변경 사항의 한국어판입니다. 전체 이력은 [CHANGELOG.md](./CHANGELOG.md)（中文）를 참조하세요.
 
+## [0.19.0] — 2026-09-29
+
+### 변경
+
+- **DSH 0.2.0 대응（compat/0.2.0）**：peerDependencies와 engines.dsh(package.json + dsh.plugin.json)를 `>=0.2.0-rc.1 <0.2.1-0`로 일괄 갱신(단일 범위 치환. 0.1.7 라인은 compat/0.1.7 브랜치가 계속 지원)；dsh-* devDependencies 9건을 0.1.1-rc.2 → 0.2.0-rc.1로 재고정하고 type-only 의존성 `@deepseek-ai/dsh-compaction` 추가. 코드 측면에서 0.2.0 호스트 API 변화 대응：`agent/session-start` 이벤트를 `agent/created`로 통합(serial 계약에 맞춰 리스너를 async화)；Session 이벤트 읽기를 `session.events` → `session.snapshotEvents()`로 변경(호스트가 동기 전량 읽기를 폐기 예정. 폴백 체인 유지)；테스트 스텁 갱신(projection 커서 offset 시맨틱스).
+- **릴리스 메타데이터**：버전 0.18.4 → 0.19.0；publishConfig.tag `dsh-0.1.7` → `dsh-0.2.0`；dsh.plugin.json version → `0.19.0-dsh0.2.0.1`.
+
 ## [0.18.4] — 2026-09-28
 
 ### 추가

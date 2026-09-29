@@ -4,7 +4,7 @@
 
 ## 環境要件
 
-- Node.js ≥ 22.16（DSH 0.1.1-rc.2 以上）
+- Node.js ≥ 22.16（DSH 0.2.0-rc.1 以上）
 - DeepSeek Harness（以下 DSH）が導入済みで、`--profile web` が利用可能
 
 ## インストール

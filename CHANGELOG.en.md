@@ -7,6 +7,13 @@
 
 This file covers the **0.12.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 
+## [0.19.0] — 2026-09-29
+
+### Changed
+
+- **DSH 0.2.0 adaptation (compat/0.2.0)**: peerDependencies and engines.dsh (package.json + dsh.plugin.json) moved wholesale to `>=0.2.0-rc.1 <0.2.1-0` (single-range replacement; the 0.1.7 line remains served by the compat/0.1.7 branch); the 9 dsh-* devDependencies re-pinned 0.1.1-rc.2 → 0.2.0-rc.1 and the type-only dependency `@deepseek-ai/dsh-compaction` added. Code-level adaptation to 0.2.0 host API drift: the `agent/session-start` event merged into `agent/created` (listeners made async to satisfy the serial contract); session event reads switched from `session.events` to `session.snapshotEvents()` (host deprecated synchronous full reads; degradation chain preserved); test stubs updated (projection cursor offset semantics).
+- **Release metadata**: version 0.18.4 → 0.19.0; publishConfig.tag `dsh-0.1.7` → `dsh-0.2.0`; dsh.plugin.json version → `0.19.0-dsh0.2.0.1`.
+
 ## [0.17.0-dsh0.1.7.1] — 2026-09-25
 
 > First release of the **host 0.1.7** compatibility line (dist-tag `dsh-0.1.7`, based on main @ 85d9b05). **Requires host ≥0.1.7-rc.1**; hosts 0.1.5 / 0.1.6 should stay on the `dsh-0.1.5` tag. Contains everything from main plus the adaptation below.

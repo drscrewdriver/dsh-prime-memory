@@ -218,7 +218,7 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
     // 上下文压缩/清空 → 已注入内容从模型上下文丢失,重置该会话的去重压制
     // (resume/startup 不重置:历史仍在,已注入的记忆模型还持有)。
     // 占用账本同步全量归零(宁低勿高;轮级粒度近似)。
-    ctx.on('agent/session-start', (payload) => {
+    ctx.on('agent/created', async (payload) => {
         if (payload.source === 'compact' || payload.source === 'clear') {
             dedupe.reset(payload.agent.id);
             const led = ledgerFor(payload.agent.id);
@@ -568,7 +568,7 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
         for (const agent of agents.list())
             registerForAgent(agent);
     }
-    ctx.on('agent/created', (payload) => {
+    ctx.on('agent/created', async (payload) => {
         registerForAgent(payload.agent);
     });
     ctx.effect(() => () => {

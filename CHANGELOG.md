@@ -6,6 +6,13 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [0.19.0] — 2026-09-29
+
+### 变更
+
+- **DSH 0.2.0 适配（compat/0.2.0）**：peerDependencies 与 engines.dsh（package.json + dsh.plugin.json）整体换代到 `>=0.2.0-rc.1 <0.2.1-0`（单段替换，0.1.7 线由 compat/0.1.7 分支继续服务）；devDependencies 9 个 dsh-* 精确钉 0.1.1-rc.2 → 0.2.0-rc.1 并新增 type-only 依赖 `@deepseek-ai/dsh-compaction`。代码层适配 0.2.0 宿主 API 漂移：`agent/session-start` 事件并入 `agent/created`（监听器改为 async 以满足 serial 契约）；Session 事件读取 `session.events` → `session.snapshotEvents()`（宿主已弃用同步全量读取，保留降级链）；测试桩同步更新（projection 游标 offset 语义）。
+- **发布元数据**：版本 0.18.4 → 0.19.0；publishConfig.tag `dsh-0.1.7` → `dsh-0.2.0`；dsh.plugin.json version → `0.19.0-dsh0.2.0.1`。
+
 ## [0.18.4] — 2026-09-28
 
 ### 新增

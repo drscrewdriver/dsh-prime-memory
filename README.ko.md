@@ -10,7 +10,7 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 [中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [최신 릴리스](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [문제 제보](https://github.com/drscrewdriver/dsh-prime-memory/issues)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
-[![DSH 0.1.1-rc.2](https://img.shields.io/badge/DSH-0.1.1--rc.2-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
+[![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
 
 </div>
@@ -43,10 +43,11 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 | 0.1.2-rc.1 | `settings.register()`（폴백 가능） | ⚠️ 프레임워크 문서 기반 추정, 미실측 |
 | 0.1.3-rc.1 | `settings.register()`（폴백 가능） | ⚠️ 미실측（0.1.3+에서 네임스페이스가 문자열화, 본 플러그인은 대응 완료） |
 | 0.1.5-rc.2 | `settings.register()`（폴백 가능） | ⚠️ 미실측. Session V3 surface 시맨틱스와 입력바/설정 슬롯 회귀 대기 |
+| 0.2.0-rc.1 | `settings.register()`（라이브 스코프） | ✅ 이번 적용 라인（이벤트 배선 agent/session-start → agent/created） |
 
 > 호환 메커니즘: settings 등록은 3분기 런타임 분기（`register` → `installSection` 브리지 → 상시 온 강등）.
 > 자세한 내용은 [CHANGELOG.md](./CHANGELOG.md)의 0.11.0 항목 참조. `dsh.plugin.json`은
-> `engines.dsh: ">=0.1.1-rc.2 <0.2.0-0"` 선언.
+> `engines.dsh: ">=0.2.0-rc.1 <0.2.1-0"` 선언.
 
 ## 빠른 시작
 

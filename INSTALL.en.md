@@ -4,7 +4,7 @@ This plugin ships as a **DSH official bundle package**: after install, the `dsh.
 
 ## Requirements
 
-- Node.js ≥ 22.16 (DSH 0.1.1-rc.2 and above)
+- Node.js ≥ 22.16 (DSH 0.2.0-rc.1 and above)
 - DeepSeek Harness (DSH) installed, with `--profile web` available
 
 ## Install

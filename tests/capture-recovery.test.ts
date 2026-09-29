@@ -210,13 +210,13 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
     const { appended, enqueued } = d;
     d.l0.maxCapturedTurn = () => 1; // turn 1 崩溃前已正常落盘,只有尾轮(turn 2)缺失
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
-    const onSessionStart = d.handlers.get('agent/session-start');
+    const onSessionStart = d.handlers.get('agent/created');
     expect(onSessionStart).toBeDefined();
     const events = [
       ...bracket(1, { user: '第一轮', assistant: '回复一' }),
       ...bracket(2, { user: '崩溃轮的宝贵输入', reason: 'interrupted' }),
     ];
-    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec', events, header: {} } }, source: 'resume' } as never);
+    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec', events, snapshotEvents: () => events, header: {} } }, source: 'resume' } as never);
     await flush?.();
     expect(appended).toHaveLength(1);
     expect(appended[0].sid).toBe('s-rec');
@@ -232,9 +232,9 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
     d.l0.maxCapturedTurn = () => 1; // turn 1 已落盘
     d.l0.hasAnyL0Message = (sid, turn) => sid === 's-rec' && turn <= 2; // turn 2 部分写残行
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
-    const onSessionStart = d.handlers.get('agent/session-start');
+    const onSessionStart = d.handlers.get('agent/created');
     const events = [...bracket(2, { user: '部分写过的轮', reason: 'interrupted' })];
-    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec', events, header: {} } }, source: 'resume' } as never);
+    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec', events, snapshotEvents: () => events, header: {} } }, source: 'resume' } as never);
     await flush?.();
     expect(appended).toHaveLength(0);
     expect(enqueued).toHaveLength(0);
@@ -245,9 +245,9 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
     const { appended, enqueued } = d;
     (d.modes as { get: () => string }).get = () => 'off';
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
-    const onSessionStart = d.handlers.get('agent/session-start');
+    const onSessionStart = d.handlers.get('agent/created');
     const events = [...bracket(1, { user: 'a', reason: 'interrupted' })];
-    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-off', events, header: {} } }, source: 'resume' } as never);
+    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-off', events, snapshotEvents: () => events, header: {} } }, source: 'resume' } as never);
     await flush?.();
     expect(appended).toHaveLength(0);
     expect(enqueued).toHaveLength(0);
@@ -257,9 +257,9 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
     const d = makeDeps();
     const { appended } = d;
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
-    const onSessionStart = d.handlers.get('agent/session-start');
+    const onSessionStart = d.handlers.get('agent/created');
     const events = [...bracket(1, { user: 'a', reason: 'interrupted' })];
-    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-x', events, header: {} } }, source: 'startup' } as never);
+    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-x', events, snapshotEvents: () => events, header: {} } }, source: 'startup' } as never);
     await flush?.();
     expect(appended).toHaveLength(0);
   });
@@ -268,7 +268,7 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
     const d = makeDeps();
     const { appended } = d;
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
-    const onSessionStart = d.handlers.get('agent/session-start');
+    const onSessionStart = d.handlers.get('agent/created');
     expect(() =>
       onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-y' } }, source: 'resume' } as never),
     ).not.toThrow();
@@ -289,7 +289,7 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
           }
         : undefined;
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
-    const onSessionStart = d.handlers.get('agent/session-start');
+    const onSessionStart = d.handlers.get('agent/created');
     onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec' } }, source: 'resume' } as never);
     await flush?.();
     expect(appended).toHaveLength(1);
@@ -314,7 +314,7 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
       return undefined;
     };
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
-    const onSessionStart = d.handlers.get('agent/session-start');
+    const onSessionStart = d.handlers.get('agent/created');
     expect(() =>
       onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec' } }, source: 'resume' } as never),
     ).not.toThrow();
@@ -328,7 +328,7 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
     const { appended, infos } = d;
     (d.ctx as unknown as { get: (name: string) => unknown }).get = () => undefined;
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
-    const onSessionStart = d.handlers.get('agent/session-start');
+    const onSessionStart = d.handlers.get('agent/created');
     for (let i = 0; i < 2; i++) {
       expect(() =>
         onSessionStart?.({ agent: { id: 'agent-1', session: { id: `s-z${i}` } }, source: 'resume' } as never),

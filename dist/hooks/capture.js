@@ -164,7 +164,7 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
     // 补收 (L0 水位线, 末尾] 内 bracket 完整的尾轮(≤2 轮)——崩溃轮在缓冲丢失后
     // 仍可从持久化层找回(persistence 会给孤儿轮补 interrupted 闭合,探针② 实证 98 处)。
     // fail-open 纪律:任何异常只 warn,不阻塞会话启动;幂等 = 水位线 + 逐 turn 存在性检查。
-    ctx.on('agent/session-start', (payload) => {
+    ctx.on('agent/created', async (payload) => {
         try {
             if (payload.source !== 'resume')
                 return;
@@ -178,7 +178,7 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
             const mode = modes.get(sid);
             if (mode === 'off')
                 return; // off 档对记忆系统完全隐身,对齐现行为
-            let events = session?.events;
+            let events = typeof session?.snapshotEvents === 'function' ? session.snapshotEvents() : undefined;
             if (!events || events.length === 0) {
                 // task_8 降级链:events 不可得(宿主版本偏差)时依次试
                 // ctx.sessionQuery.readSession / ctx.sessionPersistence.readFrom(守卫探针式)

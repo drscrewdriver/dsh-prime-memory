@@ -190,8 +190,8 @@ export function registerCapture(
   // 仍可从持久化层找回(persistence 会给孤儿轮补 interrupted 闭合,探针② 实证 98 处)。
   // fail-open 纪律:任何异常只 warn,不阻塞会话启动;幂等 = 水位线 + 逐 turn 存在性检查。
   ctx.on(
-    'agent/session-start',
-    (payload) => {
+    'agent/created',
+    async (payload) => {
       try {
         if (payload.source !== 'resume') return;
         const s = live.get();
@@ -201,7 +201,8 @@ export function registerCapture(
         if (!sid) return;
         const mode = modes.get(sid);
         if (mode === 'off') return; // off 档对记忆系统完全隐身,对齐现行为
-        let events: readonly SessionEvent[] | undefined = session?.events;
+          let events: readonly SessionEvent[] | undefined =
+            typeof session?.snapshotEvents === 'function' ? session.snapshotEvents() : undefined;
         if (!events || events.length === 0) {
           // task_8 降级链:events 不可得(宿主版本偏差)时依次试
           // ctx.sessionQuery.readSession / ctx.sessionPersistence.readFrom(守卫探针式)
