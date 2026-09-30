@@ -7,8 +7,10 @@ import { effectiveCfg, pickNextTaskIndex, type PipelineTask } from '../src/pipel
 import { estimateCalls, groupL0Sessions } from '../src/pipeline/rebuild.js';
 import { DISTILL_CHAIN_MAX, projectDistillChain, validateDistillChain } from '../src/settings.js';
 import type { LiveSettingsHandle } from '../src/settings.js';
-import type { MemoryConfig, MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryLiveSettings } from '../src/contract.js';
 import type { MemoryLiveSettings as LiveShape } from '../src/contract.js';
+import type { MemoryConfig } from '../src/config.js';
+import type { L0MessageRecord } from '../src/types.js';
 
 function cfg(over: Partial<MemoryConfig['llm']> = {}): MemoryConfig {
   return {
@@ -28,14 +30,15 @@ function cfg(over: Partial<MemoryConfig['llm']> = {}): MemoryConfig {
 }
 
 function live(over: Partial<MemoryLiveSettings>): LiveSettingsHandle {
-  const s: MemoryLiveSettings = {
+  // 断言而非注解:基线刻意不提供 conflictFreeze(显式 false 会被 effectiveCfg 视为覆盖,破坏"空覆盖=原引用"语义)
+  const s = {
     enabled: true, capture: true, distill: true, recall: true,
     reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
-    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0 }, distillMaxInputChars: 0,
+    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
     distillLayerChains: { l1: [], l2: [], l3: [] }, distillMode: '', directBaseURL: '', directApiKey: '',
     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0, memoryMutate: false,
     ...over,
-  };
+  } as MemoryLiveSettings;
   return { supported: true, get: () => s, update: async () => {} };
 }
 
@@ -99,9 +102,9 @@ describe('effectiveCfg priority table', () => {
   });
 
   it('budgets: nonzero per-layer overrides only', () => {
-    const out = effectiveCfg(cfg(), live({ distillBudgets: { extract: 100, dedup: 0, l2: 200, l3: 0 } }));
+    const out = effectiveCfg(cfg(), live({ distillBudgets: { extract: 100, dedup: 0, l2: 200, l3: 0, graph: 0 } }));
     expect(out.llm.budgets).toEqual({ extract: 100, l2: 200 });
-    expect(effectiveCfg(cfg(), live({ distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0 } })).llm.budgets).toBeUndefined();
+    expect(effectiveCfg(cfg(), live({ distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 } })).llm.budgets).toBeUndefined();
   });
 
   it('input budget and layer chains inject; pinned kills layer chains', () => {
@@ -150,7 +153,8 @@ describe('rebuild grouping and estimation', () => {
       { sessionId: 's2', recordedAt: '', id: '5', role: 'user', content: 'b', timestamp: 20 },
       { sessionId: 's1', recordedAt: '', id: '2', role: 'user', content: 'z', timestamp: 30 },
       { sessionId: 's1', recordedAt: '', id: '1', role: 'user', content: 'a', timestamp: 10 },
-      { sessionId: 's1', recordedAt: '', id: '3', role: 'system', content: 'x', timestamp: 15 }, // 非法 role 剔除
+      // 故意注入非法 role(模拟旧磁盘数据),groupL0Sessions 的守卫应剔除该行
+      { sessionId: 's1', recordedAt: '', id: '3', role: 'system' as unknown as L0MessageRecord['role'], content: 'x', timestamp: 15 }, // 非法 role 剔除
       { sessionId: 's1', recordedAt: '', id: '4', role: 'user', content: '  ', timestamp: 16 }, // 空内容剔除
       { sessionId: '', recordedAt: '', id: '6', role: 'assistant', content: 'd', timestamp: 5 }, // 归 default
     ]);

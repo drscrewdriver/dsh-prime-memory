@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GraphStore } from '../src/store/graph-store.js';
 import { MemoryDb } from '../src/store/sqlite.js';
 import type { MemoryRecord } from '../src/types.js';
+import type { GraphNodeProjection } from '../src/graph/types.js';
 
 let dir: string;
 beforeAll(async () => {
@@ -34,12 +35,13 @@ function rec(id: string, overrides: Partial<MemoryRecord> = {}): MemoryRecord {
   };
 }
 
-const NODE_PROPOSAL = {
+// 显式标注为投影形状:去掉 as const 的 readonly 收紧(sourceRecordIds 须为可变 string[])
+const NODE_PROPOSAL: GraphNodeProjection = {
   ref: 'a',
   name: '张三',
   type: 'person',
   sourceRecordIds: ['r1'],
-} as const;
+};
 
 function makeRawDb(file: string): DatabaseSync {
   const raw = new DatabaseSync(file, { allowExtension: false });

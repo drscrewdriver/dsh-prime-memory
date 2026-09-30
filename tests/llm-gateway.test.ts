@@ -157,7 +157,7 @@ describe('token cost snapshot (fake db)', () => {
     const insert = (provider: string, model: string, layer: string, outputTokens: number) =>
       rows.push({ ts: Date.now(), provider, model, layer, inputChars: 10, outputTokens, reasoningTokens: 1 });
     return {
-      insertCostCall: (provider, model, layer, _ic, ot) => insert(provider, model, layer, ot),
+      insertCostCall: (provider: string, model: string, layer: string, _ic: number, ot: number) => insert(provider, model, layer, ot),
       aggregateCost: (since: number) => {
         const sel = rows.filter((r) => r.ts >= since);
         const sorted = sel.map((r) => r.outputTokens).sort((a, b) => a - b);

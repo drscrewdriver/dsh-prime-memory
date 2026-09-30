@@ -8,12 +8,14 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
 import { registerCapture } from '../src/hooks/capture.js';
 import { registerMemoryTools } from '../src/tools/index.js';
-import type { MemoryConfig, MemoryLogger, MemoryRecord } from '../src/types.js';
+import type { MemoryLogger, MemoryRecord } from '../src/types.js';
+import type { MemoryConfig } from '../src/config.js';
 
 const SECRET_MSG = '帮我看看这个 key 对不对: sk-proj-abcdefghijklmnop123456';
 
 function captureHarness(cfgOverride?: Partial<MemoryConfig['capture']>) {
-  const handlers = new Map<string, (...args: never[]) => unknown>();
+  // 异类注册表:既有 session/event 回调也有工具对象,取用侧各自收窄为精确形状
+  const handlers = new Map<string, unknown>();
   const ctx = { on: (name: string, cb: (...args: never[]) => unknown) => handlers.set(name, cb) } as unknown as Context;
   const appended: Array<{ sid: string; messages: Array<{ role: string; content: string }> }> = [];
   const l0 = {
@@ -46,7 +48,7 @@ describe('§C 捕获路径接线', () => {
   it('默认(开启):user 消息里的 API key 进 L0 前已替换为占位符', async () => {
     const h = captureHarness();
     registerCapture(h.ctx, h.cfg, h.runner as never, h.l0 as never, h.logger, h.live as never, h.modes as never);
-    const onEvent = h.handlers.get('session/event');
+    const onEvent = h.handlers.get('session/event') as ((session: unknown, e: SessionEvent) => unknown) | undefined;
     const session = { id: 's-r' };
     for (const e of userTurn(SECRET_MSG)) onEvent?.(session, e);
     await new Promise((r) => setTimeout(r, 10));
@@ -59,7 +61,7 @@ describe('§C 捕获路径接线', () => {
   it('redactSecrets:false → 内容逐字节原样(与旧行为一致)', async () => {
     const h = captureHarness({ redactSecrets: false });
     registerCapture(h.ctx, h.cfg, h.runner as never, h.l0 as never, h.logger, h.live as never, h.modes as never);
-    const onEvent = h.handlers.get('session/event');
+    const onEvent = h.handlers.get('session/event') as ((session: unknown, e: SessionEvent) => unknown) | undefined;
     for (const e of userTurn(SECRET_MSG)) onEvent?.({ id: 's-r' }, e);
     await new Promise((r) => setTimeout(r, 10));
     const { appended } = h;
@@ -70,7 +72,7 @@ describe('§C 捕获路径接线', () => {
   it('无密钥内容零行为变化(占位符不引入)', async () => {
     const h = captureHarness();
     registerCapture(h.ctx, h.cfg, h.runner as never, h.l0 as never, h.logger, h.live as never, h.modes as never);
-    const onEvent = h.handlers.get('session/event');
+    const onEvent = h.handlers.get('session/event') as ((session: unknown, e: SessionEvent) => unknown) | undefined;
     const plain = '今天讨论了部署方案,周四上线';
     for (const e of userTurn(plain)) onEvent?.({ id: 's-r' }, e);
     await new Promise((r) => setTimeout(r, 10));
@@ -81,7 +83,7 @@ describe('§C 捕获路径接线', () => {
 
 describe('§C 手动路径接线(memory_add)', () => {
   function toolHarness(cfgOverride?: Partial<MemoryConfig['capture']>) {
-    const handlers = new Map<string, (...args: never[]) => unknown>();
+    const handlers = new Map<string, unknown>();
     const ctx = { on: () => {}, tools: { register: (t: unknown) => handlers.set((t as { name: string }).name, t) } } as unknown as Context;
     const written: MemoryRecord[] = [];
     const logger: MemoryLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as unknown as MemoryLogger;
