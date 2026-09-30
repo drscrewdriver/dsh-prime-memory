@@ -19,7 +19,8 @@ import {
   setInjectionMarker,
 } from '../src/hooks/recall-ack.js';
 import { PostCompactionTracker } from '../src/hooks/recall.js';
-import type { MemoryConfig, MemoryLogger } from '../src/types.js';
+import type { MemoryLogger } from '../src/types.js';
+import type { MemoryConfig } from '../src/config.js';
 
 beforeEach(() => resetAckForTests());
 

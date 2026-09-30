@@ -25,10 +25,11 @@ import { L1Store } from '../src/store/l1.js';
 import { L0Store } from '../src/store/l0.js';
 import { buildReceipts } from '../src/store/receipts.js';
 import type { L1Receipt } from '../src/store/receipts.js';
-import type { MemoryConfig, MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryConfig } from '../src/config.js';
 import type { LiveSettingsHandle } from '../src/settings.js';
 import type { MemoryLogger } from '../src/types.js';
-import type { Tool } from '@deepseek-ai/dsh-tools';
+import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 let dir: string;
 /**
@@ -168,19 +169,20 @@ describe('task_19 双维回溯:数据层', () => {
 });
 
 // ── 工具层 ──
-type RegisteredTool = Tool<Record<string, unknown>, Record<string, unknown>>;
+type RegisteredTool = ToolDefinition;
 
 function liveHandle(over: Partial<MemoryLiveSettings> = {}): LiveSettingsHandle {
-  const s: MemoryLiveSettings = {
+  // 基线不含 conflictFreeze 键(留空 = 不覆盖,见 runner.ts 的 !== undefined 判定),故用断言
+  const s = {
     enabled: true, capture: true, distill: true, recall: true,
     reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
-    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0 }, distillMaxInputChars: 0,
+    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
     distillLayerChains: { l1: [], l2: [], l3: [] }, distillMode: '', directBaseURL: '', directApiKey: '',
     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
     memoryMutate: false,
     ...over,
-  };
-  return { supported: true, get: () => s, update: async (patch) => Object.assign(s, patch) };
+  } as MemoryLiveSettings;
+  return { supported: true, get: () => s, update: async (patch) => { Object.assign(s, patch); } };
 }
 
 async function toolHarness() {
@@ -198,7 +200,7 @@ async function toolHarness() {
   const modes = new SessionModeStore('/nonexistent', 'auto');
   const registered: RegisteredTool[] = [];
   const ctx = {
-    tools: { register: (t: Tool) => registered.push(t as unknown as RegisteredTool) },
+    tools: { register: (t: ToolDefinition) => registered.push(t as unknown as RegisteredTool) },
     get: () => undefined,
   } as unknown as Parameters<typeof registerMemoryTools>[0];
 
@@ -211,7 +213,7 @@ async function toolHarness() {
 }
 
 /** 构造一个带 agent 标识的 exec(`resolveModeOwner` 靠它上溯档位)。 */
-function execFor(sessionId: string): unknown {
+function execFor(sessionId: string): ToolRunContext {
   return { agent: { id: sessionId, session: { header: { id: sessionId } } } } as never;
 }
 

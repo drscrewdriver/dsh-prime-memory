@@ -18,7 +18,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { MemoryConfig, MemoryLogger, MemoryRecord } from '../src/types.js';
+import type { MemoryLogger, MemoryRecord } from '../src/types.js';
+import type { MemoryConfig } from '../src/config.js';
 import { RebuildController, type RebuildStores } from '../src/pipeline/rebuild.js';
 import { L1Store } from '../src/store/l1.js';
 import { MemoryDb } from '../src/store/sqlite.js';

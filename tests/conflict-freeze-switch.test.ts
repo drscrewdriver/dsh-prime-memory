@@ -38,7 +38,7 @@ const { memorySchema } = await import('../src/config.js');
 const { runExtraction } = await import('../src/pipeline/l1.js');
 const { L1Store } = await import('../src/store/l1.js');
 const { MemoryDb } = await import('../src/store/sqlite.js');
-type MemoryConfig = import('../src/contract.js').MemoryConfig;
+type MemoryConfig = import('../src/config.js').MemoryConfig;
 
 const MODES = ['chat', 'work', 'auto'] as const;
 const BASE: Record<(typeof MODES)[number], string> = {

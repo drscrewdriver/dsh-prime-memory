@@ -13,7 +13,7 @@ import { registerCapture } from '../src/hooks/capture.js';
 import { SessionModeStore } from '../src/store/session-modes.js';
 import type { Context } from '@deepseek-ai/cordis';
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
-import type { ConversationMessage, MemoryConfig } from '../src/types.js';
+import type { ConversationMessage } from '../src/types.js';
 import type { MemoryConfig as Cfg } from '../src/config.js';
 
 interface Captured {
@@ -50,7 +50,7 @@ const okLogger = {
   warn: () => {},
   error: () => {},
   debug: () => {},
-} as unknown as MemoryConfig extends never ? never : Parameters<typeof registerCapture>[4];
+} as unknown as Cfg extends never ? never : Parameters<typeof registerCapture>[4];
 
 describe('capture 锚点 fold', () => {
   async function run(events: Omit<SessionEvent, 'time'>[]): Promise<Captured[]> {

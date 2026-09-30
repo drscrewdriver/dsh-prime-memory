@@ -56,7 +56,7 @@ const { runExtraction } = await import('../src/pipeline/l1.js');
 const { L1Store } = await import('../src/store/l1.js');
 const { MemoryDb } = await import('../src/store/sqlite.js');
 const { readSupersedeMarker } = await import('../src/store/supersede.js');
-type MemoryConfig = import('../src/contract.js').MemoryConfig;
+type MemoryConfig = import('../src/config.js').MemoryConfig;
 type FamilyStates = import('../src/pipeline/l1.js').FamilyStates;
 type ConversationMessage = import('../src/types.js').ConversationMessage;
 

@@ -17,7 +17,8 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session';
 import { registerCapture } from '../src/hooks/capture.js';
 import { foldRecoverableTurns } from '../src/hooks/capture-recovery.js';
 import { MemoryDb } from '../src/store/sqlite.js';
-import type { MemoryConfig, MemoryLogger } from '../src/types.js';
+import type { MemoryLogger } from '../src/types.js';
+import type { MemoryConfig } from '../src/config.js';
 
 // ── 事件夹具:形状对齐实测(probe-results.md §探针②) ──
 let seq = 0;

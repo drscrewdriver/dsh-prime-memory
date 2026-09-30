@@ -11,7 +11,8 @@ import { L1Store } from '../src/store/l1.js';
 import { NoopEmbeddingService } from '../src/store/embedding.js';
 import { relabelPass } from '../src/pipeline/relabel.js';
 import { InProcMemoryBackend } from '../src/store/memory-backend.js';
-import type { MemoryConfig, MemoryLogger } from '../src/types.js';
+import type { MemoryLogger } from '../src/types.js';
+import type { MemoryConfig } from '../src/config.js';
 import type { Context } from '@deepseek-ai/cordis';
 
 let dir: string;

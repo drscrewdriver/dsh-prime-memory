@@ -38,7 +38,8 @@ import type { GraphEdge, GraphNode } from '../src/graph/types.js';
 import { runGraphProjection } from '../src/pipeline/graph.js';
 import { GRAPH_PROJECTION_EXAMPLE } from '../src/prompts/graph-projection.js';
 import { GraphStore } from '../src/store/graph-store.js';
-import type { MemoryConfig, MemoryLogger } from '../src/types.js';
+import type { MemoryLogger } from '../src/types.js';
+import type { MemoryConfig } from '../src/config.js';
 
 let dir: string;
 beforeAll(async () => {

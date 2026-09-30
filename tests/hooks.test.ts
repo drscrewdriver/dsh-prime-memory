@@ -52,8 +52,8 @@ describe('capture buffers', () => {
     const before = buf.length;
     trimBuffer(buf);
     expect(buf.length).toBeLessThan(before);
-    // 未闭合轮次的事件必须幸存
-    expect(buf.some((e) => e.type === 'user/message' && e.data.turn === 999)).toBe(true);
+    // 未闭合轮次的事件必须幸存(夹具 ev() 的 data 是手造的 { turn },经断言读取)
+    expect(buf.some((e) => e.type === 'user/message' && (e.data as { turn?: number }).turn === 999)).toBe(true);
     // 最早保留的事件是未闭合 turn/start 自身
     expect(buf[0].type).toBe('turn/start');
   });

@@ -7,8 +7,8 @@
  *    消息（isError 顶层），漏掉 native 分支会让取证文本恒为空串。
  */
 import { describe, expect, it } from 'vitest'
-import { isOwnRecallSource } from '../src/hooks/recall.ts'
-import { projectEventText } from '../src/store/evidence-source.ts'
+import { isOwnRecallSource } from '../src/hooks/recall.js'
+import { projectEventText } from '../src/store/evidence-source.js'
 
 describe('isOwnRecallSource：新旧署名形状双判（P0-2 回归钉子）', () => {
   it('v4 producer-owned 命中', () => {

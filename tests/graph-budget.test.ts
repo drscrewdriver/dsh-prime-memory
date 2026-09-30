@@ -7,20 +7,24 @@
 import { describe, expect, it } from 'vitest';
 import { LAYER_DEFAULT_BUDGETS, layerEffortTrigger, layerKeyFor, resolveLayerTokens } from '../src/llm.js';
 import { effectiveCfg } from '../src/pipeline/runner.js';
-import type { MemoryConfig, MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryConfig } from '../src/config.js';
 import type { LiveSettingsHandle } from '../src/settings.js';
 import type { LayerRouteCfgView } from '../src/llm.js';
+// 动态 import 值绑定不带类型空间,补同名类型别名供类型位使用
+type PassThrough = import('node:stream').PassThrough;
 
 function liveHandle(over: Partial<MemoryLiveSettings> = {}): LiveSettingsHandle {
-  const s: MemoryLiveSettings = {
+  // 基线不含 conflictFreeze 键(留空 = 不覆盖,见 runner.ts 的 !== undefined 判定),故用断言
+  const s = {
     enabled: true, capture: true, distill: true, recall: true,
     reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
     distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
     distillLayerChains: { l1: [], l2: [], l3: [] }, distillMode: '', directBaseURL: '', directApiKey: '',
     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0, memoryMutate: false,
     ...over,
-  };
-  return { supported: true, get: () => s, update: async (patch) => Object.assign(s, patch) };
+  } as MemoryLiveSettings;
+  return { supported: true, get: () => s, update: async (patch) => { Object.assign(s, patch); } };
 }
 
 function cfgView(over: Partial<NonNullable<LayerRouteCfgView['llm']>> = {}): LayerRouteCfgView {

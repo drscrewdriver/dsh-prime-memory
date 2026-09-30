@@ -35,10 +35,10 @@ const ALL_SYSTEM_VARIANTS: Array<[string, string]> = [
   ['l1-dedup/work', WORK_CONFLICT_DETECTION_SYSTEM_PROMPT],
   ['l1-dedup/all', ALL_CONFLICT_DETECTION_SYSTEM_PROMPT],
   ['l2/chat', buildScenePrompt({
-    memoriesJson: '[]', sceneSummaries: '', currentTimestamp: 't', existingSceneFiles: [], maxScenes: 12, family: 'chat',
+    memoriesJson: '[]', sceneSummaries: '', sceneContents: '', currentTimestamp: 't', existingSceneFiles: [], maxScenes: 12, family: 'chat',
   }).systemPrompt],
   ['l2/work', buildScenePrompt({
-    memoriesJson: '[]', sceneSummaries: '', currentTimestamp: 't', existingSceneFiles: [], maxScenes: 12, family: 'work',
+    memoriesJson: '[]', sceneSummaries: '', sceneContents: '', currentTimestamp: 't', existingSceneFiles: [], maxScenes: 12, family: 'work',
   }).systemPrompt],
   ['l3/persona', buildPersonaPrompt({
     mode: 'first', family: 'chat', currentTime: 't', totalProcessed: 0, sceneCount: 0, changedSceneCount: 0,
@@ -140,7 +140,8 @@ describe('§B user 层数据界定(全部格式化函数)', () => {
 describe('§B 与冻结门控组合不冲突', () => {
   it('conflictFreeze 开/关两态下声明都保留(门控追加段只是追加)', () => {
     for (const on of [false, true]) {
-      const p = getConflictDetectionSystemPrompt(on ? ['conflict'] : []);
+      // mode 词汇 = ExtractMode('auto'|'chat'|'work');冻结态经 opts.conflictFreeze 表达
+      const p = getConflictDetectionSystemPrompt('chat', { conflictFreeze: on });
       expect(p).toContain('内容边界');
     }
   });
