@@ -15,7 +15,6 @@ export declare const inject: string[];
  * (Standard Schema 接口)做校验与默认值填充;导出 `schema` 会被静默忽略,
  * 导致 config 里嵌套对象为 undefined、apply 抛错、fiber FAILED 拖垮宿主启动。
  */
-<<<<<<< HEAD
 export declare const Config: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
     dataDir: import("@deepseek-ai/schemastery").default<string, string>;
     family: import("@deepseek-ai/schemastery").default<"chat" | "work" | "auto", "chat" | "work" | "auto">;
@@ -24,10 +23,21 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number>;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>, Schemastery.ObjectT<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number>;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>>;
+    trace: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>>;
     extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
@@ -126,129 +136,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         mode: import("@deepseek-ai/schemastery").default<"host" | "direct", "host" | "direct">;
         baseURL: import("@deepseek-ai/schemastery").default<string, string>;
         apiKey: import("@deepseek-ai/schemastery").default<string, string>;
-=======
-export declare const Config: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-    dataDir: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-    family: import("@deepseek-ai/schemastery").default<"chat" | "work" | "auto", "chat" | "work" | "auto", "defined">;
-    scope: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-    capture: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, "plain">;
-    trace: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, "plain">;
-    extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        minMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        idleSeconds: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        backgroundMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        candidatePool: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        minMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        idleSeconds: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        backgroundMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        candidatePool: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    l2: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        minNewMemories: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxScenes: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        sceneContextLimit: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        minNewMemories: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxScenes: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        sceneContextLimit: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    l3: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        interval: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        interval: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    graph: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, "plain">;
-    conflictFreeze: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    recall: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxResults: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxCharsPerMemory: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxTotalRecallChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        includePersona: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        includeSceneNav: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
-        scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxResults: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxCharsPerMemory: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxTotalRecallChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        includePersona: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        includeSceneNav: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
-        scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    embedding: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        baseUrl: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        apiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        dimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxInputChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        allowLocalModels: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        mirror: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        proxy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        baseUrl: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        apiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        dimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxInputChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        allowLocalModels: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        mirror: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        proxy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-    }>>, "plain">;
-    llm: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        mode: import("@deepseek-ai/schemastery").default<"host" | "direct", "host" | "direct", "defined">;
-        baseURL: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        apiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
->>>>>>> 549f63e (feat(prompts+redaction): §B 防注入边界声明 + §C 载荷脱敏(memorax-absorb Wave 2))
         fallbacks: import("@deepseek-ai/schemastery").default<({
             provider?: string | null | undefined;
             model?: string | null | undefined;
@@ -386,7 +273,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
                 provider?: string | null | undefined;
                 model?: string | null | undefined;
                 reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-<<<<<<< HEAD
             } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<{
                 provider: import("@deepseek-ai/schemastery").default<string, string>;
                 model: import("@deepseek-ai/schemastery").default<string, string>;
@@ -419,10 +305,21 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number>;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>, Schemastery.ObjectT<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number>;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>>;
+    trace: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>>;
     extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
@@ -521,361 +418,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         mode: import("@deepseek-ai/schemastery").default<"host" | "direct", "host" | "direct">;
         baseURL: import("@deepseek-ai/schemastery").default<string, string>;
         apiKey: import("@deepseek-ai/schemastery").default<string, string>;
-=======
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-        }>>, "defined">;
-        maxTokens: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-        temperature: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxInputChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    hall: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<string[], string[], "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<string[], string[], "defined">;
-    }>>, "plain">;
-    tokenCost: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    slots: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        inject: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxSlots: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxAlwaysOnBytes: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxBodyChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        inject: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxSlots: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxAlwaysOnBytes: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxBodyChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    tools: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    benchControl: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    live: import("@deepseek-ai/schemastery").default<NoInfer<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        capture: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        distill: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        recall: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-        distillProvider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        distillModel: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        distillChain: import("@deepseek-ai/schemastery").default<({
-            provider?: string | null | undefined;
-            model?: string | null | undefined;
-            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-            provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-            model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-            reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-        }>>[], "defined">;
-        distillLayerChains: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-            l1: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-            l2: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-            l3: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            l1: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-            l2: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-            l3: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-        }>>, "defined">;
-        distillBudgets: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-            extract: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            dedup: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            l2: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            l3: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            graph: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            extract: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            dedup: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            l2: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            l3: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            graph: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        }>>, "defined">;
-        distillMaxInputChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        distillMode: import("@deepseek-ai/schemastery").default<"" | "host" | "direct", "" | "host" | "direct", "defined">;
-        directBaseURL: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        directApiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        embedRemoteBaseURL: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        embedRemoteApiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        embedRemoteModel: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        capture: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        distill: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        recall: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-        distillProvider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        distillModel: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        distillChain: import("@deepseek-ai/schemastery").default<({
-            provider?: string | null | undefined;
-            model?: string | null | undefined;
-            reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-        } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-            provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-            model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-            reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-        }>>[], "defined">;
-        distillLayerChains: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-            l1: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-            l2: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-            l3: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            l1: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-            l2: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-            l3: import("@deepseek-ai/schemastery").default<({
-                provider?: string | null | undefined;
-                model?: string | null | undefined;
-                reasoningEffort?: "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | null | undefined;
-            } & import("@deepseek-ai/cosmokit").Dict)[], Schemastery.ObjectT<NoInfer<{
-                provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-                reasoningEffort: import("@deepseek-ai/schemastery").default<"" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "" | "off" | "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", "defined">;
-            }>>[], "defined">;
-        }>>, "defined">;
-        distillBudgets: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-            extract: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            dedup: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            l2: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            l3: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            graph: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            extract: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            dedup: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            l2: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            l3: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            graph: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        }>>, "defined">;
-        distillMaxInputChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        distillMode: import("@deepseek-ai/schemastery").default<"" | "host" | "direct", "" | "host" | "direct", "defined">;
-        directBaseURL: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        directApiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        embedRemoteBaseURL: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        embedRemoteApiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        embedRemoteModel: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>>, "volatile">;
-}>>, Schemastery.ObjectT<NoInfer<{
-    dataDir: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-    family: import("@deepseek-ai/schemastery").default<"chat" | "work" | "auto", "chat" | "work" | "auto", "defined">;
-    scope: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-    capture: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxMessageChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, "plain">;
-    trace: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        retentionDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, "plain">;
-    extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        minMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        idleSeconds: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        backgroundMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        candidatePool: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        minMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        idleSeconds: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        backgroundMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        candidatePool: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    l2: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        minNewMemories: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxScenes: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        sceneContextLimit: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        minNewMemories: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxScenes: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        sceneContextLimit: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    l3: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        interval: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        interval: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    graph: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, "plain">;
-    conflictFreeze: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    recall: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxResults: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxCharsPerMemory: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxTotalRecallChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        includePersona: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        includeSceneNav: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
-        scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        maxResults: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxCharsPerMemory: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxTotalRecallChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        includePersona: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        includeSceneNav: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
-        scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-    }>>, "plain">;
-    embedding: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        baseUrl: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        apiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        dimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxInputChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        allowLocalModels: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        mirror: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        proxy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        baseUrl: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        apiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        dimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        maxInputChars: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        timeoutMs: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        allowLocalModels: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        mirror: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        proxy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-    }>>, "plain">;
-    llm: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        provider: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        model: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        mode: import("@deepseek-ai/schemastery").default<"host" | "direct", "host" | "direct", "defined">;
-        baseURL: import("@deepseek-ai/schemastery").default<string, string, "defined">;
-        apiKey: import("@deepseek-ai/schemastery").default<string, string, "defined">;
->>>>>>> 549f63e (feat(prompts+redaction): §B 防注入边界声明 + §C 载荷脱敏(memorax-absorb Wave 2))
         fallbacks: import("@deepseek-ai/schemastery").default<({
             provider?: string | null | undefined;
             model?: string | null | undefined;

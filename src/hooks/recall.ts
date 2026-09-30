@@ -395,8 +395,8 @@ export function registerRecall(
             // §F 追踪:全量压制轮——零注入是正确状态,如实记录
             trace({
               kind: 'recall_turn', ts: Date.now(), sessionId: sessionKey, queryChars, querySha, queryText,
-              hitIds: scoped.map((h) => h.id), hitScores: scoped.map((h) => Number(h.score.toFixed(4))),
-              injectedIds: [], suppressedCount: scoped.length - fresh.length,
+              hitIds: hits.map((h) => h.id), hitScores: hits.map((h) => Number(h.score.toFixed(4))),
+              injectedIds: [], suppressedCount: hits.length - fresh.length,
               durationMs: Date.now() - searchStart, outcome: 'suppressed',
             });
             return decision;
@@ -410,7 +410,7 @@ export function registerRecall(
             trace({
               kind: 'recall_turn', ts: Date.now(), sessionId: sessionKey, queryChars, querySha, queryText,
               hitIds: fresh.map((h) => h.id), hitScores: fresh.map((h) => Number(h.score.toFixed(4))),
-              injectedIds: [], suppressedCount: scoped.length - fresh.length,
+              injectedIds: [], suppressedCount: hits.length - fresh.length,
               durationMs: Date.now() - searchStart, outcome: 'suppressed',
             });
             return decision;
@@ -446,8 +446,8 @@ export function registerRecall(
           // §F 追踪:注入轮
           trace({
             kind: 'recall_turn', ts: Date.now(), sessionId: sessionKey, queryChars, querySha, queryText,
-            hitIds: scoped.map((h) => h.id), hitScores: scoped.map((h) => Number(h.score.toFixed(4))),
-            injectedIds: fresh.slice(0, lines.length).map((h) => h.id), suppressedCount: scoped.length - fresh.length,
+            hitIds: hits.map((h) => h.id), hitScores: hits.map((h) => Number(h.score.toFixed(4))),
+            injectedIds: fresh.slice(0, lines.length).map((h) => h.id), suppressedCount: hits.length - fresh.length,
             durationMs: Date.now() - searchStart, outcome: 'injected',
           });
           // 入账在成功构造注入消息之后、返回 enter 之前——任何前置抛错路径账目零扰动

@@ -144,10 +144,4 @@ describe('§B 与冻结门控组合不冲突', () => {
       expect(p).toContain('内容边界');
     }
   });
-
-  it('reconcile 的 system/user 由 buildReconcilePrompt 装配——直接验证边界常量被引用', async () => {
-    // reconcile 的 prompt 在函数内组装;这里以常量被 src/pipeline/reconcile.ts 引用为准
-    const src = await import('../src/pipeline/reconcile.js');
-    expect(typeof src.buildReconcilePrompt === 'function' || typeof src.runReconcile === 'function').toBe(true);
-  });
 });

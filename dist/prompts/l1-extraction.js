@@ -464,10 +464,6 @@ ${bgText}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 【待提取的新消息】（务必结合 timestamp 推算时间，只从这里提取记忆！）：
-<<<<<<< HEAD
-${newText}${hallText}`;
-=======
 ${DATA_DELIMITER_NOTE}
-${newText}${wingText}`;
->>>>>>> 549f63e (feat(prompts+redaction): §B 防注入边界声明 + §C 载荷脱敏(memorax-absorb Wave 2))
+${newText}${hallText}`;
 }

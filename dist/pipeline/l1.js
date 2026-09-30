@@ -240,13 +240,20 @@ workspaceId) {
     // runId 提到块外:§C 冻结对要沿用同一批次 id,使「这一轮判了什么」与
     // 「这一轮冻结了哪一对」在记忆库侧可交叉审计(findings.md §3 / §9)。
     const runId = newRunId();
+    let byKind;
     {
         const items = extracted.map((m, i) => ({
             recordId: m.record_id,
             candidateIds: (matches[i]?.candidates ?? []).map((c) => c.id),
             action: byRecord.get(m.record_id)?.action,
         }));
-        persistReceiptsSafely((rows) => store.recordReceipts(rows), buildReceipts(runId, new Date().toISOString(), items), logger);
+        const rows = buildReceipts(runId, new Date().toISOString(), items);
+        persistReceiptsSafely((rows) => store.recordReceipts(rows), rows, logger);
+        // §F 追踪捎带:六值决策词表聚合(与凭证同源,runner 侧并入 distill_run 事件)
+        byKind = rows.reduce((acc, r) => {
+            acc[r.kind] = (acc[r.kind] ?? 0) + 1;
+            return acc;
+        }, {});
     }
     // ── Step 3: 应用决策(官方语义:新记录追加进事实源,被替换目标只从检索库删除) ──
     // 只按需取决策涉及的记录(候选 + 目标 id 并集),避免每轮全表扫描
@@ -390,7 +397,7 @@ workspaceId) {
     }
     markExtracted(states, mode, lastScene);
     logger.info(`[memory] L1 抽取完成(mode=${mode}):消息 ${pending.length} 条,抽取 ${extracted.length} 条,去重后新增 ${added.length} 条(替换 ${deletedIds.size} 条,chat=${addedByFamily.chat}/work=${addedByFamily.work}),累计 chat=${states.chat.totalExtracted}/work=${states.work.totalExtracted}`);
-    return { stored: added.length, skipped: false, sceneName: lastScene, newRecords: added };
+    return { stored: added.length, skipped: false, sceneName: lastScene, newRecords: added, runId, byKind };
 }
 /** auto 档取最近活跃的族 checkpoint(情境链/计数锚点)。 */
 function activeState(states) {

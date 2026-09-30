@@ -8,9 +8,6 @@ import { randomBytes } from 'node:crypto';
 import { blocksToText } from '../util/text.js';
 import { redactSecrets } from '../util/redact.js';
 import { sanitizeText, shouldCaptureL0, stripCodeBlocks } from '../util/sanitize.js';
-<<<<<<< HEAD
-=======
-import { foldRecoverableTurns, readPersistedEventsViaServices } from './capture-recovery.js';
 import { confirmInjectionByMessageId } from './recall-ack.js';
 /** §C 一次性告警标记:脱敏自身异常时放行原文,只提示一次(不阻断捕获)。 */
 let redactWarnedOnce = false;
@@ -34,7 +31,6 @@ function redactContent(content, cfg, logger) {
         return content;
     }
 }
->>>>>>> 549f63e (feat(prompts+redaction): §B 防注入边界声明 + §C 载荷脱敏(memorax-absorb Wave 2))
 /**
  * 需要进缓冲的事件类型。流式 chunk(text-delta/reasoning 等)一秒钟可达数百条,
  * 缓冲它们会把 MAX_BUFFER 撑爆、把轮次头部(turn/start + user 消息)裁掉——
