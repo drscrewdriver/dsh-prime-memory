@@ -189,9 +189,11 @@ export function registerCapture(
   // 补收 (L0 水位线, 末尾] 内 bracket 完整的尾轮(≤2 轮)——崩溃轮在缓冲丢失后
   // 仍可从持久化层找回(persistence 会给孤儿轮补 interrupted 闭合,探针② 实证 98 处)。
   // fail-open 纪律:任何异常只 warn,不阻塞会话启动;幂等 = 水位线 + 逐 turn 存在性检查。
+  // 0.1.7-rc.2 起 agent/session-start 并入 agent/created(serial:监听器需 async,
+  // 同 main 线 0.19.0 的 0.2.0 适配)。仍监听旧事件名的实现在 rc.2 宿主上永不触发。
   ctx.on(
-    'agent/session-start',
-    (payload) => {
+    'agent/created',
+    async (payload) => {
       try {
         if (payload.source !== 'resume') return;
         const s = live.get();
@@ -201,7 +203,10 @@ export function registerCapture(
         if (!sid) return;
         const mode = modes.get(sid);
         if (mode === 'off') return; // off 档对记忆系统完全隐身,对齐现行为
-        let events: readonly SessionEvent[] | undefined = session?.events;
+        // 0.1.7-rc.2 起 Session 弃用同步全量 .events,改 snapshotEvents()(同 main 线
+        // 0.19.0 的 0.2.0 适配);探针式读取,旧宿主形状走下方降级链。
+        let events: readonly SessionEvent[] | undefined =
+          typeof session?.snapshotEvents === 'function' ? session.snapshotEvents() : undefined;
         if (!events || events.length === 0) {
           // task_8 降级链:events 不可得(宿主版本偏差)时依次试
           // ctx.sessionQuery.readSession / ctx.sessionPersistence.readFrom(守卫探针式)
