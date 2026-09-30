@@ -50,14 +50,14 @@
     "ENGINEERING-NOTES.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/copy-client.mjs",
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/copy-client.mjs",
     "smoke": "npm run build:smoke && node dist-smoke/smoke.js",
     "verify-catalog": "npm run build && node scripts/verify-catalog.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.test.json",
     "build:smoke": "tsc src/smoke.ts --outDir dist-smoke --module nodenext --moduleResolution nodenext --target es2022 --strict --skipLibCheck --esModuleInterop",
     "lint": "eslint src client/src scripts tests",
     "test": "vitest run",
-    "hall-migrate": "npm run build && node scripts/hall-migrate.mjs"
+    "wing-migrate": "npm run build && node scripts/wing-migrate.mjs"
   },
   "engines": {
     "node": ">=22.16.0",
