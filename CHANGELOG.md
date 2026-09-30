@@ -6,6 +6,22 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [0.12.5] — 2026-10-01
+
+### 新增
+
+- **memorax-absorb 特性反哺（main 线 §B-§F 回灌本线）**：把 0.1.7/0.2.0 线已完成并实证的五块能力移植到 0.1.2 宿主，全部保持本线 v3 署名与既有设置面（§A 崩溃恢复不回灌：本线宿主无 sessionQuery/sessionPersistence，降级链两级全空，代码 inert）：
+  - **§B 蒸馏提示词防注入**：五处蒸馏 prompt（l1-extraction/l1-dedup/scene/persona/graph-projection）加入内容边界声明与数据插槽界定；本线无 reconcile 管线，该文件的声明无落地目标，未引入。
+  - **§C 载荷脱敏**（`capture.redactSecrets`，默认开启）：捕获写入边界把 8 类密钥替换为 `[REDACTED:<KIND>]` 占位符，单点覆盖 L0 与蒸馏输入；`memory_add`/`memory_import` 手动路径同词表；`false` 一键回明文。
+  - **§D 注入两段式确认**：召回注入改为 pending → 日志回执确认才 `dedupe.mark`；确认按注入消息 id 匹配、置于 source.kind 过滤之前（顺序有测试钉住）。5 分钟未回执降级照常标记。
+  - **§E 压缩感知增强召回**：`compaction/end` 后该会话下一轮跳过去重压制并重注入画像（宿主无该事件时惰性零回归）；本线无档位预过滤，去重集合直接作用于 `hits`。
+  - **§F 结构化追踪**（`trace.*`）：召回/蒸馏事件按天 JSONL 落盘（保留期默认 14 天、单日 5MB 停写），query 指纹默认 metadata-only；端点面 31 → 32（`dsh-memory/trace-tail`）。
+- **CI 门禁**：ci.yml 触发分支补 `archive/release/0.1.2`（原先本线 push 无门禁）。
+
+### 变更
+
+- 版本 0.12.4 → 0.12.5；dist 按本线源码全量重建。
+
 ## [0.11.0] — 2026-09-13
 
 ### 兼容性（按 DSH 插件框架文档适配）
