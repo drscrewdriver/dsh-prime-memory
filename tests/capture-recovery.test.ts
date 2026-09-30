@@ -291,9 +291,33 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
     const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
     const onSessionStart = d.handlers.get('agent/session-start');
     onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec' } }, source: 'resume' } as never);
+    // 0.1.5 适配:降级链为异步延续,先排空微任务再等 L0 链
+    await new Promise<void>((r) => setImmediate(r));
     await flush?.();
     expect(appended).toHaveLength(1);
     expect(appended[0].messages.map((m) => m.content)).toContain('降级路径恢复');
+  });
+
+  it('0.1.5 适配:readSession 为 async 且解析为 {session:{id},events} → 降级路径恢复', async () => {
+    const d = makeDeps();
+    const { appended } = d;
+    (d.ctx as unknown as { get: (name: string) => unknown }).get = (name: string) =>
+      name === 'sessionQuery'
+        ? {
+            // 本线宿主形状:evidence-source.ts SessionQueryLike——Promise + session 包裹
+            readSession: async (id: string) =>
+              id === 's-rec'
+                ? { session: { id }, events: [...bracket(1, { user: '异步形状恢复', reason: 'interrupted' })] }
+                : undefined,
+          }
+        : undefined;
+    const flush = registerCapture(d.ctx, d.cfg, d.runner as never, d.l0 as never, d.logger, d.live as never, d.modes as never);
+    const onSessionStart = d.handlers.get('agent/session-start');
+    onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec' } }, source: 'resume' } as never);
+    await new Promise<void>((r) => setImmediate(r));
+    await flush?.();
+    expect(appended).toHaveLength(1);
+    expect(appended[0].messages.map((m) => m.content)).toContain('异步形状恢复');
   });
 
   it('task_8 降级②:readSession 抛错 → sessionPersistence.readFrom 兜底', async () => {
@@ -318,6 +342,8 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
     expect(() =>
       onSessionStart?.({ agent: { id: 'agent-1', session: { id: 's-rec' } }, source: 'resume' } as never),
     ).not.toThrow();
+    // 0.1.5 适配:降级链为异步延续,先排空微任务再等 L0 链
+    await new Promise<void>((r) => setImmediate(r));
     await flush?.();
     expect(appended).toHaveLength(1);
     expect(appended[0].messages.map((m) => m.content)).toContain('readFrom 兜底恢复');
@@ -334,6 +360,8 @@ describe('registerCapture 恢复接线(agent/session-start resume)', () => {
         onSessionStart?.({ agent: { id: 'agent-1', session: { id: `s-z${i}` } }, source: 'resume' } as never),
       ).not.toThrow();
     }
+    // 0.1.5 适配:一次性提示也在异步延续内发出,先排空微任务
+    await new Promise<void>((r) => setImmediate(r));
     await flush?.();
     expect(appended).toHaveLength(0);
     const notices = infos.filter((m) => m.includes('一次性'));

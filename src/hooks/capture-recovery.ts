@@ -97,21 +97,34 @@ export interface HostRecoveryServices {
  * ② `ctx.sessionPersistence.readFrom(id, 0)`(按 seq 范围读,0 = 从头取全量——
  *    水位线以 turn 计,无 seq 对应,全量交由 fold + 上限 2 收敛)。
  *
+ * 0.1.5 适配:readSession/readFrom 在宿主 0.1.5 上是 **async** 且解析为
+ * `{ session: { id }, events }`(见 src/store/evidence-source.ts 的
+ * SessionQueryLike);0.1.7+ 为同步。本函数统一 await,`accepts` 同时认
+ * 顶层 `events` 与 `session.events` 两种放置。
+ *
  * 返回 undefined = 两级均不可用/均失败(调用方走一次性提示 + 维持现状)。
  * 守卫纪律与 recall.ts 的 loadStored 探针一致:不假设方法存在,失败静默降级。
  */
-export function readPersistedEventsViaServices(
+export async function readPersistedEventsViaServices(
   svcs: HostRecoveryServices,
   sessionId: string,
-): SessionEvent[] | undefined {
-  const accepts = (r: unknown): r is { events: SessionEvent[] } =>
-    r !== null && typeof r === 'object' && Array.isArray((r as { events?: unknown }).events) &&
-    (r as { events: unknown[] }).events.length > 0;
+): Promise<SessionEvent[] | undefined> {
+  const unwrap = (r: unknown): SessionEvent[] | undefined => {
+    if (r === null || typeof r !== 'object') return undefined;
+    const o = r as { events?: unknown; session?: { events?: unknown } };
+    if (Array.isArray(o.events) && o.events.length > 0) return o.events as SessionEvent[];
+    const inner = o.session as { events?: unknown } | undefined;
+    if (inner !== null && typeof inner === 'object' && Array.isArray(inner.events) && inner.events.length > 0) {
+      return inner.events as SessionEvent[];
+    }
+    return undefined;
+  };
   const q = svcs.sessionQuery as { readSession?: unknown } | undefined;
   if (q !== null && typeof q === 'object' && typeof q.readSession === 'function') {
     try {
-      const result = (q.readSession as (id: string) => unknown)(sessionId);
-      if (accepts(result)) return result.events;
+      const result = await (q.readSession as (id: string) => unknown)(sessionId);
+      const events = unwrap(result);
+      if (events) return events;
     } catch {
       /* 落到下一级 */
     }
@@ -119,8 +132,9 @@ export function readPersistedEventsViaServices(
   const p = svcs.sessionPersistence as { readFrom?: unknown } | undefined;
   if (p !== null && typeof p === 'object' && typeof p.readFrom === 'function') {
     try {
-      const result = (p.readFrom as (id: string, fromSeq: number) => unknown)(sessionId, 0);
-      if (accepts(result)) return result.events;
+      const result = await (p.readFrom as (id: string, fromSeq: number) => unknown)(sessionId, 0);
+      const events = unwrap(result);
+      if (events) return events;
     } catch {
       /* 均不可用 */
     }
