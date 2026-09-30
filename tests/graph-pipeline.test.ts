@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Context } from '@deepseek-ai/cordis';
 import { applyGraphProjection } from '../src/graph/apply.js';
-import type { GraphNode } from '../src/graph/types.js';
+import type { GraphEdge, GraphNode } from '../src/graph/types.js';
 import { GRAPH_PROJECTION_EXAMPLE, getGraphProjectionSystemPrompt } from '../src/prompts/graph-projection.js';
 import {
   GRAPH_CONTEXT_EDGE_LIMIT,
@@ -22,7 +22,8 @@ import {
 import { pickNextTaskIndex, type PipelineTask } from '../src/pipeline/runner.js';
 import { snapshotDistillUsage } from '../src/llm-usage.js';
 import { MemoryDb } from '../src/store/sqlite.js';
-import type { MemoryConfig, MemoryRecord } from '../src/types.js';
+import type { MemoryRecord } from '../src/types.js';
+import type { MemoryConfig } from '../src/config.js';
 import type { MemoryLogger } from '../src/types.js';
 
 let dir: string;
@@ -120,7 +121,8 @@ describe('claim 上下文装配有界', () => {
 
   it('边 ≤120:只取 active 且两端都入选的边', () => {
     const nodes = [node('a', '甲'), node('b', '乙'), node('c', '丙')];
-    const edge = (id: string, from: string, to: string, status = 'active') => ({
+    // 显式标注 status 为 GraphRecordStatus 词汇(默认参数推断出的 string 收不进 GraphEdge)
+    const edge = (id: string, from: string, to: string, status: GraphEdge['status'] = 'active') => ({
       id,
       fromNodeId: from,
       toNodeId: to,

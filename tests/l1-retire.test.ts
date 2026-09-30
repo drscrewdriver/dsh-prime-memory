@@ -75,7 +75,7 @@ describe('软删原语:退场 → 检索不可见 → 恢复可见', () => {
 
     // 基线:检索面能看到
     expect(ids(await store.search(Q, 5))).toContain(GONE);
-    expect(store.listRetired().total).toBe(0);
+    expect(store.listRetired({ limit: 50, offset: 0 }).total).toBe(0);
 
     // ── 退场 ──
     expect(store.retire([GONE], { at: AT, reason: 'manual' })).toBe(1);
@@ -106,7 +106,7 @@ describe('软删原语:退场 → 检索不可见 → 恢复可见', () => {
     const res = await store.restore([GONE]);
     expect(res.restored).toBe(1);
     expect(ids(await store.search(Q, 5))).toContain(GONE);
-    expect(store.listRetired().total).toBe(0);
+    expect(store.listRetired({ limit: 50, offset: 0 }).total).toBe(0);
     const [back] = store.getByIds([GONE]);
     expect(back.validTo).toBeUndefined();
     expect(readSupersedeMarker(back.metadata)).toBeUndefined();
@@ -165,7 +165,7 @@ describe('软删原语:退场 → 检索不可见 → 恢复可见', () => {
   it('不存在的 id 静默跳过(不抛、不计数)', async () => {
     const { db, store } = await setup();
     expect(store.retire(['no_such_id'], { at: AT, reason: 'manual' })).toBe(0);
-    expect(store.listRetired().total).toBe(0);
+    expect(store.listRetired({ limit: 50, offset: 0 }).total).toBe(0);
     expect(await store.restore(['no_such_id'])).toEqual({ restored: 0, vectorsWritten: 0 });
     db.close();
   });
@@ -177,7 +177,7 @@ describe('软删原语:退场 → 检索不可见 → 恢复可见', () => {
     const [row] = store.getByIds([KEEP]);
     expect(row.validTo).toBeUndefined();
     expect(readSupersedeMarker(row.metadata)).toBeUndefined();
-    expect(store.listRetired().total).toBe(0);
+    expect(store.listRetired({ limit: 50, offset: 0 }).total).toBe(0);
     expect(ids(await store.search('咖啡豆', 5))).toContain(KEEP);
     db.close();
   });

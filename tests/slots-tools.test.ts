@@ -13,6 +13,7 @@ import type { LiveSettingsHandle } from '../src/settings.js';
 import type { MemoryConfig } from '../src/config.js';
 import type { MemoryLiveSettings } from '../src/contract.js';
 import type { MemoryLogger } from '../src/types.js';
+import type { L1Store } from '../src/store/l1.js';
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
 
 let dir: string;
@@ -82,7 +83,8 @@ async function harness(opts: { mutate?: boolean; globalRecall?: boolean; tools?:
   } as unknown as Parameters<typeof registerSlotTools>[0];
 
   const cfg = { tools: opts.tools ?? true } as unknown as MemoryConfig;
-  registerSlotTools(ctx, cfg, store, noopLogger, modes, liveHandle, opts.l1);
+  // 桩只实现被测的 getByIds/retire 两成员(测断言经局部变量读 retireCalls),故收窄断言为 L1Store
+  registerSlotTools(ctx, cfg, store, noopLogger, modes, liveHandle, opts.l1 as unknown as L1Store | undefined);
 
   const find = (name: string): RegisteredTool => {
     const tool = registered.find((t) => t.name === name);

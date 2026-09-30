@@ -38,9 +38,10 @@ import { SceneStore } from '../src/store/scenes.js';
 import { PersonaStore } from '../src/store/persona.js';
 import { SessionModeStore } from '../src/store/session-modes.js';
 import type { LiveSettingsHandle } from '../src/settings.js';
-import type { MemoryConfig, MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryConfig } from '../src/config.js';
 import type { MemoryLogger } from '../src/types.js';
-import type { Tool } from '@deepseek-ai/dsh-tools';
+import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
 
 let dir: string;
 /**
@@ -105,14 +106,17 @@ function fakeAgents(links: Record<string, string>): { get: (id: string) => unkno
 }
 
 function harness(opts: { agents?: { get: (id: string) => unknown } } = {}) {
-  const live: MemoryLiveSettings = {
+  // 基线不含 conflictFreeze 键(留空 = 不覆盖,见 runner.ts 的 !== undefined 判定),故用断言;
+  // 空数组按契约类型加宽(never[] 会让断言两侧失去重叠)
+  const live = {
     enabled: true, capture: true, distill: true, recall: true,
-    reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
-    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0 }, distillMaxInputChars: 0,
-    distillLayerChains: { l1: [], l2: [], l3: [] }, distillMode: '', directBaseURL: '', directApiKey: '',
+    reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [] as MemoryLiveSettings['distillChain'],
+    distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
+    distillLayerChains: { l1: [], l2: [], l3: [] } as MemoryLiveSettings['distillLayerChains'],
+    distillMode: '', directBaseURL: '', directApiKey: '',
     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
     memoryMutate: false,
-  };
+  } as MemoryLiveSettings;
   const liveHandle: LiveSettingsHandle = { supported: true, get: () => live, update: async () => {} };
 
   // 全局默认档 = auto:正是"回落"会命中的那个值
@@ -128,7 +132,7 @@ function harness(opts: { agents?: { get: (id: string) => unknown } } = {}) {
 
   const registered: RegisteredTool[] = [];
   const ctx = {
-    tools: { register: (t: Tool) => registered.push(t as unknown as RegisteredTool) },
+    tools: { register: (t: ToolDefinition) => registered.push(t as unknown as RegisteredTool) },
     get: (name: string) => (name === 'agents' ? opts.agents : undefined),
   } as unknown as Parameters<typeof registerMemoryTools>[0];
 

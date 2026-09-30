@@ -35,7 +35,8 @@ async function seedDb(retire = false): Promise<string> {
   ]);
   if (retire) {
     // 退场一行:主表行连 metadata_json 保留(软删语义),迁移必须仍扫到
-    db.retireL1Batch(['g1'], { at: new Date().toISOString(), reason: 'test', verdict: 'test', pairId: 'p1' });
+    // (reason 须用 RetireReason 词汇内合法值;本用例只数行数,不读标记内容)
+    db.retireL1Batch(['g1'], { at: new Date().toISOString(), reason: 'manual', verdict: 'test', pairId: 'p1' });
   }
   db.close();
   return dbPath;

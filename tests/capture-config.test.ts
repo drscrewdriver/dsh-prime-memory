@@ -21,7 +21,8 @@ describe('capture.redactSecrets 配置键(§C)', () => {
   it('类型错误走 schemastery 标准校验(与既有 capture 键同语义,union 风险不涉及)', () => {
     // 与 enabled/stripCodeBlocks 一致:boolean 键传非布尔即 ValidationError——
     // 这是全部既有键的标准行为;「解析失败不阻断启动」由宿主对 Config 校验的兜底承接
-    expect(() => memorySchema({ capture: { redactSecrets: 'bogus' } })).toThrow(/boolean/);
+    // 故意传入非法值探测校验(schemastery 类型是 boolean,非法值只能经断言构造)
+    expect(() => memorySchema({ capture: { redactSecrets: 'bogus' as unknown as boolean } })).toThrow(/boolean/);
   });
 
   it('缺省回落默认 true:手造 capture 夹具(未带该键)不破坏', () => {

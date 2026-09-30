@@ -11,7 +11,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { Context } from '@deepseek-ai/cordis';
-import type { MemoryConfig, MemoryLogger, MemoryRecord } from '../src/types.js';
+import type { MemoryLogger, MemoryRecord } from '../src/types.js';
+import type { MemoryConfig } from '../src/config.js';
 
 /** LLM 桩:按序吐出预设回复,并记录每次调用的 layer/user(供断言提示词内容)。 */
 const llmReplies: string[] = [];

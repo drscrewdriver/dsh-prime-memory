@@ -43,7 +43,9 @@ const { runExtraction } = await import('../src/pipeline/l1.js');
 const { validateConflictPair } = await import('../src/store/conflicts.js');
 const { L1Store } = await import('../src/store/l1.js');
 const { MemoryDb } = await import('../src/store/sqlite.js');
-type MemoryConfig = import('../src/contract.js').MemoryConfig;
+type MemoryConfig = import('../src/config.js').MemoryConfig;
+// 动态 import 值绑定不带类型空间,补同名类型别名供类型位使用
+type MemoryDb = import('../src/store/sqlite.js').MemoryDb;
 type FamilyStates = import('../src/pipeline/l1.js').FamilyStates;
 type ConversationMessage = import('../src/types.js').ConversationMessage;
 

@@ -62,7 +62,9 @@ const { runExtraction } = await import('../src/pipeline/l1.js');
 const { L1Store } = await import('../src/store/l1.js');
 const { MemoryDb } = await import('../src/store/sqlite.js');
 const { memorySchema } = await import('../src/config.js');
-type MemoryConfig = import('../src/contract.js').MemoryConfig;
+type MemoryConfig = import('../src/config.js').MemoryConfig;
+// 动态 import 值绑定不带类型空间,补同名类型别名供类型位使用
+type MemoryDb = import('../src/store/sqlite.js').MemoryDb;
 
 /**
  * 夹具基线取自**真 schema 的部署默认值**,只在用例关心处覆盖。
