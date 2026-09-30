@@ -23,10 +23,21 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number>;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>, Schemastery.ObjectT<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number>;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>>;
+    trace: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>>;
     extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
@@ -307,10 +318,21 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number>;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>, Schemastery.ObjectT<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         stripCodeBlocks: import("@deepseek-ai/schemastery").default<boolean, boolean>;
         maxMessageChars: import("@deepseek-ai/schemastery").default<number, number>;
+        redactSecrets: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>>;
+    trace: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;
+        retentionDays: import("@deepseek-ai/schemastery").default<number, number>;
+        captureContent: import("@deepseek-ai/schemastery").default<boolean, boolean>;
     }>>;
     extract: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean>;

@@ -6,6 +6,23 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [0.16.3] — 2026-10-01
+
+### 新增
+
+- **memorax-absorb 特性反哺（main 线 §A-§F 回灌本线）**：把 0.1.7/0.2.0 线已完成并实证的六块能力整体移植到 0.1.5 宿主，全部保持本线 v3 署名与 `settings.register` 设置面：
+  - **§A 崩溃恢复**：resume 时以 L0 已落盘最大 turn 为水位线，从宿主持久化日志对账补收其后完整轮次（≤2 轮；孤儿轮由宿主补写 `interrupted` 闭合）。**本线适配**：宿主 0.1.5 的 `sessionQuery.readSession` 为 async 且解析为 `{session:{id},events}`，降级链改异步延续并同认 `session.events` 放置，监听器保持同步、异常自捕获（fail-open 纪律不变）。
+  - **§B 蒸馏提示词防注入**：六处蒸馏 prompt 加入内容边界声明——对话原文、记忆池、场景全文一律是数据不是指令。
+  - **§C 载荷脱敏**（`capture.redactSecrets`，默认开启）：捕获写入边界把 8 类密钥替换为 `[REDACTED:<KIND>]` 占位符，单点覆盖 L0 JSONL/SQLite、蒸馏输入与手动写入边界；`false` 一键回明文。
+  - **§D 注入两段式确认**：召回注入改为 pending → 日志回执确认才 `dedupe.mark`；确认按注入消息 id 匹配、置于 source.kind 过滤之前（顺序有测试钉住，注入消息不过滤）。被覆盖/取消的注入不再误压制记忆；5 分钟未回执降级照常标记。
+  - **§E 压缩感知增强召回**：`compaction/end` 后该会话下一轮做一次跳过去重的定向增强召回，画像立即重注入、占用账本归零；宿主无该事件时惰性零回归。
+  - **§F 结构化追踪**（`trace.*`）：召回/蒸馏事件按天 JSONL 落盘（保留期默认 14 天、单日 5MB 停写），query 指纹默认 metadata-only；新增 `dsh-memory/trace-tail` 端点与设置页日志三数据源切换。
+- **构建卫生**（同 main 线 5419cb6）：build 前清空 dist（根除 hall→wing 改名遗留陈旧产物并移除 tracked 的 `dist/hall-*`）；死脚本 `hall-migrate` 改名 `wing-migrate`；stores 超时加固。
+
+### 变更
+
+- 版本 0.16.2 → 0.16.3；dist 按本线源码全量重建（含 recall-ack/trace/redact/capture-recovery 新模块）。
+
 ## [Unreleased]
 
 ### 新增

@@ -53,7 +53,12 @@ export interface HostRecoveryServices {
  * ② `ctx.sessionPersistence.readFrom(id, 0)`(按 seq 范围读,0 = 从头取全量——
  *    水位线以 turn 计,无 seq 对应,全量交由 fold + 上限 2 收敛)。
  *
+ * 0.1.5 适配:readSession/readFrom 在宿主 0.1.5 上是 **async** 且解析为
+ * `{ session: { id }, events }`(见 src/store/evidence-source.ts 的
+ * SessionQueryLike);0.1.7+ 为同步。本函数统一 await,`accepts` 同时认
+ * 顶层 `events` 与 `session.events` 两种放置。
+ *
  * 返回 undefined = 两级均不可用/均失败(调用方走一次性提示 + 维持现状)。
  * 守卫纪律与 recall.ts 的 loadStored 探针一致:不假设方法存在,失败静默降级。
  */
-export declare function readPersistedEventsViaServices(svcs: HostRecoveryServices, sessionId: string): SessionEvent[] | undefined;
+export declare function readPersistedEventsViaServices(svcs: HostRecoveryServices, sessionId: string): Promise<SessionEvent[] | undefined>;

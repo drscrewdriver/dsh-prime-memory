@@ -28,6 +28,21 @@ export interface MemoryConfig {
         stripCodeBlocks: boolean;
         /** 单条消息内容最大字符数。 */
         maxMessageChars: number;
+        /**
+         * §C 载荷脱敏(memorax-absorb):捕获单点把 8 类密钥(PEM/Bearer/JWT/Cookie/
+         * 厂商 API key/邮箱/长号/高熵 ID)替换为 `[REDACTED:<KIND>]` 占位符,覆盖
+         * L0 JSONL/SQLite/蒸馏输入与手动 memory_add/import。**默认开启**——密钥被
+         * 逐轮召回注入的危害大于偶发误脱敏;注意开启后 L0 原文自此改变(重建不可得原文)。
+         * 决策记录见计划 spec §C;`false` 一键回到明文行为。 */
+        redactSecrets?: boolean;
+    };
+    /** §F 结构化追踪(memorax-absorb):recall/distill 事件按天 JSONL。 */
+    trace: {
+        enabled: boolean;
+        /** 事件文件保留天数(写入时切日清理;0 = 永久)。 */
+        retentionDays: number;
+        /** 默认 metadata-only(chars+sha);true 才存 query 原文(≤200 字符)。 */
+        captureContent: boolean;
     };
     extract: {
         enabled: boolean;
@@ -196,10 +211,21 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
         stripCodeBlocks: Schema<boolean, boolean>;
         maxMessageChars: Schema<number, number>;
+        redactSecrets: Schema<boolean, boolean>;
     }>, Schemastery.ObjectT<{
         enabled: Schema<boolean, boolean>;
         stripCodeBlocks: Schema<boolean, boolean>;
         maxMessageChars: Schema<number, number>;
+        redactSecrets: Schema<boolean, boolean>;
+    }>>;
+    trace: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+        retentionDays: Schema<number, number>;
+        captureContent: Schema<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
+        retentionDays: Schema<number, number>;
+        captureContent: Schema<boolean, boolean>;
     }>>;
     extract: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
@@ -480,10 +506,21 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;
         stripCodeBlocks: Schema<boolean, boolean>;
         maxMessageChars: Schema<number, number>;
+        redactSecrets: Schema<boolean, boolean>;
     }>, Schemastery.ObjectT<{
         enabled: Schema<boolean, boolean>;
         stripCodeBlocks: Schema<boolean, boolean>;
         maxMessageChars: Schema<number, number>;
+        redactSecrets: Schema<boolean, boolean>;
+    }>>;
+    trace: Schema<Schemastery.ObjectS<{
+        enabled: Schema<boolean, boolean>;
+        retentionDays: Schema<number, number>;
+        captureContent: Schema<boolean, boolean>;
+    }>, Schemastery.ObjectT<{
+        enabled: Schema<boolean, boolean>;
+        retentionDays: Schema<number, number>;
+        captureContent: Schema<boolean, boolean>;
     }>>;
     extract: Schema<Schemastery.ObjectS<{
         enabled: Schema<boolean, boolean>;

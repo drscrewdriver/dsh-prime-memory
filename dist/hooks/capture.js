@@ -108,7 +108,7 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
             const sid = String(session.id ?? session);
             // §D 日志回执(memorax-absorb):注入消息以原样 user/message 入日志时在此确认,
             // 才真正 dedupe.mark。**必须置于 source.kind 过滤之前**——过滤在
-            // turnEventsToMessages 内且只放行 kind='user',注入消息(kind='plugin:memory')
+            // turnEventsToMessages 内且只放行 kind='user',注入消息(kind='plugin',本线 v3 署名)
             // 走不到那里;也置于 off 档返回之前(确认与档位无关,且代价是一次 Map 查找)。
             if (event.type === 'user/message') {
                 const mid = event.data.id;
@@ -160,6 +160,38 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
             logger.warn(`[memory] session/event 处理失败: ${err instanceof Error ? err.message : String(err)}`);
         }
     });
+    // §A 恢复共用水位线对账段(同步主路径与异步降级延续共用;mode 由调用方传入,
+    // 调用点已被 off 早退收窄,故直接取 enqueue 的形参类型)
+    const recoverFromEvents = (sid, mode, events) => {
+        const watermark = l0.maxCapturedTurn(sid);
+        const brackets = foldRecoverableTurns(events, watermark);
+        if (brackets.length === 0)
+            return;
+        let recovered = 0;
+        let skipped = 0;
+        let total = 0;
+        for (const bracket of brackets) {
+            if (l0.hasAnyL0Message(sid, bracket.turn)) {
+                // 部分写残行:水位线只判"整轮无",存在性检查兜底——整轮跳过,宁少收不重复
+                skipped += 1;
+                continue;
+            }
+            const messages = turnEventsToMessages(bracket.events, cfg, logger, sid, bracket.turn);
+            if (messages.length === 0)
+                continue;
+            recovered += 1;
+            total += messages.length;
+            const n = messages.length;
+            l0Queue = l0Queue
+                .then(() => l0.append(sid, messages))
+                .then(() => logger.info(`[memory] L0 恢复落盘 ${n} 条`))
+                .catch((err) => logger.warn(`[memory] L0 恢复落盘失败: ${err instanceof Error ? err.message : String(err)}`));
+            runner.enqueue(sid, messages, mode);
+        }
+        if (recovered > 0 || skipped > 0) {
+            logger.info(`[memory] resume 对账:水位线 ${watermark ?? '无'} → 恢复 ${recovered} 轮 ${total} 条,幂等跳过 ${skipped} 轮(session=${sid})`);
+        }
+    };
     // ── §A 崩溃恢复(memorax-absorb Wave 1 / task_7):resume 时对账宿主持久化日志,
     // 补收 (L0 水位线, 末尾] 内 bracket 完整的尾轮(≤2 轮)——崩溃轮在缓冲丢失后
     // 仍可从持久化层找回(persistence 会给孤儿轮补 interrupted 闭合,探针② 实证 98 处)。
@@ -178,18 +210,24 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
             const mode = modes.get(sid);
             if (mode === 'off')
                 return; // off 档对记忆系统完全隐身,对齐现行为
-            let events = session?.events;
-            if (!events || events.length === 0) {
-                // task_8 降级链:events 不可得(宿主版本偏差)时依次试
-                // ctx.sessionQuery.readSession / ctx.sessionPersistence.readFrom(守卫探针式)
-                const get = ctx.get;
-                const svcs = typeof get === 'function'
-                    ? {
-                        sessionQuery: get.call(ctx, 'sessionQuery'),
-                        sessionPersistence: get.call(ctx, 'sessionPersistence'),
-                    }
-                    : {};
-                const degraded = readPersistedEventsViaServices(svcs, sid);
+            const primary = session?.events;
+            if (primary && primary.length > 0) {
+                recoverFromEvents(sid, mode, primary);
+                return;
+            }
+            // task_8 降级链:events 不可得(宿主版本偏差)时依次试
+            // ctx.sessionQuery.readSession / ctx.sessionPersistence.readFrom(守卫探针式)。
+            // 0.1.5 适配:两级服务都是 async,故走异步延续;listener 保持同步
+            // (0.1.5 无 serial 契约),延续内部自捕获异常,fail-open 纪律不变。
+            const get = ctx.get;
+            const svcs = typeof get === 'function'
+                ? {
+                    sessionQuery: get.call(ctx, 'sessionQuery'),
+                    sessionPersistence: get.call(ctx, 'sessionPersistence'),
+                }
+                : {};
+            void readPersistedEventsViaServices(svcs, sid)
+                .then((degraded) => {
                 if (degraded === undefined) {
                     if (!warnedRecoveryUnavailable) {
                         warnedRecoveryUnavailable = true;
@@ -197,36 +235,11 @@ export function registerCapture(ctx, cfg, runner, l0, logger, live, modes) {
                     }
                     return;
                 }
-                events = degraded;
-            }
-            const watermark = l0.maxCapturedTurn(sid);
-            const brackets = foldRecoverableTurns(events, watermark);
-            if (brackets.length === 0)
-                return;
-            let recovered = 0;
-            let skipped = 0;
-            let total = 0;
-            for (const bracket of brackets) {
-                if (l0.hasAnyL0Message(sid, bracket.turn)) {
-                    // 部分写残行:水位线只判"整轮无",存在性检查兜底——整轮跳过,宁少收不重复
-                    skipped += 1;
-                    continue;
-                }
-                const messages = turnEventsToMessages(bracket.events, cfg, logger, sid, bracket.turn);
-                if (messages.length === 0)
-                    continue;
-                recovered += 1;
-                total += messages.length;
-                const n = messages.length;
-                l0Queue = l0Queue
-                    .then(() => l0.append(sid, messages))
-                    .then(() => logger.info(`[memory] L0 恢复落盘 ${n} 条`))
-                    .catch((err) => logger.warn(`[memory] L0 恢复落盘失败: ${err instanceof Error ? err.message : String(err)}`));
-                runner.enqueue(sid, messages, mode);
-            }
-            if (recovered > 0 || skipped > 0) {
-                logger.info(`[memory] resume 对账:水位线 ${watermark ?? '无'} → 恢复 ${recovered} 轮 ${total} 条,幂等跳过 ${skipped} 轮(session=${sid})`);
-            }
+                recoverFromEvents(sid, mode, degraded);
+            })
+                .catch((err) => {
+                logger.warn(`[memory] resume 恢复失败(不阻塞会话启动): ${err instanceof Error ? err.message : String(err)}`);
+            });
         }
         catch (err) {
             logger.warn(`[memory] resume 恢复失败(不阻塞会话启动): ${err instanceof Error ? err.message : String(err)}`);
