@@ -18,7 +18,8 @@ import { StateStore } from '../src/store/state.js';
 import { SessionModeStore } from '../src/store/session-modes.js';
 import { emptyOccupancyLedger } from '../src/util/context-occupancy.js';
 import { initTokenCost, resetTokenCost } from '../src/token-cost.js';
-import type { MemoryConfig, MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryLiveSettings } from '../src/contract.js';
+import type { MemoryConfig } from '../src/config.js';
 import type { LiveSettingsHandle } from '../src/settings.js';
 import type { MemoryLogger } from '../src/types.js';
 
@@ -57,19 +58,21 @@ function cfg(
 }
 
 function liveHandle(over: Partial<MemoryLiveSettings> = {}): LiveSettingsHandle {
-  const s: MemoryLiveSettings = {
+  // 断言而非注解:基线刻意不提供 conflictFreeze(与生产 LiveSettings 解析的缺省语义保持一致)
+  const s = {
     enabled: true, capture: true, distill: true, recall: true,
     reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
     distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
     distillLayerChains: { l1: [], l2: [], l3: [] }, distillMode: '', directBaseURL: '', directApiKey: '',
     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0, memoryMutate: false,
     ...over,
-  };
-  return { supported: true, get: () => s, update: async (patch) => Object.assign(s, patch) };
+  } as MemoryLiveSettings;
+  return { supported: true, get: () => s, update: async (patch) => { Object.assign(s, patch); } };
 }
 
 interface Harness {
-  call: (endpoint: string, payload?: unknown) => Promise<{ ok: boolean; value?: unknown; error?: { message: string } }>;
+  // call 返回的是 HTTP envelope 解包后的 value(非 200/ok:false 已 throw),与运行时行为一致
+  call: (endpoint: string, payload?: unknown) => Promise<unknown>;
   stores: { l0: L0Store; l1: L1Store; scenes: Record<'chat' | 'work', SceneStore>; persona: Record<'chat' | 'work', PersonaStore>; state: StateStore };
   db: MemoryDb;
   modes: SessionModeStore;

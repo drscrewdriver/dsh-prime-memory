@@ -41,9 +41,11 @@ const { runExtraction } = await import('../src/pipeline/l1.js');
 const { L1Store } = await import('../src/store/l1.js');
 const { MemoryDb } = await import('../src/store/sqlite.js');
 const { handleEndpoint, buildEndpointDeps } = await import('../src/stats.js');
-type MemoryConfig = import('../src/contract.js').MemoryConfig;
+type MemoryConfig = import('../src/config.js').MemoryConfig;
 type FamilyStates = import('../src/pipeline/l1.js').FamilyStates;
 type ConversationMessage = import('../src/types.js').ConversationMessage;
+// 值绑定来自上面的动态 import(构造器);类型侧用同名别名指向实例类型
+type MemoryDb = import('../src/store/sqlite.js').MemoryDb;
 
 let root: string;
 afterAll(async () => {

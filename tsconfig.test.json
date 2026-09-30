@@ -8,6 +8,16 @@
     "sourceMap": false,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "tests/ruminate.test.ts", "tests/stores.test.ts"],
+  "include": [
+    "src/**/*.ts",
+    "tests/ruminate.test.ts",
+    "tests/stores.test.ts",
+    "tests/rpc.test.ts",
+    "tests/redact-wiring.test.ts",
+    "tests/pipeline.test.ts",
+    "tests/llm-gateway.test.ts",
+    "tests/l1-receipts-backtracking.test.ts",
+    "tests/graph-store.test.ts"
+  ],
   "exclude": ["src/smoke.ts", "dist", "dist-smoke", "node_modules"]
 }
