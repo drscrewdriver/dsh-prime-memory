@@ -129,7 +129,7 @@ export function registerCapture(
       const sid = String(session.id ?? session);
       // §D 日志回执(memorax-absorb):注入消息以原样 user/message 入日志时在此确认,
       // 才真正 dedupe.mark。**必须置于 source.kind 过滤之前**——过滤在
-      // turnEventsToMessages 内且只放行 kind='user',注入消息(kind='plugin:memory')
+      // turnEventsToMessages 内且只放行 kind='user',注入消息(kind='plugin',本线 v3 署名)
       // 走不到那里;也置于 off 档返回之前(确认与档位无关,且代价是一次 Map 查找)。
       if (event.type === 'user/message') {
         const mid = (event.data as { id?: unknown }).id;

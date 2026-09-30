@@ -1,7 +1,7 @@
 /**
  * Wave 3 测试(memorax-absorb):
  *  - §D recall-ack 两段式:pending 登记 → 日志回执确认才标记;超时降级;容量淘汰;
- *  - §D capture 回执顺序约束(P1-3):source.kind='plugin:memory' 的注入消息必须
+ *  - §D capture 回执顺序约束(P1-3):source.kind='plugin'(v3)的注入消息必须
  *    能确认(匹配置于 source.kind 过滤之前);
  *  - §E PostCompactionTracker:error 过滤 / 消费即清 / 容量淘汰。
  */
@@ -88,19 +88,19 @@ describe('§D capture 回执顺序约束(P1-3)', () => {
     return handlers.get('session/event') as (session: unknown, event: SessionEvent) => void;
   }
 
-  it('source.kind=plugin:memory 的注入消息可触发确认(置于过滤之前)', () => {
+  it('source.kind=plugin(v3)的注入消息可触发确认(置于过滤之前)', () => {
     const marked: Array<[string, string[]]> = [];
     setInjectionMarker((agentId, ids) => marked.push([agentId, ids]));
     registerPendingInjection('agent-9', 'inj-1', ['r9']);
     const onEvent = harness();
-    // 注入消息事件:v4 署名 + 非用户来源——若匹配被放在 source.kind 过滤之后,这里收不到
+    // 注入消息事件:本线 v3 署名 + 非用户来源——若匹配被放在 source.kind 过滤之后,这里收不到
     onEvent(
       { id: 's-x' },
       {
         type: 'user/message',
         seq: 1,
         time: Date.now(),
-        data: { id: 'inj-1', role: 'user', content: [], source: { kind: 'plugin:memory', form: 'recall' } },
+        data: { id: 'inj-1', role: 'user', content: [], source: { kind: 'plugin', plugin: 'memory', form: 'recall' } },
       } as unknown as SessionEvent,
     );
     expect(marked).toEqual([['agent-9', ['r9']]]);
