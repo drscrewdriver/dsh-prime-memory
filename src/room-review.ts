@@ -60,6 +60,9 @@ export interface RoomMergeStore extends RoomReviewStore {
 export interface RoomRegistryMerge {
   markMerged(fromSlug: string, toSlug: string): Promise<boolean>;
   renameSlug(oldSlug: string, newSlug: string): Promise<boolean>;
+  /** rename 收尾恢复先前状态用(active 条目改名后不掉出标注词表)。 */
+  bySlug?(slug: string): { status: 'active' | 'retired' } | undefined;
+  setStatus?(slug: string, status: 'active' | 'retired'): Promise<boolean>;
 }
 
 export interface RoomCandidate {
@@ -314,15 +317,21 @@ export async function mergeRoom(
   }
 }
 
-/** rename = merge 1:1 + 注册表改名(冲突时抛错提示走 merge)。 */
+/** rename = merge 1:1 + 注册表改名(冲突时抛错提示走 merge)。
+ *  归类语义:改名**不是退役**——merge 编排的 markMerged 会把旧条目置 retired,
+ *  这里在改名后恢复其先前状态(active 条目改名后仍 active,不掉出标注词表)。 */
 export async function renameRoom(
   io: { l1: RoomMergeStore; registry: RoomRegistryMerge; logger: MemoryLogger },
   from: string,
   to: string,
   opts: { dryRun?: boolean; cap?: number } = {},
 ): Promise<MergeRoomResult> {
+  const priorStatus = io.registry.bySlug?.(from)?.status ?? 'active';
   const r = await mergeRoom(io, from, to, opts);
-  if (!r.dryRun && r.applied > 0) await io.registry.renameSlug(from, to);
+  if (!r.dryRun && r.applied > 0) {
+    await io.registry.renameSlug(from, to);
+    if (priorStatus === 'active') await io.registry.setStatus?.(to, 'active');
+  }
   return r;
 }
 

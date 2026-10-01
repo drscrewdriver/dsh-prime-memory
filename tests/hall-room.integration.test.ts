@@ -270,6 +270,7 @@ describe('Hall·Room 集成(HTTP 面全链 × 真实存储)', () => {
     expect(r.affected).toBe(1);
     expect(env.l1.getByIds(['t1'])[0]!.metadata?.tags).toEqual(['dsh-plugin/bash-terminal']);
     expect(env.registry.bySlug('dsh-plugin/bash-terminal')!.aliases).toContain('dsh-bash-terminal');
+    expect(env.registry.bySlug('dsh-plugin/bash-terminal')!.status).toBe('active'); // 归类不是退役
     // rooms-get 分组视图:该 room 现挂在 dsh-plugin hall 下
     const g = (await env.call('dsh-memory/rooms-get', {})) as { rooms: Array<{ room: string; count: number }> };
     expect(g.rooms.find((x) => x.room === 'dsh-plugin/bash-terminal')?.count).toBe(1);
