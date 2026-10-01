@@ -7,7 +7,7 @@
  *    退役·恢复 / 每 room 记录 CSV 导出。破坏性操作统一走 dsh-memory/room-admin,
  *    高权限(memoryMutate)门控,与 memory_room_admin 工具同一编排(备份+入队场景重算)。
  */
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
 
@@ -74,6 +74,34 @@ export function RoomsTab(props: { rpc: RpcFn }) {
   const [dragOverHall, setDragOverHall] = useState<string | null>(null);
   // 点选归类(拖拽不可用的 webview 兜底):点「归类」进入挑选态,再点目标 hall 头完成
   const [picking, setPicking] = useState<string | null>(null);
+  // 指针自制拖拽(HTML5 DnD 在部分 webview 不触发,ego-browser 同款纯 pointer 方案)
+  const dragRef = useRef<{ from: string; x: number; y: number; active: boolean } | null>(null);
+  const [ghost, setGhost] = useState<{ x: number; y: number; text: string } | null>(null);
+
+  const onDragLabelDown = (ev: ReactPointerEvent, slug: string) => {
+    if (!hiPriv || busy || ev.button !== 0) return;
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+    dragRef.current = { from: slug, x: ev.clientX, y: ev.clientY, active: false };
+  };
+  const onDragLabelMove = (ev: ReactPointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (!d.active && Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) d.active = true;
+    if (!d.active) return;
+    setGhost({ x: ev.clientX, y: ev.clientY, text: d.from });
+    const hall = (document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('[data-hall]') as HTMLElement | null)?.getAttribute('data-hall') ?? null;
+    setDragOverHall(hall);
+  };
+  const onDragLabelUp = (ev: ReactPointerEvent) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setGhost(null);
+    if (!d) return;
+    if (!d.active) return;
+    const hall = (document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('[data-hall]') as HTMLElement | null)?.getAttribute('data-hall');
+    setDragOverHall(null);
+    if (hall) beginReclass(d.from, hall);
+  };
 
   const loadAll = useCallback(() => {
     rpc('dsh-memory/rooms-get', {})
@@ -315,8 +343,52 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         {!hiPriv && <span style={S.muted}>管理操作需先开启高权限模式</span>}
       </div>
 
+      {/* 全局操作栏:合并/归类/改名的表单与预览常驻页首(不随行滚动、不被埋) */}
+      {form ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap', padding: '6px 8px', border: '1px solid var(--dsh-mem-accent)', borderRadius: 8 }}>
+          <span style={S.muted}>{form.action === 'merge' ? '合并' : '归类/改名'} {form.from} →</span>
+          <input
+            value={form.to}
+            onChange={(ev) => setForm({ ...form, to: ev.target.value })}
+            placeholder="目标 slug"
+            disabled={busy}
+            style={{ ...S.input, width: 190, fontSize: 12 }}
+          />
+          {form.action === 'rename' ? (
+            <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+              {groups.filter((gg) => gg.hall !== majorOf(form.from)).map((gg) => (
+                <button
+                  key={gg.hall}
+                  type="button"
+                  title={`归入 ${gg.hall} 下(${gg.hall}/${suffixOf(form.from)})`}
+                  onClick={() => setForm({ ...form, to: `${gg.hall}/${suffixOf(form.from)}` })}
+                  style={{ ...btn, borderRadius: 999, padding: '1px 8px' }}
+                >{gg.hall}</button>
+              ))}
+            </span>
+          ) : null}
+          <button type="button" disabled={busy} onClick={() => previewMerge()} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}>预览</button>
+          <button type="button" disabled={busy} onClick={() => { setForm(null); setPreview(null); setPicking(null); }} style={btn}>取消</button>
+          {picking ? <span style={S.muted}>挑选中:点击目标 hall 头完成归类</span> : null}
+          <span style={S.muted}>与反刍并发会互相覆盖,请在反刍空闲时执行。</span>
+        </div>
+      ) : null}
+      {preview ? (
+        <div style={{ marginBottom: 8, padding: '6px 8px', border: '1px solid var(--dsh-mem-danger)', borderRadius: 8, fontSize: 12 }}>
+          <div>{preview.notice}</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            <button type="button" disabled={busy} onClick={execMerge} style={{ ...btn, color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }}>确认执行{preview.action === 'merge' ? '合并' : '归类/改名'}</button>
+            <button type="button" disabled={busy} onClick={() => setPreview(null)} style={btn}>再改改</button>
+          </div>
+        </div>
+      ) : null}
       {msg ? <div style={S.hint}>{msg}</div> : null}
       {error ? <div style={S.error}>{error}</div> : null}
+      {ghost ? (
+        <div style={{ position: 'fixed', left: ghost.x + 12, top: ghost.y + 12, zIndex: 9999, pointerEvents: 'none', fontSize: 12, padding: '2px 10px', borderRadius: 999, border: '1px solid var(--dsh-mem-accent)', background: 'var(--dsh-mem-bg-inset)', color: 'var(--dsh-mem-accent)' }}>
+          {ghost.text}
+        </div>
+      ) : null}
 
       {/* Hall 分组树 */}
       {groups.length === 0 ? (
@@ -325,6 +397,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         groups.map((g) => (
           <div key={g.hall} style={{ marginBottom: 10, border: '1px solid var(--dsh-mem-border)', borderRadius: 8, overflow: 'hidden' }}>
             <div
+              data-hall={g.hall}
               onDragOver={(ev) => {
                 if (!hiPriv || busy) return;
                 ev.preventDefault();
@@ -378,16 +451,15 @@ export function RoomsTab(props: { rpc: RpcFn }) {
               const retired = e.status === 'retired';
               return (
                 <div key={e.slug} style={{ padding: '4px 10px', borderTop: '1px solid var(--dsh-mem-border)', opacity: retired ? 0.55 : 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', gap: '2px 8px', alignItems: 'baseline' }}>
                     <span
-                      style={{ fontSize: 12, cursor: hiPriv && !busy ? 'grab' : 'default' }}
-                      draggable={hiPriv && !busy}
-                      onDragStart={(ev) => {
-                        ev.dataTransfer.setData('text/dsh-room', e.slug);
-                        ev.dataTransfer.effectAllowed = 'move';
-                      }}
+                      style={{ fontSize: 12, cursor: hiPriv && !busy ? 'grab' : 'default', touchAction: 'none' }}
+                      onPointerDown={(ev) => onDragLabelDown(ev, e.slug)}
+                      onPointerMove={onDragLabelMove}
+                      onPointerUp={onDragLabelUp}
                       title={hiPriv && !busy
-                        ? '拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)'
+                        ? '按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)'
                         : e.description ? `${e.slug} — ${e.description}` : e.slug}
                     >
                       {standalone ? e.slug : '· ' + e.slug.slice(g.hall.length + 1)}
@@ -396,8 +468,9 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                     {e.label ? <span style={S.muted}>{e.label}</span> : null}
                     <span style={S.muted}>{count + ' 条'}</span>
                     {retired ? <span style={{ ...S.muted, color: 'var(--dsh-mem-danger)' }}>已退役</span> : null}
-                    {(e.aliases ?? []).length > 0 ? <span style={S.muted}>{'别名: ' + (e.aliases ?? []).join(', ')}</span> : null}
-                    <div style={S.grow} />
+                    {(e.aliases ?? []).length > 0 ? <span style={{ ...S.muted, wordBreak: 'break-all' }}>{'别名: ' + (e.aliases ?? []).join(', ')}</span> : null}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                     {!hiPriv ? null : (
                       <>
                         <button
@@ -420,44 +493,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                     )}
                     <button type="button" disabled={busy} title="导出该 Room 的记录清单 CSV" onClick={() => exportRecords(e.slug)} style={btn}>导出</button>
                   </div>
-                  {/* 行内合并/改名表单 + dryRun 预览 */}
-                  {form && form.from === e.slug ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
-                      <span style={S.muted}>{form.action === 'merge' ? '合并' : '改名'} {form.from} →</span>
-                      <input
-                        value={form.to}
-                        onChange={(ev) => setForm({ ...form, to: ev.target.value })}
-                        placeholder="目标 slug"
-                        disabled={busy}
-                        style={{ ...S.input, width: 180, fontSize: 12 }}
-                      />
-                      {form.action === 'rename' ? (
-                        <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
-                          {groups.filter((gg) => gg.hall !== majorOf(form.from)).map((gg) => (
-                            <button
-                              key={gg.hall}
-                              type="button"
-                              title={`归入 ${gg.hall} 下(${gg.hall}/${suffixOf(form.from)})`}
-                              onClick={() => setForm({ ...form, to: `${gg.hall}/${suffixOf(form.from)}` })}
-                              style={{ ...btn, borderRadius: 999, padding: '1px 8px' }}
-                            >{gg.hall}</button>
-                          ))}
-                        </span>
-                      ) : null}
-                      <button type="button" disabled={busy} onClick={() => previewMerge()} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}>预览</button>
-                      <button type="button" disabled={busy} onClick={() => { setForm(null); setPreview(null); }} style={btn}>取消</button>
-                      <span style={S.muted}>合并/改名与反刍并发会互相覆盖,请在反刍空闲时执行。</span>
-                    </div>
-                  ) : null}
-                  {preview && (form ? form.from === e.slug : false) ? (
-                    <div style={{ marginTop: 4, padding: '6px 8px', border: '1px solid var(--dsh-mem-accent)', borderRadius: 6, fontSize: 12 }}>
-                      <div>{preview.notice}</div>
-                      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                        <button type="button" disabled={busy} onClick={execMerge} style={{ ...btn, color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }}>确认执行{preview.action === 'merge' ? '合并' : '改名'}</button>
-                        <button type="button" disabled={busy} onClick={() => setPreview(null)} style={btn}>再改改</button>
-                      </div>
-                    </div>
-                  ) : null}
+                  </div>
                 </div>
               );
             })}
@@ -477,13 +513,11 @@ export function RoomsTab(props: { rpc: RpcFn }) {
               {grownOnly.map((r) => (
                 <span key={r.room} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <span
-                    style={{ ...btn, cursor: hiPriv && !busy ? 'grab' : 'default', borderRadius: 999, padding: '2px 8px' }}
-                    draggable={hiPriv && !busy}
-                    onDragStart={(ev) => {
-                      ev.dataTransfer.setData('text/dsh-room', r.room);
-                      ev.dataTransfer.effectAllowed = 'move';
-                    }}
-                    title={hiPriv && !busy ? '自生长 slug(未注册)——拖到某个 hall 头上 = 收编并归为其子类' : '自生长 slug(未注册)'}
+                    style={{ ...btn, cursor: hiPriv && !busy ? 'grab' : 'default', borderRadius: 999, padding: '2px 8px', touchAction: 'none' }}
+                    onPointerDown={(ev) => onDragLabelDown(ev, r.room)}
+                    onPointerMove={onDragLabelMove}
+                    onPointerUp={onDragLabelUp}
+                    title={hiPriv && !busy ? '自生长 slug(未注册)——按住拖到某个 hall 头上 = 收编并归为其子类' : '自生长 slug(未注册)'}
                   >
                     {r.room + ' · ' + r.count}
                   </span>

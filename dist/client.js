@@ -4044,6 +4044,32 @@ var __defProp = Object.defineProperty;
 		  const [grownOpen, setGrownOpen] = (0, import_react16.useState)(false);
 		  const [dragOverHall, setDragOverHall] = (0, import_react16.useState)(null);
 		  const [picking, setPicking] = (0, import_react16.useState)(null);
+		  const dragRef = (0, import_react16.useRef)(null);
+		  const [ghost, setGhost] = (0, import_react16.useState)(null);
+		  const onDragLabelDown = (ev, slug) => {
+		    if (!hiPriv || busy || ev.button !== 0) return;
+		    ev.currentTarget.setPointerCapture(ev.pointerId);
+		    dragRef.current = { from: slug, x: ev.clientX, y: ev.clientY, active: false };
+		  };
+		  const onDragLabelMove = (ev) => {
+		    const d = dragRef.current;
+		    if (!d) return;
+		    if (!d.active && Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) d.active = true;
+		    if (!d.active) return;
+		    setGhost({ x: ev.clientX, y: ev.clientY, text: d.from });
+		    const hall = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.("[data-hall]")?.getAttribute("data-hall") ?? null;
+		    setDragOverHall(hall);
+		  };
+		  const onDragLabelUp = (ev) => {
+		    const d = dragRef.current;
+		    dragRef.current = null;
+		    setGhost(null);
+		    if (!d) return;
+		    if (!d.active) return;
+		    const hall = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.("[data-hall]")?.getAttribute("data-hall");
+		    setDragOverHall(null);
+		    if (hall) beginReclass(d.from, hall);
+		  };
 		  const loadAll = (0, import_react16.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
 		      if (r && r.ok) {
@@ -4299,12 +4325,61 @@ var __defProp = Object.defineProperty;
 		      ),
 		      !hiPriv && /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "管理操作需先开启高权限模式" })
 		    ] }),
+		    form ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap", padding: "6px 8px", border: "1px solid var(--dsh-mem-accent)", borderRadius: 8 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: S.muted, children: [
+		        form.action === "merge" ? "合并" : "归类/改名",
+		        " ",
+		        form.from,
+		        " →"
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		        "input",
+		        {
+		          value: form.to,
+		          onChange: (ev) => setForm({ ...form, to: ev.target.value }),
+		          placeholder: "目标 slug",
+		          disabled: busy,
+		          style: { ...S.input, width: 190, fontSize: 12 }
+		        }
+		      ),
+		      form.action === "rename" ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { display: "inline-flex", gap: 4, flexWrap: "wrap" }, children: groups.filter((gg) => gg.hall !== majorOf(form.from)).map((gg) => /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		        "button",
+		        {
+		          type: "button",
+		          title: `归入 ${gg.hall} 下(${gg.hall}/${suffixOf(form.from)})`,
+		          onClick: () => setForm({ ...form, to: `${gg.hall}/${suffixOf(form.from)}` }),
+		          style: { ...btn, borderRadius: 999, padding: "1px 8px" },
+		          children: gg.hall
+		        },
+		        gg.hall
+		      )) }) : null,
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: () => previewMerge(), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: "预览" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: () => {
+		        setForm(null);
+		        setPreview(null);
+		        setPicking(null);
+		      }, style: btn, children: "取消" }),
+		      picking ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "挑选中:点击目标 hall 头完成归类" }) : null,
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "与反刍并发会互相覆盖,请在反刍空闲时执行。" })
+		    ] }) : null,
+		    preview ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginBottom: 8, padding: "6px 8px", border: "1px solid var(--dsh-mem-danger)", borderRadius: 8, fontSize: 12 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { children: preview.notice }),
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", gap: 6, marginTop: 4 }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("button", { type: "button", disabled: busy, onClick: execMerge, style: { ...btn, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: [
+		          "确认执行",
+		          preview.action === "merge" ? "合并" : "归类/改名"
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: () => setPreview(null), style: btn, children: "再改改" })
+		      ] })
+		    ] }) : null,
 		    msg ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.hint, children: msg }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.error, children: error }) : null,
+		    ghost ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { position: "fixed", left: ghost.x + 12, top: ghost.y + 12, zIndex: 9999, pointerEvents: "none", fontSize: 12, padding: "2px 10px", borderRadius: 999, border: "1px solid var(--dsh-mem-accent)", background: "var(--dsh-mem-bg-inset)", color: "var(--dsh-mem-accent)" }, children: ghost.text }) : null,
 		    groups.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("p", { style: S.intro, children: "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。" }) : groups.map((g) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginBottom: 10, border: "1px solid var(--dsh-mem-border)", borderRadius: 8, overflow: "hidden" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
 		        "div",
 		        {
+		          "data-hall": g.hall,
 		          onDragOver: (ev) => {
 		            if (!hiPriv || busy) return;
 		            ev.preventDefault();
@@ -4361,18 +4436,16 @@ var __defProp = Object.defineProperty;
 		        const standalone = e.slug === g.hall;
 		        const count = rooms.find((r) => r.room === e.slug)?.count ?? 0;
 		        const retired = e.status === "retired";
-		        return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { padding: "4px 10px", borderTop: "1px solid var(--dsh-mem-border)", opacity: retired ? 0.55 : 1 }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }, children: [
+		        return /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { padding: "4px 10px", borderTop: "1px solid var(--dsh-mem-border)", opacity: retired ? 0.55 : 1 }, children: /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: "2px 8px", alignItems: "baseline" }, children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
 		              "span",
 		              {
-		                style: { fontSize: 12, cursor: hiPriv && !busy ? "grab" : "default" },
-		                draggable: hiPriv && !busy,
-		                onDragStart: (ev) => {
-		                  ev.dataTransfer.setData("text/dsh-room", e.slug);
-		                  ev.dataTransfer.effectAllowed = "move";
-		                },
-		                title: hiPriv && !busy ? "拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)" : e.description ? `${e.slug} — ${e.description}` : e.slug,
+		                style: { fontSize: 12, cursor: hiPriv && !busy ? "grab" : "default", touchAction: "none" },
+		                onPointerDown: (ev) => onDragLabelDown(ev, e.slug),
+		                onPointerMove: onDragLabelMove,
+		                onPointerUp: onDragLabelUp,
+		                title: hiPriv && !busy ? "按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)" : e.description ? `${e.slug} — ${e.description}` : e.slug,
 		                children: [
 		                  standalone ? e.slug : "· " + e.slug.slice(g.hall.length + 1),
 		                  e.source === "pre-registered" ? " ⭐" : ""
@@ -4382,8 +4455,9 @@ var __defProp = Object.defineProperty;
 		            e.label ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: e.label }) : null,
 		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: count + " 条" }),
 		            retired ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: "已退役" }) : null,
-		            (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "别名: " + (e.aliases ?? []).join(", ") }) : null,
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.grow }),
+		            (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { ...S.muted, wordBreak: "break-all" }, children: "别名: " + (e.aliases ?? []).join(", ") }) : null
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }, children: [
 		            !hiPriv ? null : /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_jsx_runtime16.Fragment, { children: [
 		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
 		                "button",
@@ -4417,53 +4491,8 @@ var __defProp = Object.defineProperty;
 		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: retired ? "恢复该 Room 到词表" : "退役该 Room(存量 tags 不动)", onClick: () => retire(e.slug, retired), style: { ...btn, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } }, children: retired ? "恢复" : "退役" })
 		            ] }),
 		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "导出该 Room 的记录清单 CSV", onClick: () => exportRecords(e.slug), style: btn, children: "导出" })
-		          ] }),
-		          form && form.from === e.slug ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: S.muted, children: [
-		              form.action === "merge" ? "合并" : "改名",
-		              " ",
-		              form.from,
-		              " →"
-		            ] }),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
-		              "input",
-		              {
-		                value: form.to,
-		                onChange: (ev) => setForm({ ...form, to: ev.target.value }),
-		                placeholder: "目标 slug",
-		                disabled: busy,
-		                style: { ...S.input, width: 180, fontSize: 12 }
-		              }
-		            ),
-		            form.action === "rename" ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { display: "inline-flex", gap: 4, flexWrap: "wrap" }, children: groups.filter((gg) => gg.hall !== majorOf(form.from)).map((gg) => /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
-		              "button",
-		              {
-		                type: "button",
-		                title: `归入 ${gg.hall} 下(${gg.hall}/${suffixOf(form.from)})`,
-		                onClick: () => setForm({ ...form, to: `${gg.hall}/${suffixOf(form.from)}` }),
-		                style: { ...btn, borderRadius: 999, padding: "1px 8px" },
-		                children: gg.hall
-		              },
-		              gg.hall
-		            )) }) : null,
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: () => previewMerge(), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: "预览" }),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: () => {
-		              setForm(null);
-		              setPreview(null);
-		            }, style: btn, children: "取消" }),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "合并/改名与反刍并发会互相覆盖,请在反刍空闲时执行。" })
-		          ] }) : null,
-		          preview && (form ? form.from === e.slug : false) ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginTop: 4, padding: "6px 8px", border: "1px solid var(--dsh-mem-accent)", borderRadius: 6, fontSize: 12 }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { children: preview.notice }),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", gap: 6, marginTop: 4 }, children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("button", { type: "button", disabled: busy, onClick: execMerge, style: { ...btn, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: [
-		                "确认执行",
-		                preview.action === "merge" ? "合并" : "改名"
-		              ] }),
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: () => setPreview(null), style: btn, children: "再改改" })
-		            ] })
-		          ] }) : null
-		        ] }, e.slug);
+		          ] })
+		        ] }) }, e.slug);
 		      })
 		    ] }, g.hall)),
 		    grownOnly.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginTop: 4 }, children: [
@@ -4477,13 +4506,11 @@ var __defProp = Object.defineProperty;
 		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
 		          "span",
 		          {
-		            style: { ...btn, cursor: hiPriv && !busy ? "grab" : "default", borderRadius: 999, padding: "2px 8px" },
-		            draggable: hiPriv && !busy,
-		            onDragStart: (ev) => {
-		              ev.dataTransfer.setData("text/dsh-room", r.room);
-		              ev.dataTransfer.effectAllowed = "move";
-		            },
-		            title: hiPriv && !busy ? "自生长 slug(未注册)——拖到某个 hall 头上 = 收编并归为其子类" : "自生长 slug(未注册)",
+		            style: { ...btn, cursor: hiPriv && !busy ? "grab" : "default", borderRadius: 999, padding: "2px 8px", touchAction: "none" },
+		            onPointerDown: (ev) => onDragLabelDown(ev, r.room),
+		            onPointerMove: onDragLabelMove,
+		            onPointerUp: onDragLabelUp,
+		            title: hiPriv && !busy ? "自生长 slug(未注册)——按住拖到某个 hall 头上 = 收编并归为其子类" : "自生长 slug(未注册)",
 		            children: r.room + " · " + r.count
 		          }
 		        ),

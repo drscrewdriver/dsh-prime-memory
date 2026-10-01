@@ -17,6 +17,15 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.19] — 2026-10-02
+
+> 归类交互重做(实测反馈:HTML5 拖拽在部分 webview 不触发;点 hall 后预览被埋在源行里像"没反应")。
+
+### 变更
+
+- **指针自制拖拽**(ego-browser 同款纯 pointer 方案):按住 room/自生长 slug → 浮动幽灵 chip 跟手 → 悬停 hall 头虚线高亮 → 松手归类。不依赖 HTML5 DnD,任何 webview 都生效。点选归类(「归类」/「归」→ 挑选态 → 点 hall 头)保留。
+- **全局操作栏**:合并/归类/改名的表单与 dryRun 预览**常驻页首**(红色确认框不随行滚动、不再被埋在源 room 行里)——点 hall 后一定看得见。
+- **room 行布局**:按钮固定一行不再折行(导出不再孤行);名称/别名在左侧信息区自然换行(别名可断词)。
 ## [0.20.0-beta.18] — 2026-10-02
 
 ### 维护
