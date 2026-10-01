@@ -17,7 +17,13 @@
   - **建议状态(`longtask-hint-get`)+ 浮动球(`client/src/longtask-fab.ts`)**:ego-browser 式 vanilla overlay(FAB+面板,拖拽/位置持久化/视口夹紧),**建议不阻断**——仅当「上下文占用达 `contextThresholdPct`」或「todo 漂移达 `driftThreshold`」且长任务未开启时点亮呼吸光晕;面板内:长任务开关(临时,per-session,**不带 mode**——切开关不重置用户档位)、占用/漂移进度条、手动尾部压缩按钮(长任务开启才可用)、任务计数。轮询忙 2s/闲 5s,RPC 失败静默;座位契约不变(settings.section 恰一个,body 单例不占任何座位)。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
 
-## [0.20.0-beta.5] — 2026-10-01
+## [0.20.0-beta.6] — 2026-10-01
+
+### 修复
+
+- **标注器词表接入注册表(beta.5 漏项补齐)**:beta.5 的 merge/rename/retire 已落,但候选标注器(`annotateOrphanCandidates`)的词表仍是纯自生长聚合——预注册的 Room 根本进不了候选。现 OrphanAnnotateIO 带 registry:合并词表 = 注册表条目排前(count=0,附 label/description)+ 自生长目录,封顶 120;ruminate 与 memory_room_admin annotate 两条路径都传参。**预注册 Room 从此真实影响候选标注**。
+
+## [0.20.0-beta.5] — 2026-10-01## [0.20.0-beta.5] — 2026-10-01
 
 > Room 分类管理第二船(**破坏性面**)。dryRun 默认 true——merge/rename 先预览影响面,确认后才实跑;执行前自动备份到 `rooms-merge-backups/`。
 
