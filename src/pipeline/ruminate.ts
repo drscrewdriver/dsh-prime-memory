@@ -30,6 +30,7 @@ import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
 import { relabelPass, type RelabelStats } from './relabel.js';
 import { processSceneReclusterJobs } from './recluster.js';
+import { annotateOrphanCandidates } from '../room-review.js';
 import { runPersona } from './l3.js';
 import type { MemoryRunner } from './runner.js';
 
@@ -309,6 +310,16 @@ export class RuminateController {
         if (reprocessed > 0) this.status.detail = `场景重聚类 ${reprocessed} 个作业已派发重算`;
       } catch (err) {
         this.logger.warn(`[memory] 场景重聚类调度失败(忽略): ${errDetail(err)}`);
+      }
+
+      // 孤儿候选预标记(长尾治理):无 Room 的活跃孤儿对照现有 Room 词表产出
+      // 候选(roomReview='pending'),由 agent 用 memory_room_review 逐个复查;
+      // 每轮至多 40 条,吞错不拖垮反刍。
+      try {
+        const r = await annotateOrphanCandidates(this.ctx, this.cfg, { l1: this.stores.l1, logger: this.logger }, 40);
+        if (r.written > 0) this.status.detail = `孤儿候选预标记 ${r.written} 条(待 agent 复查,工具 memory_room_review)`;
+      } catch (err) {
+        this.logger.warn(`[memory] 孤儿候选预标记失败(忽略): ${errDetail(err)}`);
       }
 
       this.status.phase = 'done';
