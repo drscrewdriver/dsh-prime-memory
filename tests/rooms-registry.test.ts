@@ -118,6 +118,17 @@ describe('RoomRegistryStore', () => {
     await expect(store.register({ slug: 'a//b' })).rejects.toThrow(/两级制/);
   });
 
+  it('持久化回环保留两级 slug(重启不丢 hall-room 关系)', async () => {
+    if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-roomreg-'));
+    const a = new RoomRegistryStore(dir);
+    await a.init();
+    await a.register({ slug: 'dsh-plugin' });
+    await a.register({ slug: 'dsh-plugin/merge', source: 'grown' });
+    const b = new RoomRegistryStore(dir);
+    await b.init();
+    expect(b.bySlug('dsh-plugin/merge')!.status).toBe('active'); // 加载器不得用 isTag 丢两级条目
+  });
+
   it('持久化回环:重开文件仍在', async () => {
     const d = await mkdtemp(join(tmpdir(), 'dsh-roomreg-'));
     const s1 = new RoomRegistryStore(d);

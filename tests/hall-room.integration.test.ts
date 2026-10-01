@@ -296,6 +296,9 @@ describe('Hall·Room 集成(HTTP 面全链 × 真实存储)', () => {
     // 分组视图:已挂到 dsh-plugin hall 下
     const g = (await env.call('dsh-memory/rooms-get', {})) as { rooms: Array<{ room: string; count: number }> };
     expect(g.rooms.find((x) => x.room === 'dsh-plugin/git-commits')?.count).toBe(1);
+    // 两级 tag 过滤(list-records 的 tagSel 不得用 isTag 误拒)
+    const lr = (await env.call('dsh-memory/list-records', { tag: 'dsh-plugin/git-commits' })) as { items: unknown[] };
+    expect(lr.items).toHaveLength(1);
   });
 
   it('⑦ retire / 恢复往返(HTTP 面)', async () => {

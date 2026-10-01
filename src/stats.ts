@@ -45,7 +45,7 @@ import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
 import { WING_CATALOG, WING_FALLBACK, type MemoryFamily, type MemoryLogger, type MemoryMode } from './types.js';
-import { isTag } from './metadata-validators.js';
+import { isRoomSlug, isTag } from './metadata-validators.js';
 import { InProcMemoryBackend, type MemoryBackend } from './store/memory-backend.js';
 import { isWingCorner } from './store/session-modes.js';
 import { startWingBackfill } from './wing-backfill.js';
@@ -1123,7 +1123,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const retiredSel = typeof p.retired === 'boolean' ? p.retired : undefined;
       // Room 过滤:tag 是**自生长**的 slug(无枚举),只做形状与长度校验(SQL 侧参数化)
       const tagSel = typeof p.tag === 'string' ? p.tag.trim().slice(0, 64) : '';
-      if (tagSel && !isTag(tagSel)) throw new Error('tag 非法(需小写字母数字连字符,1-32 字符)');
+      if (tagSel && !isRoomSlug(tagSel)) throw new Error('tag 非法(两级制:major 或 major/minor,各段小写字母数字连字符)');
       // 孤儿记忆筛选(与 tag 互斥,tag 优先):只认显式布尔,其余视为缺省。
       const untaggedSel = p.untagged === true && !tagSel;
       // R13 多值归一: halls 数组只留非空字符串(≤40 字符),去重,上限 8(角数);
