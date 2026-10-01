@@ -4043,6 +4043,7 @@ var __defProp = Object.defineProperty;
 		  const [preview, setPreview] = (0, import_react16.useState)(null);
 		  const [grownOpen, setGrownOpen] = (0, import_react16.useState)(false);
 		  const [dragOverHall, setDragOverHall] = (0, import_react16.useState)(null);
+		  const [picking, setPicking] = (0, import_react16.useState)(null);
 		  const loadAll = (0, import_react16.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
 		      if (r && r.ok) {
@@ -4306,16 +4307,23 @@ var __defProp = Object.defineProperty;
 		            const from = ev.dataTransfer.getData("text/dsh-room");
 		            if (from) beginReclass(from, g.hall);
 		          },
+		          onClick: () => {
+		            if (!picking || busy) return;
+		            const from = picking;
+		            setPicking(null);
+		            beginReclass(from, g.hall);
+		          },
 		          style: {
 		            display: "flex",
 		            alignItems: "center",
 		            gap: 8,
 		            padding: "5px 10px",
 		            background: "var(--dsh-mem-bg-inset)",
-		            outline: dragOverHall === g.hall ? "2px dashed var(--dsh-mem-accent)" : void 0,
-		            outlineOffset: dragOverHall === g.hall ? "-2px" : void 0
+		            outline: dragOverHall === g.hall || picking !== null ? "2px dashed var(--dsh-mem-accent)" : void 0,
+		            outlineOffset: dragOverHall === g.hall || picking !== null ? "-2px" : void 0,
+		            cursor: picking ? "pointer" : void 0
 		          },
-		          title: hiPriv ? "拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)" : void 0,
+		          title: picking ? "点击此 hall:把「" + picking + "」归入 " + g.hall + " 下(major/minor,预览后确认)" : hiPriv ? "拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)" : void 0,
 		          children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { fontSize: 12, fontWeight: 600 }, children: [
 		              g.hall,
@@ -4365,7 +4373,27 @@ var __defProp = Object.defineProperty;
 		            (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "别名: " + (e.aliases ?? []).join(", ") }) : null,
 		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.grow }),
 		            !hiPriv ? null : /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_jsx_runtime16.Fragment, { children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "归类到已有 hall 下(major/minor;记录随迁)", onClick: () => beginReclass(e.slug, groups.find((gg) => gg.hall !== majorOf(e.slug))?.hall ?? ""), style: btn, children: "归类" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		                "button",
+		                {
+		                  type: "button",
+		                  disabled: busy,
+		                  title: picking === e.slug ? "再点一次取消挑选;然后点击目标 hall 头完成归类" : "归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)",
+		                  onClick: () => {
+		                    if (picking === e.slug) {
+		                      setPicking(null);
+		                      return;
+		                    }
+		                    setForm({ action: "rename", from: e.slug, to: "" });
+		                    setPreview(null);
+		                    setPicking(e.slug);
+		                    setMsg(null);
+		                    setError(null);
+		                  },
+		                  style: { ...btn, ...picking === e.slug ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : {} },
+		                  children: picking === e.slug ? "选 hall…" : "归类"
+		                }
+		              ),
 		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: `改名(= merge 1:1 + 注册表改名)`, onClick: () => {
 		                setForm({ action: "rename", from: e.slug, to: "" });
 		                setPreview(null);

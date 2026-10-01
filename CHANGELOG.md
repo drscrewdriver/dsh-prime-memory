@@ -17,6 +17,17 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.15] — 2026-10-02
+
+> 归类实测反馈两连修:①改名后的条目误带「已退役」(会掉出标注词表);②HTML5 拖拽在部分 webview 不生效 → 新增**点选归类**主路径。
+
+### 修复
+
+- **归类(改名)后条目误标 retired**:renameRoom 复用 merge 编排,`markMerged` 的"旧条目转退役"被带了过来——归完类的新 room 显示「已退役」并**掉出标注器词表**(listActive 过滤)。现 rename 收尾恢复先前状态(active 条目改名后仍 active);真 merge(并集语义)不受影响。红测试先行(unit + HTTP 面集成)。
+
+### 变更
+
+- **点选归类为主路径**:点 room 行「归类」→ 进入挑选态(按钮变「选 hall…」,所有 hall 头虚线高亮)→ 点目标 hall 头 → 出 dryRun 预览 → 确认实跑。拖拽保留(支持的環境仍可用),但不再依赖。
 ## [0.20.0-beta.14] — 2026-10-02
 
 > 记忆卡片新增**老化权重**与**召回使用**展示,并开始为"老化权重效果统计"积累数据。口径(用户裁定):**进 topN(被注入上下文)才算被使用**;参与尝试未进 = 仅计尝试。

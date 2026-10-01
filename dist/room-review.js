@@ -202,11 +202,17 @@ export async function mergeRoom(io, from, to, opts = {}) {
         roomMergeRunning = false;
     }
 }
-/** rename = merge 1:1 + 注册表改名(冲突时抛错提示走 merge)。 */
+/** rename = merge 1:1 + 注册表改名(冲突时抛错提示走 merge)。
+ *  归类语义:改名**不是退役**——merge 编排的 markMerged 会把旧条目置 retired,
+ *  这里在改名后恢复其先前状态(active 条目改名后仍 active,不掉出标注词表)。 */
 export async function renameRoom(io, from, to, opts = {}) {
+    const priorStatus = io.registry.bySlug?.(from)?.status ?? 'active';
     const r = await mergeRoom(io, from, to, opts);
-    if (!r.dryRun && r.applied > 0)
+    if (!r.dryRun && r.applied > 0) {
         await io.registry.renameSlug(from, to);
+        if (priorStatus === 'active')
+            await io.registry.setStatus?.(to, 'active');
+    }
     return r;
 }
 /** 下一条待复查(供 agent 逐个过):记录摘要 + 候选 + 现有 Room 词表 + 剩余数。 */

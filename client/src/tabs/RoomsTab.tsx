@@ -72,6 +72,8 @@ export function RoomsTab(props: { rpc: RpcFn }) {
   const [grownOpen, setGrownOpen] = useState(false);
   // 拖拽归类:拖 room → 放到 hall 头(高亮);松手 = 预填 rename 表单并出 dryRun 预览
   const [dragOverHall, setDragOverHall] = useState<string | null>(null);
+  // 点选归类(拖拽不可用的 webview 兜底):点「归类」进入挑选态,再点目标 hall 头完成
+  const [picking, setPicking] = useState<string | null>(null);
 
   const loadAll = useCallback(() => {
     rpc('dsh-memory/rooms-get', {})
@@ -326,13 +328,24 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                 const from = ev.dataTransfer.getData('text/dsh-room');
                 if (from) beginReclass(from, g.hall);
               }}
+              onClick={() => {
+                if (!picking || busy) return;
+                const from = picking;
+                setPicking(null);
+                beginReclass(from, g.hall);
+              }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px',
                 background: 'var(--dsh-mem-bg-inset)',
-                outline: dragOverHall === g.hall ? '2px dashed var(--dsh-mem-accent)' : undefined,
-                outlineOffset: dragOverHall === g.hall ? '-2px' : undefined,
+                outline: dragOverHall === g.hall || picking !== null
+                  ? '2px dashed var(--dsh-mem-accent)'
+                  : undefined,
+                outlineOffset: dragOverHall === g.hall || picking !== null ? '-2px' : undefined,
+                cursor: picking ? 'pointer' : undefined,
               }}
-              title={hiPriv ? '拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)' : undefined}
+              title={picking
+                ? '点击此 hall:把「' + picking + '」归入 ' + g.hall + ' 下(major/minor,预览后确认)'
+                : hiPriv ? '拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)' : undefined}
             >
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {g.hall}
@@ -376,7 +389,19 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                     <div style={S.grow} />
                     {!hiPriv ? null : (
                       <>
-                        <button type="button" disabled={busy} title="归类到已有 hall 下(major/minor;记录随迁)" onClick={() => beginReclass(e.slug, groups.find((gg) => gg.hall !== majorOf(e.slug))?.hall ?? '')} style={btn}>归类</button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          title={picking === e.slug ? '再点一次取消挑选;然后点击目标 hall 头完成归类' : '归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)'}
+                          onClick={() => {
+                            if (picking === e.slug) { setPicking(null); return; }
+                            setForm({ action: 'rename', from: e.slug, to: '' });
+                            setPreview(null);
+                            setPicking(e.slug);
+                            setMsg(null); setError(null);
+                          }}
+                          style={{ ...btn, ...(picking === e.slug ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : {}) }}
+                        >{picking === e.slug ? '选 hall…' : '归类'}</button>
                         <button type="button" disabled={busy} title={`改名(= merge 1:1 + 注册表改名)`} onClick={() => { setForm({ action: 'rename', from: e.slug, to: '' }); setPreview(null); }} style={btn}>改名</button>
                         <button type="button" disabled={busy} title="合并到另一个 Room(dryRun 预览→确认实跑)" onClick={() => { setForm({ action: 'merge', from: e.slug, to: '' }); setPreview(null); }} style={btn}>合并</button>
                         <button type="button" disabled={busy} title={retired ? '恢复该 Room 到词表' : '退役该 Room(存量 tags 不动)'} onClick={() => retire(e.slug, retired)} style={{ ...btn, ...(retired ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : { color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }) }}>{retired ? '恢复' : '退役'}</button>

@@ -126,6 +126,14 @@ describe('renameRoom', () => {
     expect(registry.bySlug('renamed')!.aliases).toContain('old');
   });
 
+  it('rename 后条目保持 active(归类语义:改名不是退役)', async () => {
+    const { l1, registry } = await mkL1();
+    await registry.register({ slug: 'solo' });
+    await seed(l1, 'a', ['solo']);
+    await renameRoom({ l1, registry, logger }, 'solo', 'dsh-plugin/solo', { dryRun: false });
+    expect(registry.bySlug('dsh-plugin/solo')!.status).toBe('active');
+  });
+
   it('目标已注册 → renameSlug 抛错,但记录重写已完成(仅注册表改名失败)', async () => {
     const { l1, registry } = await mkL1();
     await registry.register({ slug: 'target' });

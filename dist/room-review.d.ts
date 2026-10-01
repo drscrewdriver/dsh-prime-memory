@@ -65,6 +65,11 @@ export interface RoomMergeStore extends RoomReviewStore {
 export interface RoomRegistryMerge {
     markMerged(fromSlug: string, toSlug: string): Promise<boolean>;
     renameSlug(oldSlug: string, newSlug: string): Promise<boolean>;
+    /** rename 收尾恢复先前状态用(active 条目改名后不掉出标注词表)。 */
+    bySlug?(slug: string): {
+        status: 'active' | 'retired';
+    } | undefined;
+    setStatus?(slug: string, status: 'active' | 'retired'): Promise<boolean>;
 }
 export interface RoomCandidate {
     id: string;
@@ -153,7 +158,9 @@ export declare function mergeRoom(io: {
     dryRun?: boolean;
     cap?: number;
 }): Promise<MergeRoomResult>;
-/** rename = merge 1:1 + 注册表改名(冲突时抛错提示走 merge)。 */
+/** rename = merge 1:1 + 注册表改名(冲突时抛错提示走 merge)。
+ *  归类语义:改名**不是退役**——merge 编排的 markMerged 会把旧条目置 retired,
+ *  这里在改名后恢复其先前状态(active 条目改名后仍 active,不掉出标注词表)。 */
 export declare function renameRoom(io: {
     l1: RoomMergeStore;
     registry: RoomRegistryMerge;
