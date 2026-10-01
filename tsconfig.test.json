@@ -13,6 +13,7 @@
     "tests/ruminate.test.ts",
     "tests/stores.test.ts",
     "tests/repo-axis.test.ts",
+    "tests/governance-weights.test.ts",
     "tests/longtask-compress-tail.test.ts",
     "tests/long-task.test.ts",
     "tests/rpc.test.ts",

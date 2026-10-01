@@ -29,6 +29,8 @@ import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryFamily, MemoryLogger, MemoryRecord, Persistence } from '../types.js';
 import { WING_CATALOG, WING_FALLBACK, normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
+import { applyGovernanceWeights } from '../store/governance.js';
+import { resolveRepoScope } from '../repo-scope.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 import { redactSecrets } from '../util/redact.js';
 
@@ -208,8 +210,20 @@ export function registerMemoryTools(
           // 零漂移由 `scopeFilterOf` 一处收口保证，不靠各调用点各自判断。
           workspaceId: scopeFilterOf(cfg.scope, exec),
         });
+        // ── 治理权重(ADR-0015 T1.10b):工具出口与召回出口同一函数、同一 cfg 门;
+        // 软减权重排(score 不改写),默认关时逐字现状。
+        let items = hits;
+        if (cfg.recall.scopeFence?.enabled === true && hits.length > 1) {
+          const currentRepoKey = resolveRepoScope(workspaceIdOf({ agent: exec.agent })).repoKey;
+          const recordsById = new Map(stores.l1.getByIds(hits.map((h) => h.id)).map((r) => [r.id, r]));
+          items = applyGovernanceWeights(hits, recordsById, {
+            enabled: true,
+            currentRepoKey,
+            crossRepoMultiplier: cfg.recall.scopeFence?.crossRepoMultiplier ?? 0.2,
+          });
+        }
         return {
-          items: hits.map((h) => ({
+          items: items.map((h) => ({
             content: h.content,
             type: h.type,
             scene_name: h.scene_name,

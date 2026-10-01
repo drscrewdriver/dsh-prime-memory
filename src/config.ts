@@ -129,6 +129,12 @@ export interface MemoryConfig {
     /** 时效衰减半衰期(天,0=关):score × max(0.5, 0.5^(Δ天/半衰期)),
      *  只影响相关度相近候选间的名次(老记忆最多损失一半排序分,不淘汰)。 */
     decayHalfLifeDays: number;
+    /** repo 软围栏(ADR-0015,默认关=不减权不围栏,零漂移)。 */
+    scopeFence: {
+      enabled: boolean;
+      /** repo 不匹配时的乘子(与域门禁 0.4 叠乘 ≥0.08;软减权非硬排除)。 */
+      crossRepoMultiplier: number;
+    };
   };
   embedding: {
     /** 向量检索总开关;关闭时纯 FTS 运行。 */
@@ -367,6 +373,12 @@ export const memorySchema = Schema.object({
     scoreThreshold: Schema.number().min(0).max(1).default(0.3),
     // 时效衰减:乘法软加权 + 地板 0.5;0=关(bench 基线可比性可 pin 0)
     decayHalfLifeDays: Schema.number().min(0).max(3650).default(30),
+    // repo 软围栏(治理 W1):默认关=零漂移。开启也只是软减权非硬排除(P0-7:
+    // cross-project 绝不围栏,四象限不塌缩)
+    scopeFence: Schema.object({
+      enabled: Schema.boolean().default(false),
+      crossRepoMultiplier: Schema.number().min(0).max(1).default(0.2),
+    }),
   }),
   embedding: Schema.object({
     enabled: Schema.boolean().default(false),

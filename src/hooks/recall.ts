@@ -39,7 +39,9 @@ import {
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryLogger } from '../types.js';
-import { scopeFilterOf } from '../workspace.js';
+import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
+import { applyGovernanceWeights } from '../store/governance.js';
+import { resolveRepoScope } from '../repo-scope.js';
 import { applyRecallBudget, raceRecallTimeout, RECALL_EMBED_CAP_MS } from '../util/recall-budget.js';
 import {
   clearProfileShare,
@@ -472,6 +474,21 @@ export function registerRecall(
                 `[memory] 域软门禁(source=${gate.source}) ${formatWeights(gate.weights)} agent=${payload.agent.id}`,
               );
             }
+          }
+          // ── 治理权重(ADR-0015 T1.10b):repo 软围栏,纯函数重排(score 不改写,I-1)。
+          // 挂在域软门禁**之后**(组合语义:既有调用点不动);默认关,关闭时不进本分支,
+          // 召回路径逐字现状(I-10);读不到归属的记录乘 1(fail-open)。
+          if (cfg.recall.scopeFence?.enabled === true && scoped.length > 1) {
+            const currentRepoKey = resolveRepoScope(workspaceIdOf({ agent: payload.agent })).repoKey;
+            const recordsById = new Map(stores.l1.getByIds(scoped.map((h) => h.id)).map((r) => [r.id, r]));
+            scoped = applyGovernanceWeights(scoped, recordsById, {
+              enabled: true,
+              currentRepoKey,
+              crossRepoMultiplier: cfg.recall.scopeFence?.crossRepoMultiplier ?? 0.2,
+            });
+            logger.info(
+              `[memory] repo 软围栏:currentRepo=${currentRepoKey || '(未识别)'} 跨仓乘子=${cfg.recall.scopeFence.crossRepoMultiplier} agent=${payload.agent.id}`,
+            );
           }
           // 召回去重:同会话已注入过的记录不再重复注入(模型上下文已持有,省 token)。
           // 纯过滤——剩几条注几条,全量压制(0 条新鲜命中)是正确状态而非未命中。

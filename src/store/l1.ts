@@ -18,7 +18,7 @@ import { isRetired, type SupersedeInfo } from './supersede.js';
 import { exportThenPurge, readSnapshotManifest, readSnapshotRecords, restoreL1Snapshot, selectSnapshotTargets, snapshotDirFor, listSnapshots as listSnapshotsIn, type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { EmbedHelper, NoopEmbeddingService, type EmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
-import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
+import { applyDecayWeight, normalizeRrf, rrfMerge , markDedupPath } from './search-utils.js';
 import { isZeroVector, type L1MetaLite, type MemoryDb } from './sqlite.js';
 
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
@@ -728,6 +728,8 @@ export class L1Store {
    * 但已经决定了项目 A 记忆去向」的记录——比不隔离更糟。
    */
   async searchCandidates(query: string, limit: number, family?: MemoryFamily, workspaceId?: string): Promise<MemoryRecord[]> {
+    // 治理哨兵(治理 W0 T0.2):标记去重候选路径;治理权重误入即抛(dev/test)。
+    return markDedupPath(async () => {
     if (this.db.countL1() === 0) return [];
     const caps = this.db.getCapabilities();
     if (caps.vectorSearch && this.helper.vectorReady()) {
@@ -743,6 +745,7 @@ export class L1Store {
     }
     const fts = this.db.searchL1Fts(query, limit * 2, family, workspaceId);
     return this.db.getL1ByIds(fts.map((h) => h.id));
+    });
   }
 
   /**
