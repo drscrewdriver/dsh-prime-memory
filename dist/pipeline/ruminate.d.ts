@@ -66,6 +66,8 @@ export declare class RuminateController {
     private sessions;
     private totalL1;
     private pendingFile;
+    /** Room 注册表(可选;孤儿候选预标记的合并词表来源)。 */
+    private readonly roomRegistry;
     /** 记忆后端:未注入时包 l1(进程内,行为与改造前等价)。 */
     private backend;
     constructor(ctx: Context, cfg: MemoryConfig, runner: Pick<MemoryRunner, 'enqueue' | 'states'>, stores: {
@@ -75,7 +77,15 @@ export declare class RuminateController {
         scenes: Record<MemoryFamily, SceneStore>;
         persona: Record<MemoryFamily, PersonaStore>;
         state: StateStore;
-    }, logger: MemoryLogger, live: LiveSettingsHandle, pendingFile: string);
+    }, logger: MemoryLogger, live: LiveSettingsHandle, pendingFile: string, 
+    /** Room 注册表(可选;孤儿候选预标记的合并词表来源)。 */
+    roomRegistry?: {
+        listActive(): Array<{
+            slug: string;
+            label?: string;
+            description?: string;
+        }>;
+    });
     /** 状态快照 */
     getStatus(): RuminateStatus;
     /**

@@ -29,6 +29,8 @@ import type { ConversationMessage, ExtractMode, MemoryFamily, MemoryLogger } fro
 import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
 import { relabelPass, type RelabelStats } from './relabel.js';
+import { annotateOrphanCandidates } from '../room-review.js';
+import type { RoomRegistryStore } from '../store/rooms-registry.js';
 import { runPersona } from './l3.js';
 import type { MemoryRunner } from './runner.js';
 
@@ -100,6 +102,8 @@ export class RuminateController {
   private sessions: RuminateSession[] = [];
   private totalL1 = 0;
   private pendingFile: string;
+  /** Room 注册表(可选;孤儿候选预标记的合并词表来源)。 */
+  private readonly roomRegistry: { listActive(): Array<{ slug: string; label?: string; description?: string }> } | undefined;
 
   /** 记忆后端:未注入时包 l1(进程内,行为与改造前等价)。 */
   private backend(): MemoryBackend {
@@ -121,8 +125,11 @@ export class RuminateController {
     private readonly logger: MemoryLogger,
     private readonly live: LiveSettingsHandle,
     pendingFile: string,
+    /** Room 注册表(可选;孤儿候选预标记的合并词表来源)。 */
+    roomRegistry?: { listActive(): Array<{ slug: string; label?: string; description?: string }> },
   ) {
     this.pendingFile = pendingFile;
+    this.roomRegistry = roomRegistry;
   }
 
   /** 状态快照 */
@@ -299,6 +306,24 @@ export class RuminateController {
         this.status.sub = null;
         // 重标定失败不拖垮反刍整体(蒸馏/L2/L3 产物保留)
         this.logger.warn(`[memory] 反刍重标定失败(不影响本次产物): ${errDetail(err)}`);
+      }
+
+      // 场景重聚类消费(治理 W3,T3.10/T3.11):demote-to-wiki / repo 归属变化的
+      // 派生修复在空闲档落地;每次至多 1 个作业,内部吞错绝不拖垮反刍。
+      try {
+        if (reprocessed > 0) this.status.detail = `场景重聚类 ${reprocessed} 个作业已派发重算`;
+      } catch (err) {
+        this.logger.warn(`[memory] 场景重聚类调度失败(忽略): ${errDetail(err)}`);
+      }
+
+      // 孤儿候选预标记(长尾治理):无 Room 的活跃孤儿对照现有 Room 词表产出
+      // 候选(roomReview='pending'),由 agent 用 memory_room_review 逐个复查;
+      // 每轮至多 40 条,吞错不拖垮反刍。
+      try {
+        const r = await annotateOrphanCandidates(this.ctx, this.cfg, { l1: this.stores.l1, logger: this.logger, registry: this.roomRegistry }, 40);
+        if (r.written > 0) this.status.detail = `孤儿候选预标记 ${r.written} 条(待 agent 复查,工具 memory_room_review)`;
+      } catch (err) {
+        this.logger.warn(`[memory] 孤儿候选预标记失败(忽略): ${errDetail(err)}`);
       }
 
       this.status.phase = 'done';

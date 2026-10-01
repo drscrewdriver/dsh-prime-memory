@@ -997,6 +997,85 @@ export function registerMemoryTools(
   );
 
   // ── 反刍状态查询(查看当前反刍进度) ──
+  // ── memory_room_review:孤儿记忆的 Room 候选逐个复查(agent 长尾治理)──────
+  // next/annotate 只读或预算内标注(无需门);confirm/skip 改写 metadata,
+  // confirm 吃 live.memoryMutate 高权限门(与 memory_delete 同款)。
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_room_review',
+      description:
+        '孤儿记忆(无 Room 绑定)的逐个复查:action="next" 取下一条待复查记录(带系统预标记的候选 Room 与现有词表,agent 依据记录内容判定);' +
+        'action="confirm" 按 id 把 1-3 个 Room slug 写入该记忆(高权限);action="skip" 跳过(不再进队列);' +
+        'action="annotate" 立即对一批孤儿做候选预标记(平时由反刍自动推进)。建议长会话空闲时逐个过,保持分类收敛——优先挂靠现有 Room。',
+      parameters: {
+        action: { type: 'string', required: true, description: 'next(取下一条)| confirm(确认写入)| skip(跳过)| annotate(批量预标记)' },
+        id: { type: 'string', description: 'confirm/skip 的目标记录 id(action=next 返回的 id)' },
+        rooms: { type: 'string', description: 'confirm 的 Room slug 列表(逗号分隔,1-3 个,小写字母数字连字符;可含词表外新 slug)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            notice: { type: 'string' },
+            id: { type: 'string' },
+            content: { type: 'string' },
+            candidates: { type: 'string' },
+            roomCatalog: { type: 'string' },
+            remaining: { type: 'number' },
+            confirmedTags: { type: 'string' },
+            annotated: { type: 'number' },
+            deferred: { type: 'number' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: value.notice ?? JSON.stringify(value) }],
+      },
+      execute: async (args) => {
+        const action = String(args.action ?? '');
+        const io = { l1: stores.l1, logger };
+        if (action === 'next') {
+          const item = nextReview(io.l1);
+          if (!item) return { notice: '没有待复查的孤儿记忆(roomCandidates 队列为空)。可用 action=annotate 先做一轮候选预标记。' };
+          return {
+            id: item.id,
+            content: item.content,
+            candidates: item.candidates.join(', '),
+            roomCatalog: item.roomCatalog.map((r) => `${r.room}(${r.count})`).join(', '),
+            remaining: item.remaining,
+          };
+        }
+        if (action === 'annotate') {
+          const r = await annotateOrphanCandidates(ctx, cfg, { ...io, registry: roomRegistry }, 40);
+          return {
+            notice: `候选预标记完成:选中 ${r.selected} 条,产候选 ${r.candidates} 条,写 pending ${r.written} 条。用 action=next 逐个复查。`,
+            annotated: r.candidates,
+            deferred: r.selected - r.written,
+          };
+        }
+        if (action === 'confirm') {
+          if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
+          const id = String(args.id ?? '').trim();
+          if (!id) return { notice: 'confirm 需要 id(action=next 返回的 id)。' };
+          const rooms = String(args.rooms ?? '')
+            .split(/[,,、]/)
+            .map((x) => x.trim())
+            .filter(Boolean);
+          if (rooms.length === 0) return { notice: 'confirm 需要 rooms(逗号分隔的 1-3 个 Room slug)。' };
+          const r = confirmReview(io.l1, id, rooms);
+          if (!r) return { notice: `确认失败:id=${id} 不存在、已被确认过、或 rooms 全部非法(需 1-3 个合法 slug)。` };
+          return { notice: `已挂到 Room:${r.tags.join(', ')}(面板下一次刷新即可见)。`, confirmedTags: r.tags.join(', '), id };
+        }
+        if (action === 'skip') {
+          const id = String(args.id ?? '').trim();
+          if (!id) return { notice: 'skip 需要 id。' };
+          const ok = skipReview(io.l1, id);
+          return { notice: ok ? `已跳过 ${id}(不再进复查队列)。` : `跳过失败:id=${id} 不存在。`, id };
+        }
+        return { notice: `非法 action:${action}(允许 next/confirm/skip/annotate)。剩余待复查 ${pendingReviewCount(stores.l1)} 条。` };
+      },
+    }),
+  );
+
   ctx.tools.register(
     defineTool({
       name: 'memory_ruminate_status',

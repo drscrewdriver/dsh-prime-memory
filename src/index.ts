@@ -399,9 +399,12 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   }
   stores.backend = backend;
 
+  // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
+  const roomRegistry = new RoomRegistryStore(dataDir, logger);
+  await roomRegistry.init();
   const ruminate =
     storageOk && !db.isDegraded() && ruminateFile
-      ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile)
+      ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile, roomRegistry)
       : undefined;
 
   let flushL0: (() => Promise<void>) | undefined;
@@ -411,8 +414,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   // 长任务模式(cfg.longTask.enabled 门控,默认关):官方 usage 上下文计量 +
   // todo/write 快照参考(仅长任务会话;写 pinned 槽位走 slot-recall 常驻注入)。
   // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
-  const roomRegistry = new RoomRegistryStore(dataDir, logger);
-  await roomRegistry.init();
+
   if (storageOk) {
       cfg: config,
       modes,
