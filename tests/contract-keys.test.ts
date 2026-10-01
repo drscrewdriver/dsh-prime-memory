@@ -67,6 +67,7 @@ const ENDPOINTS = [
   'dsh-memory/rooms-get',
   'dsh-memory/rooms-export',
   'dsh-memory/room-register',
+  'dsh-memory/room-admin',
   'dsh-memory/wing-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
@@ -146,8 +147,8 @@ describe('wing catalog', () => {
 
 describe('endpoint surface', () => {
   it('exposes exactly the 43 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(47);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(47);
+    expect(ENDPOINTS.length).toBe(48);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(48);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {

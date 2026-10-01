@@ -25,6 +25,7 @@ import { emptyRecallStats, type RecallSessionStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import type { RebuildController } from './pipeline/rebuild.js';
 import type { RuminateController } from './pipeline/ruminate.js';
+import { mergeRoom, renameRoom } from './room-review.js';
 import type { RoomRegistryStore } from './store/rooms-registry.js';
 import { projectDistillChain, validateDistillChain, type DistillChainEntry, type LiveSettingsHandle } from './settings.js';
 import type { GraphStore } from './store/graph-store.js';
@@ -88,6 +89,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/rooms-get',
   'dsh-memory/rooms-export',
   'dsh-memory/room-register',
+  'dsh-memory/room-admin',
   'dsh-memory/wing-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
@@ -264,6 +266,8 @@ import type {
   RoomsExportResponse,
   RoomRegisterRequest,
   RoomRegisterResponse,
+  RoomAdminRequest,
+  RoomAdminResponse,
 } from './contract.js';
 export type { MemoryStats } from './contract.js';
 
@@ -932,10 +936,74 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       return v;
     }
 
+    // ── Room 破坏性面管理(merge/rename/retire;与 memory_room_admin 工具同编排) ──
+    case 'dsh-memory/room-admin': {
+      if (!roomRegistry) throw new Error('Room 注册表未装配(需要插件重载以初始化)。');
+      if (!live?.get().memoryMutate) throw new Error('记忆写删未开放:请在记忆库面板开启「高权限模式」后,才能执行 Room 管理。');
+      const p = (payload ?? {}) as RoomAdminRequest;
+      if (p.action === 'retire') {
+        const slug = String(p.slug ?? '').trim();
+        if (!slug) throw new Error('retire 需要 slug');
+        const active = p.active === true;
+        const changed = await roomRegistry.setStatus(slug, active ? 'active' : 'retired');
+        const v: RoomAdminResponse = {
+          notice: changed
+            ? active
+              ? `已恢复:${slug}`
+              : `已退役:${slug}(存量记录的 tags 不动,仅词表不再推荐)。`
+            : `未找到注册条目或状态无变化:${slug}(自生长 Room 无需退役,会随 tags 自然消失)。`,
+        };
+        return v;
+      }
+      if (p.action === 'merge' || p.action === 'rename') {
+        const from = String(p.from ?? '').trim();
+        const to = String(p.to ?? '').trim();
+        if (!from || !to) throw new Error('merge/rename 需要 from 与 to 两个 slug');
+        const dryRun = p.dryRun !== false;
+        const r = await (p.action === 'merge' ? mergeRoom : renameRoom)(
+          { l1: stores.l1, registry: roomRegistry, logger: deps.logger },
+          from,
+          to,
+          { dryRun },
+        );
+        if (r.dryRun) {
+          const v: RoomAdminResponse = {
+            notice:
+              `[dryRun 预览] ${from} → ${to}:影响 ${r.affected} 条${r.hasMore ? '(超过单次上限,需续跑)' : ''}。` +
+              `样例:${r.preview.join(', ') || '无'}。确认无误后以 dryRun=false 执行(执行前自动备份,完成后自动入队场景重算)。`,
+            dryRun: true,
+            affected: r.affected,
+            preview: r.preview,
+            hasMore: r.hasMore,
+          };
+          return v;
+        }
+        // 实跑:受影响场景入队重算(source='room-merge';与工具同口径)
+        let requeued = 0;
+        for (const family of r.families ?? []) {
+          for (const scene of r.scenes ?? []) {
+            stores.l1.enqueueSceneRecluster(family, [scene], `room-merge:${Date.now()}`, 'room-merge');
+            requeued++;
+          }
+        }
+        const v: RoomAdminResponse = {
+          notice:
+            `${p.action === 'merge' ? '合并' : '改名'}完成:${from} → ${to},重写 ${r.applied} 条` +
+            `(备份:${r.backupFile ?? '无'})${requeued > 0 ? `;已入队 ${requeued} 个场景重算` : ''}。`,
+          dryRun: false,
+          affected: r.applied,
+          backupFile: r.backupFile,
+        };
+        return v;
+      }
+      throw new Error(`非法 action:${String(p.action)}(允许 merge/rename/retire)`);
+    }
+
     case 'dsh-memory/rooms-export': {
-      const p = (payload ?? {}) as { kind?: string; limit?: number };
-      const kind = p.kind === 'orphans' ? 'orphans' : p.kind === 'rooms' ? 'rooms' : '';
-      if (!kind) throw new Error(`頖kind: ${String(p.kind)}(允rooms/orphans)` + ')');
+      const p = (payload ?? {}) as { kind?: string; limit?: number; tag?: string };
+      const kind =
+        p.kind === 'orphans' ? 'orphans' : p.kind === 'rooms' ? 'rooms' : p.kind === 'records' ? 'records' : '';
+      if (!kind) throw new Error(`非法 kind: ${String(p.kind)}(允许 rooms/orphans/records)`);
       const limit = Math.min(Math.max(Number(p.limit) || 2000, 1), 10_000);
       const esc = (v: unknown): string => {
         const t = String(v ?? '');
@@ -958,6 +1026,32 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           n++;
         }
         const v: RoomsExportResponse = { kind, csv: lines.join('\r\n'), total: n, truncated: false };
+        return v;
+      }
+      if (kind === 'records') {
+        const tag = String(p.tag ?? '').trim();
+        if (!tag) throw new Error('kind=records 需要 tag(目标 Room slug)');
+        const header = 'id,type,scene_name,updated_at,tags,content';
+        const lines: string[] = [header];
+        let n = 0;
+        let truncated2 = false;
+        for (let offset = 0; offset < limit; offset += 200) {
+          const page = stores.l1.list({ tag, retired: undefined, limit: 200, offset });
+          for (const r of page.items) {
+            if (n >= limit) {
+              truncated2 = true;
+              break;
+            }
+            const meta = (r.metadata ?? {}) as Record<string, unknown>;
+            const tags = Array.isArray(meta.tags) ? (meta.tags as string[]).join('|') : '';
+            lines.push(
+              [r.id, r.type, r.scene_name, new Date(r.updatedAt).toISOString(), tags, r.content].map(esc).join(','),
+            );
+            n++;
+          }
+          if (truncated2 || page.items.length < 200) break;
+        }
+        const v: RoomsExportResponse = { kind, csv: lines.join('\r\n'), total: n, truncated: truncated2 };
         return v;
       }
       // orphans:无 Room 绑定的活跃记录清单(id/type/scene/updated/content/候选/状态)
