@@ -354,8 +354,11 @@ export async function apply(ctx, config) {
         backend = await createMemoryBackend({ dbPath: path.join(dataDir, 'memory.db'), dimensions: initial.dims, logger }, backend);
     }
     stores.backend = backend;
+    // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
+    const roomRegistry = new RoomRegistryStore(dataDir, logger);
+    await roomRegistry.init();
     const ruminate = storageOk && !db.isDegraded() && ruminateFile
-        ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile)
+        ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile, roomRegistry)
         : undefined;
     let flushL0;
     if (storageOk) {
@@ -366,8 +369,6 @@ export async function apply(ctx, config) {
     const contextUsage = new ContextUsageStore(logger);
     const todoRef = new TodoRefStore();
     // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
-    const roomRegistry = new RoomRegistryStore(dataDir, logger);
-    await roomRegistry.init();
     if (storageOk) {
         registerLongTaskMonitor(ctx, {
             cfg: config,

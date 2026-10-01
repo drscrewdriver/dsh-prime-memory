@@ -46,11 +46,15 @@ export class RuminateController {
     sessions = [];
     totalL1 = 0;
     pendingFile;
+    /** Room 注册表(可选;孤儿候选预标记的合并词表来源)。 */
+    roomRegistry;
     /** 记忆后端:未注入时包 l1(进程内,行为与改造前等价)。 */
     backend() {
         return this.stores.backend ?? new InProcMemoryBackend(this.stores.l1);
     }
-    constructor(ctx, cfg, runner, stores, logger, live, pendingFile) {
+    constructor(ctx, cfg, runner, stores, logger, live, pendingFile, 
+    /** Room 注册表(可选;孤儿候选预标记的合并词表来源)。 */
+    roomRegistry) {
         this.ctx = ctx;
         this.cfg = cfg;
         this.runner = runner;
@@ -58,6 +62,7 @@ export class RuminateController {
         this.logger = logger;
         this.live = live;
         this.pendingFile = pendingFile;
+        this.roomRegistry = roomRegistry;
     }
     /** 状态快照 */
     getStatus() {
@@ -238,7 +243,7 @@ export class RuminateController {
             // 候选(roomReview='pending'),由 agent 用 memory_room_review 逐个复查;
             // 每轮至多 40 条,吞错不拖垮反刍。
             try {
-                const r = await annotateOrphanCandidates(this.ctx, this.cfg, { l1: this.stores.l1, logger: this.logger }, 40);
+                const r = await annotateOrphanCandidates(this.ctx, this.cfg, { l1: this.stores.l1, logger: this.logger, registry: this.roomRegistry }, 40);
                 if (r.written > 0)
                     this.status.detail = `孤儿候选预标记 ${r.written} 条(待 agent 复查,工具 memory_room_review)`;
             }

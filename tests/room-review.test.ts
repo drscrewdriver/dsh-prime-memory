@@ -122,7 +122,7 @@ describe('annotateOrphanCandidates(候选预标记)', () => {
     seedRecord(db, 'r2');
     const seen: string[] = [];
     const r = await annotateOrphanCandidates({} as never, cfg, io(l1), 40, {
-      chunkAnnotator: async (chunk) => {
+      chunkAnnotator: async (chunk, _catalog) => {
         for (const c of chunk) seen.push(c.id);
         return chunk.map((c) => ({ id: c.id, rooms: ['git-commits'] }));
       },
@@ -136,7 +136,7 @@ describe('annotateOrphanCandidates(候选预标记)', () => {
     // r2 标 skipped 后重跑:不再选中
     skipReview(l1, 'r2');
     const r2 = await annotateOrphanCandidates({} as never, cfg, io(l1), 40, {
-      chunkAnnotator: async (chunk) => chunk.map((c) => ({ id: c.id, rooms: ['gpu-vram'] })),
+      chunkAnnotator: async (chunk, _cat) => chunk.map((c) => ({ id: c.id, rooms: ['gpu-vram'] })),
     });
     expect(r2.selected).toBe(1);
   });

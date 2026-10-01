@@ -31,6 +31,7 @@ import { runSceneConsolidation } from './l2.js';
 import { relabelPass, type RelabelStats } from './relabel.js';
 import { processSceneReclusterJobs } from './recluster.js';
 import { annotateOrphanCandidates } from '../room-review.js';
+import type { RoomRegistryStore } from '../store/rooms-registry.js';
 import { runPersona } from './l3.js';
 import type { MemoryRunner } from './runner.js';
 
@@ -102,6 +103,8 @@ export class RuminateController {
   private sessions: RuminateSession[] = [];
   private totalL1 = 0;
   private pendingFile: string;
+  /** Room 注册表(可选;孤儿候选预标记的合并词表来源)。 */
+  private readonly roomRegistry: { listActive(): Array<{ slug: string; label?: string; description?: string }> } | undefined;
 
   /** 记忆后端:未注入时包 l1(进程内,行为与改造前等价)。 */
   private backend(): MemoryBackend {
@@ -123,8 +126,11 @@ export class RuminateController {
     private readonly logger: MemoryLogger,
     private readonly live: LiveSettingsHandle,
     pendingFile: string,
+    /** Room 注册表(可选;孤儿候选预标记的合并词表来源)。 */
+    roomRegistry?: { listActive(): Array<{ slug: string; label?: string; description?: string }> },
   ) {
     this.pendingFile = pendingFile;
+    this.roomRegistry = roomRegistry;
   }
 
   /** 状态快照 */
@@ -316,7 +322,7 @@ export class RuminateController {
       // 候选(roomReview='pending'),由 agent 用 memory_room_review 逐个复查;
       // 每轮至多 40 条,吞错不拖垮反刍。
       try {
-        const r = await annotateOrphanCandidates(this.ctx, this.cfg, { l1: this.stores.l1, logger: this.logger }, 40);
+        const r = await annotateOrphanCandidates(this.ctx, this.cfg, { l1: this.stores.l1, logger: this.logger, registry: this.roomRegistry }, 40);
         if (r.written > 0) this.status.detail = `孤儿候选预标记 ${r.written} 条(待 agent 复查,工具 memory_room_review)`;
       } catch (err) {
         this.logger.warn(`[memory] 孤儿候选预标记失败(忽略): ${errDetail(err)}`);

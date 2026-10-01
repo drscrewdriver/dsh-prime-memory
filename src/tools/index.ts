@@ -1059,7 +1059,7 @@ export function registerMemoryTools(
           };
         }
         if (action === 'annotate') {
-          const r = await annotateOrphanCandidates(ctx, cfg, io, 40);
+          const r = await annotateOrphanCandidates(ctx, cfg, { ...io, registry: roomRegistry }, 40);
           return {
             notice: `候选预标记完成:选中 ${r.selected} 条,产候选 ${r.candidates} 条,写 pending ${r.written} 条。用 action=next 逐个复查。`,
             annotated: r.candidates,
