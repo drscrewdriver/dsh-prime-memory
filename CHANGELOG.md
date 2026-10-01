@@ -17,6 +17,17 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.10] — 2026-10-02
+
+> **longtask(长任务模式)全量撤除**:该族功能的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——beta.8 撤浮动球、本版撤完剩余后端。pm 回归纯记忆域。将来若需要「立即蒸馏尾部」等能力,以 pm 本位重新设计再立项。
+
+### 移除
+
+- **端点 `longtask-hint-get` / `longtask-compress-tail`**(契约键 48 → 46)及 `compressTailTurns`/去抖 ruminate 闭环:上下文计量(`ContextUsageStore`)、todo 漂移检测(`TodoRefStore`)、建议判定随之一并撤除,`hooks/long-task.ts`、`store/context-usage.ts`、`store/todo-ref.ts` 三文件删除(含 todo/write 事件的 declare module 扩充)。
+- **`cfg.longTask.*` 配置块**(默认值 + 两处 Schema):旧配置文件里的 longTask 键由 schema 忽略,无需迁移。
+- **会话级 `longTask` 旗标与尾部压缩水位线 `lastTailCompressedTurn`**(session-modes):旧 session-modes.json 里的遗留键由载入过滤自然忽略。
+- **`session-mode-set` 的 `mode` 恢复必传**(该可先化专为 longTask 二选一而生);`longTask` 请求/响应字段删除。
+- 保留:beta.9 的 roomRegistry RPC 接线修复(独立成立);Hall 管理页与 Room 分类管理面不变。
 ## [0.20.0-beta.9] — 2026-10-02
 
 > 修复面板 RPC 全链路的 deps 漏带:`roomRegistry` 与 `longTaskDeps` 在 rpcHandler 组装 sources 时丢失,面板侧 Room 管理/长任务端点恒"未装配"(工具面直传不受影响,故 beta.4 起工具可用而面板注册一直报错)。

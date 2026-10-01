@@ -152,7 +152,7 @@ async function harness(opts: {
     llm: {} as never,
   } as unknown as Parameters<typeof registerMemoryRpc>[0];
 
-  registerMemoryRpc(ctx, cfg({}, opts.cfgOver ?? {}), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined, undefined, registry);
+  registerMemoryRpc(ctx, cfg({}, opts.cfgOver ?? {}), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined, registry);
   return {
     registry,
     call: async (endpoint, payload) => {
@@ -250,7 +250,6 @@ describe('rpc: session mode endpoints', () => {
       halls: [],
       hallIncludeUnlabeled: true,
       hallIncludeGeneral: false,
-      longTask: false,
     });
     // 显式 null 清除覆盖
     const cleared = await h.call('dsh-memory/session-mode-set', { sessionId: 's1', mode: 'auto', recall: null }) as { recall: null; recallResolved: boolean };
@@ -262,6 +261,7 @@ describe('rpc: session mode endpoints', () => {
     expect(kept.recall).toBe(true);
     // 非法档位 / 非法覆盖 / 超长 sessionId
     await expect(h.call('dsh-memory/session-mode-set', { sessionId: 's', mode: 'bogus' })).rejects.toThrow('非法档位');
+    await expect(h.call('dsh-memory/session-mode-set', { sessionId: 's' })).rejects.toThrow('需要 mode');
     await expect(h.call('dsh-memory/session-mode-set', { sessionId: 's', mode: 'auto', recall: 'yes' })).rejects.toThrow('非法注入覆盖');
     await expect(h.call('dsh-memory/session-mode-set', { sessionId: 'x'.repeat(600), mode: 'auto' })).rejects.toThrow('过长');
     const get = await h.call('dsh-memory/session-mode-get', { sessionId: 's1' }) as { mode: string; recallResolved: boolean };

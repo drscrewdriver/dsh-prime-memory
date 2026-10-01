@@ -36,9 +36,6 @@ import { SlotStore } from './store/slots.js';
 import { registerMemoryTools } from './tools/index.js';
 import { registerSlotTools } from './tools/slots.js';
 import { registerSlotRecall } from './hooks/slot-recall.js';
-import { registerLongTaskMonitor } from './hooks/long-task.js';
-import { ContextUsageStore } from './store/context-usage.js';
-import { TodoRefStore } from './store/todo-ref.js';
 import { RoomRegistryStore } from './store/rooms-registry.js';
 import { registerSlotsProjection } from './projection/slots.js';
 import { errDetail, withFileLog } from './util/filelog.js';
@@ -364,21 +361,6 @@ export async function apply(ctx, config) {
     if (storageOk) {
         flushL0 = registerCapture(ctx, config, runner, stores.l0, logger, live, modes);
     }
-    // 长任务模式(cfg.longTask.enabled 门控,默认关):官方 usage 上下文计量 +
-    // todo/write 快照参考(仅长任务会话;写 pinned 槽位走 slot-recall 常驻注入)。
-    const contextUsage = new ContextUsageStore(logger);
-    const todoRef = new TodoRefStore();
-    // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
-    if (storageOk) {
-        registerLongTaskMonitor(ctx, {
-            cfg: config,
-            modes,
-            slots: stores.slots,
-            contextUsage,
-            todoRef,
-            logger,
-        });
-    }
     const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir);
     runner.setAfterRun(recall.invalidateProfile);
     registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate, storageOk ? roomRegistry : undefined);
@@ -400,7 +382,7 @@ export async function apply(ctx, config) {
         runnerView: (sid, mode) => runner.sessionView(sid, mode),
         l0Count: (sid) => stores.l0.countBySession(sid),
         capabilities: () => db.getCapabilities(),
-    }, ruminate, storageOk ? { runner, slots: stores.slots, contextUsage, todoRef } : undefined, storageOk ? roomRegistry : undefined);
+    }, ruminate, storageOk ? roomRegistry : undefined);
     // bench 控制服务(config.benchControl 门控,默认关):仅基准/调试部署注册,
     // 供同进程的 bench-runner lifecycle 赛道触发 rebuild / 设置会话档位
     // (宿主侧 RPC 无 call(),见 bench-control.ts)

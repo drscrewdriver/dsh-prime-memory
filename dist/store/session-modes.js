@@ -92,8 +92,6 @@ export class SessionModeStore {
                         : undefined,
                 hallIncludeUnlabeled: typeof entry.hallIncludeUnlabeled === 'boolean' ? entry.hallIncludeUnlabeled : undefined,
                 hallIncludeGeneral: typeof entry.hallIncludeGeneral === 'boolean' ? entry.hallIncludeGeneral : undefined,
-                longTask: typeof entry.longTask === 'boolean' ? entry.longTask : undefined,
-                lastTailCompressedTurn: typeof entry.lastTailCompressedTurn === 'number' ? entry.lastTailCompressedTurn : undefined,
                 updatedAt: entry.updatedAt ?? now,
             });
             count++;
@@ -137,52 +135,6 @@ export class SessionModeStore {
             halls: entry?.halls,
             hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
             hallIncludeGeneral: entry?.hallIncludeGeneral,
-            longTask: entry?.longTask,
-            lastTailCompressedTurn: entry?.lastTailCompressedTurn,
-            updatedAt: Date.now(),
-        });
-        this.writeChain = this.writeChain.then(() => this.persist());
-    }
-    /** 长任务模式(缺省 = 关)。 */
-    getLongTask(sessionId) {
-        return this.entries.get(sessionId)?.longTask ?? false;
-    }
-    /** 切换长任务模式(写穿持久化)。 */
-    setLongTask(sessionId, on) {
-        const entry = this.entries.get(sessionId);
-        this.entries.set(sessionId, {
-            mode: entry?.mode ?? this.loaded,
-            recall: entry?.recall,
-            hall: entry?.hall,
-            halls: entry?.halls,
-            hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
-            hallIncludeGeneral: entry?.hallIncludeGeneral,
-            longTask: on,
-            lastTailCompressedTurn: entry?.lastTailCompressedTurn,
-            updatedAt: Date.now(),
-        });
-        this.writeChain = this.writeChain.then(() => this.persist());
-    }
-    /** 尾部压缩水位线(undefined = 尚未压缩过)。 */
-    getTailWatermark(sessionId) {
-        const t = this.entries.get(sessionId)?.lastTailCompressedTurn;
-        return typeof t === 'number' && Number.isFinite(t) ? t : undefined;
-    }
-    /** 推进尾部压缩水位线(写穿持久化;只前进不回退)。 */
-    setTailWatermark(sessionId, turn) {
-        const entry = this.entries.get(sessionId);
-        const prev = entry?.lastTailCompressedTurn;
-        if (typeof prev === 'number' && prev >= turn)
-            return;
-        this.entries.set(sessionId, {
-            mode: entry?.mode ?? this.loaded,
-            recall: entry?.recall,
-            hall: entry?.hall,
-            halls: entry?.halls,
-            hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
-            hallIncludeGeneral: entry?.hallIncludeGeneral,
-            longTask: entry?.longTask,
-            lastTailCompressedTurn: turn,
             updatedAt: Date.now(),
         });
         this.writeChain = this.writeChain.then(() => this.persist());
@@ -221,8 +173,6 @@ export class SessionModeStore {
             halls: locked === undefined ? entry?.halls : locked.length > 0 ? locked : undefined,
             hallIncludeUnlabeled: boundaries?.includeUnlabeled ?? entry?.hallIncludeUnlabeled,
             hallIncludeGeneral: boundaries?.includeGeneral ?? entry?.hallIncludeGeneral,
-            longTask: entry?.longTask,
-            lastTailCompressedTurn: entry?.lastTailCompressedTurn,
             updatedAt: Date.now(),
         });
         this.writeChain = this.writeChain.then(() => this.persist());
@@ -244,8 +194,6 @@ export class SessionModeStore {
             halls: entry?.halls,
             hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
             hallIncludeGeneral: entry?.hallIncludeGeneral,
-            longTask: entry?.longTask,
-            lastTailCompressedTurn: entry?.lastTailCompressedTurn,
             updatedAt: Date.now(),
         });
         this.writeChain = this.writeChain.then(() => this.persist());

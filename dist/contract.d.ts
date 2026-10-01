@@ -456,14 +456,11 @@ export interface SessionModeGetResponse {
     hallIncludeUnlabeled: boolean;
     /** 锁定域边界开关:跨域兜底 general 是否参与召回(默认不含)。 */
     hallIncludeGeneral: boolean;
-    /** 长任务模式(浮动面板切换;尾部 turn 压缩与 todo 参考仅在开启时可用)。 */
-    longTask: boolean;
 }
 export interface SessionModeSetRequest {
     sessionId: string;
-    /** 档位。**与 longTask 二选一必传**:纯切档传 mode,只切长任务开关传 longTask
-     *  (mode 缺省时不触碰档位——浮动面板切开关不能顺带重置用户档位)。 */
-    mode?: MemoryMode;
+    /** 档位(必传)。 */
+    mode: MemoryMode;
     /** 会话级注入覆盖:布尔 = 设置覆盖;显式 null = 清除(跟随全局);缺省 = 不动
      *  (旧 client 纯切档兼容,覆盖不丢)。mode 与 recall 可独立设置。 */
     recall?: boolean | null;
@@ -475,8 +472,6 @@ export interface SessionModeSetRequest {
     /** 锁定域边界开关(缺省 = 不动)。 */
     hallIncludeUnlabeled?: boolean;
     hallIncludeGeneral?: boolean;
-    /** 长任务模式:布尔 = 切换(关闭时服务端同步撤下 todo 参考槽位);缺省 = 不动。 */
-    longTask?: boolean;
 }
 export interface SessionModeSetResponse {
     sessionId: string;
@@ -490,50 +485,6 @@ export interface SessionModeSetResponse {
     halls: string[];
     hallIncludeUnlabeled: boolean;
     hallIncludeGeneral: boolean;
-    /** 设置后的长任务态。 */
-    longTask: boolean;
-}
-/** dsh-memory/longtask-hint-get | 长任务建议状态(浮动面板轮询;热路径:全内存读)。 */
-export interface LongTaskHintGetRequest {
-    sessionId: string;
-}
-export interface LongTaskHintGetResponse {
-    sessionId: string;
-    /** 部署总开关(cfg.longTask.enabled):false 时面板不应挂载。 */
-    enabled: boolean;
-    /** 会话长任务态。 */
-    longTask: boolean;
-    /** 上下文占用百分比(最近官方输入侧 / 模型窗口;无样本或窗口未知 = null)。 */
-    contextPct: number | null;
-    contextThresholdPct: number;
-    /** 最近一次 todo 快照漂移度(无快照 = null)。 */
-    drift: number | null;
-    driftThreshold: number;
-    /** 最新 todo 快照条目数。 */
-    todoCount: number;
-    /** 非阻断建议:达到任一阈值且长任务未开启。 */
-    suggest: boolean;
-    reasons: Array<'context-threshold' | 'todo-drift'>;
-    /** 尾部压缩一次覆盖的轮数(cfg)。 */
-    tailTurns: number;
-    /** 已压缩水位线(null = 从未压缩)。 */
-    lastTailCompressedTurn: number | null;
-    /** 水位线之上、可压缩的已捕获轮数(长任务关闭时 null)。 */
-    pendingTailTurns: number | null;
-}
-/** dsh-memory/longtask-compress-tail | 尾部 turn 压缩(强制蒸馏最近 N 轮入记忆)。 */
-export interface LongTaskCompressTailRequest {
-    sessionId: string;
-    /** 覆盖 cfg.longTask.tailTurns(≤50)。 */
-    turns?: number;
-}
-export interface LongTaskCompressTailResponse {
-    sessionId: string;
-    /** 实际入队蒸馏的消息条数(0 = 无可压轮/长任务未开启)。 */
-    enqueued: number;
-    fromTurn: number | null;
-    toTurn: number | null;
-    longTask: boolean;
 }
 /** dsh-memory/wing-overview(八边形角计数;WingWheel 打开时拉取,非热路径)。 */
 export interface WingOverviewResponse {
@@ -579,6 +530,8 @@ export interface RoomRegisterRequest {
     slug: string;
     label?: string;
     description?: string;
+    /** 收编自生长 slug 时传 grown(缺省 pre-registered;已存在条目忽略此字段)。 */
+    source?: 'pre-registered' | 'grown';
 }
 export interface RoomRegisterResponse {
     slug: string;
@@ -588,13 +541,15 @@ export interface RoomRegisterResponse {
 }
 /** dsh-memory/rooms-export(分类数据导出,CSV 直出)。 */
 export interface RoomsExportRequest {
-    /** rooms = 词表+计数;orphans = 无 Room 绑定的记录清单。 */
-    kind: 'rooms' | 'orphans';
-    /** orphans 上限(1..10000,默认 2000)。 */
+    /** rooms = 词表+计数;orphans = 无 Room 绑定的记录清单;records = 按 Room 的记录清单(tag 必传)。 */
+    kind: 'rooms' | 'orphans' | 'records';
+    /** 各 kind 通用上限(1..10000,默认 2000)。 */
     limit?: number;
+    /** kind=records 的目标 Room slug。 */
+    tag?: string;
 }
 export interface RoomsExportResponse {
-    kind: 'rooms' | 'orphans';
+    kind: 'rooms' | 'orphans' | 'records';
     /** CSV 文本(首行表头;
    行尾;RFC 4180 转义)。 */
     csv: string;
@@ -602,6 +557,34 @@ export interface RoomsExportResponse {
     total: number;
     /** truncated = 达到 limit 上限,结果可能不完整。 */
     truncated: boolean;
+}
+/** dsh-memory/room-admin(Room 破坏性面管理;高权限:面板 memoryMutate 开启才生效)。 */
+export interface RoomAdminRequest {
+    /** merge/rename:from→to(mergeRoom/renameRoom 编排:预览→实跑+自动备份+入队场景重算);retire:slug 退役/恢复。 */
+    action: 'merge' | 'rename' | 'retire';
+    /** merge/rename 的源 Room slug。 */
+    from?: string;
+    /** merge/rename 的目标 Room slug。 */
+    to?: string;
+    /** retire 的目标 Room slug。 */
+    slug?: string;
+    /** retire:true=恢复 active;缺省/false=退役。 */
+    active?: boolean;
+    /** merge/rename:缺省 true 只返预览;实跑需显式 false。 */
+    dryRun?: boolean;
+}
+export interface RoomAdminResponse {
+    notice: string;
+    /** merge/rename 本次是否 dryRun(预览)。 */
+    dryRun?: boolean;
+    /** merge/rename 影响的记录条数(实跑 = 已改写条数)。 */
+    affected?: number;
+    /** 预览样例(受影响记录 id 的前几条)。 */
+    preview?: string[];
+    /** true = 超过单次上限,需续跑。 */
+    hasMore?: boolean;
+    /** 实跑时改写前备份文件名(rooms-merge-backups/)。 */
+    backupFile?: string;
 }
 /** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */
 export interface WingBackfillResponse {
@@ -1295,12 +1278,11 @@ export interface DshMemoryRequestMap {
     'dsh-memory/token-cost': TokenCostRequest;
     'dsh-memory/session-mode-get': SessionModeGetRequest;
     'dsh-memory/session-mode-set': SessionModeSetRequest;
-    'dsh-memory/longtask-hint-get': LongTaskHintGetRequest;
-    'dsh-memory/longtask-compress-tail': LongTaskCompressTailRequest;
     'dsh-memory/wing-overview': Record<string, never>;
     'dsh-memory/rooms-get': Record<string, never>;
     'dsh-memory/rooms-export': RoomsExportRequest;
     'dsh-memory/room-register': RoomRegisterRequest;
+    'dsh-memory/room-admin': RoomAdminRequest;
     'dsh-memory/wing-backfill': Record<string, never>;
     'dsh-memory/session-stats': SessionStatsRequest;
     'dsh-memory/settings-get': Record<string, never>;
@@ -1343,13 +1325,12 @@ export interface DshMemoryResponseMap {
     'dsh-memory/stats': StatsResponse;
     'dsh-memory/token-cost': TokenCostResponse;
     'dsh-memory/session-mode-get': SessionModeGetResponse;
-    'dsh-memory/longtask-hint-get': LongTaskHintGetResponse;
-    'dsh-memory/longtask-compress-tail': LongTaskCompressTailResponse;
     'dsh-memory/session-mode-set': SessionModeSetResponse;
     'dsh-memory/wing-overview': WingOverviewResponse;
     'dsh-memory/rooms-get': RoomsGetResponse;
     'dsh-memory/rooms-export': RoomsExportResponse;
     'dsh-memory/room-register': RoomRegisterResponse;
+    'dsh-memory/room-admin': RoomAdminResponse;
     'dsh-memory/wing-backfill': WingBackfillResponse;
     'dsh-memory/session-stats': SessionStatsResponse;
     'dsh-memory/settings-get': SettingsGetResponse;

@@ -75,19 +75,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, "plain">;
-    longTask: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, "plain">;
     conflictFreeze: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
@@ -433,19 +420,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteModel: import("@deepseek-ai/schemastery").default<string, string, "defined">;
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        longTask: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-            contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-            contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        }>>, "plain">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -543,19 +517,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteModel: import("@deepseek-ai/schemastery").default<string, string, "defined">;
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        longTask: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-            contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-            contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        }>>, "plain">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, Schemastery.ObjectT<NoInfer<{
@@ -618,19 +579,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, "plain">;
-    longTask: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-        autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-    }>>, "plain">;
     conflictFreeze: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
@@ -976,19 +924,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteModel: import("@deepseek-ai/schemastery").default<string, string, "defined">;
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        longTask: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-            contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-            contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        }>>, "plain">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -1086,19 +1021,6 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteModel: import("@deepseek-ai/schemastery").default<string, string, "defined">;
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        longTask: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
-            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-            contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-            contextThresholdPct: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            driftThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            tailTurns: import("@deepseek-ai/schemastery").default<number, number, "defined">;
-            autoCompress: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
-        }>>, "plain">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, "plain">;

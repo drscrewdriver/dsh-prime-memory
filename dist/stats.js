@@ -18,6 +18,7 @@ import { EFFORT_CHOICES, resolveDataDir } from './config.js';
 import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
+import { mergeRoom, renameRoom } from './room-review.js';
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
 import { getTraceStore } from './store/trace.js';
@@ -25,7 +26,6 @@ import { resolveConflictPair, listConflictPairs } from './conflict-service.js';
 import { sourceAnchorLabels } from './pipeline/anchors.js';
 import { readSupersedeMarker } from './store/supersede.js';
 import { isSnapshotName } from './store/l1-snapshot.js';
-import { closeTodoRefSlot } from './hooks/long-task.js';
 import { WING_CATALOG, WING_FALLBACK } from './types.js';
 import { isTag } from './metadata-validators.js';
 import { InProcMemoryBackend } from './store/memory-backend.js';
@@ -51,12 +51,11 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/token-cost',
     'dsh-memory/session-mode-get',
     'dsh-memory/session-mode-set',
-    'dsh-memory/longtask-hint-get',
-    'dsh-memory/longtask-compress-tail',
     'dsh-memory/wing-overview',
     'dsh-memory/rooms-get',
     'dsh-memory/rooms-export',
     'dsh-memory/room-register',
+    'dsh-memory/room-admin',
     'dsh-memory/wing-backfill',
     'dsh-memory/session-stats',
     'dsh-memory/settings-get',
@@ -158,51 +157,6 @@ function readJsonBody(req) {
         req.on('error', reject);
     });
 }
-/** 压缩后去抖 ruminate:上次触发时刻(模块级;跨轮询/按压共享)。 */
-let lastCompressRuminateAt = 0;
-const COMPRESS_RUMINATE_DEBOUNCE_MS = 10 * 60_000;
-/**
- * 尾部压缩闭环(T05):压缩入队成功后,冲刷+L2(带 repo 感知)+relabel+recluster
- * 消费一条龙由 ruminate 轻刷新接管——去抖 10 分钟,失败静默(压缩本身已成功,
- * 重算由下一次任何触发兜底)。
- */
-function debouncedCompressRuminate(ruminate, logger) {
-    const now = Date.now();
-    if (!ruminate || now - lastCompressRuminateAt < COMPRESS_RUMINATE_DEBOUNCE_MS)
-        return;
-    lastCompressRuminateAt = now;
-    void ruminate.start().catch((err) => logger.warn(`[memory] 压缩后反刍触发失败(压缩产物保留,重算由下次触发兜底): ${err instanceof Error ? err.message : String(err)}`));
-}
-/**
- * 尾部 turn 压缩:把 (水位线, maxCapturedTurn] 内最近的最近 N 轮强制蒸馏入记忆
- * (force 跳过阈值;L1 去重与水位线双重防重)。off 档会话保持完全隐身(不压缩)。
- * 无锚点老数据只在首次压缩(无水位线)时纳入——宁少收不重蒸。
- */
-export async function compressTailTurns(sessionId, turns, io) {
-    const toTurn = io.l0.maxCapturedTurn(sessionId);
-    if (toTurn === undefined)
-        return { enqueued: 0, fromTurn: null, toTurn: null };
-    const watermark = io.modes.getTailWatermark(sessionId) ?? 0;
-    const fromTurn = Math.max(watermark + 1, toTurn - turns + 1);
-    if (fromTurn > toTurn)
-        return { enqueued: 0, fromTurn, toTurn };
-    const mode = io.modes.get(sessionId);
-    if (mode === 'off')
-        return { enqueued: 0, fromTurn, toTurn };
-    const messages = await io.l0.recentBySession(sessionId, turns * 12 + 24);
-    const picked = messages.filter((m) => {
-        const t = m.anchor?.turn;
-        if (t === undefined)
-            return watermark === 0;
-        return t >= fromTurn && t <= toTurn;
-    });
-    if (picked.length === 0)
-        return { enqueued: 0, fromTurn, toTurn };
-    io.runner.enqueue(sessionId, picked, mode, { force: true });
-    io.modes.setTailWatermark(sessionId, toTurn);
-    io.logger.info(`[memory] 尾部压缩:turn ${fromTurn}..${toTurn} 已强制入队蒸馏(${picked.length} 条)`);
-    return { enqueued: picked.length, fromTurn, toTurn };
-}
 /**
  * 组装端点 deps。抽成函数是为了让"哪个控制器落入哪个字段"成为可测接缝:
  * 反刍端点读 deps.ruminate,若此处漏注入,端点会静默恒返 {supported:false}(面板整块不渲染)。
@@ -218,7 +172,6 @@ export function buildEndpointDeps(base, sources, controller) {
         embedManager: sources.embedManager,
         sessionInfo: sources.sessionInfo,
         ruminate: controller,
-        longTask: sources.longTask,
         roomRegistry: sources.roomRegistry,
     };
     return { ...base, ...injected };
@@ -226,8 +179,6 @@ export function buildEndpointDeps(base, sources, controller) {
 export function registerMemoryRpc(ctx, cfg, stores, logger, status, live, modes, dataDir, rebuild, embedManager, sessionInfo, 
 /** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
 ruminate, 
-/** 长任务端点依赖(cfg.longTask.enabled 门控;缺省 = 端点恒 disabled)。 */
-longTaskDeps, 
 /** Room 分类管理依赖(注册表;缺省 = rooms-get 不带 registry、rooms-export 恒 404 语义)。 */
 roomRegistry) {
     /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
@@ -247,7 +198,10 @@ roomRegistry) {
             // 端点处理器:HTTP 层与旧 connection.rpc 的 handler 共用同一分发。
             const rpcHandler = async (endpoint, payload) => {
                 try {
-                    const value = await handleEndpoint(endpoint, payload, buildEndpointDeps({ ctx, cfg, stores, logger }, { status, live, modes, dataDir, rebuild, embedManager, sessionInfo }, ruminate));
+                    const value = await handleEndpoint(endpoint, payload, buildEndpointDeps({ ctx, cfg, stores, logger }, 
+                    // roomRegistry 必须随 sources 下发——漏带 = 面板侧 room-* 恒"未装配"
+                    // (工具面直传不受影响;2026-10-02 beta.9 实测回归)
+                    { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry }, ruminate));
                     return { ok: true, value };
                 }
                 catch (err) {
@@ -395,7 +349,7 @@ function sanitizeSettings(s) {
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export async function handleEndpoint(endpoint, payload, deps) {
-    const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, longTask: longTaskDeps, roomRegistry } = deps;
+    const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry } = deps;
     switch (endpoint) {
         case 'dsh-memory/stats':
             return buildStats(cfg, stores, status);
@@ -429,7 +383,6 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 halls: locked,
                 hallIncludeUnlabeled: bounds.includeUnlabeled,
                 hallIncludeGeneral: bounds.includeGeneral,
-                longTask: modes.getLongTask(sessionId),
             };
             return v;
         }
@@ -439,9 +392,8 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const p = (payload ?? {});
             const sessionId = expectSessionId(p.sessionId);
             const allowed = ['auto', 'chat', 'work', 'off'];
-            // mode 可选(带 longTask 的轻量切换);二者都不传 = 无操作拒绝(防旧客户端漏字段静默)。
-            if (p.mode === undefined && p.longTask === undefined) {
-                throw new Error('session-mode-set 需要 mode 或 longTask 之一');
+            if (p.mode === undefined) {
+                throw new Error('session-mode-set 需要 mode');
             }
             if (p.mode !== undefined && (typeof p.mode !== 'string' || !allowed.includes(p.mode))) {
                 throw new Error(`非法档位: ${String(p.mode)}(允许 ${allowed.join('/')})`);
@@ -461,17 +413,6 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 const bad = Array.from(p.halls).find((x) => !isWingCorner(x));
                 if (bad !== undefined) {
                     throw new Error(`非法 Wing 锁定: ${String(bad)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
-                }
-            }
-            // 长任务开关可选同车:布尔 = 切换;缺省 = 不动。关闭时撤下 todo 参考槽位
-            // (todo 参考只在长任务模式可用;撤下失败不影响开关本身,log 即可)。
-            if (p.longTask !== undefined) {
-                if (typeof p.longTask !== 'boolean') {
-                    throw new Error(`非法长任务开关: ${String(p.longTask)}(允许 true/false)`);
-                }
-                modes.setLongTask(sessionId, p.longTask);
-                if (!p.longTask && longTaskDeps?.slots) {
-                    closeTodoRefSlot({ cfg, modes, slots: longTaskDeps.slots, contextUsage: longTaskDeps.contextUsage, todoRef: longTaskDeps.todoRef, logger: deps.logger }).catch((err) => deps.logger.warn(`[memory] todo 参考槽位撤下失败: ${err instanceof Error ? err.message : String(err)}`));
                 }
             }
             if (p.mode !== undefined)
@@ -513,129 +454,6 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 halls: locked,
                 hallIncludeUnlabeled: bounds.includeUnlabeled,
                 hallIncludeGeneral: bounds.includeGeneral,
-                longTask: modes.getLongTask(sessionId),
-            };
-            return v;
-        }
-        case 'dsh-memory/longtask-hint-get': {
-            if (!modes)
-                throw new Error('档位存储未初始化');
-            const p = (payload ?? {});
-            const sessionId = expectSessionId(p.sessionId);
-            const enabled = cfg.longTask.enabled;
-            const longTask = modes.getLongTask(sessionId);
-            let contextPct = null;
-            if (enabled && longTask) {
-                // 分母:主对话模型官方窗口(3s race 封顶,同 session-stats 口径)
-                let window = null;
-                try {
-                    const sel = deps.ctx.get('agentDefaultModel')?.currentSelection?.();
-                    if (sel?.provider && sel?.model) {
-                        window = await Promise.race([
-                            resolveModelContextWindow(deps.ctx, sel.provider, sel.model),
-                            new Promise((resolve) => setTimeout(() => resolve(null), 3_000)),
-                        ]);
-                    }
-                }
-                catch {
-                    /* 可选服务缺失 = 分母未知 */
-                }
-                contextPct = longTaskDeps
-                    ? longTaskDeps.contextUsage.percentOfWindow(sessionId, window ?? undefined)
-                    : null;
-            }
-            const drift = enabled ? longTaskDeps?.todoRef.latest(sessionId)?.drift ?? null : null;
-            const todoCount = enabled ? longTaskDeps?.todoRef.latest(sessionId)?.items.length ?? 0 : 0;
-            const reasons = [];
-            if (!longTask) {
-                if (contextPct !== null && contextPct >= cfg.longTask.contextThresholdPct) {
-                    reasons.push('context-threshold');
-                }
-                if (drift !== null && drift >= cfg.longTask.driftThreshold) {
-                    reasons.push('todo-drift');
-                }
-            }
-            const watermark = modes.getTailWatermark(sessionId);
-            let pendingTailTurns = null;
-            if (enabled && longTask && longTaskDeps) {
-                const captured = stores.l0.maxCapturedTurn(sessionId);
-                pendingTailTurns = captured === undefined ? 0 : Math.max(0, captured - (watermark ?? 0));
-            }
-            // 自动尾部压缩(长任务开启 + 显式 opt-in + 跨阈值):水位线只前进,
-            // 轮询重复触发天然幂等;失败只 warn,不打断建议状态返回。
-            if (enabled &&
-                longTask &&
-                longTaskDeps &&
-                cfg.longTask.autoCompress &&
-                pendingTailTurns !== null &&
-                pendingTailTurns > 0 &&
-                contextPct !== null &&
-                contextPct >= cfg.longTask.contextThresholdPct) {
-                try {
-                    const ar = await compressTailTurns(sessionId, cfg.longTask.tailTurns, {
-                        modes,
-                        l0: stores.l0,
-                        runner: longTaskDeps.runner,
-                        logger: deps.logger,
-                    });
-                    if (ar.enqueued > 0)
-                        debouncedCompressRuminate(ruminate, deps.logger);
-                }
-                catch (err) {
-                    deps.logger.warn(`[memory] 自动尾部压缩失败: ${err instanceof Error ? err.message : String(err)}`);
-                }
-                const captured = stores.l0.maxCapturedTurn(sessionId);
-                pendingTailTurns = captured === undefined ? 0 : Math.max(0, captured - (modes.getTailWatermark(sessionId) ?? 0));
-            }
-            const v = {
-                sessionId,
-                enabled,
-                longTask,
-                contextPct,
-                contextThresholdPct: cfg.longTask.contextThresholdPct,
-                drift,
-                driftThreshold: cfg.longTask.driftThreshold,
-                todoCount,
-                suggest: reasons.length > 0,
-                reasons,
-                tailTurns: cfg.longTask.tailTurns,
-                lastTailCompressedTurn: watermark ?? null,
-                pendingTailTurns,
-            };
-            return v;
-        }
-        case 'dsh-memory/longtask-compress-tail': {
-            if (!modes)
-                throw new Error('档位存储未初始化');
-            const p = (payload ?? {});
-            const sessionId = expectSessionId(p.sessionId);
-            const longTask = modes.getLongTask(sessionId);
-            const turns = p.turns === undefined
-                ? cfg.longTask.tailTurns
-                : Math.max(1, Math.min(50, Math.round(p.turns)));
-            let enqueued = 0;
-            let fromTurn = null;
-            let toTurn = null;
-            if (longTask && longTaskDeps) {
-                // 只在长任务模式可用(部署开关在 compressTailTurns 内再守一道)
-                const r = await compressTailTurns(sessionId, turns, {
-                    modes,
-                    l0: stores.l0,
-                    runner: longTaskDeps.runner,
-                    logger: deps.logger,
-                });
-                enqueued = r.enqueued;
-                fromTurn = r.fromTurn;
-                toTurn = r.toTurn;
-                if (enqueued > 0)
-                    debouncedCompressRuminate(ruminate, deps.logger);
-            }
-            const v = {
-                sessionId,
-                enqueued,
-                fromTurn,
-                toTurn,
-                longTask,
             };
             return v;
         }
@@ -693,6 +511,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 slug,
                 label: typeof p.label === 'string' ? p.label : undefined,
                 description: typeof p.description === 'string' ? p.description : undefined,
+                source: p.source === 'grown' ? 'grown' : undefined,
             });
             const v = {
                 slug: r.entry.slug,
@@ -701,11 +520,70 @@ export async function handleEndpoint(endpoint, payload, deps) {
             };
             return v;
         }
+        // ── Room 破坏性面管理(merge/rename/retire;与 memory_room_admin 工具同编排) ──
+        case 'dsh-memory/room-admin': {
+            if (!roomRegistry)
+                throw new Error('Room 注册表未装配(需要插件重载以初始化)。');
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放:请在记忆库面板开启「高权限模式」后,才能执行 Room 管理。');
+            const p = (payload ?? {});
+            if (p.action === 'retire') {
+                const slug = String(p.slug ?? '').trim();
+                if (!slug)
+                    throw new Error('retire 需要 slug');
+                const active = p.active === true;
+                const changed = await roomRegistry.setStatus(slug, active ? 'active' : 'retired');
+                const v = {
+                    notice: changed
+                        ? active
+                            ? `已恢复:${slug}`
+                            : `已退役:${slug}(存量记录的 tags 不动,仅词表不再推荐)。`
+                        : `未找到注册条目或状态无变化:${slug}(自生长 Room 无需退役,会随 tags 自然消失)。`,
+                };
+                return v;
+            }
+            if (p.action === 'merge' || p.action === 'rename') {
+                const from = String(p.from ?? '').trim();
+                const to = String(p.to ?? '').trim();
+                if (!from || !to)
+                    throw new Error('merge/rename 需要 from 与 to 两个 slug');
+                const dryRun = p.dryRun !== false;
+                const r = await (p.action === 'merge' ? mergeRoom : renameRoom)({ l1: stores.l1, registry: roomRegistry, logger: deps.logger }, from, to, { dryRun });
+                if (r.dryRun) {
+                    const v = {
+                        notice: `[dryRun 预览] ${from} → ${to}:影响 ${r.affected} 条${r.hasMore ? '(超过单次上限,需续跑)' : ''}。` +
+                            `样例:${r.preview.join(', ') || '无'}。确认无误后以 dryRun=false 执行(执行前自动备份,完成后自动入队场景重算)。`,
+                        dryRun: true,
+                        affected: r.affected,
+                        preview: r.preview,
+                        hasMore: r.hasMore,
+                    };
+                    return v;
+                }
+                // 实跑:受影响场景入队重算(source='room-merge';与工具同口径)
+                let requeued = 0;
+                for (const family of r.families ?? []) {
+                    for (const scene of r.scenes ?? []) {
+                        stores.l1.enqueueSceneRecluster(family, [scene], `room-merge:${Date.now()}`, 'room-merge');
+                        requeued++;
+                    }
+                }
+                const v = {
+                    notice: `${p.action === 'merge' ? '合并' : '改名'}完成:${from} → ${to},重写 ${r.applied} 条` +
+                        `(备份:${r.backupFile ?? '无'})${requeued > 0 ? `;已入队 ${requeued} 个场景重算` : ''}。`,
+                    dryRun: false,
+                    affected: r.applied,
+                    backupFile: r.backupFile,
+                };
+                return v;
+            }
+            throw new Error(`非法 action:${String(p.action)}(允许 merge/rename/retire)`);
+        }
         case 'dsh-memory/rooms-export': {
             const p = (payload ?? {});
-            const kind = p.kind === 'orphans' ? 'orphans' : p.kind === 'rooms' ? 'rooms' : '';
+            const kind = p.kind === 'orphans' ? 'orphans' : p.kind === 'rooms' ? 'rooms' : p.kind === 'records' ? 'records' : '';
             if (!kind)
-                throw new Error(`頖kind: ${String(p.kind)}(允rooms/orphans)` + ')');
+                throw new Error(`非法 kind: ${String(p.kind)}(允许 rooms/orphans/records)`);
             const limit = Math.min(Math.max(Number(p.limit) || 2000, 1), 10_000);
             const esc = (v) => {
                 const t = String(v ?? '');
@@ -729,6 +607,32 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     n++;
                 }
                 const v = { kind, csv: lines.join('\r\n'), total: n, truncated: false };
+                return v;
+            }
+            if (kind === 'records') {
+                const tag = String(p.tag ?? '').trim();
+                if (!tag)
+                    throw new Error('kind=records 需要 tag(目标 Room slug)');
+                const header = 'id,type,scene_name,updated_at,tags,content';
+                const lines = [header];
+                let n = 0;
+                let truncated2 = false;
+                for (let offset = 0; offset < limit; offset += 200) {
+                    const page = stores.l1.list({ tag, retired: undefined, limit: 200, offset });
+                    for (const r of page.items) {
+                        if (n >= limit) {
+                            truncated2 = true;
+                            break;
+                        }
+                        const meta = (r.metadata ?? {});
+                        const tags = Array.isArray(meta.tags) ? meta.tags.join('|') : '';
+                        lines.push([r.id, r.type, r.scene_name, new Date(r.updatedAt).toISOString(), tags, r.content].map(esc).join(','));
+                        n++;
+                    }
+                    if (truncated2 || page.items.length < 200)
+                        break;
+                }
+                const v = { kind, csv: lines.join('\r\n'), total: n, truncated: truncated2 };
                 return v;
             }
             // orphans:无 Room 绑定的活跃记录清单(id/type/scene/updated/content/候选/状态)

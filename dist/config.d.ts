@@ -76,22 +76,6 @@ export interface MemoryConfig {
          *  同时为真才执行;图谱是 L1 的可重建投影,关闭不影响记忆主链路。 */
         enabled: boolean;
     };
-    /** 长任务模式:浮动面板(非阻断建议)+ 尾部 turn 压缩 + todo 参考。
-     *  **默认关**——浮动 UI 与额外蒸馏都消耗注意力/额度,由用户显式打开。 */
-    longTask: {
-        /** 总开关:关闭时监听器不注册、RPC 返回 enabled:false、面板不挂载。 */
-        enabled: boolean;
-        /** 上下文占用告警阈值(% 窗口):最近一轮官方输入侧 token 达到该比例,
-         *  且长任务未开启时,浮动面板建议开启(压缩灾难遗忘高风险区)。 */
-        contextThresholdPct: number;
-        /** todo 漂移阈值:相邻 todo/write 快照的词面 Jaccard 相似度低于
-         *  (1 - 该值) 视为"大幅漂移"。0.6 = 相似度不足 0.4。 */
-        driftThreshold: number;
-        /** 尾部压缩一次覆盖的最近轮数。 */
-        tailTurns: number;
-        /** 达到上下文阈值时自动执行尾部压缩(无需按压面板;长任务开启才生效)。 */
-        autoCompress: boolean;
-    };
     /** §C 矛盾冻结:去重判定"两边都像是对的、机器判不了"时不自动裁决,
      *  把冲突对停放到待人工裁决区(conflict_pending)。**默认关**——
      *  冻结消耗人的注意力,不可默认全开。 */
@@ -337,19 +321,6 @@ export declare function liveSettingsSchema(): Schema<NoInfer<Schemastery.ObjectS
     embedRemoteModel: Schema<string, string, "defined">;
     embedRemoteDimensions: Schema<number, number, "defined">;
     memoryMutate: Schema<boolean, boolean, "defined">;
-    longTask: Schema<Schemastery.ObjectS<NoInfer<{
-        enabled: Schema<boolean, boolean, "defined">;
-        contextThresholdPct: Schema<number, number, "defined">;
-        driftThreshold: Schema<number, number, "defined">;
-        tailTurns: Schema<number, number, "defined">;
-        autoCompress: Schema<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: Schema<boolean, boolean, "defined">;
-        contextThresholdPct: Schema<number, number, "defined">;
-        driftThreshold: Schema<number, number, "defined">;
-        tailTurns: Schema<number, number, "defined">;
-        autoCompress: Schema<boolean, boolean, "defined">;
-    }>>, "plain">;
     conflictFreeze: Schema<boolean, boolean, "defined">;
 }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
     enabled: Schema<boolean, boolean, "defined">;
@@ -447,19 +418,6 @@ export declare function liveSettingsSchema(): Schema<NoInfer<Schemastery.ObjectS
     embedRemoteModel: Schema<string, string, "defined">;
     embedRemoteDimensions: Schema<number, number, "defined">;
     memoryMutate: Schema<boolean, boolean, "defined">;
-    longTask: Schema<Schemastery.ObjectS<NoInfer<{
-        enabled: Schema<boolean, boolean, "defined">;
-        contextThresholdPct: Schema<number, number, "defined">;
-        driftThreshold: Schema<number, number, "defined">;
-        tailTurns: Schema<number, number, "defined">;
-        autoCompress: Schema<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: Schema<boolean, boolean, "defined">;
-        contextThresholdPct: Schema<number, number, "defined">;
-        driftThreshold: Schema<number, number, "defined">;
-        tailTurns: Schema<number, number, "defined">;
-        autoCompress: Schema<boolean, boolean, "defined">;
-    }>>, "plain">;
     conflictFreeze: Schema<boolean, boolean, "defined">;
 }>>>, "volatile">;
 export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
@@ -522,19 +480,6 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
     }>>, "plain">;
-    longTask: Schema<Schemastery.ObjectS<NoInfer<{
-        enabled: Schema<boolean, boolean, "defined">;
-        contextThresholdPct: Schema<number, number, "defined">;
-        driftThreshold: Schema<number, number, "defined">;
-        tailTurns: Schema<number, number, "defined">;
-        autoCompress: Schema<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: Schema<boolean, boolean, "defined">;
-        contextThresholdPct: Schema<number, number, "defined">;
-        driftThreshold: Schema<number, number, "defined">;
-        tailTurns: Schema<number, number, "defined">;
-        autoCompress: Schema<boolean, boolean, "defined">;
-    }>>, "plain">;
     conflictFreeze: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxPending: Schema<number, number, "defined">;
@@ -880,19 +825,6 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteModel: Schema<string, string, "defined">;
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
-        longTask: Schema<Schemastery.ObjectS<NoInfer<{
-            enabled: Schema<boolean, boolean, "defined">;
-            contextThresholdPct: Schema<number, number, "defined">;
-            driftThreshold: Schema<number, number, "defined">;
-            tailTurns: Schema<number, number, "defined">;
-            autoCompress: Schema<boolean, boolean, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            enabled: Schema<boolean, boolean, "defined">;
-            contextThresholdPct: Schema<number, number, "defined">;
-            driftThreshold: Schema<number, number, "defined">;
-            tailTurns: Schema<number, number, "defined">;
-            autoCompress: Schema<boolean, boolean, "defined">;
-        }>>, "plain">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -990,19 +922,6 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteModel: Schema<string, string, "defined">;
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
-        longTask: Schema<Schemastery.ObjectS<NoInfer<{
-            enabled: Schema<boolean, boolean, "defined">;
-            contextThresholdPct: Schema<number, number, "defined">;
-            driftThreshold: Schema<number, number, "defined">;
-            tailTurns: Schema<number, number, "defined">;
-            autoCompress: Schema<boolean, boolean, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            enabled: Schema<boolean, boolean, "defined">;
-            contextThresholdPct: Schema<number, number, "defined">;
-            driftThreshold: Schema<number, number, "defined">;
-            tailTurns: Schema<number, number, "defined">;
-            autoCompress: Schema<boolean, boolean, "defined">;
-        }>>, "plain">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, Schemastery.ObjectT<NoInfer<{
@@ -1065,19 +984,6 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
     }>>, "plain">;
-    longTask: Schema<Schemastery.ObjectS<NoInfer<{
-        enabled: Schema<boolean, boolean, "defined">;
-        contextThresholdPct: Schema<number, number, "defined">;
-        driftThreshold: Schema<number, number, "defined">;
-        tailTurns: Schema<number, number, "defined">;
-        autoCompress: Schema<boolean, boolean, "defined">;
-    }>>, Schemastery.ObjectT<NoInfer<{
-        enabled: Schema<boolean, boolean, "defined">;
-        contextThresholdPct: Schema<number, number, "defined">;
-        driftThreshold: Schema<number, number, "defined">;
-        tailTurns: Schema<number, number, "defined">;
-        autoCompress: Schema<boolean, boolean, "defined">;
-    }>>, "plain">;
     conflictFreeze: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxPending: Schema<number, number, "defined">;
@@ -1423,19 +1329,6 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteModel: Schema<string, string, "defined">;
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
-        longTask: Schema<Schemastery.ObjectS<NoInfer<{
-            enabled: Schema<boolean, boolean, "defined">;
-            contextThresholdPct: Schema<number, number, "defined">;
-            driftThreshold: Schema<number, number, "defined">;
-            tailTurns: Schema<number, number, "defined">;
-            autoCompress: Schema<boolean, boolean, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            enabled: Schema<boolean, boolean, "defined">;
-            contextThresholdPct: Schema<number, number, "defined">;
-            driftThreshold: Schema<number, number, "defined">;
-            tailTurns: Schema<number, number, "defined">;
-            autoCompress: Schema<boolean, boolean, "defined">;
-        }>>, "plain">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -1533,19 +1426,6 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteModel: Schema<string, string, "defined">;
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
-        longTask: Schema<Schemastery.ObjectS<NoInfer<{
-            enabled: Schema<boolean, boolean, "defined">;
-            contextThresholdPct: Schema<number, number, "defined">;
-            driftThreshold: Schema<number, number, "defined">;
-            tailTurns: Schema<number, number, "defined">;
-            autoCompress: Schema<boolean, boolean, "defined">;
-        }>>, Schemastery.ObjectT<NoInfer<{
-            enabled: Schema<boolean, boolean, "defined">;
-            contextThresholdPct: Schema<number, number, "defined">;
-            driftThreshold: Schema<number, number, "defined">;
-            tailTurns: Schema<number, number, "defined">;
-            autoCompress: Schema<boolean, boolean, "defined">;
-        }>>, "plain">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, "plain">;

@@ -34,7 +34,6 @@
 import type { MemoryClientCtx } from './env.js';
 import { MemoryPanel } from './panel.js';
 import { MemoryModePill } from './pill/MemoryModePill.js';
-import { initLongTaskFab } from './longtask-fab';
 import { makeRpc } from './rpc.js';
 
 export const inject = ['slots'];
@@ -47,15 +46,6 @@ const SEAT_PROBE_MS = 3000;
 export function apply(ctx: MemoryClientCtx) {
   const rpc = makeRpc(ctx);
   console.info('[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位');
-
-  // 长任务浮动球(幂等 body 单例;document 环境缺失/旧宿主异常都只 warn,
-  // 绝不影响两个正式座位)。sessionId 跟随输入栏座位的 inject 回调(裸 sessionId)。
-  let latestSessionId: string | undefined;
-  try {
-    initLongTaskFab(rpc as never, () => latestSessionId);
-  } catch (err) {
-    console.warn('[dsh-prime-memory] 长任务浮动球挂载失败(不影响主面板):', err);
-  }
 
   // 设置面板：**只挂顶层「记忆」分节（`settings.section`）**，其余座位一个都不注册。
   // ⚠️ 曾经挂了三处 → 设置里出现三份「记忆」（2026-09-17 实测回归）。起因是一个
@@ -106,7 +96,6 @@ export function apply(ctx: MemoryClientCtx) {
           id: 'dsh-memory-mode',
           order: 100,
           inject: (sessionId: string) => {
-            latestSessionId = sessionId;
             return { sessionId, rpc };
           },
         },
