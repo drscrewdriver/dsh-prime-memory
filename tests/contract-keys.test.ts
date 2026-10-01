@@ -65,6 +65,7 @@ const ENDPOINTS = [
   'dsh-memory/rooms-get',
   'dsh-memory/rooms-export',
   'dsh-memory/room-register',
+  'dsh-memory/room-admin',
   'dsh-memory/wing-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
@@ -144,12 +145,12 @@ describe('wing catalog', () => {
 
 describe('endpoint surface', () => {
   it('exposes exactly the 43 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(46);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(46);
-=======
     expect(ENDPOINTS.length).toBe(47);
     expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(47);
->>>>>>> b6bac73 (feat(room-classification-beta.5): 两级制注册表 + merge/rename/retire + 标注器词表基建)
+=======
+    expect(ENDPOINTS.length).toBe(48);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(48);
+>>>>>>> 7ec1e85 (feat(room-admin-rpc): Hall 管理页服务端 — room-admin RPC + records 导出收口)
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
