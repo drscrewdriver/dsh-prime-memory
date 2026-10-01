@@ -8,6 +8,10 @@ import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
 import type { L1Store } from './store/l1.js';
 import type { PersonaStore } from './store/persona.js';
+import type { SlotStore } from './store/slots.js';
+import type { ContextUsageStore } from './store/context-usage.js';
+import type { TodoRefStore } from './store/todo-ref.js';
+import type { MemoryRunner } from './pipeline/runner.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
@@ -68,6 +72,28 @@ export interface SessionInfoSource {
 import type { MemoryOccupancy, UiRecord } from './contract.js';
 export type { MemoryStats } from './contract.js';
 /** 注册状态 RPC(web 侧 connection 服务可选,缺失时跳过,不影响插件主体)。 */
+/** 长任务端点依赖(可选:未装配时端点返 enabled:false,不报错)。 */
+export interface LongTaskEndpointDeps {
+    runner: MemoryRunner;
+    slots: SlotStore;
+    contextUsage: ContextUsageStore;
+    todoRef: TodoRefStore;
+}
+/**
+ * 尾部 turn 压缩:把 (水位线, maxCapturedTurn] 内最近的最近 N 轮强制蒸馏入记忆
+ * (force 跳过阈值;L1 去重与水位线双重防重)。off 档会话保持完全隐身(不压缩)。
+ * 无锚点老数据只在首次压缩(无水位线)时纳入——宁少收不重蒸。
+ */
+export declare function compressTailTurns(sessionId: string, turns: number, io: {
+    modes: SessionModeStore;
+    l0: L0Store;
+    runner: MemoryRunner;
+    logger: MemoryLogger;
+}): Promise<{
+    enqueued: number;
+    fromTurn: number | null;
+    toTurn: number | null;
+}>;
 /** registerMemoryRpc 形参中需要落入端点 deps 的部分。 */
 interface MemoryRpcSources {
     status?: MemoryStatusSource;
@@ -77,6 +103,8 @@ interface MemoryRpcSources {
     rebuild?: RebuildController;
     embedManager?: EmbeddingManager;
     sessionInfo?: SessionInfoSource;
+    /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
+    longTask?: LongTaskEndpointDeps;
 }
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
 export type EndpointDepsInput = Omit<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>;
@@ -98,7 +126,9 @@ export declare function registerMemoryRpc(ctx: Context, cfg: MemoryConfig, store
     graph?: GraphStore;
 }, logger: MemoryLogger, status?: MemoryStatusSource, live?: LiveSettingsHandle, modes?: SessionModeStore, dataDir?: string, rebuild?: RebuildController, embedManager?: EmbeddingManager, sessionInfo?: SessionInfoSource, 
 /** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
-ruminate?: RuminateController): void;
+ruminate?: RuminateController, 
+/** 长任务端点依赖(cfg.longTask.enabled 门控;缺省 = 端点恒 disabled)。 */
+longTaskDeps?: LongTaskEndpointDeps): void;
 export interface EndpointDeps {
     ctx: Context;
     cfg: MemoryConfig;
@@ -121,6 +151,8 @@ export interface EndpointDeps {
     ruminate?: RuminateController;
     embedManager?: EmbeddingManager;
     sessionInfo?: SessionInfoSource;
+    /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
+    longTask?: LongTaskEndpointDeps;
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;

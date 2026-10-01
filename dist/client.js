@@ -5077,6 +5077,245 @@ var __defProp = Object.defineProperty;
 		  ] });
 		}
 		
+		// client/src/longtask-fab.ts
+		var FAB_ID = "dsh-mem-longtask-fab";
+		var PANEL_ID = "dsh-mem-longtask-panel";
+		var STYLE_ID = "dsh-mem-longtask-style";
+		var PARASITE = "dsh-mem-parasite";
+		var POS_KEY = "dsh.memory.longtask.pos";
+		function initLongTaskFab(rpc, sessionIdOf) {
+		  if (document.getElementById(FAB_ID) !== null) return;
+		  const style = document.createElement("style");
+		  style.id = STYLE_ID;
+		  style.textContent = `
+		#${FAB_ID} { position: fixed; z-index: 9999; width: 42px; height: 42px; border-radius: 50%;
+		  background: rgba(30,30,32,.72); backdrop-filter: blur(22px) saturate(180%);
+		  border: 1px solid rgba(255,255,255,.14); box-shadow: 0 8px 24px rgba(0,0,0,.4);
+		  color: #f5f5f7; font-size: 19px; line-height: 40px; text-align: center; cursor: grab;
+		  touch-action: none; user-select: none; display: none; transition: transform .18s; }
+		#${FAB_ID}:hover { transform: scale(1.08); }
+		#${FAB_ID}.lit { display: block; box-shadow: 0 0 0 5px rgba(10,132,255,.22), 0 8px 24px rgba(0,0,0,.4);
+		  animation: dsh-mem-lt-breathe 2.4s ease-in-out infinite; }
+		@keyframes dsh-mem-lt-breathe { 0%,100% { box-shadow: 0 0 0 4px rgba(10,132,255,.16), 0 8px 24px rgba(0,0,0,.4); }
+		  50% { box-shadow: 0 0 0 8px rgba(10,132,255,.30), 0 8px 24px rgba(0,0,0,.4); } }
+		#${PANEL_ID} { position: fixed; z-index: 9998; width: 336px; border-radius: 14px;
+		  background: rgba(28,28,30,.78); backdrop-filter: blur(26px) saturate(180%);
+		  border: 1px solid rgba(255,255,255,.12); box-shadow: 0 14px 44px rgba(0,0,0,.55);
+		  color: #f5f5f7; font-size: 12.5px; opacity: 0; pointer-events: none;
+		  transform: translateY(10px) scale(.92); transform-origin: 88% 100%;
+		  transition: opacity .22s cubic-bezier(.16,.8,.3,1.05), transform .22s cubic-bezier(.16,.8,.3,1.1); }
+		#${PANEL_ID}.open { opacity: 1; pointer-events: auto; transform: none; }
+		#${PANEL_ID} h4 { margin: 0; padding: 10px 14px 8px; font-size: 13px; cursor: grab;
+		  touch-action: none; user-select: none; border-bottom: 1px solid rgba(255,255,255,.09); }
+		#${PANEL_ID} .row { display: flex; align-items: center; gap: 8px; padding: 7px 14px; }
+		#${PANEL_ID} .muted { color: rgba(245,245,247,.55); }
+		#${PANEL_ID} button { font: inherit; border-radius: 8px; border: 1px solid rgba(255,255,255,.18);
+		  background: rgba(10,132,255,.85); color: #fff; padding: 4px 10px; cursor: pointer; }
+		#${PANEL_ID} button.ghost { background: transparent; }
+		#${PANEL_ID} button:disabled { opacity: .45; cursor: default; }
+		#${PANEL_ID} .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.14); overflow: hidden; }
+		#${PANEL_ID} .bar > i { display: block; height: 100%; background: #0a84ff; }
+		#${PANEL_ID} .bar.hot > i { background: #ff9f0a; }
+		#${PANEL_ID} .todos { max-height: 168px; overflow: auto; padding: 2px 14px 6px; color: rgba(245,245,247,.8); white-space: pre-wrap; }
+		#${PANEL_ID} .hint { padding: 0 14px 8px; color: #ffd60a; display: none; }
+		#${PANEL_ID} .hint.show { display: block; }
+		`;
+		  document.head.appendChild(style);
+		  const fab = document.createElement("div");
+		  fab.id = FAB_ID;
+		  fab.className = PARASITE;
+		  fab.textContent = "⏳";
+		  fab.title = "长任务助手";
+		  const panel = document.createElement("div");
+		  panel.id = PANEL_ID;
+		  panel.className = PARASITE;
+		  panel.hidden = true;
+		  panel.innerHTML = `
+		<h4>长任务助手</h4>
+		<div class="row"><label style="flex:1">长任务模式</label><button data-toggle>关闭</button></div>
+		<div class="row muted" data-why style="display:none"></div>
+		<div class="row"><span style="width:86px">上下文占用</span><div class="bar"><i></i></div><span data-ctx class="muted">–</span></div>
+		<div class="row"><span style="width:86px">任务漂移</span><div class="bar" data-driftbar><i></i></div><span data-drift class="muted">–</span></div>
+		<div class="hint" data-hint>建议开启长任务模式:临近上下文压缩高风险区 / 任务内容已大幅漂移。</div>
+		<div class="row"><button data-compress>压缩最近轮次入记忆</button><span class="muted" data-tail></span></div>
+		<div class="todos" data-todos>尚无任务快照</div>
+		`;
+		  document.body.append(fab, panel);
+		  let pos;
+		  try {
+		    pos = JSON.parse(localStorage.getItem(POS_KEY) ?? "null") ?? {
+		      x: window.innerWidth - 66,
+		      y: window.innerHeight - 140
+		    };
+		  } catch {
+		    pos = { x: window.innerWidth - 66, y: window.innerHeight - 140 };
+		  }
+		  const place = () => {
+		    pos.x = Math.max(4, Math.min(window.innerWidth - 46, pos.x));
+		    pos.y = Math.max(4, Math.min(window.innerHeight - 46, pos.y));
+		    fab.style.left = `${pos.x}px`;
+		    fab.style.top = `${pos.y}px`;
+		  };
+		  place();
+		  const makeDrag = (el, key) => {
+		    let sx = 0;
+		    let sy = 0;
+		    let bx = 0;
+		    let by = 0;
+		    let active = false;
+		    let dragged = false;
+		    el.addEventListener("pointerdown", (e) => {
+		      if (e.button !== 0 || e.target.closest?.("button, input")) return;
+		      active = true;
+		      dragged = false;
+		      sx = e.clientX;
+		      sy = e.clientY;
+		      bx = pos.x;
+		      by = pos.y;
+		      el.setPointerCapture(e.pointerId);
+		    });
+		    el.addEventListener("pointermove", (e) => {
+		      if (!active) return;
+		      const dx = e.clientX - sx;
+		      const dy = e.clientY - sy;
+		      if (!dragged && Math.abs(dx) + Math.abs(dy) > 5) dragged = true;
+		      if (dragged) {
+		        pos.x = bx + dx;
+		        pos.y = by + dy;
+		        place();
+		      }
+		    });
+		    el.addEventListener("pointerup", () => {
+		      active = false;
+		      if (dragged) {
+		        try {
+		          localStorage.setItem(POS_KEY, JSON.stringify(pos));
+		        } catch {
+		        }
+		        if (key === "fab") suppressClick = true;
+		      }
+		    });
+		    el.addEventListener("pointercancel", () => {
+		      active = false;
+		    });
+		  };
+		  let suppressClick = false;
+		  makeDrag(fab, "fab");
+		  let open = false;
+		  fab.addEventListener("click", () => {
+		    if (suppressClick) {
+		      suppressClick = false;
+		      return;
+		    }
+		    open = !open;
+		    if (open) {
+		      panel.hidden = false;
+		      const px = Math.max(8, Math.min(window.innerWidth - 344, pos.x - 300));
+		      const py = pos.y - 300 < 8 ? pos.y + 46 : Math.max(8, pos.y - 300);
+		      panel.style.left = `${px}px`;
+		      panel.style.top = `${py}px`;
+		      void panel.offsetHeight;
+		      panel.classList.add("open");
+		    } else {
+		      panel.classList.remove("open");
+		      setTimeout(() => {
+		        panel.hidden = true;
+		      }, 240);
+		    }
+		  });
+		  makeDrag(panel.querySelector("h4"), "panel");
+		  let last;
+		  const setToggle = (on, busy) => {
+		    const btn = panel.querySelector("[data-toggle]");
+		    btn.textContent = on ? "开启中" : "关闭";
+		    btn.disabled = busy;
+		  };
+		  const render = (h) => {
+		    last = h;
+		    fab.classList.toggle("lit", Boolean(h.enabled && h.suggest && !h.longTask));
+		    setToggle(h.longTask, false);
+		    const ctxBar = panel.querySelector(".row .bar > i");
+		    const ctxPctEl = panel.querySelector("[data-ctx]");
+		    const pct = h.contextPct;
+		    if (pct === null) {
+		      ctxBar.style.width = "0%";
+		      ctxPctEl.textContent = "–";
+		    } else {
+		      ctxBar.style.width = `${Math.min(100, pct)}%`;
+		      ctxBar.parentElement?.classList.toggle("hot", pct >= h.contextThresholdPct);
+		      ctxPctEl.textContent = `${pct}%`;
+		    }
+		    const driftBar = panel.querySelector("[data-driftbar] > i");
+		    const driftEl = panel.querySelector("[data-drift]");
+		    if (h.drift === null) {
+		      driftBar.style.width = "0%";
+		      driftEl.textContent = "–";
+		    } else {
+		      driftBar.style.width = `${Math.min(100, Math.round(h.drift * 100))}%`;
+		      driftEl.textContent = `${Math.round(h.drift * 100)}%`;
+		    }
+		    const hint = panel.querySelector("[data-hint]");
+		    hint.classList.toggle("show", Boolean(h.suggest && !h.longTask));
+		    const tail = panel.querySelector("[data-tail]");
+		    tail.textContent = h.pendingTailTurns === null ? "" : h.pendingTailTurns > 0 ? `待压缩 ${h.pendingTailTurns} 轮` : "已全部入忆";
+		    panel.querySelector("[data-compress]").disabled = !h.longTask;
+		  };
+		  const fetchTodos = async () => {
+		    return "";
+		  };
+		  void fetchTodos;
+		  const tick = async () => {
+		    const sid = sessionIdOf();
+		    if (!sid) {
+		      setTimeout(tick, 5e3);
+		      return;
+		    }
+		    try {
+		      const r = await rpc("dsh-memory/longtask-hint-get", { sessionId: sid });
+		      if (r?.sessionId === sid) {
+		        render(r);
+		        if (String(r.longTask) !== panel.dataset.lt) {
+		          panel.dataset.lt = String(r.longTask);
+		          setToggle(r.longTask, false);
+		        }
+		        const todos = panel.querySelector("[data-todos]");
+		        todos.textContent = r.todoCount > 0 ? `任务 ${r.todoCount} 条 · 漂移 ${r.drift === null ? "–" : `${Math.round((r.drift ?? 0) * 100)}%`}
+		(完整清单见会话 todo 面板;开启长任务后清单自动驻留上下文)` : "尚无任务快照";
+		      }
+		    } catch {
+		    }
+		    setTimeout(tick, last?.suggest ? 2e3 : 5e3);
+		  };
+		  setTimeout(tick, 1500);
+		  panel.querySelector("[data-toggle]")?.addEventListener("click", async () => {
+		    const sid = sessionIdOf();
+		    if (!sid) return;
+		    const btn = panel.querySelector("[data-toggle]");
+		    const next = !(last?.longTask ?? false);
+		    setToggle(next, true);
+		    try {
+		      const r = await rpc("dsh-memory/session-mode-set", { sessionId: sid, longTask: next });
+		      if (last) last.longTask = Boolean(r.longTask ?? next);
+		      setToggle(Boolean(r.longTask ?? next), false);
+		    } catch {
+		      setToggle(!next, false);
+		    }
+		  });
+		  panel.querySelector("[data-compress]")?.addEventListener("click", async () => {
+		    const sid = sessionIdOf();
+		    if (!sid || !last?.longTask) return;
+		    const btn = panel.querySelector("[data-compress]");
+		    btn.disabled = true;
+		    try {
+		      const r = await rpc("dsh-memory/longtask-compress-tail", { sessionId: sid });
+		      const tail = panel.querySelector("[data-tail]");
+		      tail.textContent = `已入队 ${r.enqueued ?? 0} 条消息蒸馏`;
+		    } catch {
+		    }
+		    btn.disabled = false;
+		  });
+		}
+		
 		// client/src/entry.tsx
 		var inject = ["slots"];
 		var SETTINGS_SEAT = "settings.section";
@@ -5084,6 +5323,12 @@ var __defProp = Object.defineProperty;
 		function apply(ctx) {
 		  const rpc = makeRpc(ctx);
 		  console.info("[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位");
+		  let latestSessionId;
+		  try {
+		    initLongTaskFab(rpc, () => latestSessionId);
+		  } catch (err) {
+		    console.warn("[dsh-prime-memory] 长任务浮动球挂载失败(不影响主面板):", err);
+		  }
 		  const SETTINGS_SEAT2 = "settings.section";
 		  let cardSeatLive = false;
 		  try {
@@ -5116,7 +5361,10 @@ var __defProp = Object.defineProperty;
 		          name: "conversation.input.left",
 		          id: "dsh-memory-mode",
 		          order: 100,
-		          inject: (sessionId) => ({ sessionId, rpc })
+		          inject: (sessionId) => {
+		            latestSessionId = sessionId;
+		            return { sessionId, rpc };
+		          }
 		        },
 		        MemoryModePill
 		      );

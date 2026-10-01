@@ -252,3 +252,13 @@ declare module '@deepseek-ai/dsh-llm' {
         } & import('@deepseek-ai/dsh-llm').ContextFormed;
     }
 }
+declare module '@deepseek-ai/dsh-session/types' {
+    interface SessionEventMap {
+        'todo/write': {
+            todos: Array<{
+                content: string;
+                status: string;
+            }>;
+        };
+    }
+}

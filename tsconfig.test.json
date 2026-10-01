@@ -12,6 +12,8 @@
     "src/**/*.ts",
     "tests/ruminate.test.ts",
     "tests/stores.test.ts",
+    "tests/longtask-compress-tail.test.ts",
+    "tests/long-task.test.ts",
     "tests/rpc.test.ts",
     "tests/redact-wiring.test.ts",
     "tests/pipeline.test.ts",

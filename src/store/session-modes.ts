@@ -32,6 +32,12 @@ interface ModeEntry {
   hallIncludeUnlabeled?: boolean;
   /** 锁定域时跨域兜底 `general` 是否参与召回(默认不含——跨域与单主题相悖)。 */
   hallIncludeGeneral?: boolean;
+  /** 长任务模式(会话级运行开关,浮动面板临时切换):开启后尾部 turn 压缩与
+   *  todo 参考才可用。与档位/锁域正交,跨切档保留;写穿持久化(会话恢复后仍生效,
+   *  面板可再关)。 */
+  longTask?: boolean;
+  /** 尾部压缩水位线:已强制蒸馏过的最大 turn(重复按压不重蒸;去重在 L1 侧仍有兜底)。 */
+  lastTailCompressedTurn?: number;
   updatedAt: number;
 }
 
@@ -121,9 +127,12 @@ export class SessionModeStore {
             : undefined,
         hallIncludeUnlabeled:
           typeof entry.hallIncludeUnlabeled === 'boolean' ? entry.hallIncludeUnlabeled : undefined,
-      hallIncludeGeneral:
-        typeof entry.hallIncludeGeneral === 'boolean' ? entry.hallIncludeGeneral : undefined,
-      updatedAt: entry.updatedAt ?? now,
+        hallIncludeGeneral:
+          typeof entry.hallIncludeGeneral === 'boolean' ? entry.hallIncludeGeneral : undefined,
+        longTask: typeof entry.longTask === 'boolean' ? entry.longTask : undefined,
+        lastTailCompressedTurn:
+          typeof entry.lastTailCompressedTurn === 'number' ? entry.lastTailCompressedTurn : undefined,
+        updatedAt: entry.updatedAt ?? now,
       });
       count++;
     }
@@ -171,6 +180,55 @@ export class SessionModeStore {
       halls: entry?.halls,
       hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: entry?.hallIncludeGeneral,
+      longTask: entry?.longTask,
+      lastTailCompressedTurn: entry?.lastTailCompressedTurn,
+      updatedAt: Date.now(),
+    });
+    this.writeChain = this.writeChain.then(() => this.persist());
+  }
+
+  /** 长任务模式(缺省 = 关)。 */
+  getLongTask(sessionId: string): boolean {
+    return this.entries.get(sessionId)?.longTask ?? false;
+  }
+
+  /** 切换长任务模式(写穿持久化)。 */
+  setLongTask(sessionId: string, on: boolean): void {
+    const entry = this.entries.get(sessionId);
+    this.entries.set(sessionId, {
+      mode: entry?.mode ?? this.loaded,
+      recall: entry?.recall,
+      hall: entry?.hall,
+      halls: entry?.halls,
+      hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
+      hallIncludeGeneral: entry?.hallIncludeGeneral,
+      longTask: on,
+      lastTailCompressedTurn: entry?.lastTailCompressedTurn,
+      updatedAt: Date.now(),
+    });
+    this.writeChain = this.writeChain.then(() => this.persist());
+  }
+
+  /** 尾部压缩水位线(undefined = 尚未压缩过)。 */
+  getTailWatermark(sessionId: string): number | undefined {
+    const t = this.entries.get(sessionId)?.lastTailCompressedTurn;
+    return typeof t === 'number' && Number.isFinite(t) ? t : undefined;
+  }
+
+  /** 推进尾部压缩水位线(写穿持久化;只前进不回退)。 */
+  setTailWatermark(sessionId: string, turn: number): void {
+    const entry = this.entries.get(sessionId);
+    const prev = entry?.lastTailCompressedTurn;
+    if (typeof prev === 'number' && prev >= turn) return;
+    this.entries.set(sessionId, {
+      mode: entry?.mode ?? this.loaded,
+      recall: entry?.recall,
+      hall: entry?.hall,
+      halls: entry?.halls,
+      hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
+      hallIncludeGeneral: entry?.hallIncludeGeneral,
+      longTask: entry?.longTask,
+      lastTailCompressedTurn: turn,
       updatedAt: Date.now(),
     });
     this.writeChain = this.writeChain.then(() => this.persist());
@@ -217,6 +275,8 @@ export class SessionModeStore {
       halls: locked === undefined ? entry?.halls : locked.length > 0 ? locked : undefined,
       hallIncludeUnlabeled: boundaries?.includeUnlabeled ?? entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: boundaries?.includeGeneral ?? entry?.hallIncludeGeneral,
+        longTask: entry?.longTask,
+        lastTailCompressedTurn: entry?.lastTailCompressedTurn,
       updatedAt: Date.now(),
     });
     this.writeChain = this.writeChain.then(() => this.persist());
@@ -240,6 +300,8 @@ export class SessionModeStore {
       halls: entry?.halls,
       hallIncludeUnlabeled: entry?.hallIncludeUnlabeled,
       hallIncludeGeneral: entry?.hallIncludeGeneral,
+        longTask: entry?.longTask,
+        lastTailCompressedTurn: entry?.lastTailCompressedTurn,
       updatedAt: Date.now(),
     });
     this.writeChain = this.writeChain.then(() => this.persist());

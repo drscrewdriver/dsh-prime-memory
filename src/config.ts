@@ -80,6 +80,22 @@ export interface MemoryConfig {
      *  同时为真才执行;图谱是 L1 的可重建投影,关闭不影响记忆主链路。 */
     enabled: boolean;
   };
+  /** 长任务模式:浮动面板(非阻断建议)+ 尾部 turn 压缩 + todo 参考。
+   *  **默认关**——浮动 UI 与额外蒸馏都消耗注意力/额度,由用户显式打开。 */
+  longTask: {
+    /** 总开关:关闭时监听器不注册、RPC 返回 enabled:false、面板不挂载。 */
+    enabled: boolean;
+    /** 上下文占用告警阈值(% 窗口):最近一轮官方输入侧 token 达到该比例,
+     *  且长任务未开启时,浮动面板建议开启(压缩灾难遗忘高风险区)。 */
+    contextThresholdPct: number;
+    /** todo 漂移阈值:相邻 todo/write 快照的词面 Jaccard 相似度低于
+     *  (1 - 该值) 视为"大幅漂移"。0.6 = 相似度不足 0.4。 */
+    driftThreshold: number;
+    /** 尾部压缩一次覆盖的最近轮数。 */
+    tailTurns: number;
+    /** 达到上下文阈值时自动执行尾部压缩(无需按压面板;长任务开启才生效)。 */
+    autoCompress: boolean;
+  };
   /** §C 矛盾冻结:去重判定"两边都像是对的、机器判不了"时不自动裁决,
    *  把冲突对停放到待人工裁决区(conflict_pending)。**默认关**——
    *  冻结消耗人的注意力,不可默认全开。 */
@@ -263,6 +279,13 @@ export function liveSettingsSchema() {
     // 记忆写删权限门:默认 false(模型写删风险高,须显式在面板开启高权限模式)
     memoryMutate: Schema.boolean().default(false),
     // §C 人工冲突裁决总开关:默认 false(冻结消耗注意力,不可默认全开)
+    longTask: Schema.object({
+      enabled: Schema.boolean().default(false),
+      contextThresholdPct: Schema.number().min(10).max(95).default(70),
+      driftThreshold: Schema.number().min(0.1).max(1).default(0.6),
+      tailTurns: Schema.number().min(1).max(50).default(6),
+      autoCompress: Schema.boolean().default(false),
+    }),
     conflictFreeze: Schema.boolean().default(false),
   }).volatile();
 }
@@ -311,6 +334,18 @@ export const memorySchema = Schema.object({
   }),
   // §C 矛盾冻结:默认关(新功能默认关)。开启后去重决策词表多出 conflict 动作,
   // 冲突对停放待人工裁决,不再由 LLM 直接 update/merge 覆盖。
+  longTask: Schema.object({
+    // 总开关:关闭时监听器不注册、建议面板不挂载(部署级上限)。
+    enabled: Schema.boolean().default(false),
+    // 上下文占用告警阈值(%,官方输入侧 / 模型窗口)。
+    contextThresholdPct: Schema.number().min(10).max(95).default(70),
+    // todo 漂移阈值:Jaccard 相似度低于 (1 - driftThreshold) 视为大幅漂移。
+    driftThreshold: Schema.number().min(0.1).max(1).default(0.6),
+    // 尾部压缩一次覆盖的最近轮数。
+    tailTurns: Schema.number().min(1).max(50).default(6),
+    // 跨阈值自动尾部压缩(长任务开启才生效)。
+    autoCompress: Schema.boolean().default(false),
+  }),
   conflictFreeze: Schema.object({
     enabled: Schema.boolean().default(false),
     // 上限给"人会看"留出余量:100 条待裁决 ≈ 连续 5~20 轮蒸馏全在冲突,

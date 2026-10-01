@@ -92,6 +92,17 @@ export declare class SlotStore {
      */
     upsert(input: SlotInput): Promise<Slot>;
     /** 关闭槽位(标记 done/dropped)。不存在返回 false。 */
+    /**
+     * 受管刷新(服务端自动化写,非工具面):按精确标题找既有槽位,存在则**原地**
+     * 更新 body/updatedAt(其余字段不动——pinned/kind/priority 由首次写入定形),
+     * 不存在则按 insert-only 新建。todo 参考这类"同一主体反复刷新"的高频写必须
+     * 走这里:逐次 upsert 会在 ≤8 槽上限里堆出一条关闭槽位尾迹。
+     * @returns 刷新/新建的槽位;超限新建失败时抛错(调用方转日志,不打断事件流)。
+     */
+    refreshByTitle(title: string, patch: {
+        body: string;
+        pinned?: boolean;
+    }): Promise<Slot | undefined>;
     close(id: string, status: 'done' | 'dropped'): Promise<boolean>;
     /**
      * 常驻注入选材:pinned && open,按 priority 降序,累计字节 ≤ maxBytes。

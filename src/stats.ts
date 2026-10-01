@@ -37,6 +37,11 @@ import { sourceAnchorLabels } from './pipeline/anchors.js';
 import { readSupersedeMarker } from './store/supersede.js';
 import { isSnapshotName } from './store/l1-snapshot.js';
 import type { PersonaStore } from './store/persona.js';
+import type { SlotStore } from './store/slots.js';
+import type { ContextUsageStore } from './store/context-usage.js';
+import type { TodoRefStore } from './store/todo-ref.js';
+import type { MemoryRunner } from './pipeline/runner.js';
+import { closeTodoRefSlot } from './hooks/long-task.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
@@ -76,6 +81,8 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/token-cost',
   'dsh-memory/session-mode-get',
   'dsh-memory/session-mode-set',
+  'dsh-memory/longtask-hint-get',
+  'dsh-memory/longtask-compress-tail',
   'dsh-memory/wing-overview',
   'dsh-memory/rooms-get',
   'dsh-memory/wing-backfill',
@@ -247,6 +254,8 @@ import type {
   SettingsGetResponse,
   SettingsSetResponse,
   UiRecord,
+  LongTaskHintGetResponse,
+  LongTaskCompressTailResponse,
 } from './contract.js';
 export type { MemoryStats } from './contract.js';
 
@@ -257,6 +266,49 @@ type FamilyStores = {
 };
 
 /** 注册状态 RPC(web 侧 connection 服务可选,缺失时跳过,不影响插件主体)。 */
+/** 长任务端点依赖(可选:未装配时端点返 enabled:false,不报错)。 */
+export interface LongTaskEndpointDeps {
+  runner: MemoryRunner;
+  slots: SlotStore;
+  contextUsage: ContextUsageStore;
+  todoRef: TodoRefStore;
+}
+
+/**
+ * 尾部 turn 压缩:把 (水位线, maxCapturedTurn] 内最近的最近 N 轮强制蒸馏入记忆
+ * (force 跳过阈值;L1 去重与水位线双重防重)。off 档会话保持完全隐身(不压缩)。
+ * 无锚点老数据只在首次压缩(无水位线)时纳入——宁少收不重蒸。
+ */
+export async function compressTailTurns(
+  sessionId: string,
+  turns: number,
+  io: {
+    modes: SessionModeStore;
+    l0: L0Store;
+    runner: MemoryRunner;
+    logger: MemoryLogger;
+  },
+): Promise<{ enqueued: number; fromTurn: number | null; toTurn: number | null }> {
+  const toTurn = io.l0.maxCapturedTurn(sessionId);
+  if (toTurn === undefined) return { enqueued: 0, fromTurn: null, toTurn: null };
+  const watermark = io.modes.getTailWatermark(sessionId) ?? 0;
+  const fromTurn = Math.max(watermark + 1, toTurn - turns + 1);
+  if (fromTurn > toTurn) return { enqueued: 0, fromTurn, toTurn };
+  const mode = io.modes.get(sessionId);
+  if (mode === 'off') return { enqueued: 0, fromTurn, toTurn };
+  const messages = await io.l0.recentBySession(sessionId, turns * 12 + 24);
+  const picked = messages.filter((m) => {
+    const t = m.anchor?.turn;
+    if (t === undefined) return watermark === 0;
+    return t >= fromTurn && t <= toTurn;
+  });
+  if (picked.length === 0) return { enqueued: 0, fromTurn, toTurn };
+  io.runner.enqueue(sessionId, picked, mode as Parameters<MemoryRunner['enqueue']>[2], { force: true });
+  io.modes.setTailWatermark(sessionId, toTurn);
+  io.logger.info(`[memory] 尾部压缩:turn ${fromTurn}..${toTurn} 已强制入队蒸馏(${picked.length} 条)`);
+  return { enqueued: picked.length, fromTurn, toTurn };
+}
+
 /** registerMemoryRpc 形参中需要落入端点 deps 的部分。 */
 interface MemoryRpcSources {
   status?: MemoryStatusSource;
@@ -266,6 +318,8 @@ interface MemoryRpcSources {
   rebuild?: RebuildController;
   embedManager?: EmbeddingManager;
   sessionInfo?: SessionInfoSource;
+  /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
+  longTask?: LongTaskEndpointDeps;
 }
 
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
@@ -290,6 +344,7 @@ export function buildEndpointDeps(
     embedManager: sources.embedManager,
     sessionInfo: sources.sessionInfo,
     ruminate: controller,
+    longTask: sources.longTask,
   };
   return { ...base, ...injected };
 }
@@ -318,6 +373,8 @@ export function registerMemoryRpc(
   sessionInfo?: SessionInfoSource,
   /** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
   ruminate?: RuminateController,
+  /** 长任务端点依赖(cfg.longTask.enabled 门控;缺省 = 端点恒 disabled)。 */
+  longTaskDeps?: LongTaskEndpointDeps,
 ): void {
   /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
   let holding = false;
@@ -501,6 +558,8 @@ export interface EndpointDeps {
   ruminate?: RuminateController;
   embedManager?: EmbeddingManager;
   sessionInfo?: SessionInfoSource;
+  /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
+  longTask?: LongTaskEndpointDeps;
 }
 
 /** RPC 字符串入参上限校验:防 loopback 面畸形超长载荷
@@ -519,7 +578,7 @@ function sanitizeSettings(s: MemoryLiveSettings): MemoryLiveSettings {
 
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export async function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown> {
-  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo } = deps;
+  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, longTask: longTaskDeps } = deps;
   switch (endpoint) {
     case 'dsh-memory/stats':
       return buildStats(cfg, stores, status);
@@ -555,6 +614,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
         hallIncludeGeneral: bounds.includeGeneral,
+        longTask: modes.getLongTask(sessionId),
       };
       return v;
     }
@@ -569,10 +629,15 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         halls?: readonly string[] | null;
         hallIncludeUnlabeled?: boolean;
         hallIncludeGeneral?: boolean;
+        longTask?: boolean;
       };
       const sessionId = expectSessionId(p.sessionId);
       const allowed: MemoryMode[] = ['auto', 'chat', 'work', 'off'];
-      if (typeof p.mode !== 'string' || !allowed.includes(p.mode as MemoryMode)) {
+      // mode 可选(带 longTask 的轻量切换);二者都不传 = 无操作拒绝(防旧客户端漏字段静默)。
+      if (p.mode === undefined && p.longTask === undefined) {
+        throw new Error('session-mode-set 需要 mode 或 longTask 之一');
+      }
+      if (p.mode !== undefined && (typeof p.mode !== 'string' || !allowed.includes(p.mode as MemoryMode))) {
         throw new Error(`非法档位: ${String(p.mode)}(允许 ${allowed.join('/')})`);
       }
       // 注入覆盖可选同车:布尔 = 设置覆盖;显式 null = 清除覆盖(跟随全局);
@@ -592,7 +657,20 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           throw new Error(`非法 Wing 锁定: ${String(bad)}(允许 ${WING_CATALOG.map((h) => h.id).join('/')}/null)`);
         }
       }
-      modes.set(sessionId, p.mode as MemoryMode);
+      // 长任务开关可选同车:布尔 = 切换;缺省 = 不动。关闭时撤下 todo 参考槽位
+      // (todo 参考只在长任务模式可用;撤下失败不影响开关本身,log 即可)。
+      if (p.longTask !== undefined) {
+        if (typeof p.longTask !== 'boolean') {
+          throw new Error(`非法长任务开关: ${String(p.longTask)}(允许 true/false)`);
+        }
+        modes.setLongTask(sessionId, p.longTask);
+        if (!p.longTask && longTaskDeps?.slots) {
+          closeTodoRefSlot({ cfg, modes, slots: longTaskDeps.slots, contextUsage: longTaskDeps.contextUsage, todoRef: longTaskDeps.todoRef, logger: deps.logger }).catch(
+            (err) => deps.logger.warn(`[memory] todo 参考槽位撤下失败: ${err instanceof Error ? err.message : String(err)}`),
+          );
+        }
+      }
+      if (p.mode !== undefined) modes.set(sessionId, p.mode as MemoryMode);
       if (typeof p.recall === 'boolean') {
         modes.setRecall(sessionId, p.recall);
       } else if (p.recall === null) {
@@ -627,13 +705,133 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const locked = modes.getWings(sessionId);
       const v: SessionModeSetResponse = {
         sessionId,
-        mode: p.mode as MemoryMode,
+        mode: modes.get(sessionId),
         recall: modes.getRecall(sessionId) ?? null,
         recallResolved: modes.resolvedRecall(sessionId, s?.recall ?? true),
         hall: locked[0] ?? null,
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
         hallIncludeGeneral: bounds.includeGeneral,
+        longTask: modes.getLongTask(sessionId),
+      };
+      return v;
+    }
+
+    case 'dsh-memory/longtask-hint-get': {
+      if (!modes) throw new Error('档位存储未初始化');
+      const p = (payload ?? {}) as { sessionId?: string };
+      const sessionId = expectSessionId(p.sessionId);
+      const enabled = cfg.longTask.enabled;
+      const longTask = modes.getLongTask(sessionId);
+      let contextPct: number | null = null;
+      if (enabled && longTask) {
+        // 分母:主对话模型官方窗口(3s race 封顶,同 session-stats 口径)
+        let window: number | null = null;
+        try {
+          const sel = deps.ctx.get('agentDefaultModel')?.currentSelection?.();
+          if (sel?.provider && sel?.model) {
+            window = await Promise.race([
+              resolveModelContextWindow(deps.ctx, sel.provider, sel.model),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 3_000)),
+            ]);
+          }
+        } catch {
+          /* 可选服务缺失 = 分母未知 */
+        }
+        contextPct = longTaskDeps
+          ? longTaskDeps.contextUsage.percentOfWindow(sessionId, window ?? undefined)
+          : null;
+      }
+      const drift = enabled ? longTaskDeps?.todoRef.latest(sessionId)?.drift ?? null : null;
+      const todoCount = enabled ? longTaskDeps?.todoRef.latest(sessionId)?.items.length ?? 0 : 0;
+      const reasons: Array<'context-threshold' | 'todo-drift'> = [];
+      if (!longTask) {
+        if (contextPct !== null && contextPct >= cfg.longTask.contextThresholdPct) {
+          reasons.push('context-threshold');
+        }
+        if (drift !== null && drift >= cfg.longTask.driftThreshold) {
+          reasons.push('todo-drift');
+        }
+      }
+      const watermark = modes.getTailWatermark(sessionId);
+      let pendingTailTurns: number | null = null;
+      if (enabled && longTask && longTaskDeps) {
+        const captured = stores.l0.maxCapturedTurn(sessionId);
+        pendingTailTurns = captured === undefined ? 0 : Math.max(0, captured - (watermark ?? 0));
+      }
+      // 自动尾部压缩(长任务开启 + 显式 opt-in + 跨阈值):水位线只前进,
+      // 轮询重复触发天然幂等;失败只 warn,不打断建议状态返回。
+      if (
+        enabled &&
+        longTask &&
+        longTaskDeps &&
+        cfg.longTask.autoCompress &&
+        pendingTailTurns !== null &&
+        pendingTailTurns > 0 &&
+        contextPct !== null &&
+        contextPct >= cfg.longTask.contextThresholdPct
+      ) {
+        try {
+          await compressTailTurns(sessionId, cfg.longTask.tailTurns, {
+            modes,
+            l0: stores.l0,
+            runner: longTaskDeps.runner,
+            logger: deps.logger,
+          });
+        } catch (err) {
+          deps.logger.warn(`[memory] 自动尾部压缩失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        const captured = stores.l0.maxCapturedTurn(sessionId);
+        pendingTailTurns = captured === undefined ? 0 : Math.max(0, captured - (modes.getTailWatermark(sessionId) ?? 0));
+      }
+      const v: LongTaskHintGetResponse = {
+        sessionId,
+        enabled,
+        longTask,
+        contextPct,
+        contextThresholdPct: cfg.longTask.contextThresholdPct,
+        drift,
+        driftThreshold: cfg.longTask.driftThreshold,
+        todoCount,
+        suggest: reasons.length > 0,
+        reasons,
+        tailTurns: cfg.longTask.tailTurns,
+        lastTailCompressedTurn: watermark ?? null,
+        pendingTailTurns,
+      };
+      return v;
+    }
+
+    case 'dsh-memory/longtask-compress-tail': {
+      if (!modes) throw new Error('档位存储未初始化');
+      const p = (payload ?? {}) as { sessionId?: string; turns?: number };
+      const sessionId = expectSessionId(p.sessionId);
+      const longTask = modes.getLongTask(sessionId);
+      const turns =
+        p.turns === undefined
+          ? cfg.longTask.tailTurns
+          : Math.max(1, Math.min(50, Math.round(p.turns)));
+      let enqueued = 0;
+      let fromTurn: number | null = null;
+      let toTurn: number | null = null;
+      if (longTask && longTaskDeps) {
+        // 只在长任务模式可用(部署开关在 compressTailTurns 内再守一道)
+        const r = await compressTailTurns(sessionId, turns, {
+          modes,
+          l0: stores.l0,
+          runner: longTaskDeps.runner,
+          logger: deps.logger,
+        });
+        enqueued = r.enqueued;
+        fromTurn = r.fromTurn;
+        toTurn = r.toTurn;
+      }
+      const v: LongTaskCompressTailResponse = {
+        sessionId,
+        enqueued,
+        fromTurn,
+        toTurn,
+        longTask,
       };
       return v;
     }

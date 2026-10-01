@@ -323,3 +323,22 @@ declare module '@deepseek-ai/dsh-llm' {
     'plugin:memory': { kind: 'plugin:memory' } & import('@deepseek-ai/dsh-llm').ContextFormed;
   }
 }
+
+/**
+ * 宿主 todo/write 事件的类型登记(运行时注册于 dsh-session 的
+ * known-event-types;包类型到 0.2.0-rc.1 仍未声明,插件自扩充——
+ * 同 §E 的 dsh-compaction 先例,declare module 合并 SessionEventMap)。
+ *
+ * 数据是全量快照 `{ todos: [{content,status}] }`(dsh-commands typert.host.js
+ * 实证):每次写入都是整份清单,不做增量。
+ */
+// augmentation 目标须先进入程序(import 触发解析),否则 TS2664。
+import type {} from '@deepseek-ai/dsh-session/types';
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    'todo/write': {
+      todos: Array<{ content: string; status: string }>;
+    };
+  }
+}

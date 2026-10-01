@@ -44,6 +44,14 @@ export declare class SessionModeStore {
     resolvedRecall(sessionId: string, globalRecall: boolean): boolean;
     /** 设置会话级注入覆盖(undefined = 清除覆盖跟随全局。写穿持久化)。 */
     setRecall(sessionId: string, recall: boolean | undefined): void;
+    /** 长任务模式(缺省 = 关)。 */
+    getLongTask(sessionId: string): boolean;
+    /** 切换长任务模式(写穿持久化)。 */
+    setLongTask(sessionId: string, on: boolean): void;
+    /** 尾部压缩水位线(undefined = 尚未压缩过)。 */
+    getTailWatermark(sessionId: string): number | undefined;
+    /** 推进尾部压缩水位线(写穿持久化;只前进不回退)。 */
+    setTailWatermark(sessionId: string, turn: number): void;
     /** 会话级域锁定(多选):空数组 = 中心(智能档,无锁域)。 */
     getWings(sessionId: string): string[];
     /** 兼容读取(单选口径,取第一个锁定域):undefined = 中心。 */

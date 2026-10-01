@@ -276,6 +276,27 @@ export class SlotStore {
   }
 
   /** 关闭槽位(标记 done/dropped)。不存在返回 false。 */
+  /**
+   * 受管刷新(服务端自动化写,非工具面):按精确标题找既有槽位,存在则**原地**
+   * 更新 body/updatedAt(其余字段不动——pinned/kind/priority 由首次写入定形),
+   * 不存在则按 insert-only 新建。todo 参考这类"同一主体反复刷新"的高频写必须
+   * 走这里:逐次 upsert 会在 ≤8 槽上限里堆出一条关闭槽位尾迹。
+   * @returns 刷新/新建的槽位;超限新建失败时抛错(调用方转日志,不打断事件流)。
+   */
+  async refreshByTitle(title: string, patch: { body: string; pinned?: boolean }): Promise<Slot | undefined> {
+    const key = String(title ?? '').trim();
+    if (!key) throw new Error('slot.title 不能为空');
+    const found = this.slots.find((s) => s.title === key.slice(0, this.maxTitleChars));
+    if (found) {
+      found.body = String(patch.body ?? '').slice(0, this.maxBodyChars);
+      if (typeof patch.pinned === 'boolean') found.pinned = patch.pinned;
+      found.updatedAt = nowIso();
+      await this.persist();
+      return clone(found);
+    }
+    return this.upsert({ title: key, ...patch, pinned: patch.pinned === true, status: 'open', origin: 'agent' });
+  }
+
   async close(id: string, status: 'done' | 'dropped'): Promise<boolean> {
     const slot = this.slots.find((s) => s.id === id);
     if (!slot) return false;

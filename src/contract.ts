@@ -478,10 +478,14 @@ export interface SessionModeGetResponse {
   hallIncludeUnlabeled: boolean;
   /** 锁定域边界开关:跨域兜底 general 是否参与召回(默认不含)。 */
   hallIncludeGeneral: boolean;
+  /** 长任务模式(浮动面板切换;尾部 turn 压缩与 todo 参考仅在开启时可用)。 */
+  longTask: boolean;
 }
 export interface SessionModeSetRequest {
   sessionId: string;
-  mode: MemoryMode;
+  /** 档位。**与 longTask 二选一必传**:纯切档传 mode,只切长任务开关传 longTask
+   *  (mode 缺省时不触碰档位——浮动面板切开关不能顺带重置用户档位)。 */
+  mode?: MemoryMode;
   /** 会话级注入覆盖:布尔 = 设置覆盖;显式 null = 清除(跟随全局);缺省 = 不动
    *  (旧 client 纯切档兼容,覆盖不丢)。mode 与 recall 可独立设置。 */
   recall?: boolean | null;
@@ -493,6 +497,8 @@ export interface SessionModeSetRequest {
   /** 锁定域边界开关(缺省 = 不动)。 */
   hallIncludeUnlabeled?: boolean;
   hallIncludeGeneral?: boolean;
+  /** 长任务模式:布尔 = 切换(关闭时服务端同步撤下 todo 参考槽位);缺省 = 不动。 */
+  longTask?: boolean;
 }
 export interface SessionModeSetResponse {
   sessionId: string;
@@ -506,6 +512,52 @@ export interface SessionModeSetResponse {
   halls: string[];
   hallIncludeUnlabeled: boolean;
   hallIncludeGeneral: boolean;
+  /** 设置后的长任务态。 */
+  longTask: boolean;
+}
+
+/** dsh-memory/longtask-hint-get | 长任务建议状态(浮动面板轮询;热路径:全内存读)。 */
+export interface LongTaskHintGetRequest {
+  sessionId: string;
+}
+export interface LongTaskHintGetResponse {
+  sessionId: string;
+  /** 部署总开关(cfg.longTask.enabled):false 时面板不应挂载。 */
+  enabled: boolean;
+  /** 会话长任务态。 */
+  longTask: boolean;
+  /** 上下文占用百分比(最近官方输入侧 / 模型窗口;无样本或窗口未知 = null)。 */
+  contextPct: number | null;
+  contextThresholdPct: number;
+  /** 最近一次 todo 快照漂移度(无快照 = null)。 */
+  drift: number | null;
+  driftThreshold: number;
+  /** 最新 todo 快照条目数。 */
+  todoCount: number;
+  /** 非阻断建议:达到任一阈值且长任务未开启。 */
+  suggest: boolean;
+  reasons: Array<'context-threshold' | 'todo-drift'>;
+  /** 尾部压缩一次覆盖的轮数(cfg)。 */
+  tailTurns: number;
+  /** 已压缩水位线(null = 从未压缩)。 */
+  lastTailCompressedTurn: number | null;
+  /** 水位线之上、可压缩的已捕获轮数(长任务关闭时 null)。 */
+  pendingTailTurns: number | null;
+}
+
+/** dsh-memory/longtask-compress-tail | 尾部 turn 压缩(强制蒸馏最近 N 轮入记忆)。 */
+export interface LongTaskCompressTailRequest {
+  sessionId: string;
+  /** 覆盖 cfg.longTask.tailTurns(≤50)。 */
+  turns?: number;
+}
+export interface LongTaskCompressTailResponse {
+  sessionId: string;
+  /** 实际入队蒸馏的消息条数(0 = 无可压轮/长任务未开启)。 */
+  enqueued: number;
+  fromTurn: number | null;
+  toTurn: number | null;
+  longTask: boolean;
 }
 
 /** dsh-memory/wing-overview(八边形角计数;WingWheel 打开时拉取,非热路径)。 */
@@ -1234,6 +1286,8 @@ export interface DshMemoryRequestMap {
   'dsh-memory/token-cost': TokenCostRequest;
   'dsh-memory/session-mode-get': SessionModeGetRequest;
   'dsh-memory/session-mode-set': SessionModeSetRequest;
+  'dsh-memory/longtask-hint-get': LongTaskHintGetRequest;
+  'dsh-memory/longtask-compress-tail': LongTaskCompressTailRequest;
   'dsh-memory/wing-overview': Record<string, never>;
   'dsh-memory/rooms-get': Record<string, never>;
   'dsh-memory/wing-backfill': Record<string, never>;
@@ -1279,6 +1333,8 @@ export interface DshMemoryResponseMap {
   'dsh-memory/stats': StatsResponse;
   'dsh-memory/token-cost': TokenCostResponse;
   'dsh-memory/session-mode-get': SessionModeGetResponse;
+  'dsh-memory/longtask-hint-get': LongTaskHintGetResponse;
+  'dsh-memory/longtask-compress-tail': LongTaskCompressTailResponse;
   'dsh-memory/session-mode-set': SessionModeSetResponse;
   'dsh-memory/wing-overview': WingOverviewResponse;
   'dsh-memory/rooms-get': RoomsGetResponse;

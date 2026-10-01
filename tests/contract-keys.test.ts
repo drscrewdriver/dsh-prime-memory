@@ -61,6 +61,8 @@ const ENDPOINTS = [
   'dsh-memory/token-cost',
   'dsh-memory/session-mode-get',
   'dsh-memory/session-mode-set',
+  'dsh-memory/longtask-hint-get',
+  'dsh-memory/longtask-compress-tail',
   'dsh-memory/wing-overview',
   'dsh-memory/rooms-get',
   'dsh-memory/wing-backfill',
@@ -142,8 +144,8 @@ describe('wing catalog', () => {
 
 describe('endpoint surface', () => {
   it('exposes exactly the 43 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(43);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(43);
+    expect(ENDPOINTS.length).toBe(45);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(45);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
