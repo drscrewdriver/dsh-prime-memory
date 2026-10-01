@@ -602,6 +602,8 @@ export interface RoomRegisterRequest {
   slug: string;
   label?: string;
   description?: string;
+  /** 收编自生长 slug 时传 grown(缺省 pre-registered;已存在条目忽略此字段)。 */
+  source?: 'pre-registered' | 'grown';
 }
 export interface RoomRegisterResponse {
   slug: string;
