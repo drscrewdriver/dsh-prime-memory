@@ -158,18 +158,29 @@ function selectPendingOrphans(
  * 预标记消费器:活跃孤儿(≤limit 条)批量产候选并写 pending。
  * 写前重读合并(与 relabel 同纪律);失败单条跳过、原记录零改动。
  */
+export interface OrphanAnnotateOverrides {
+  /** 测试注入口:替换 LLM 候选标注器(默认走真实 callLLM 路径)。 */
+  chunkAnnotator?: (
+    chunk: MemoryRecord[],
+  ) => Promise<Array<{ id: string; rooms: string[] }>>;
+}
+
 export async function annotateOrphanCandidates(
   ctx: Context,
   cfg: MemoryConfig,
   io: OrphanAnnotateIO,
   limit = 40,
+  overrides: OrphanAnnotateOverrides = {},
 ): Promise<{ selected: number; candidates: number; written: number }> {
   const selected = selectPendingOrphans(io.l1, limit);
   if (selected.length === 0) return { selected: 0, candidates: 0, written: 0 };
   // 全库 Room 词表(计数降序)。整批共享一张词表(一次 LLM 调用),
   // 同仓优先的精化在逐条候选写入后由 repo-change 重算消费,此处保持简单。
   const rooms = io.l1.listRooms();
-  const rows = await roomCandidateChunk(ctx, cfg, io.logger, selected, rooms);
+  const rows =
+    overrides.chunkAnnotator !== undefined
+      ? await overrides.chunkAnnotator(selected)
+      : await roomCandidateChunk(ctx, cfg, io.logger, selected, rooms);
   let written = 0;
   for (const { id, rooms: candidates } of rows) {
     if (candidates.length === 0) continue;
@@ -266,11 +277,12 @@ export function confirmReview(
   return { tags: cleaned };
 }
 
-/** 跳过:标 skipped(不再进 pending 队列;可由重新预标记覆盖)。 */
+/** 跳过:标 skipped(不再进 pending 队列)。已 confirmed 的记录不受 skip 影响(挂了 Room 的不算长尾)。 */
 export function skipReview(l1: RoomReviewStore, id: string): boolean {
   const found = l1.getByIds([id])[0];
   if (!found) return false;
   const meta = { ...(found.metadata ?? {}) } as Record<string, unknown>;
+  if (meta[ROOM_REVIEW_KEY] === 'confirmed') return false;
   meta[ROOM_REVIEW_KEY] = 'skipped';
   return l1.patchMetadata(id, meta);
 }
