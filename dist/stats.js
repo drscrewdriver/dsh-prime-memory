@@ -56,6 +56,7 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/wing-overview',
     'dsh-memory/rooms-get',
     'dsh-memory/rooms-export',
+    'dsh-memory/room-register',
     'dsh-memory/wing-backfill',
     'dsh-memory/session-stats',
     'dsh-memory/settings-get',
@@ -676,6 +677,27 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     aliases: e.aliases,
                     status: e.status,
                 })),
+            };
+            return v;
+        }
+        case 'dsh-memory/room-register': {
+            if (!roomRegistry)
+                throw new Error('Room 注册表未装配(需要插件重载以初始化)。');
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放:请在记忆库面板开启「高权限模式」后,模型才能预注册 Room。');
+            const p = (payload ?? {});
+            const slug = String(p.slug ?? '').trim();
+            if (!slug)
+                throw new Error('slug 不能为空');
+            const r = await roomRegistry.register({
+                slug,
+                label: typeof p.label === 'string' ? p.label : undefined,
+                description: typeof p.description === 'string' ? p.description : undefined,
+            });
+            const v = {
+                slug: r.entry.slug,
+                created: r.created,
+                notice: r.created ? '已预注册。' : '已存在(只补全了缺失的 label/description)。',
             };
             return v;
         }

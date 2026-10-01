@@ -46,6 +46,26 @@ export interface RoomReviewStore {
     /** 确认写 tags 后失效 Room 计数缓存(30s TTL)。 */
     invalidateRooms(): void;
 }
+/** merge/rename 的 store 面(RoomReviewStore + 游标重写与备份;L1Store 已实现)。 */
+export interface RoomMergeStore extends RoomReviewStore {
+    listByTagAll(tag: string, cap?: number): MemoryRecord[];
+    backupTagRecords(tag: string): {
+        file: string;
+        count: number;
+    };
+    rewriteTag(from: string, to: string, cap?: number): {
+        rewritten: number;
+        scanned: number;
+        families: string[];
+        scenes: string[];
+        hasMore: boolean;
+    };
+}
+/** Room 注册表最小面(merge 收尾;RoomRegistryStore 已满足)。 */
+export interface RoomRegistryMerge {
+    markMerged(fromSlug: string, toSlug: string): Promise<boolean>;
+    renameSlug(oldSlug: string, newSlug: string): Promise<boolean>;
+}
 export interface RoomCandidate {
     id: string;
     rooms: string[];
@@ -91,6 +111,44 @@ export declare function annotateOrphanCandidates(ctx: Context, cfg: MemoryConfig
     candidates: number;
     written: number;
 }>;
+export interface MergeRoomResult {
+    dryRun: boolean;
+    /** 影响条数(dryRun=预览数;实跑=实际重写数)。 */
+    affected: number;
+    preview: string[];
+    applied: number;
+    hasMore: boolean;
+    backupFile?: string;
+    /** 实跑时回传:受影响的族与场景(调用方入队 recluster 'room-merge')。 */
+    families?: string[];
+    scenes?: string[];
+}
+/**
+ * Room merge/rename 编排(破坏性动作,分类管理 beta.5):
+ *  - dryRun(缺省 true):只统计 affected + 前 6 条预览,**零写入**;
+ *  - 实跑:执行前备份(matching rows → rooms-merge-backups/)→ 游标重写
+ *    (写前重读-合并-写回,其余 metadata 键保全)→ 注册表 markMerged/renameSlug
+ *    → 返回受影响 (family, scene) 供调用方入队 recluster('room-merge');
+ *  - 单飞:并发 merge 直接抛错;与 relabel/ruminate 的时间错开由调用方保证。
+ * 抛错语义:非法参数/注册表冲突直接抛(调用方转 notice)。
+ */
+export declare function mergeRoom(io: {
+    l1: RoomMergeStore;
+    registry: RoomRegistryMerge;
+    logger: MemoryLogger;
+}, from: string, to: string, opts?: {
+    dryRun?: boolean;
+    cap?: number;
+}): Promise<MergeRoomResult>;
+/** rename = merge 1:1 + 注册表改名(冲突时抛错提示走 merge)。 */
+export declare function renameRoom(io: {
+    l1: RoomMergeStore;
+    registry: RoomRegistryMerge;
+    logger: MemoryLogger;
+}, from: string, to: string, opts?: {
+    dryRun?: boolean;
+    cap?: number;
+}): Promise<MergeRoomResult>;
 /** 下一条待复查(供 agent 逐个过):记录摘要 + 候选 + 现有 Room 词表 + 剩余数。 */
 export declare function nextReview(l1: RoomReviewStore): {
     id: string;

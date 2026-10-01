@@ -6,7 +6,7 @@
  *
  * 去重/合并的更新记录走 upsert(新 record id + 版本递增),不再全量重写文件。
  */
-import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, mkdirSync, promises as fs, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { familyForType, isScopeVisible } from '../types.js';
 import { graphHitRecordIds } from '../graph/search.js';
@@ -161,6 +161,65 @@ export class L1Store {
     }
     finishSceneRecluster(jobId, ok) {
         this.db.finishSceneRecluster(jobId, ok);
+    }
+    // ── Room merge/rename 的游标重写(分类管理 beta.5;破坏性面)──────────────
+    /**
+     * 收集某 Room 的全部匹配记录(含已退场行,口径与 Room 计数一致)。
+     * 内部分页拉取,上限 cap 防跑飞;返回记录数组供备份与干跑预览。
+     */
+    listByTagAll(tag, cap = 500) {
+        const out = [];
+        for (let offset = 0; offset < cap; offset += 200) {
+            const page = this.list({ tag, retired: undefined, limit: Math.min(200, cap - out.length), offset });
+            out.push(...page.items);
+            if (page.items.length < 200 || out.length >= cap)
+                break;
+        }
+        return out;
+    }
+    /**
+     * 备份某 Room 的匹配记录到 `<dataDir>/rooms-merge-backups/<ts>-<tag>.json`
+     * (执行前快照;破坏性重写前的唯一回滚物料)。返回备份文件路径与条数。
+     */
+    backupTagRecords(tag) {
+        const records = this.listByTagAll(tag, 2000);
+        const backupDir = path.join(this.dataDir, 'rooms-merge-backups');
+        if (!existsSync(backupDir))
+            mkdirSync(backupDir, { recursive: true });
+        const file = path.join(backupDir, `${Date.now()}-${tag.replace(/[^a-z0-9-]/gi, '_')}.json`);
+        writeFileSync(file, JSON.stringify({ tag, exportedAt: new Date().toISOString(), records }, null, 2), 'utf8');
+        return { file, count: records.length };
+    }
+    /**
+     * 游标重写:把 metadata.tags 里的 `from` 全部替换为 `to`(**含已退场行**,
+     * 口径与 Room 计数一致)。写前重读-合并-写回(relabel 同款):只动 tags,
+     * roomCandidates/roomReview/hall/cogHall/sourceAnchors 等其余键原样保全。
+     *
+     * 单次上限 cap(500)可续跑:再次调用同一 from 即继续处理剩余行。
+     * 返回重写条数 + 受影响的 (family, scene) 集(供 recluster 'room-merge' 入队)。
+     */
+    rewriteTag(from, to, cap = 500) {
+        const rows = this.listByTagAll(from, cap + 1);
+        const hasMore = rows.length > cap;
+        const batch = rows.slice(0, cap);
+        let rewritten = 0;
+        const families = new Set();
+        const scenes = new Set();
+        for (const r of batch) {
+            const meta = { ...(r.metadata ?? {}) };
+            const tags = Array.isArray(meta.tags) ? meta.tags.map(String) : [];
+            if (!tags.includes(from))
+                continue; // 命中是 json_each 判等,数组缺失即无可改
+            const next = tags.map((t) => (t === from ? to : t));
+            meta.tags = [...new Set(next)];
+            if (this.patchMetadata(r.id, meta)) {
+                rewritten++;
+                families.add(r.family ?? 'chat');
+                if (r.scene_name)
+                    scenes.add(r.scene_name);
+            }
+        }
+        return { rewritten, scanned: batch.length, families: [...families], scenes: [...scenes], hasMore };
     }
     /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
     getByIds(ids) {

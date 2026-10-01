@@ -3711,7 +3711,54 @@ var __defProp = Object.defineProperty;
 		              children: "▶"
 		            }
 		          )
-		        ] }) : null
+		        ] }) : null,
+		        roomsOpen && /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--dsh-mem-border)" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "管理(高权限)" }),
+		            !hiPriv && /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "需先开启高权限模式(见上方工具栏)" })
+		          ] }),
+		          hiPriv && /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("input", { "data-adm-slug": true, placeholder: "slug(如 dsh-plugin 或 dsh-plugin/merge)", style: { ...S.input, width: 150, fontSize: 12 } }),
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("input", { "data-adm-label": true, placeholder: "名称(可中文)", style: { ...S.input, width: 110, fontSize: 12 } }),
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("input", { "data-adm-desc": true, placeholder: "归类说明(喂标注器)", style: { ...S.input, width: 170, fontSize: 12 } }),
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		              "button",
+		              {
+		                type: "button",
+		                onClick: async () => {
+		                  const q = (sel2) => document.querySelector(sel2)?.value ?? "";
+		                  const r = await rpc("dsh-memory/room-register", { slug: q("[data-adm-slug]"), label: q("[data-adm-label]"), description: q("[data-adm-desc]") }).catch(() => null);
+		                  void r;
+		                  loadRooms();
+		                },
+		                style: { cursor: "pointer", fontSize: 12, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--dsh-mem-accent)", background: "transparent", color: "var(--dsh-mem-accent)" },
+		                children: "注册"
+		              }
+		            ),
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		              "button",
+		              {
+		                type: "button",
+		                title: "导出无 Room 绑定的孤儿清单(含候选)",
+		                onClick: () => {
+		                  rpc("dsh-memory/rooms-export", { kind: "orphans" }).then((r) => {
+		                    if (!r || !r.ok || !r.value?.csv) return;
+		                    const blob = new Blob([r.value.csv], { type: "text/csv;charset=utf-8" });
+		                    const url = URL.createObjectURL(blob);
+		                    const a = document.createElement("a");
+		                    a.href = url;
+		                    a.download = "dsh-memory-room-orphans.csv";
+		                    a.click();
+		                    URL.revokeObjectURL(url);
+		                  }).catch(() => void 0);
+		                },
+		                style: { cursor: "pointer", fontSize: 12, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--dsh-mem-border)", background: "transparent", color: "var(--dsh-mem-text-2)" },
+		                children: "导出孤儿"
+		              }
+		            ),
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "合并/改名/退役:用 agent 工具 memory_room_admin(merge/rename/retire,dryRun 默认预览)" })
+		          ] })
+		        ] })
 		      ] }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.muted, children: "Room 分类:暂无(由反刍涌现的标签自动生成,无需手工建立)" })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
