@@ -676,31 +676,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     // ── Room 分类计数(标签自生长分类;展开 metadata.tags 聚合,零 schema) ──
     case 'dsh-memory/rooms-get': {
       const rooms = stores.l1.listRooms();
-      // 端点层合并注册表(Agent A 设计):注册表 active 条目 count=0 补齐并带
-      // source/label;自生长条目标 source='grown'。不动 listRooms() 的缓存语义。
-      const merged: Array<RoomCount & { label?: string }> = rooms.map((r) => ({ ...r, source: 'grown' }));
-      const registry = roomRegistry?.listActive() ?? [];
-      for (const e of registry) {
-        const idx = merged.findIndex((r) => r.room === e.slug);
-        if (idx === -1) {
-          merged.push({ room: e.slug, count: 0, source: 'pre-registered', label: e.label });
-        } else {
-          merged[idx] = { ...merged[idx], source: 'pre-registered', label: e.label ?? merged[idx].label };
-        }
-      }
-      const v: RoomsGetResponse = {
-        rooms: merged,
-        total: merged.length,
-        orphanCount: stores.l1.untaggedL1Count(),
-        registry: roomRegistry?.list().map((e) => ({
-          slug: e.slug,
-          label: e.label,
-          description: e.description,
-          source: e.source,
-          aliases: e.aliases,
-          status: e.status,
-        })),
-      };
+      const v: RoomsGetResponse = { rooms, total: rooms.length, orphanCount: stores.l1.untaggedL1Count() };
       return v;
     }
 
@@ -1136,7 +1112,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     }
 
     case 'dsh-memory/list-records': {
-      const p = (payload ?? {}) as { query?: string; type?: string; scene?: string; hall?: string; halls?: unknown; tag?: string; retired?: unknown; limit?: number; offset?: number };
+      const p = (payload ?? {}) as { query?: string; type?: string; scene?: string; hall?: string; halls?: unknown; tag?: string; untagged?: boolean; retired?: unknown; limit?: number; offset?: number };
       if (p.query !== undefined && p.query.length > 4096) throw new Error('query 过长(≤4096 字符)');
       // 退场筛查:三态(缺省=全部混排/false=仅活跃/true=仅已退场)。显式布尔才透传,
       // 其余值(字符串/数字等)一律视为缺省——宁可宽看,不可静默筛掉一半。
@@ -1144,6 +1120,8 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // Room 过滤:tag 是**自生长**的 slug(无枚举),只做形状与长度校验(SQL 侧参数化)
       const tagSel = typeof p.tag === 'string' ? p.tag.trim().slice(0, 64) : '';
       if (tagSel && !isTag(tagSel)) throw new Error('tag 非法(需小写字母数字连字符,1-32 字符)');
+      // 孤儿记忆筛选(与 tag 互斥,tag 优先):只认显式布尔,其余视为缺省。
+      const untaggedSel = p.untagged === true && !tagSel;
       // R13 多值归一: halls 数组只留非空字符串(≤40 字符),去重,上限 8(角数);
       // wing 单值保留兼容,归一后与 halls 合并
       const wingSel = Array.from(
@@ -1186,6 +1164,12 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
               const tags = m?.tags;
               if (!Array.isArray(tags) || !tags.some((t) => t === tagSel)) return false;
             }
+            if (untaggedSel) {
+              // 孤儿:tags 缺失/非数组/全部空串均算无 Room
+              const tags = m?.tags;
+              const hasRoom = Array.isArray(tags) && tags.some((t) => typeof t === 'string' && t !== '');
+              if (hasRoom) return false;
+            }
             return true;
           });
         }
@@ -1201,7 +1185,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       }
       // 退场筛查仅浏览路径透传;检索路径不接——FTS/向量里本就没有已退场行,
       // 接了只会让「仅退场+关键词」永远空结果,不如如实不筛。
-      const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, retired: retiredSel, limit, offset });
+      const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, untagged: untaggedSel || undefined, retired: retiredSel, limit, offset });
       const resp: ListRecordsResponse = {
         items: items.map(hitToUiRecord),
         hasMore: offset + items.length < total,

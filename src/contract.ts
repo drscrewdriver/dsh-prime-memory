@@ -534,79 +534,6 @@ export interface RoomsGetResponse {
   total: number;
   /** 孤儿记忆数:没有任何 Room(tags 为空/缺失)的记录条数(与 rooms 同口径含已退场)。 */
   orphanCount: number;
-  /** 注册表条目(全量含 retired;分类管理面板用;未装配 = undefined)。 */
-  registry?: Array<{
-    slug: string;
-    label?: string;
-    description?: string;
-    source: 'pre-registered' | 'grown';
-    aliases?: string[];
-    status: 'active' | 'retired';
-  }>;
-}
-
-/** dsh-memory/room-register(预注册 Room;高权限:面板 memoryMutate 开启才生效)。 */
-export interface RoomRegisterRequest {
-  slug: string;
-  label?: string;
-  description?: string;
-  /** 收编自生长 slug 时传 grown(缺省 pre-registered;已存在条目忽略此字段)。 */
-  source?: 'pre-registered' | 'grown';
-}
-export interface RoomRegisterResponse {
-  slug: string;
-  created: boolean;
-  /** 幂等补全时的提示(如「已存在,只补全缺失字段」)。 */
-  notice?: string;
-}
-
-/** dsh-memory/rooms-export(分类数据导出,CSV 直出)。 */
-export interface RoomsExportRequest {
-  /** rooms = 词表+计数;orphans = 无 Room 绑定的记录清单;records = 按 Room 的记录清单(tag 必传)。 */
-  kind: 'rooms' | 'orphans' | 'records';
-  /** 各 kind 通用上限(1..10000,默认 2000)。 */
-  limit?: number;
-  /** kind=records 的目标 Room slug。 */
-  tag?: string;
-}
-export interface RoomsExportResponse {
-  kind: 'rooms' | 'orphans' | 'records';
-  /** CSV 文本(首行表头;
- 行尾;RFC 4180 转义)。 */
-  csv: string;
-  /** 数据行数(不含表头)。 */
-  total: number;
-  /** truncated = 达到 limit 上限,结果可能不完整。 */
-  truncated: boolean;
-}
-
-/** dsh-memory/room-admin(Room 破坏性面管理;高权限:面板 memoryMutate 开启才生效)。 */
-export interface RoomAdminRequest {
-  /** merge/rename:from→to(mergeRoom/renameRoom 编排:预览→实跑+自动备份+入队场景重算);retire:slug 退役/恢复。 */
-  action: 'merge' | 'rename' | 'retire';
-  /** merge/rename 的源 Room slug。 */
-  from?: string;
-  /** merge/rename 的目标 Room slug。 */
-  to?: string;
-  /** retire 的目标 Room slug。 */
-  slug?: string;
-  /** retire:true=恢复 active;缺省/false=退役。 */
-  active?: boolean;
-  /** merge/rename:缺省 true 只返预览;实跑需显式 false。 */
-  dryRun?: boolean;
-}
-export interface RoomAdminResponse {
-  notice: string;
-  /** merge/rename 本次是否 dryRun(预览)。 */
-  dryRun?: boolean;
-  /** merge/rename 影响的记录条数(实跑 = 已改写条数)。 */
-  affected?: number;
-  /** 预览样例(受影响记录 id 的前几条)。 */
-  preview?: string[];
-  /** true = 超过单次上限,需续跑。 */
-  hasMore?: boolean;
-  /** 实跑时改写前备份文件名(rooms-merge-backups/)。 */
-  backupFile?: string;
 }
 
 /** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */
@@ -720,6 +647,11 @@ export interface ListRecordsRequest {
    * Room 由 tags 派生(自生长),故这里传的是**具体 tag 名**而非枚举 id。
    */
   tag?: string;
+  /**
+   * 孤儿记忆筛选:true = 只列**没有任何 Room(tags 为空/缺失)**的记录。
+   * 与 `tag` 互斥;同传时 `tag` 优先(客户端保证不同传)。
+   */
+  untagged?: boolean;
   /**
    * 退场(软删)筛查:三态。省略 = 全部(活跃+已退场混排,靠 `UiRecord.retired`
    * 徽标区分);`false` = 仅活跃;`true` = 仅已退场。

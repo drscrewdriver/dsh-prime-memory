@@ -1657,6 +1657,8 @@ export class MemoryDb {
     halls?: readonly string[];
     /** Room 过滤(metadata.tags 含该 slug)。 */
     tag?: string;
+    /** 孤儿记忆筛选(true = 只列没有 Room 的记录;与 tag 互斥,tag 优先)。 */
+    untagged?: boolean;
     workspaceId?: string;
     /**
      * 退场(软删)筛查:三态。
@@ -1705,6 +1707,12 @@ export class MemoryDb {
           `EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END, '$.tags') j WHERE j.value = ?)`,
         );
         params.push(opts.tag);
+      } else if (opts.untagged) {
+        // 孤儿记忆:没有任何 Room(tags 数组缺失/为空/字段非法)。与 room 计数同一
+        // json_valid 守卫口径;与 l1RoomCounts() 计数互补(rooms 计数 + 孤儿数 = 全量)。
+        where.push(
+          `NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END, '$.tags'))`,
+        );
       }
       // 退场筛查(三态,见 opts.retired 注释):与 listRetiredL1 同一判据,保证
       // 「仅退场」视图与「已退场」区看到同一批行。
@@ -1815,6 +1823,22 @@ export class MemoryDb {
         .map((r) => ({ room: r.room, count: Number(r.n) }));
     } catch {
       return [];
+    }
+  }
+
+  /** 孤儿记忆计数:没有任何 Room(tags 为空/缺失)的记录条数(含已退场,与 l1RoomCounts 同口径)。 */
+  untaggedL1Count(): number {
+    if (this.degraded) return 0;
+    try {
+      const row = this.db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM l1_records r
+           WHERE NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(r.metadata_json) THEN r.metadata_json ELSE '{}' END, '$.tags'))`,
+        )
+        .get() as { n: number | bigint };
+      return Number(row?.n ?? 0);
+    } catch {
+      return 0;
     }
   }
 
