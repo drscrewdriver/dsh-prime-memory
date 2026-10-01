@@ -39,6 +39,10 @@ export async function runSceneConsolidation(
       type: m.type,
       priority: m.priority,
       scene_name: m.scene_name,
+      // repo 归属(ADR-0015 T1.9/T1.10):L2 场景归属决策可见项目边界——
+      // this-repo 记录不得并入跨项目场景;'' = 未归属(不引导分组)。
+      repoKeyName: m.repoKeyName ?? '',
+      applicability: m.applicability ?? '',
       timestamps: m.timestamps.map((t) => new Date(t).toISOString()),
     })),
     null,

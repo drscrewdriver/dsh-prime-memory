@@ -51,3 +51,9 @@ export declare function buildFtsQuery(raw: string): string | null;
  * 与 buildFtsQuery 用同一分词器,保证查询 token 在索引中可命中。
  */
 export declare function tokenizeForFts(raw: string): string;
+/** 哨兵开关:生产(NODE_ENV=production)关闭,其余(dev/test)生效。 */
+export declare const GOVERNANCE_SENTINEL_ACTIVE: boolean;
+/** 标记"回调及其异步下游处于 searchCandidates(去重候选)路径内"。仅 MemoryDb.searchCandidates 入口调用;生产 no-op 直通。 */
+export declare function markDedupPath<T>(fn: () => T): T;
+/** 治理代码入口自证清白:处于去重候选路径内则抛错。生产 no-op。 */
+export declare function assertNotDedupPath(who: string): void;

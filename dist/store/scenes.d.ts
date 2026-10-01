@@ -11,6 +11,8 @@ export declare class SceneStore {
     /** 列出场景摘要(解析 META 块)。 */
     list(): Promise<SceneSummary[]>;
     read(name: string): Promise<string | undefined>;
+    /** 原样读场景文件(重聚类回滚快照用,治理 W3);不存在/非法名返回 null。 */
+    readRaw(name: string): Promise<string | null>;
     /**
      * 写入/重写场景文件。content 为 [DELETED] 时删除该文件(LLM 的 delete 操作)。
      * 文件名自动归一化(空格→短横线、剔除非法字符),非法则抛错。

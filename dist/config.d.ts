@@ -125,6 +125,12 @@ export interface MemoryConfig {
         /** 时效衰减半衰期(天,0=关):score × max(0.5, 0.5^(Δ天/半衰期)),
          *  只影响相关度相近候选间的名次(老记忆最多损失一半排序分,不淘汰)。 */
         decayHalfLifeDays: number;
+        /** repo 软围栏(ADR-0015,默认关=不减权不围栏,零漂移)。 */
+        scopeFence: {
+            enabled: boolean;
+            /** repo 不匹配时的乘子(与域门禁 0.4 叠乘 ≥0.08;软减权非硬排除)。 */
+            crossRepoMultiplier: number;
+        };
     };
     embedding: {
         /** 向量检索总开关;关闭时纯 FTS 运行。 */
@@ -549,6 +555,13 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: Schema<number, number, "defined">;
         decayHalfLifeDays: Schema<number, number, "defined">;
+        scopeFence: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, "plain">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxResults: Schema<number, number, "defined">;
@@ -560,6 +573,13 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: Schema<number, number, "defined">;
         decayHalfLifeDays: Schema<number, number, "defined">;
+        scopeFence: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     embedding: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -1078,6 +1098,13 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: Schema<number, number, "defined">;
         decayHalfLifeDays: Schema<number, number, "defined">;
+        scopeFence: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, "plain">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxResults: Schema<number, number, "defined">;
@@ -1089,6 +1116,13 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: Schema<number, number, "defined">;
         decayHalfLifeDays: Schema<number, number, "defined">;
+        scopeFence: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     embedding: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;

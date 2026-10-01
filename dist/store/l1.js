@@ -14,7 +14,7 @@ import { isRetired } from './supersede.js';
 import { exportThenPurge, readSnapshotManifest, readSnapshotRecords, restoreL1Snapshot, selectSnapshotTargets, snapshotDirFor, listSnapshots as listSnapshotsIn } from './l1-snapshot.js';
 import { EmbedHelper, NoopEmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
-import { applyDecayWeight, normalizeRrf, rrfMerge } from './search-utils.js';
+import { applyDecayWeight, normalizeRrf, rrfMerge, markDedupPath } from './search-utils.js';
 import { isZeroVector } from './sqlite.js';
 /** Room 计数缓存 TTL(tags 只在反刍标签段变化;面板常开也不必每次敲库)。 */
 const ROOM_CACHE_TTL_MS = 30_000;
@@ -112,6 +112,51 @@ export class L1Store {
      */
     patchMetadata(id, metadata) {
         return this.db.patchL1Metadata(id, metadata);
+    }
+    /** repo 归属修补(ADR-0015 T3.3;人工消歧用)。CAS:expectRepoKeyName 非空时要求当前值匹配。 */
+    patchRepoKey(id, patch, expectRepoKeyName) {
+        const changed = this.db.patchRepoKey(id, patch, expectRepoKeyName);
+        if (changed > 0)
+            this.enqueueRepoChangeRecluster([id]);
+        return changed;
+    }
+    /**
+     * repo 归属变化 → 受影响场景的重聚类作业(治理 W3,repo-change 触发源)。
+     * 归属变了,记忆对场景的归属度就变了——受影响场景的摘要必须由当前事实重算
+     * (I-20 投影哲学)。反查各 id 的 scene_name 入队(消费器在 ruminate 空闲档,
+     * 每轮至多 1 个作业;内部只有文件级操作,无新增 LLM 通道)。
+     */
+    enqueueRepoChangeRecluster(ids) {
+        try {
+            const records = this.db.getL1ByIds([...ids]);
+            const byFamilyScene = new Map();
+            for (const r of records) {
+                if (!r.scene_name)
+                    continue;
+                const family = r.family ?? 'chat';
+                const set = byFamilyScene.get(family) ?? new Set();
+                set.add(r.scene_name);
+                byFamilyScene.set(family, set);
+            }
+            const batchId = `repo:${Date.now()}`;
+            for (const [family, scenes] of byFamilyScene) {
+                if (scenes.size > 0)
+                    this.enqueueSceneRecluster(family, [...scenes], batchId, 'repo-change');
+            }
+        }
+        catch {
+            /* 反查失败 = 不入队;重算由下一次任何触发兜底(消费器幂等) */
+        }
+    }
+    // ── L2 场景重聚类作业队列(治理 W3 T3.10;ruminate 空闲档消费)──────────────
+    enqueueSceneRecluster(family, sceneNames, batchId, source = 'demote') {
+        return this.db.enqueueSceneRecluster(family, sceneNames, batchId, source);
+    }
+    claimSceneRecluster() {
+        return this.db.claimSceneRecluster();
+    }
+    finishSceneRecluster(jobId, ok) {
+        this.db.finishSceneRecluster(jobId, ok);
     }
     /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
     getByIds(ids) {
@@ -589,24 +634,27 @@ export class L1Store {
      * 但已经决定了项目 A 记忆去向」的记录——比不隔离更糟。
      */
     async searchCandidates(query, limit, family, workspaceId) {
-        if (this.db.countL1() === 0)
-            return [];
-        const caps = this.db.getCapabilities();
-        if (caps.vectorSearch && this.helper.vectorReady()) {
-            try {
-                const vec = await this.helper.query(query);
-                if (vec) {
-                    const hits = this.db.searchL1Vector(vec, limit, family, workspaceId);
-                    if (hits.length > 0)
-                        return this.db.getL1ByIds(hits.map((h) => h.id));
+        // 治理哨兵(治理 W0 T0.2):标记去重候选路径;治理权重误入即抛(dev/test)。
+        return markDedupPath(async () => {
+            if (this.db.countL1() === 0)
+                return [];
+            const caps = this.db.getCapabilities();
+            if (caps.vectorSearch && this.helper.vectorReady()) {
+                try {
+                    const vec = await this.helper.query(query);
+                    if (vec) {
+                        const hits = this.db.searchL1Vector(vec, limit, family, workspaceId);
+                        if (hits.length > 0)
+                            return this.db.getL1ByIds(hits.map((h) => h.id));
+                    }
+                }
+                catch (err) {
+                    this.logger?.warn(`[memory] 向量候选召回失败,降级 FTS: ${err instanceof Error ? err.message : String(err)}`);
                 }
             }
-            catch (err) {
-                this.logger?.warn(`[memory] 向量候选召回失败,降级 FTS: ${err instanceof Error ? err.message : String(err)}`);
-            }
-        }
-        const fts = this.db.searchL1Fts(query, limit * 2, family, workspaceId);
-        return this.db.getL1ByIds(fts.map((h) => h.id));
+            const fts = this.db.searchL1Fts(query, limit * 2, family, workspaceId);
+            return this.db.getL1ByIds(fts.map((h) => h.id));
+        });
     }
     /**
      * 增量重嵌入(embedding 配置变化 / 周期性补齐用):只处理缺失向量的记录,

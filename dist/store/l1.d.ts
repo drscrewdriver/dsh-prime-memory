@@ -88,6 +88,26 @@ export declare class L1Store {
      * 返回 false 表示 id 不存在或写入失败——调用方须记账,不许静默。
      */
     patchMetadata(id: string, metadata: Record<string, unknown>): boolean;
+    /** repo 归属修补(ADR-0015 T3.3;人工消歧用)。CAS:expectRepoKeyName 非空时要求当前值匹配。 */
+    patchRepoKey(id: string, patch: {
+        repoKeyName?: string;
+        repoKeyOwner?: string;
+    }, expectRepoKeyName?: string): number;
+    /**
+     * repo 归属变化 → 受影响场景的重聚类作业(治理 W3,repo-change 触发源)。
+     * 归属变了,记忆对场景的归属度就变了——受影响场景的摘要必须由当前事实重算
+     * (I-20 投影哲学)。反查各 id 的 scene_name 入队(消费器在 ruminate 空闲档,
+     * 每轮至多 1 个作业;内部只有文件级操作,无新增 LLM 通道)。
+     */
+    private enqueueRepoChangeRecluster;
+    enqueueSceneRecluster(family: string, sceneNames: readonly string[], batchId: string, source?: string): string;
+    claimSceneRecluster(): {
+        jobId: string;
+        family: string;
+        sceneNames: string[];
+        source: string;
+    } | null;
+    finishSceneRecluster(jobId: string, ok: boolean): void;
     /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
     getByIds(ids: string[]): MemoryRecord[];
     /**

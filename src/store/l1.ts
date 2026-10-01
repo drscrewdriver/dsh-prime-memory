@@ -185,7 +185,35 @@ export class L1Store {
     patch: { repoKeyName?: string; repoKeyOwner?: string },
     expectRepoKeyName?: string,
   ): number {
-    return this.db.patchRepoKey(id, patch, expectRepoKeyName);
+    const changed = this.db.patchRepoKey(id, patch, expectRepoKeyName);
+    if (changed > 0) this.enqueueRepoChangeRecluster([id]);
+    return changed;
+  }
+
+  /**
+   * repo 归属变化 → 受影响场景的重聚类作业(治理 W3,repo-change 触发源)。
+   * 归属变了,记忆对场景的归属度就变了——受影响场景的摘要必须由当前事实重算
+   * (I-20 投影哲学)。反查各 id 的 scene_name 入队(消费器在 ruminate 空闲档,
+   * 每轮至多 1 个作业;内部只有文件级操作,无新增 LLM 通道)。
+   */
+  private enqueueRepoChangeRecluster(ids: readonly string[]): void {
+    try {
+      const records = this.db.getL1ByIds([...ids]);
+      const byFamilyScene = new Map<string, Set<string>>();
+      for (const r of records) {
+        if (!r.scene_name) continue;
+        const family = r.family ?? 'chat';
+        const set = byFamilyScene.get(family) ?? new Set<string>();
+        set.add(r.scene_name);
+        byFamilyScene.set(family, set);
+      }
+      const batchId = `repo:${Date.now()}`;
+      for (const [family, scenes] of byFamilyScene) {
+        if (scenes.size > 0) this.enqueueSceneRecluster(family, [...scenes], batchId, 'repo-change');
+      }
+    } catch {
+      /* 反查失败 = 不入队;重算由下一次任何触发兜底(消费器幂等) */
+    }
   }
 
   // ── L2 场景重聚类作业队列(治理 W3 T3.10;ruminate 空闲档消费)──────────────

@@ -108,6 +108,13 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeFence: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxResults: import("@deepseek-ai/schemastery").default<number, number, "defined">;
@@ -119,6 +126,13 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeFence: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     embedding: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -637,6 +651,13 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeFence: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxResults: import("@deepseek-ai/schemastery").default<number, number, "defined">;
@@ -648,6 +669,13 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeFence: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     embedding: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;

@@ -118,3 +118,28 @@ export function buildFtsQuery(raw) {
 export function tokenizeForFts(raw) {
     return tokenize(raw).join(' ');
 }
+// ── 去重路径运行时哨兵(治理升级 Wave 0,T0.2;随 repo 围栏最小闭包移植)────
+// 红线只写在注释挡不住机械失误(P0-1:治理权重混进去重候选路径 → 去重漏检 →
+// 同事实双记录正反馈,且症状完全隐形)。searchCandidates 进入时用
+// AsyncLocalStorage 标记"当前处于去重路径";治理代码入口调用
+// assertNotDedupPath 自证清白——误入即抛,把隐形污染变成显式崩溃。
+// dev/test 生效,生产构建整体 no-op(零行为面)。
+import { AsyncLocalStorage } from 'node:async_hooks';
+const dedupPathStorage = new AsyncLocalStorage();
+/** 哨兵开关:生产(NODE_ENV=production)关闭,其余(dev/test)生效。 */
+export const GOVERNANCE_SENTINEL_ACTIVE = process.env.NODE_ENV !== 'production';
+/** 标记"回调及其异步下游处于 searchCandidates(去重候选)路径内"。仅 MemoryDb.searchCandidates 入口调用;生产 no-op 直通。 */
+export function markDedupPath(fn) {
+    if (!GOVERNANCE_SENTINEL_ACTIVE)
+        return fn();
+    return dedupPathStorage.run(true, fn);
+}
+/** 治理代码入口自证清白:处于去重候选路径内则抛错。生产 no-op。 */
+export function assertNotDedupPath(who) {
+    if (!GOVERNANCE_SENTINEL_ACTIVE)
+        return;
+    if (dedupPathStorage.getStore()) {
+        throw new Error(`[governance] ${who} 出现在 searchCandidates(去重候选)路径内——违反 search-utils 红线:` +
+            '去重候选必须无视治理权重(衰减/地板/scope),否则去重漏检、同事实双记录累积(P0-1)');
+    }
+}

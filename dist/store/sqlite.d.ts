@@ -217,6 +217,22 @@ export declare class MemoryDb {
      *
      * 返回 false 表示 id 不存在或写入失败(调用方据此记账,不静默)。
      */
+    /** repo 归属修补(T3.3;人工消歧用)。CAS:expectRepoKeyName 非空时要求当前值匹配。 */
+    patchRepoKey(id: string, patch: {
+        repoKeyName?: string;
+        repoKeyOwner?: string;
+    }, expectRepoKeyName?: string): number;
+    /** 入队一个重聚类作业(demote-to-wiki / repo 归属变化触发;source 区分来源)。 */
+    enqueueSceneRecluster(family: string, sceneNames: readonly string[], batchId: string, source?: string): string;
+    /** 取一个待处理作业(ruminate 空闲消费;按创建序)。 */
+    claimSceneRecluster(): {
+        jobId: string;
+        family: string;
+        sceneNames: string[];
+        source: string;
+    } | null;
+    /** 打标作业完成/失败(失败保留行供诊断;重算由下一次触发再入队)。 */
+    finishSceneRecluster(jobId: string, ok: boolean): void;
     patchL1Metadata(id: string, metadata: Record<string, unknown>): boolean;
     /** 全量读取(调试/迁移/重嵌入用;检索请走 FTS/向量)。 */
     getAllL1(): MemoryRecord[];

@@ -15,6 +15,7 @@ import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../promp
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
 import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope, WING_FALLBACK } from '../types.js';
+import { normApplicability, resolveRepoScope } from '../repo-scope.js';
 /** 解析 ISO/epoch 时间证据,非法或非正值一律 undefined——不猜测。 */
 function parseTimeEvidence(raw) {
     const t = typeof raw === 'string' ? Date.parse(raw) : typeof raw === 'number' ? raw : Number.NaN;
@@ -75,6 +76,12 @@ function toStoreRecord(m, now, ts, anchorMap) {
         family: m.family,
         scope: m.scope,
         workspaceId: m.workspaceId,
+        // 治理归属(ADR-0015 T1.9/T1.10):进管线时一次算定(I-21 不得事后补录)。
+        // 缺省**不写键**——无治理归属的记录与改动前的 JSONL/DB 形状逐字一致
+        // (零形状漂移,withSourceAnchors 同款纪律);DB 侧列 DEFAULT 即标注。
+        ...(m.repoKeyName ? { repoKeyName: m.repoKeyName } : {}),
+        ...(m.repoKeyOwner ? { repoKeyOwner: m.repoKeyOwner } : {}),
+        ...(m.applicability ? { applicability: m.applicability } : {}),
         ...temporalOf(m.metadata),
     };
 }
@@ -172,6 +179,9 @@ anchorMap) {
     const extracted = [];
     let lastScene = chainState.lastSceneName;
     let sceneCount = 0;
+    // 治理归属(ADR-0015 T1.7/T1.9):repoKey=basename(归一 cwd),**进管线时一次算定**
+    // (I-21 不得事后补录)。纯字符串派生,识别失败 = ''(不围栏 fail-open)。
+    const repoScope = resolveRepoScope(workspaceId);
     // wing 打标候选(R14 归一化后的启用列表);general(跨域兜底)仅在 auto 档追加进候选
     const hallCandidates = normWingEnabled(cfg.hall?.enabled);
     const halls = mode === 'auto' && !hallCandidates.includes(WING_FALLBACK)
@@ -211,6 +221,12 @@ anchorMap) {
                     // §E 归属在**进管线时**一次算定,下游(store / conflict / update / merge 各分支)
                     // 一律复用它——四个分支各算一次是漏判的温床。
                     ...resolveRecordScope(scopeMode, family, workspaceId),
+                    // 治理归属(ADR-0015 T1.9/T1.10):repoKey 一次算定;applicability 由抽取
+                    // prompt 显式产出、经归一收窄——**绝不从 family 推导**(P0-7 四象限),
+                    // 未声明/非法 = ''(不围栏)。
+                    repoKeyName: repoScope.repoKey,
+                    repoKeyOwner: '',
+                    applicability: normApplicability(m.applicability),
                 });
             }
         }

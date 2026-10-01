@@ -399,7 +399,13 @@ ${memoriesJson}
 ${sceneSummaries}
 
 ${contentsSection}
-### 3️⃣ Current Timestamp
+### 3️⃣ Repo 归属（repoKeyName / applicability）
+New Memories List 中的每条记忆带有项目归属标注：\`repoKeyName\`（来源仓库，空 = 未识别）与 \`applicability\`（适用范围：\`this-repo\` = 仅限该项目｜\`cross-project\` = 跨项目通用｜空 = 未声明）。整合时遵守：
+- \`applicability\`=\`this-repo\` 的记忆**不得**并入以其它项目内容为主的场景；优先并入同 \`repoKeyName\` 的场景，无合适场景时新建（文件名可带项目前缀以示区分）。
+- \`applicability\`=\`cross-project\` 的记忆**不得**写成某项目专属的 SOP/配置——它们是跨项目可迁移知识。
+- \`repoKeyName\` 为空的历史记录不强制分组（零漂移：归属信息缺失时维持既有行为）。
+
+### 4️⃣ Current Timestamp
 ${currentTimestamp}
 
 ${fileListSection}
