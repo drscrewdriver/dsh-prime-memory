@@ -3978,6 +3978,10 @@ var __defProp = Object.defineProperty;
 		  const i = slug.indexOf("/");
 		  return i === -1 ? slug : slug.slice(0, i);
 		}
+		function suffixOf(slug) {
+		  const i = slug.indexOf("/");
+		  return i === -1 ? slug : slug.slice(i + 1);
+		}
 		function downloadCsv(csv, name) {
 		  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
 		  const url = URL.createObjectURL(blob);
@@ -4012,6 +4016,7 @@ var __defProp = Object.defineProperty;
 		  const [form, setForm] = (0, import_react16.useState)(null);
 		  const [preview, setPreview] = (0, import_react16.useState)(null);
 		  const [grownOpen, setGrownOpen] = (0, import_react16.useState)(false);
+		  const [dragOverHall, setDragOverHall] = (0, import_react16.useState)(null);
 		  const loadAll = (0, import_react16.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
 		      if (r && r.ok) {
@@ -4073,22 +4078,41 @@ var __defProp = Object.defineProperty;
 		      loadAll();
 		    } else setError(r && r.error ? r.error.message : "收编失败");
 		  });
-		  const previewMerge = () => run(async () => {
-		    if (!form) return;
-		    const to = form.to.trim();
+		  const previewMerge = (override) => run(async () => {
+		    const fm = override ?? form;
+		    if (!fm) return;
+		    const to = fm.to.trim();
 		    if (!to) {
 		      setError("目标 slug 不能为空");
 		      return;
 		    }
-		    if (to === form.from) {
+		    if (to === fm.from) {
 		      setError("目标与源相同");
 		      return;
 		    }
-		    const r = await rpc("dsh-memory/room-admin", { action: form.action, from: form.from, to });
+		    const r = await rpc("dsh-memory/room-admin", { action: fm.action, from: fm.from, to });
 		    if (r && r.ok) {
-		      setPreview({ action: form.action, from: form.from, to, notice: String(r.value?.notice ?? "") });
+		      setPreview({ action: fm.action, from: fm.from, to, notice: String(r.value?.notice ?? "") });
 		    } else setError(r && r.error ? r.error.message : "预览失败");
 		  });
+		  const beginReclass = (from, hall) => {
+		    if (!busy) {
+		      setMsg(null);
+		      setError(null);
+		    }
+		    if (!hall) {
+		      setError("尚无 hall:先注册一个(如 dsh-plugin),再归类。");
+		      return;
+		    }
+		    if (majorOf(from) === hall) {
+		      setMsg(`${from} 已在 ${hall} 下。`);
+		      return;
+		    }
+		    const f = { action: "rename", from, to: `${hall}/${suffixOf(from)}` };
+		    setForm(f);
+		    setPreview(null);
+		    void previewMerge(f);
+		  };
 		  const execMerge = () => run(async () => {
 		    if (!preview) return;
 		    const r = await rpc("dsh-memory/room-admin", { action: preview.action, from: preview.from, to: preview.to, dryRun: false });
@@ -4239,41 +4263,83 @@ var __defProp = Object.defineProperty;
 		    msg ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.hint, children: msg }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.error, children: error }) : null,
 		    groups.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("p", { style: S.intro, children: "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。" }) : groups.map((g) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginBottom: 10, border: "1px solid var(--dsh-mem-border)", borderRadius: 8, overflow: "hidden" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", background: "var(--dsh-mem-bg-inset)" }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { fontSize: 12, fontWeight: 600 }, children: [
-		          g.hall,
-		          g.label ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: " (" + g.label + ")" }) : null
-		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: `合计 ${g.total} 条 · ${g.entries.length} 个 room` }),
-		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.grow }),
-		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
-		          "button",
-		          {
-		            type: "button",
-		            disabled: !hiPriv || busy,
-		            title: `预填注册表单为 ${g.hall}/…(注册该 hall 下的小类)`,
-		            onClick: () => setRegSlug(g.hall + "/"),
-		            style: btn,
-		            children: "+小类"
-		          }
-		        )
-		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+		        "div",
+		        {
+		          onDragOver: (ev) => {
+		            if (!hiPriv || busy) return;
+		            ev.preventDefault();
+		            ev.dataTransfer.dropEffect = "move";
+		            setDragOverHall(g.hall);
+		          },
+		          onDragLeave: () => setDragOverHall((cur) => cur === g.hall ? null : cur),
+		          onDrop: (ev) => {
+		            ev.preventDefault();
+		            setDragOverHall(null);
+		            if (!hiPriv || busy) return;
+		            const from = ev.dataTransfer.getData("text/dsh-room");
+		            if (from) beginReclass(from, g.hall);
+		          },
+		          style: {
+		            display: "flex",
+		            alignItems: "center",
+		            gap: 8,
+		            padding: "5px 10px",
+		            background: "var(--dsh-mem-bg-inset)",
+		            outline: dragOverHall === g.hall ? "2px dashed var(--dsh-mem-accent)" : void 0,
+		            outlineOffset: dragOverHall === g.hall ? "-2px" : void 0
+		          },
+		          title: hiPriv ? "拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)" : void 0,
+		          children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { fontSize: 12, fontWeight: 600 }, children: [
+		              g.hall,
+		              g.label ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: " (" + g.label + ")" }) : null
+		            ] }),
+		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: `合计 ${g.total} 条 · ${g.entries.length} 个 room` }),
+		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.grow }),
+		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		              "button",
+		              {
+		                type: "button",
+		                disabled: !hiPriv || busy,
+		                title: `预填注册表单为 ${g.hall}/…(注册该 hall 下的小类)`,
+		                onClick: () => setRegSlug(g.hall + "/"),
+		                style: btn,
+		                children: "+小类"
+		              }
+		            )
+		          ]
+		        }
+		      ),
 		      g.entries.map((e) => {
 		        const standalone = e.slug === g.hall;
 		        const count = rooms.find((r) => r.room === e.slug)?.count ?? 0;
 		        const retired = e.status === "retired";
 		        return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { padding: "4px 10px", borderTop: "1px solid var(--dsh-mem-border)", opacity: retired ? 0.55 : 1 }, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { fontSize: 12 }, title: e.description ? `${e.slug} — ${e.description}` : e.slug, children: [
-		              standalone ? e.slug : "· " + e.slug.slice(g.hall.length + 1),
-		              e.source === "pre-registered" ? " ⭐" : ""
-		            ] }),
+		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+		              "span",
+		              {
+		                style: { fontSize: 12, cursor: hiPriv && !busy ? "grab" : "default" },
+		                draggable: hiPriv && !busy,
+		                onDragStart: (ev) => {
+		                  ev.dataTransfer.setData("text/dsh-room", e.slug);
+		                  ev.dataTransfer.effectAllowed = "move";
+		                },
+		                title: hiPriv && !busy ? "拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)" : e.description ? `${e.slug} — ${e.description}` : e.slug,
+		                children: [
+		                  standalone ? e.slug : "· " + e.slug.slice(g.hall.length + 1),
+		                  e.source === "pre-registered" ? " ⭐" : ""
+		                ]
+		              }
+		            ),
 		            e.label ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: e.label }) : null,
 		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: count + " 条" }),
 		            retired ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: "已退役" }) : null,
 		            (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "别名: " + (e.aliases ?? []).join(", ") }) : null,
 		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.grow }),
 		            !hiPriv ? null : /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_jsx_runtime16.Fragment, { children: [
+		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "归类到已有 hall 下(major/minor;记录随迁)", onClick: () => beginReclass(e.slug, groups.find((gg) => gg.hall !== majorOf(e.slug))?.hall ?? ""), style: btn, children: "归类" }),
 		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: `改名(= merge 1:1 + 注册表改名)`, onClick: () => {
 		                setForm({ action: "rename", from: e.slug, to: "" });
 		                setPreview(null);
@@ -4303,7 +4369,18 @@ var __defProp = Object.defineProperty;
 		                style: { ...S.input, width: 180, fontSize: 12 }
 		              }
 		            ),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: previewMerge, style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: "预览" }),
+		            form.action === "rename" ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { display: "inline-flex", gap: 4, flexWrap: "wrap" }, children: groups.filter((gg) => gg.hall !== majorOf(form.from)).map((gg) => /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		              "button",
+		              {
+		                type: "button",
+		                title: `归入 ${gg.hall} 下(${gg.hall}/${suffixOf(form.from)})`,
+		                onClick: () => setForm({ ...form, to: `${gg.hall}/${suffixOf(form.from)}` }),
+		                style: { ...btn, borderRadius: 999, padding: "1px 8px" },
+		                children: gg.hall
+		              },
+		              gg.hall
+		            )) }) : null,
+		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: () => previewMerge(), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: "预览" }),
 		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, onClick: () => {
 		              setForm(null);
 		              setPreview(null);

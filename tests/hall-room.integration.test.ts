@@ -256,6 +256,25 @@ describe('Hall·Room 集成(HTTP 面全链 × 真实存储)', () => {
     expect(env.registry.bySlug('beta')!.slug).toBe('gamma');
   });
 
+  it('归类:standalone room 经 rename(拖拽归类的后端)归入已有 hall,记录随迁', async () => {
+    await env.call('dsh-memory/room-register', { slug: 'dsh-bash-terminal' });
+    await seed(env.l1, 't1', ['dsh-bash-terminal']);
+    const preview = (await env.call('dsh-memory/room-admin', { action: 'rename', from: 'dsh-bash-terminal', to: 'dsh-plugin/bash-terminal' })) as {
+      dryRun?: boolean; affected?: number;
+    };
+    expect(preview.dryRun).toBe(true);
+    expect(preview.affected).toBe(1);
+    const r = (await env.call('dsh-memory/room-admin', { action: 'rename', from: 'dsh-bash-terminal', to: 'dsh-plugin/bash-terminal', dryRun: false })) as {
+      affected?: number;
+    };
+    expect(r.affected).toBe(1);
+    expect(env.l1.getByIds(['t1'])[0]!.metadata?.tags).toEqual(['dsh-plugin/bash-terminal']);
+    expect(env.registry.bySlug('dsh-plugin/bash-terminal')!.aliases).toContain('dsh-bash-terminal');
+    // rooms-get 分组视图:该 room 现挂在 dsh-plugin hall 下
+    const g = (await env.call('dsh-memory/rooms-get', {})) as { rooms: Array<{ room: string; count: number }> };
+    expect(g.rooms.find((x) => x.room === 'dsh-plugin/bash-terminal')?.count).toBe(1);
+  });
+
   it('⑦ retire / 恢复往返(HTTP 面)', async () => {
     await env.call('dsh-memory/room-admin', { action: 'retire', slug: 'dsh-plugin/merge' });
     expect(env.registry.bySlug('dsh-plugin/merge')!.status).toBe('retired');

@@ -17,6 +17,18 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.13] — 2026-10-02
+
+> 补全归类逻辑:把 room 归到已有 hall 下(此前只能新增 hall,或合并进别的 room 抹掉身份)。面板支持**拖拽归类**——拖 room 放到 hall 头上即可。
+
+### 新增
+
+- **Hall 页拖拽归类**:room 行可拖(hiPriv 开启时抓手光标),hall 头为放置目标(虚线高亮);松手 = 预填改名(major/minor)并直接出 dryRun 预览,确认后实跑——记录随迁、旧名进别名、分组视图即挂到该 hall 下。触屏/不支持拖放的环境用 room 行「归类」按钮或改名表单里的 hall 快选 chips 兜底。
+- 后端修复:`renameSlug` 目标校验 `isTag` → `isRoomSlug`——此前两级目标(major/minor)被误拒,「归类到 hall 下」这条路实际不通(且 rename 编排会先重写记录再在注册表改名时抛错,留下半程状态)。按 C3 卸除/变更纪律:红测试先行(unit + HTTP 面集成各一),验红后修复回绿。
+
+### 修复
+
+- 同上:`renameSlug` 两级目标校验(beta.5 引入的缺口)。
 ## [0.20.0-beta.12] — 2026-10-02
 
 > lint 清账 + 卸除纪律成文(ENGINEERING-NOTES 新增 C3)。**无功能变更**。
