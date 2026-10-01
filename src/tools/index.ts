@@ -29,6 +29,14 @@ import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryFamily, MemoryLogger, MemoryRecord, Persistence } from '../types.js';
 import { WING_CATALOG, WING_FALLBACK, normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
+import type { RoomRegistryStore } from '../store/rooms-registry.js';
+import {
+  annotateOrphanCandidates,
+  confirmReview,
+  nextReview,
+  pendingReviewCount,
+  skipReview,
+} from '../room-review.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 import { redactSecrets } from '../util/redact.js';
 
@@ -84,6 +92,8 @@ export function registerMemoryTools(
   live: LiveSettingsHandle,
   /** 反刍控制器(可选:未装配时 ruminate 工具返回未启用提示)。 */
   ruminate?: RuminateController,
+  /** Room 注册表(分类管理 beta.4;缺省 = memory_room_admin 返回未装配提示)。 */
+  roomRegistry?: RoomRegistryStore,
 ): void {
   if (!cfg.tools) return;
 
@@ -216,6 +226,79 @@ export function registerMemoryTools(
             score: Math.round(h.score * 100) / 100,
           })),
         };
+      },
+    }),
+  );
+
+  // ── memory_room_admin: Room 粒度目录治理(分类管理 beta.4)────────────────
+  // list/register 免预算零风险;merge/rename/retire 属破坏性面(beta.5),暂不注册。
+  ctx.tools.register(
+    defineTool({
+      name: 'memory_room_admin',
+      description:
+        'Room 分类管理(目录粒度)。action="list" 列出注册表条目与自生长 Room 计数;' +
+        'action="register" 预注册一个 Room(高权限;slug 需小写字母数字连字符,可选人类可读名与归类说明——' +
+        '注册后候选标注器与 tags 标注器会优先把记忆挂到这些 Room 上,是治理碎片化的推荐入口)。',
+      parameters: {
+        action: { type: 'string', required: true, description: 'list(列目录)| register(预注册 Room,高权限)' },
+        slug: { type: 'string', description: 'register 的 Room slug(小写字母数字连字符)' },
+        label: { type: 'string', description: 'register 的人类可读名(可选,可中文)' },
+        description: { type: 'string', description: 'register 的归类说明(可选;喂给标注器帮助归类)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            notice: { type: 'string' },
+            rooms: { type: 'string' },
+            slug: { type: 'string' },
+            created: { type: 'boolean' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: value.notice ?? JSON.stringify(value) }],
+      },
+      execute: async (args) => {
+        const action = String(args.action ?? '');
+        if (action === 'list') {
+          if (!roomRegistry) return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };
+          const registry = roomRegistry.list();
+          const counts = stores.l1.listRooms();
+          const countOf = (slug: string) => counts.find((r) => r.room === slug)?.count ?? 0;
+          const regLines = registry.map(
+            (e) => `- ${e.slug}${e.label ? `(${e.label})` : ''} [${e.source}/${e.status}] 现有 ${countOf(e.slug)} 条${e.description ? ` — ${e.description}` : ''}`,
+          );
+          const grownOnly = counts.filter((r) => !registry.some((e) => e.slug === r.room));
+          return {
+            notice:
+              `注册表 ${registry.length} 条(上限 200),自生长未注册 ${grownOnly.length} 个。\n` +
+              (regLines.join('\n') || '(注册表为空——用 action=register 预注册)') +
+              `\n自生长未注册:${grownOnly.map((r) => `${r.room}(${r.count})`).join(", ") || "无"}`,
+            rooms: `${registry.length}+${grownOnly.length}`,
+          };
+        }
+        if (action === 'register') {
+          if (!roomRegistry) return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };
+          if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
+          const slug = String(args.slug ?? '').trim();
+          try {
+            const r = await roomRegistry.register({
+              slug,
+              label: typeof args.label === 'string' ? args.label : undefined,
+              description: typeof args.description === 'string' ? args.description : undefined,
+            });
+            return {
+              notice: r.created
+                ? `已预注册 Room:${r.entry.slug}${r.entry.label ? `(${r.entry.label})` : ''}。候选标注器将优先把相关记忆挂到它上面。`
+                : `Room 已存在:${r.entry.slug}(本次只补全了缺失的 label/description)。`,
+              slug: r.entry.slug,
+              created: r.created,
+            };
+          } catch (err) {
+            return { notice: `注册失败: ${err instanceof Error ? err.message : String(err)}` };
+          }
+        }
+        return { notice: `非法 action:${action}(允许 list/register;merge/rename/retire 将在后续版本提供)。` };
       },
     }),
   );
