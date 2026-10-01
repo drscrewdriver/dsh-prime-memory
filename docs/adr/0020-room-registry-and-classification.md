@@ -54,3 +54,12 @@ slug 支持两级:`major` 或 `major/minor`(如 `dsh-plugin`、`dsh-plugin/merge
 list/export 无门(本机 loopback;records 类导出 limit 1 万/上限 5 万);
 register/retire 吃 memoryMutate 单门;merge/rename 双保险(memoryMutate +
 dryRun 默认 true)。register 上限 200 + isTag + 查重含 aliases 防刷。
+
+### 7. Hall 管理标签页(beta.7,UI 术语裁定)
+UI 层 大类=**Hall**、小类/条目=**Room**(用户裁定);代码仍叫 major/minor,不引入
+hall 命名。**术语消歧**:Hall(本页)= Room 词表的分组视图;`metadata.hall` = Wing
+生活域磁盘兼容键;CognitiveHall = 认知类型层 —— 三者共用词根但互不相干。
+standalone slug(无 `/`)自成 hall(既是 hall 又是其下唯一 room,与 majorOf 语义
+一致)。破坏性操作走新 RPC `room-admin`(merge/rename/retire;memoryMutate 单门,
+merge/rename 保留 dryRun 预览→确认实跑,与 §4 同一编排);收编自生长走
+`room-register source=grown`。契约键 47 → 48。

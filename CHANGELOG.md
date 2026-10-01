@@ -17,13 +17,27 @@
   - **建议状态(`longtask-hint-get`)+ 浮动球(`client/src/longtask-fab.ts`)**:ego-browser 式 vanilla overlay(FAB+面板,拖拽/位置持久化/视口夹紧),**建议不阻断**——仅当「上下文占用达 `contextThresholdPct`」或「todo 漂移达 `driftThreshold`」且长任务未开启时点亮呼吸光晕;面板内:长任务开关(临时,per-session,**不带 mode**——切开关不重置用户档位)、占用/漂移进度条、手动尾部压缩按钮(长任务开启才可用)、任务计数。轮询忙 2s/闲 5s,RPC 失败静默;座位契约不变(settings.section 恰一个,body 单例不占任何座位)。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
 
+## [0.20.0-beta.7] — 2026-10-02
+
+> Room 分类管理第三船(**管理面板档**):专用「Hall」标签页,hall(大类)+ room(小类)一起管理 —— 手动查看/管理 Room 从此不用借道 agent 工具。
+
+### 新增
+
+- **「Hall」管理标签页**(「场景」之后):hall 分组树 —— `major/minor` 归其前缀大类,standalone slug 自成 hall(既是 hall 又是其下唯一 room);hall 头行聚合计数 + 一键「+小类」(预填 `hall/`);room 行展示 ⭐预注册/source/状态/别名/计数,retired 灰化。UI 术语 Hall/Room 为分组视图,与 Wing(`metadata.hall` 域)及认知 hall 无关(ADR-0020 §7 消歧)。
+- **全操作 UI 入口(高权限 memoryMutate 门)**:两级 slug 注册(受控表单,placeholder `dsh-plugin` / `dsh-plugin/merge`);自生长 slug **收编**(`source=grown`);**改名/合并**走新 RPC —— dryRun 预览(影响条数+样例)→「确认执行」实跑,与 memory_room_admin 工具同一编排(执行前自动备份 + 完成入队场景重算);退役/恢复一次点击(恢复不二次确认,退役确认);每 room 记录清单 CSV 导出;词表/孤儿导出收拢进本页;合并/改名带「反刍空闲时执行」提示。
+- **新端点 `dsh-memory/room-admin`**(merge/rename/retire;memoryMutate 门,端点侧抛错语义):契约键 47 → 48。`rooms-export` 增 `kind='records'`(按 Room 导出记录清单,`tag` 必传);`room-register` 增可选 `source`(收编传 `grown`)。
+- 记忆 Tab Room 块瘦身:管理子面板移除(孤儿导出上移头部行),提示指向 Hall 页。
+
+### 修复
+
+- `rooms-export` records 分支 kind 类型收窄(TS2322)与历史乱码报错文案;CHANGELOG beta.1-beta.5 重复标题行修复。
 ## [0.20.0-beta.6] — 2026-10-01
 
 ### 修复
 
 - **标注器词表接入注册表(beta.5 漏项补齐)**:beta.5 的 merge/rename/retire 已落,但候选标注器(`annotateOrphanCandidates`)的词表仍是纯自生长聚合——预注册的 Room 根本进不了候选。现 OrphanAnnotateIO 带 registry:合并词表 = 注册表条目排前(count=0,附 label/description)+ 自生长目录,封顶 120;ruminate 与 memory_room_admin annotate 两条路径都传参。**预注册 Room 从此真实影响候选标注**。
 
-## [0.20.0-beta.5] — 2026-10-01## [0.20.0-beta.5] — 2026-10-01
+## [0.20.0-beta.5] — 2026-10-01
 
 > Room 分类管理第二船(**破坏性面**)。dryRun 默认 true——merge/rename 先预览影响面,确认后才实跑;执行前自动备份到 `rooms-merge-backups/`。
 
@@ -35,7 +49,7 @@
 - **面板 Room 管理子面板**(高权限开启后出现):注册表单(slug/名称/说明,走新 RPC `room-register`)、孤儿清单导出;合并/退役建议走 agent 工具(dryRun 预览更详细)。
 - 端点面 46 → 47(`room-register`)。
 
-## [0.20.0-beta.4] — 2026-10-01## [0.20.0-beta.4] — 2026-10-01
+## [0.20.0-beta.4] — 2026-10-01
 
 > Room 分类管理第一船(**零漂移面**):注册表空 = 与 beta.3 行为逐字一致。merge/rename/retire 破坏性面将随 beta.5(dryRun 默认 true 保留一版)。
 
@@ -46,13 +60,13 @@
 - **工具 `memory_room_admin`**(action=list|register):list 列注册表+自生长总览;register 预注册 Room(高权限门,幂等补全)——配合 `memory_room_review` 的逐个复查,agent 有了「注册→预标记→逐个确认」的完整分类管理入口。
 - 客户端:Room chip 带「预注册/自生长」来源标示;孤儿 chip 带待复查语义。
 
-## [0.20.0-beta.3] — 2026-10-01## [0.20.0-beta.3] — 2026-10-01
+## [0.20.0-beta.3] — 2026-10-01
 
 ### 新增
 
 - **记录面板 Room 分类改进**:①展开/收拢(收拢 = 头部 + 前 8 个高频 Room 预览,开合状态持久化);②展开态全量分页(每页 40,◀▶ 翻页),替代原先「仅显示前 40」的硬截断;③**孤儿记忆筛选**——首位「无绑定 · N」chip 只看没有任何 Room 绑定的记忆(`list-records` 新增 `untagged` 过滤通道,`rooms-get` 新增 `orphanCount`,与 Room 计数同口径);④筛选条件即时可见 + 一键清除。检索路径同款孤儿过滤。
 
-## [0.20.0-beta.2] — 2026-10-01## [0.20.0-beta.2] — 2026-10-01
+## [0.20.0-beta.2] — 2026-10-01
 
 > dsh-0.2.0-beta 渠道 +1:反刍完整 context 优化(repo 软围栏/场景按项目迁移/闭环)。与 longtask(见 beta.1)同包,真机反馈合并收口。
 
@@ -62,7 +76,7 @@
 - **场景按项目迁移(L2 repo 感知 + 重聚类)**:L2 整合 prompt 可见 repoKeyName/applicability——this-repo 记录不再并入跨项目场景;`scene_recluster_jobs` 作业队列 + ruminate 空闲档消费器(快照→删摘要投影→失败整体回滚,零新 LLM 通道);repo 归属修补后自动按 repoKey 反查受影响场景入队重算。
 - **压缩闭环**:尾部压缩入队成功后 10 分钟去抖触发一次反刍(冲刷→L2→L3→relabel→重聚类消费),修掉「压缩记录滞留蒸馏桶」的断点。
 
-## [0.20.0-beta.1] — 2026-10-01## [0.20.0-beta.1] — 2026-10-01
+## [0.20.0-beta.1] — 2026-10-01
 
 > dsh-0.2.0 线首个 beta 渠道发布(`dsh-0.2.0-beta` tag):长任务模式真机预览。除下述内容外,本版同时携带此前 parked 于 `[Unreleased]` 的全部 main 改动(激活槽位/来源锚点/证据读取器/记忆退场闭环/三轴冲突等)——它们已随 0.1.7 线发布,但 main 线尚无对应版本号。
 
