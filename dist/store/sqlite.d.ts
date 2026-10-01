@@ -400,6 +400,8 @@ export declare class MemoryDb {
         halls?: readonly string[];
         /** Room 过滤(metadata.tags 含该 slug)。 */
         tag?: string;
+        /** 孤儿记忆筛选(true = 只列没有 Room 的记录;与 tag 互斥,tag 优先)。 */
+        untagged?: boolean;
         workspaceId?: string;
         /**
          * 退场(软删)筛查:三态。
@@ -445,6 +447,8 @@ export declare class MemoryDb {
         room: string;
         count: number;
     }>;
+    /** 孤儿记忆计数:没有任何 Room(tags 为空/缺失)的记录条数(含已退场,与 l1RoomCounts 同口径)。 */
+    untaggedL1Count(): number;
     /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */
     wingL1Counts(): {
         counts: Record<string, number>;

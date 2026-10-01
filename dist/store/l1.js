@@ -34,6 +34,10 @@ export class L1Store {
     decayHalfLifeDays;
     /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
     graphLaneProvider;
+    /** 孤儿记忆计数(没有任何 Room 的记录;rooms-get 面板「无绑定」chip 用)。 */
+    untaggedL1Count() {
+        return this.db.untaggedL1Count();
+    }
     /** Room 计数缓存(见 `listRooms()`:tags 仅随反刍变化,不必每次敲库)。 */
     roomCache = null;
     constructor(dataDir, db, embed = new NoopEmbeddingService(), strategy = 'hybrid', logger, 

@@ -14,6 +14,8 @@ interface QueryConds {
   halls: string[];
   /** Room 过滤(自生长 slug tag;空 = 不过滤)。 */
   tag: string;
+  /** 孤儿记忆:只看没有任何 Room 绑定的记录(与 tag 互斥)。 */
+  untagged: boolean;
   /** 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场。 */
   retired: '' | 'active' | 'retired';
 }
@@ -42,6 +44,9 @@ const TYPE_CHOICES = [
 /** records-delete 单次上限（契约：ids ≤200）。 */
 const DELETE_LIMIT = 200;
 
+/** Room 分类展开态的分页大小(收拢态固定预览前 8 个)。 */
+const ROOM_PAGE_SIZE = 40;
+
 export function RecordsTab(props: { rpc: RpcFn }) {
   const rpc = props.rpc;
   const limit = 50;
@@ -66,6 +71,19 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [hallFilter, setHallFilter] = useState<string[]>([]);
   // Room 过滤(标签自生长分类):点分类 chip 即按该 tag 筛选记录
   const [tagFilter, setTagFilter] = useState('');
+  // 孤儿记忆(无 Room 绑定)筛选:与 tagFilter 互斥
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
+  // Room 区块展开/收拢(持久化;收拢 = 只留头部 + 首行预览)
+  const [roomsOpen, setRoomsOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem('dsh.memory.rooms.open') === '1';
+    } catch {
+      return false;
+    }
+  });
+  // Room 分页(展开态;每页 40)
+  const [roomPage, setRoomPage] = useState(0);
+  const [orphanCount, setOrphanCount] = useState(0);
   // 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场
   const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
   const [rooms, setRooms] = useState<RoomCount[]>([]);
@@ -73,7 +91,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [wingCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
 
   // 上一次实际生效的查询条件（「加载更多」按它续页）
-  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [], tag: '', retired: '' });
+  const [last, setLast] = useState<QueryConds>({ query: '', type: '', scene: '', halls: [], tag: '', untagged: false, retired: '' });
 
   // 请求序号：快速搜索/翻页时旧响应过期即弃，避免慢响应覆盖新结果
   const seqRef = useRef(0);
@@ -89,6 +107,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       if (conds.scene) payload.scene = conds.scene;
       if (conds.halls.length > 0) payload.halls = conds.halls;
       if (conds.tag) payload.tag = conds.tag;
+      if (conds.untagged) payload.untagged = true;
       const retiredSel = retiredSelOf(conds.retired);
       if (retiredSel !== undefined) payload.retired = retiredSel;
       rpc('dsh-memory/list-records', payload)
@@ -119,7 +138,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   );
 
   const search = () => {
-    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: retiredFilter };
+    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, untagged: untaggedOnly, retired: retiredFilter };
     setLast(conds);
     fetchPage(conds, 0, false);
   };
@@ -127,7 +146,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   /** 切换退场筛查(全部/仅活跃/仅退场)并立即重查第一页。 */
   const applyRetiredFilter = (next: '' | 'active' | 'retired') => {
     setRetiredFilter(next);
-    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: next };
+    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, untagged: untaggedOnly, retired: next };
     setLast(conds);
     fetchPage(conds, 0, false);
   };
@@ -136,7 +155,10 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const loadRooms = useCallback(() => {
     rpc('dsh-memory/rooms-get', {})
       .then((r) => {
-        if (r && r.ok) setRooms(r.value.rooms ?? []);
+        if (r && r.ok) {
+          setRooms(r.value.rooms ?? []);
+          setOrphanCount(r.value.orphanCount ?? 0);
+        }
       })
       .catch(() => {
         /* 端点不可用时静默:Room 区块降级为不显示,不影响列表主功能 */
@@ -144,7 +166,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   }, [rpc]);
 
   useEffect(() => {
-    fetchPage({ query: '', type: '', scene: '', halls: [], tag: '', retired: '' }, 0, false);
+    fetchPage({ query: '', type: '', scene: '', halls: [], tag: '', untagged: false, retired: '' }, 0, false);
     loadRooms();
   }, [fetchPage, loadRooms]);
 
@@ -334,45 +356,127 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           {hiPriv ? '高权限：开' : '高权限：关'}
         </NButton>
       </div>
-      {/* ── Room 分类(标签自生长):点 chip 按该 tag 筛选,再点取消 ── */}
-      {rooms.length > 0 ? (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
-          <span style={S.muted}>Room 分类</span>
-          {rooms.slice(0, 40).map((r) => {
-            const on = tagFilter === r.room;
-            return (
+      {/* ── Room 分类(标签自生长):展开/收拢 + 分页 + 孤儿(无绑定)筛选 ── */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <button
+            type="button"
+            title={roomsOpen ? '收拢 Room 分类' : '展开 Room 分类(全部分页浏览)'}
+            onClick={() => {
+              const next = !roomsOpen;
+              setRoomsOpen(next);
+              setRoomPage(0);
+              try {
+                window.localStorage.setItem('dsh.memory.rooms.open', next ? '1' : '0');
+              } catch {
+                /* 存储不可用 = 会话内仍可切换 */
+              }
+            }}
+            style={{
+              cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
+              border: '1px solid var(--dsh-mem-border)', background: 'transparent',
+              color: 'var(--dsh-mem-text-2)',
+            }}
+          >
+            {roomsOpen ? '▾' : '▸'} Room 分类 · 共 {rooms.length}
+          </button>
+          {/* 孤儿 chip:与 Room chip 互斥的筛选入口 */}
+          <button
+            type="button"
+            title={untaggedOnly ? '取消孤儿筛选' : '只看没有任何 Room 绑定的记忆'}
+            onClick={() => {
+              const next = !untaggedOnly;
+              setUntaggedOnly(next);
+              if (next) setTagFilter('');
+              const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next ? '' : tagFilter, untagged: next, retired: retiredFilter };
+              setLast(conds);
+              fetchPage(conds, 0, false);
+            }}
+            style={{
+              cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 999,
+              border: untaggedOnly ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+              background: untaggedOnly ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+              color: untaggedOnly ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+            }}
+          >
+            {'无绑定 · ' + orphanCount}
+          </button>
+          {(tagFilter || untaggedOnly) && (
+            <span style={S.muted}>
+              筛选中:{untaggedOnly ? '无绑定' : tagFilter}
               <button
-                key={r.room}
                 type="button"
-                title={on ? '取消按该 Room 筛选' : '按该 Room 筛选记录'}
+                title="清除 Room/孤儿筛选"
                 onClick={() => {
-                  const next = on ? '' : r.room;
-                  setTagFilter(next);
-                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, retired: retiredFilter };
+                  setTagFilter('');
+                  setUntaggedOnly(false);
+                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: '', untagged: false, retired: retiredFilter };
                   setLast(conds);
                   fetchPage(conds, 0, false);
                 }}
-                style={{
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  padding: '2px 8px',
-                  borderRadius: 999,
-                  border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
-                  background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
-                  color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
-                }}
+                style={{ cursor: 'pointer', marginLeft: 6, background: 'transparent', border: 'none', color: 'var(--dsh-mem-accent)', fontSize: 12 }}
               >
-                {r.room + ' · ' + r.count}
+                ×清除
               </button>
-            );
-          })}
-          {rooms.length > 40 ? <span style={S.muted}>{'（仅显示前 40 / 共 ' + rooms.length + '）'}</span> : null}
+            </span>
+          )}
         </div>
-      ) : (
-        <div style={{ ...S.muted, marginBottom: 10 }}>
-          Room 分类：暂无（由反刍涌现的标签自动生成，无需手工建立）
-        </div>
-      )}
+        {rooms.length > 0 ? (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: roomsOpen ? 6 : 0 }}>
+              {(roomsOpen ? rooms.slice(roomPage * ROOM_PAGE_SIZE, (roomPage + 1) * ROOM_PAGE_SIZE) : rooms.slice(0, 8)).map((r) => {
+                const on = tagFilter === r.room && !untaggedOnly;
+                return (
+                  <button
+                    key={r.room}
+                    type="button"
+                    title={on ? '取消按该 Room 筛选' : '按该 Room 筛选记录'}
+                    onClick={() => {
+                      const next = on ? '' : r.room;
+                      setTagFilter(next);
+                      setUntaggedOnly(false);
+                      const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, untagged: false, retired: retiredFilter };
+                      setLast(conds);
+                      fetchPage(conds, 0, false);
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+                      background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+                      color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+                    }}
+                  >
+                    {r.room + ' · ' + r.count}
+                  </button>
+                );
+              })}
+              {!roomsOpen && rooms.length > 8 ? (
+                <span style={S.muted}>(收拢中,共 {rooms.length} 个)</span>
+              ) : null}
+            </div>
+            {roomsOpen && rooms.length > ROOM_PAGE_SIZE ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={S.muted}>
+                  第 {roomPage + 1} / {Math.ceil(rooms.length / ROOM_PAGE_SIZE)} 页(共 {rooms.length})
+                </span>
+                <button type="button" title="上一页" disabled={roomPage === 0}
+                  onClick={() => setRoomPage((p) => Math.max(0, p - 1))}
+                  style={{ cursor: roomPage === 0 ? 'default' : 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--dsh-mem-border)', background: 'transparent', color: 'var(--dsh-mem-text-2)' }}
+                >◀</button>
+                <button type="button" title="下一页" disabled={(roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length}
+                  onClick={() => setRoomPage((p) => ((p + 1) * ROOM_PAGE_SIZE < rooms.length ? p + 1 : p))}
+                  style={{ cursor: (roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length ? 'default' : 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--dsh-mem-border)', background: 'transparent', color: 'var(--dsh-mem-text-2)' }}
+                >▶</button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div style={S.muted}>Room 分类:暂无(由反刍涌现的标签自动生成,无需手工建立)</div>
+        )}
+      </div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>{loading ? '加载中…' : countText}</span>
         {/* 退场筛查:三态分开看——软删记录不隐藏(可恢复),但混排时可一键分流 */}

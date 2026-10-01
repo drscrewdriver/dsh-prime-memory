@@ -88,6 +88,11 @@ export class L1Store {
   private readonly decayHalfLifeDays: number;
   /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
   private readonly graphLaneProvider?: GraphLaneProvider;
+  /** 孤儿记忆计数(没有任何 Room 的记录;rooms-get 面板「无绑定」chip 用)。 */
+  untaggedL1Count(): number {
+    return this.db.untaggedL1Count();
+  }
+
   /** Room 计数缓存(见 `listRooms()`:tags 仅随反刍变化,不必每次敲库)。 */
   private roomCache: { at: number; list: RoomCount[] } | null = null;
 
@@ -698,6 +703,8 @@ export class L1Store {
     halls?: readonly string[];
     /** Room 过滤(metadata.tags 含该 slug)。 */
     tag?: string;
+    /** 孤儿记忆筛选(true = 只列没有 Room 的记录;与 tag 互斥,tag 优先)。 */
+    untagged?: boolean;
     workspaceId?: string;
     /** 退场筛查:三态(`undefined` 全部 / `false` 仅活跃 / `true` 仅已退场)。 */
     retired?: boolean;

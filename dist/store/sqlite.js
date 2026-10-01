@@ -1601,6 +1601,11 @@ export class MemoryDb {
                 where.push(`EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END, '$.tags') j WHERE j.value = ?)`);
                 params.push(opts.tag);
             }
+            else if (opts.untagged) {
+                // 孤儿记忆:没有任何 Room(tags 数组缺失/为空/字段非法)。与 room 计数同一
+                // json_valid 守卫口径;与 l1RoomCounts() 计数互补(rooms 计数 + 孤儿数 = 全量)。
+                where.push(`NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(metadata_json) THEN metadata_json ELSE '{}' END, '$.tags'))`);
+            }
             // 退场筛查(三态,见 opts.retired 注释):与 listRetiredL1 同一判据,保证
             // 「仅退场」视图与「已退场」区看到同一批行。
             if (opts.retired === false) {
@@ -1714,6 +1719,21 @@ export class MemoryDb {
         }
         catch {
             return [];
+        }
+    }
+    /** 孤儿记忆计数:没有任何 Room(tags 为空/缺失)的记录条数(含已退场,与 l1RoomCounts 同口径)。 */
+    untaggedL1Count() {
+        if (this.degraded)
+            return 0;
+        try {
+            const row = this.db
+                .prepare(`SELECT COUNT(*) AS n FROM l1_records r
+           WHERE NOT EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(r.metadata_json) THEN r.metadata_json ELSE '{}' END, '$.tags'))`)
+                .get();
+            return Number(row?.n ?? 0);
+        }
+        catch {
+            return 0;
         }
     }
     /** Hall 域计数(八边形角数据源):按 metadata.hall 分组计数 + 未打标行数。失败返回空。 */

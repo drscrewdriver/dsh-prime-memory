@@ -561,6 +561,8 @@ export interface RoomsGetResponse {
     rooms: RoomCount[];
     /** Room 总数(= rooms.length,冗余只为前端少写一次 .length)。 */
     total: number;
+    /** 孤儿记忆数:没有任何 Room(tags 为空/缺失)的记录条数(与 rooms 同口径含已退场)。 */
+    orphanCount: number;
 }
 /** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */
 export interface WingBackfillResponse {
@@ -700,6 +702,11 @@ export interface ListRecordsRequest {
      * Room 由 tags 派生(自生长),故这里传的是**具体 tag 名**而非枚举 id。
      */
     tag?: string;
+    /**
+     * 孤儿记忆筛选:true = 只列**没有任何 Room(tags 为空/缺失)**的记录。
+     * 与 `tag` 互斥;同传时 `tag` 优先(客户端保证不同传)。
+     */
+    untagged?: boolean;
     /**
      * 退场(软删)筛查:三态。省略 = 全部(活跃+已退场混排,靠 `UiRecord.retired`
      * 徽标区分);`false` = 仅活跃;`true` = 仅已退场。

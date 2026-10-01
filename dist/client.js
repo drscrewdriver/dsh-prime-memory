@@ -3268,6 +3268,7 @@ var __defProp = Object.defineProperty;
 		  "work_artifact"
 		];
 		var DELETE_LIMIT = 200;
+		var ROOM_PAGE_SIZE = 40;
 		function RecordsTab(props) {
 		  const rpc = props.rpc;
 		  const limit = 50;
@@ -3287,10 +3288,20 @@ var __defProp = Object.defineProperty;
 		  const [sceneFilter, setSceneFilter] = (0, import_react15.useState)("");
 		  const [hallFilter, setHallFilter] = (0, import_react15.useState)([]);
 		  const [tagFilter, setTagFilter] = (0, import_react15.useState)("");
+		  const [untaggedOnly, setUntaggedOnly] = (0, import_react15.useState)(false);
+		  const [roomsOpen, setRoomsOpen] = (0, import_react15.useState)(() => {
+		    try {
+		      return window.localStorage.getItem("dsh.memory.rooms.open") === "1";
+		    } catch {
+		      return false;
+		    }
+		  });
+		  const [roomPage, setRoomPage] = (0, import_react15.useState)(0);
+		  const [orphanCount, setOrphanCount] = (0, import_react15.useState)(0);
 		  const [retiredFilter, setRetiredFilter] = (0, import_react15.useState)("");
 		  const [rooms, setRooms] = (0, import_react15.useState)([]);
 		  const [wingCatalog, setHallCatalog] = (0, import_react15.useState)(null);
-		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", halls: [], tag: "", retired: "" });
+		  const [last, setLast] = (0, import_react15.useState)({ query: "", type: "", scene: "", halls: [], tag: "", untagged: false, retired: "" });
 		  const seqRef = (0, import_react15.useRef)(0);
 		  const fetchPage = (0, import_react15.useCallback)(
 		    (conds, offset, append) => {
@@ -3303,6 +3314,7 @@ var __defProp = Object.defineProperty;
 		      if (conds.scene) payload.scene = conds.scene;
 		      if (conds.halls.length > 0) payload.halls = conds.halls;
 		      if (conds.tag) payload.tag = conds.tag;
+		      if (conds.untagged) payload.untagged = true;
 		      const retiredSel = retiredSelOf(conds.retired);
 		      if (retiredSel !== void 0) payload.retired = retiredSel;
 		      rpc("dsh-memory/list-records", payload).then((r) => {
@@ -3329,24 +3341,27 @@ var __defProp = Object.defineProperty;
 		    [rpc]
 		  );
 		  const search = () => {
-		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: retiredFilter };
+		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, untagged: untaggedOnly, retired: retiredFilter };
 		    setLast(conds);
 		    fetchPage(conds, 0, false);
 		  };
 		  const applyRetiredFilter = (next) => {
 		    setRetiredFilter(next);
-		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, retired: next };
+		    const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: tagFilter, untagged: untaggedOnly, retired: next };
 		    setLast(conds);
 		    fetchPage(conds, 0, false);
 		  };
 		  const loadRooms = (0, import_react15.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
-		      if (r && r.ok) setRooms(r.value.rooms ?? []);
+		      if (r && r.ok) {
+		        setRooms(r.value.rooms ?? []);
+		        setOrphanCount(r.value.orphanCount ?? 0);
+		      }
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
 		  (0, import_react15.useEffect)(() => {
-		    fetchPage({ query: "", type: "", scene: "", halls: [], tag: "", retired: "" }, 0, false);
+		    fetchPage({ query: "", type: "", scene: "", halls: [], tag: "", untagged: false, retired: "" }, 0, false);
 		    loadRooms();
 		  }, [fetchPage, loadRooms]);
 		  const loadHiPriv = (0, import_react15.useCallback)(() => {
@@ -3515,19 +3530,48 @@ var __defProp = Object.defineProperty;
 		        }
 		      )
 		    ] }),
-		    rooms.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "Room 分类" }),
-		      rooms.slice(0, 40).map((r) => {
-		        const on = tagFilter === r.room;
-		        return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { marginBottom: 10 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
 		          "button",
 		          {
 		            type: "button",
-		            title: on ? "取消按该 Room 筛选" : "按该 Room 筛选记录",
+		            title: roomsOpen ? "收拢 Room 分类" : "展开 Room 分类(全部分页浏览)",
 		            onClick: () => {
-		              const next = on ? "" : r.room;
-		              setTagFilter(next);
-		              const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, retired: retiredFilter };
+		              const next = !roomsOpen;
+		              setRoomsOpen(next);
+		              setRoomPage(0);
+		              try {
+		                window.localStorage.setItem("dsh.memory.rooms.open", next ? "1" : "0");
+		              } catch {
+		              }
+		            },
+		            style: {
+		              cursor: "pointer",
+		              fontSize: 12,
+		              padding: "2px 8px",
+		              borderRadius: 6,
+		              border: "1px solid var(--dsh-mem-border)",
+		              background: "transparent",
+		              color: "var(--dsh-mem-text-2)"
+		            },
+		            children: [
+		              roomsOpen ? "▾" : "▸",
+		              " Room 分类 · 共 ",
+		              rooms.length
+		            ]
+		          }
+		        ),
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		          "button",
+		          {
+		            type: "button",
+		            title: untaggedOnly ? "取消孤儿筛选" : "只看没有任何 Room 绑定的记忆",
+		            onClick: () => {
+		              const next = !untaggedOnly;
+		              setUntaggedOnly(next);
+		              if (next) setTagFilter("");
+		              const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next ? "" : tagFilter, untagged: next, retired: retiredFilter };
 		              setLast(conds);
 		              fetchPage(conds, 0, false);
 		            },
@@ -3536,17 +3580,106 @@ var __defProp = Object.defineProperty;
 		              fontSize: 12,
 		              padding: "2px 8px",
 		              borderRadius: 999,
-		              border: on ? "1px solid var(--dsh-mem-accent)" : "1px solid var(--dsh-mem-border)",
-		              background: on ? "var(--dsh-mem-bg-inset)" : "transparent",
-		              color: on ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-2)"
+		              border: untaggedOnly ? "1px solid var(--dsh-mem-accent)" : "1px solid var(--dsh-mem-border)",
+		              background: untaggedOnly ? "var(--dsh-mem-bg-inset)" : "transparent",
+		              color: untaggedOnly ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-2)"
 		            },
-		            children: r.room + " · " + r.count
-		          },
-		          r.room
-		        );
-		      }),
-		      rooms.length > 40 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "（仅显示前 40 / 共 " + rooms.length + "）" }) : null
-		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: "Room 分类：暂无（由反刍涌现的标签自动生成，无需手工建立）" }),
+		            children: "无绑定 · " + orphanCount
+		          }
+		        ),
+		        (tagFilter || untaggedOnly) && /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { style: S.muted, children: [
+		          "筛选中:",
+		          untaggedOnly ? "无绑定" : tagFilter,
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		            "button",
+		            {
+		              type: "button",
+		              title: "清除 Room/孤儿筛选",
+		              onClick: () => {
+		                setTagFilter("");
+		                setUntaggedOnly(false);
+		                const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: "", untagged: false, retired: retiredFilter };
+		                setLast(conds);
+		                fetchPage(conds, 0, false);
+		              },
+		              style: { cursor: "pointer", marginLeft: 6, background: "transparent", border: "none", color: "var(--dsh-mem-accent)", fontSize: 12 },
+		              children: "×清除"
+		            }
+		          )
+		        ] })
+		      ] }),
+		      rooms.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(import_jsx_runtime15.Fragment, { children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: roomsOpen ? 6 : 0 }, children: [
+		          (roomsOpen ? rooms.slice(roomPage * ROOM_PAGE_SIZE, (roomPage + 1) * ROOM_PAGE_SIZE) : rooms.slice(0, 8)).map((r) => {
+		            const on = tagFilter === r.room && !untaggedOnly;
+		            return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		              "button",
+		              {
+		                type: "button",
+		                title: on ? "取消按该 Room 筛选" : "按该 Room 筛选记录",
+		                onClick: () => {
+		                  const next = on ? "" : r.room;
+		                  setTagFilter(next);
+		                  setUntaggedOnly(false);
+		                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, untagged: false, retired: retiredFilter };
+		                  setLast(conds);
+		                  fetchPage(conds, 0, false);
+		                },
+		                style: {
+		                  cursor: "pointer",
+		                  fontSize: 12,
+		                  padding: "2px 8px",
+		                  borderRadius: 999,
+		                  border: on ? "1px solid var(--dsh-mem-accent)" : "1px solid var(--dsh-mem-border)",
+		                  background: on ? "var(--dsh-mem-bg-inset)" : "transparent",
+		                  color: on ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-2)"
+		                },
+		                children: r.room + " · " + r.count
+		              },
+		              r.room
+		            );
+		          }),
+		          !roomsOpen && rooms.length > 8 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { style: S.muted, children: [
+		            "(收拢中,共 ",
+		            rooms.length,
+		            " 个)"
+		          ] }) : null
+		        ] }),
+		        roomsOpen && rooms.length > ROOM_PAGE_SIZE ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10 }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { style: S.muted, children: [
+		            "第 ",
+		            roomPage + 1,
+		            " / ",
+		            Math.ceil(rooms.length / ROOM_PAGE_SIZE),
+		            " 页(共 ",
+		            rooms.length,
+		            ")"
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		            "button",
+		            {
+		              type: "button",
+		              title: "上一页",
+		              disabled: roomPage === 0,
+		              onClick: () => setRoomPage((p) => Math.max(0, p - 1)),
+		              style: { cursor: roomPage === 0 ? "default" : "pointer", fontSize: 12, padding: "2px 8px", borderRadius: 6, border: "1px solid var(--dsh-mem-border)", background: "transparent", color: "var(--dsh-mem-text-2)" },
+		              children: "◀"
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		            "button",
+		            {
+		              type: "button",
+		              title: "下一页",
+		              disabled: (roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length,
+		              onClick: () => setRoomPage((p) => (p + 1) * ROOM_PAGE_SIZE < rooms.length ? p + 1 : p),
+		              style: { cursor: (roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length ? "default" : "pointer", fontSize: 12, padding: "2px 8px", borderRadius: 6, border: "1px solid var(--dsh-mem-border)", background: "transparent", color: "var(--dsh-mem-text-2)" },
+		              children: "▶"
+		            }
+		          )
+		        ] }) : null
+		      ] }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.muted, children: "Room 分类:暂无(由反刍涌现的标签自动生成,无需手工建立)" })
+		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: loading ? "加载中…" : countText }),
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "退场筛查" }),
