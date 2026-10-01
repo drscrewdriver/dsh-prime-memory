@@ -10,11 +10,12 @@
 
 ### 新增
 
-- **长任务模式(`longTask.*`,默认关)——「长跑会话」的三件套:上下文计量、任务参考、尾部压缩,以及一个非阻断的浮动建议面板。**
+- **长任务模式(`longTask.*`,默认关)——「长跑会话」的三件套:上下文计量、任务参考、尾部压缩。**
   - **上下文使用量(`store/context-usage.ts`)**:监听 `assistant/message` 官方 `usage` 的输入侧(input + cache 读/写),取**最近值**语义(每轮输入侧已含全部历史,不累加);`compaction/summary` 后归零重计。纯内存 per-session Map——重启后首条 assistant 消息即可重建,持久化只会让过期样本诈尸。
   - **todo 参考(`store/todo-ref.ts` + `hooks/long-task.ts`)**:监听宿主结构化 `todo/write` 事件(全量快照;包类型到 0.2.0-rc.1 未声明,插件以 declare module 自扩充——同 §E 的 dsh-compaction 先例)。**仅长任务会话**:快照刷进一张 pinned `todo` 槽位(`SlotStore.refreshByTitle` 受管刷新——同一主体反复写必须原地更新,否则 ≤8 槽上限里堆出关闭槽位尾迹),经 slot-recall 常驻注入——压缩把旧上下文逐出后,任务北极星仍在。相邻快照做词面 Jaccard 漂移检测(同快照重复写入不稀释信号);body ≤512 字节,截断明示。
   - **尾部 turn 压缩(`longtask-compress-tail` 端点 + `compressTailTurns`)**:把(压缩水位线, 最新已捕获轮] 内最近 N 轮立即 `enqueue(force:true)` 蒸馏入记忆——立即把尾部对话落成可检索记忆,而不是等蒸馏阈值。水位线(`SessionModeStore.lastTailCompressedTurn`)只前进,重复按压天然幂等;off 档完全隐身;无锚点老数据只在首次压缩(水位线 0)时纳入——宁少收不重蒸。
-  - **建议状态(`longtask-hint-get`)+ 浮动球(`client/src/longtask-fab.ts`)**:ego-browser 式 vanilla overlay(FAB+面板,拖拽/位置持久化/视口夹紧),**建议不阻断**——仅当「上下文占用达 `contextThresholdPct`」或「todo 漂移达 `driftThreshold`」且长任务未开启时点亮呼吸光晕;面板内:长任务开关(临时,per-session,**不带 mode**——切开关不重置用户档位)、占用/漂移进度条、手动尾部压缩按钮(长任务开启才可用)、任务计数。轮询忙 2s/闲 5s,RPC 失败静默;座位契约不变(settings.section 恰一个,body 单例不占任何座位)。
+  - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
+  - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
 
 ## [0.20.0-beta.7] — 2026-10-02
