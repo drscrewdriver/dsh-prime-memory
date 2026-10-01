@@ -101,7 +101,7 @@ describe('memory tools', () => {
     return { db, l1, l0, scenes, persona };
   }
 
-  it('registers the nine retrieval/mutation tools plus the three ruminate tools', async () => {
+  it('registers the retrieval/mutation tools, the three ruminate tools, and memory_room_review', async () => {
     const stores = await setupStores();
     const h = harness();
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
