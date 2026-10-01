@@ -19,6 +19,7 @@
     "tests/rooms-registry.test.ts",
     "tests/room-merge.test.ts",
     "tests/room-admin-endpoint.test.ts",
+    "tests/hall-room.integration.test.ts",
     "tests/rpc.test.ts",
     "tests/redact-wiring.test.ts",
     "tests/pipeline.test.ts",

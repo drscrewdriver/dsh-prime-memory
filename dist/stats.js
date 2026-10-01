@@ -471,16 +471,17 @@ export async function handleEndpoint(endpoint, payload, deps) {
         case 'dsh-memory/rooms-get': {
             const rooms = stores.l1.listRooms();
             // 端点层合并注册表(Agent A 设计):注册表 active 条目 count=0 补齐并带
-            // source/label;自生长条目标 source='grown'。不动 listRooms() 的缓存语义。
+            // source/label(source 用条目真实来源——收编 grown ≠ 预注册,⭐角标靠它区分);
+            // 自生长条目标 source='grown'。不动 listRooms() 的缓存语义。
             const merged = rooms.map((r) => ({ ...r, source: 'grown' }));
             const registry = roomRegistry?.listActive() ?? [];
             for (const e of registry) {
                 const idx = merged.findIndex((r) => r.room === e.slug);
                 if (idx === -1) {
-                    merged.push({ room: e.slug, count: 0, source: 'pre-registered', label: e.label });
+                    merged.push({ room: e.slug, count: 0, source: e.source, label: e.label });
                 }
                 else {
-                    merged[idx] = { ...merged[idx], source: 'pre-registered', label: e.label ?? merged[idx].label };
+                    merged[idx] = { ...merged[idx], source: e.source, label: e.label ?? merged[idx].label };
                 }
             }
             const v = {

@@ -17,6 +17,17 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.11] — 2026-10-02
+
+> Hall·Room **集成测试**入库(`tests/hall-room.integration.test.ts`:HTTP 面全链 × 真实存储的用户旅程,9 用例),集成首跑即抓到一个单测盲区并修复。
+
+### 修复
+
+- **rooms-get 合并视图 source 硬编码 `pre-registered`**(beta.4 引入):注册表条目并入计数列表时来源写死,收编(source=grown)的条目在面板计数 chips 上恒戴 ⭐ 预注册角标——身份失真。现用条目真实来源(⭐ 只归预注册;收编显示 grown)。单测盲区成因:rooms-registry 单测只测 store 层,端点合并行无人断言 grown 条目的 source。
+
+### 测试
+
+- `hall-room.integration.test.ts`:空表自生长计数 → 两级注册/非法 slug 拒绝 → 收编 → 导出三 kind → merge dryRun 零写入→实跑(备份落盘/退场行重写/metadata 保全/场景重算入队 source='room-merge')→ rename 别名 → retire/恢复 → 大类 200 上限+小类不占额 → 损坏只读降级红线(rooms-get 不阻塞、磁盘不回写)。
 ## [0.20.0-beta.10] — 2026-10-02
 
 > **longtask(长任务模式)全量撤除**:该族功能的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——beta.8 撤浮动球、本版撤完剩余后端。pm 回归纯记忆域。将来若需要「立即蒸馏尾部」等能力,以 pm 本位重新设计再立项。
