@@ -78,12 +78,18 @@ ${CONTENT_IS_DATA_CLAUSE}
         "content": "完整、独立的记忆陈述（按对应类型的句式要求）",
         "type": "persona|episodic|instruction",
         "priority": 80,
+        "applicability": "cross-project",
         "source_message_ids": ["消息ID_1", "消息ID_2"],
         "metadata": {}
       }
     ]
   }
 ]
+
+applicability 字段说明（记忆的适用范围，治理用）：
+- "cross-project"：跨项目通用（个人偏好、通用技能、行业惯例等，换一个项目仍然成立）
+- "this-repo"：绑定当前项目/仓库（项目特定配置、命名约定、内网地址等）
+- 无法判断时省略该字段（系统按"不限定"处理，绝不误伤跨项目知识）
 
 metadata 字段说明：
 - episodic 类型：如能确定活动时间，填入 {"activity_start_time": "ISO8601", "activity_end_time": "ISO8601"}
@@ -282,12 +288,18 @@ metadata 建议：
         "content": "完整、独立、适合团队共享的工作记忆陈述",
         "type": "work_fact|work_task|work_method|work_artifact",
         "priority": 80,
+        "applicability": "this-repo",
         "source_message_ids": ["消息ID_1", "消息ID_2"],
         "metadata": {}
       }
     ]
   }
 ]
+
+applicability 字段说明（记忆的适用范围，治理用）：
+- "this-repo"：绑定当前项目/仓库（本项目配置、命名约定、内网地址、本团队特有流程等）
+- "cross-project"：跨项目通用（行业惯例、通用工具用法、可迁移方法论等——**换一个项目仍然成立**的知识）
+- 无法判断时省略该字段（系统按"不限定"处理，绝不误伤跨项目知识）
 
 metadata 字段说明：
 - 所有类型都可以输出空对象 {}。
@@ -411,12 +423,18 @@ ${CONTENT_IS_DATA_CLAUSE}
         "type": "persona|episodic|instruction|work_fact|work_task|work_method|work_artifact",
         "family": "chat|work",
         "priority": 80,
+        "applicability": "cross-project",
         "source_message_ids": ["消息ID_1", "消息ID_2"],
         "metadata": {}
       }
     ]
   }
 ]
+
+applicability 字段说明（记忆的适用范围，治理用）：
+- "cross-project"：跨项目通用（个人偏好、通用技能、行业惯例等，换一个项目仍然成立）
+- "this-repo"：绑定当前项目/仓库（项目特定配置、命名约定、内网地址等）
+- 无法判断时省略该字段（系统按"不限定"处理，绝不误伤跨项目知识）
 
 metadata 字段说明：
 - episodic 类型：如能确定活动时间，填入 {"activity_start_time": "ISO8601", "activity_end_time": "ISO8601"}

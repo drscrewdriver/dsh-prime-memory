@@ -25,6 +25,7 @@ import type { EmbeddingProviderInfo } from './embedding.js';
 import type { L0MessageRecord, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import { familyForType, isScopeVisible, normPersistence, normScope } from '../types.js';
 import { isZeroVector, vecToBuffer } from './vec-utils.js';
+import { normApplicability } from '../repo-scope.js';
 import { normalizeWorkspacePath } from '../workspace.js';
 import { bm25RankToScore, buildFtsQuery, tokenizeForFts } from './search-utils.js';
 import { describeTokenizer, ensureTokenizer, tokenizerStamp } from '../util/tokenizer.js';
@@ -365,6 +366,29 @@ export class MemoryDb {
       this.db.exec("ALTER TABLE l1_records ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''");
       this.logger?.info(`${TAG} l1_records 补 scope/workspace_id 列(存量数据默认归 global)`);
     }
+    // ── repo 软围栏列(ADR-0015 T1.7/T1.9/T1.10):'' = 未归属 = 不围栏(fail-open)。
+    // DEFAULT 即标注,存量零回填;不进 l1_fts、不进快照哈希投影(I-3/I-4)。
+    // 读侧 fail-open:缺列/缺值一律 ''(读不到归属 ≈ 正常记忆,绝不让记忆凭空消失)。
+    if (!this.hasColumn('l1_records', 'repo_key_name')) {
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN repo_key_name TEXT NOT NULL DEFAULT ''");
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN repo_key_owner TEXT NOT NULL DEFAULT ''");
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN applicability TEXT NOT NULL DEFAULT ''");
+      this.logger?.info(`${TAG} l1_records 补 repo 归属列(DEFAULT 即标注,存量零回填)`);
+    }
+    // L2 场景重聚类作业队列(治理 W3 T3.10;ruminate 空闲档消费,每轮至多 1 作业)。
+    // source 区分触发来源('demote'|'repo-change'),便于诊断与重入队语义区分。
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS scene_recluster_jobs (
+        job_id TEXT PRIMARY KEY,
+        family TEXT NOT NULL DEFAULT 'chat',
+        scene_names TEXT NOT NULL DEFAULT '',
+        batch_id TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL DEFAULT '',
+        finished_at TEXT NOT NULL DEFAULT ''
+      )
+    `);
     const backfilled = this.db
       .prepare("UPDATE l1_records SET family = 'work' WHERE type LIKE 'work\\_%' ESCAPE '\\' AND family != 'work'")
       .run().changes;
@@ -478,8 +502,9 @@ export class MemoryDb {
       INSERT INTO l1_records (
         record_id, content, type, priority, scene_name, session_id, version,
         timestamp_str, timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family,
-        valid_from, valid_to, persistence, scope, workspace_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        valid_from, valid_to, persistence, scope, workspace_id,
+        repo_key_name, repo_key_owner, applicability
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         content=excluded.content,
         type=excluded.type,
@@ -496,12 +521,16 @@ export class MemoryDb {
         valid_to=excluded.valid_to,
         persistence=excluded.persistence,
         scope=excluded.scope,
-        workspace_id=excluded.workspace_id
+        workspace_id=excluded.workspace_id,
+        repo_key_name=excluded.repo_key_name,
+        repo_key_owner=excluded.repo_key_owner,
+        applicability=excluded.applicability
     `);
     this.stmtGetL1 = this.db.prepare(`
       SELECT record_id, content, type, priority, scene_name, version, timestamp_str,
              timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family,
-             valid_from, valid_to, persistence, scope, workspace_id
+             valid_from, valid_to, persistence, scope, workspace_id,
+             repo_key_name, repo_key_owner, applicability
       FROM l1_records WHERE record_id = ?
     `);
     this.stmtL1Exists = this.db.prepare('SELECT 1 FROM l1_records WHERE record_id = ?');
@@ -1015,6 +1044,9 @@ export class MemoryDb {
       normPersistence(record.persistence) ?? '',
       scope,
       workspaceId,
+      record.repoKeyName ?? '',
+      record.repoKeyOwner ?? '',
+      normApplicability(record.applicability),
     );
     // vec0 不支持 ON CONFLICT → 先删后插;零向量跳过(cosine 未定义)。
     // 已退场则**只删不插**(见上方 retiredNow 的说明)。
@@ -1164,7 +1196,7 @@ export class MemoryDb {
         .get() as { n: number | bigint };
       const rows = this.db
         .prepare(
-          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id
+          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id, repo_key_name, repo_key_owner, applicability
            FROM l1_records WHERE COALESCE(valid_to, '') <> '' ORDER BY updated_time DESC LIMIT ? OFFSET ?`,
         )
         .all(opts.limit, opts.offset) as unknown as L1MetaRow[];
@@ -1189,10 +1221,16 @@ export class MemoryDb {
       // §E:同款按形状探测——未迁移的旧库(补列前)不应因缺列让"按 id 取记录"整条路径失败。
       const scopeCols =
         table === 'l1_records' && this.hasColumn('l1_records', 'scope') ? ', scope, workspace_id' : '';
+      // repo 归属列(治理 W1):同款形状探测,缺列(迁移降级)时读侧 fail-open 归一 ''。
+      const repoCols =
+        table === 'l1_records' && this.hasColumn('l1_records', 'repo_key_name')
+          ? ', repo_key_name, repo_key_owner, applicability'
+          : '';
       const metaCols =
         'record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family' +
         temporal +
-        scopeCols;
+        scopeCols +
+        repoCols;
       stmt =
         action === 'delete'
           ? this.db.prepare(`DELETE FROM ${table} WHERE record_id IN (${ph})`)
@@ -1281,6 +1319,88 @@ export class MemoryDb {
    *
    * 返回 false 表示 id 不存在或写入失败(调用方据此记账,不静默)。
    */
+  /** repo 归属修补(T3.3;人工消歧用)。CAS:expectRepoKeyName 非空时要求当前值匹配。 */
+  patchRepoKey(
+    id: string,
+    patch: { repoKeyName?: string; repoKeyOwner?: string },
+    expectRepoKeyName?: string,
+  ): number {
+    if (this.degraded || !id) return 0;
+    try {
+      const sets: string[] = [];
+      const args: (string | number)[] = [];
+      if (patch.repoKeyName !== undefined) {
+        sets.push('repo_key_name = ?');
+        args.push(String(patch.repoKeyName));
+      }
+      if (patch.repoKeyOwner !== undefined) {
+        sets.push('repo_key_owner = ?');
+        args.push(String(patch.repoKeyOwner));
+      }
+      if (sets.length === 0) return 0;
+      let sql = `UPDATE l1_records SET ${sets.join(', ')} WHERE record_id = ?`;
+      args.push(id);
+      if (expectRepoKeyName !== undefined) {
+        sql += ' AND repo_key_name = ?';
+        args.push(expectRepoKeyName);
+      }
+      return Number(this.db.prepare(sql).run(...args).changes);
+    } catch (err) {
+      this.logger?.warn(`${TAG} patchRepoKey 失败 id=${id}: ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
+  }
+
+  // ── L2 场景重聚类作业队列(治理 W3,T3.10)──────────────────────────────
+
+  /** 入队一个重聚类作业(demote-to-wiki / repo 归属变化触发;source 区分来源)。 */
+  enqueueSceneRecluster(family: string, sceneNames: readonly string[], batchId: string, source = 'demote'): string {
+    const jobId = `recl_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    if (this.degraded) return jobId;
+    try {
+      this.db
+        .prepare(
+          "INSERT INTO scene_recluster_jobs (job_id, family, scene_names, batch_id, source, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', ?)",
+        )
+        .run(jobId, family, sceneNames.join(''), batchId, source, new Date().toISOString());
+    } catch (err) {
+      this.logger?.warn(`${TAG} 重聚类入队失败(降级为不重聚类): ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return jobId;
+  }
+
+  /** 取一个待处理作业(ruminate 空闲消费;按创建序)。 */
+  claimSceneRecluster(): { jobId: string; family: string; sceneNames: string[]; source: string } | null {
+    if (this.degraded) return null;
+    try {
+      const row = this.db
+        .prepare("SELECT job_id, family, scene_names, source FROM scene_recluster_jobs WHERE status = 'pending' ORDER BY created_at LIMIT 1")
+        .get() as unknown as Record<string, unknown> | undefined;
+      if (!row) return null;
+      return {
+        jobId: String(row.job_id),
+        family: String(row.family ?? 'chat'),
+        sceneNames: String(row.scene_names ?? '').split('').filter((x) => x.length > 0),
+        source: String(row.source ?? ''),
+      };
+    } catch (err) {
+      this.logger?.warn(`${TAG} 重聚类取作业失败: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /** 打标作业完成/失败(失败保留行供诊断;重算由下一次触发再入队)。 */
+  finishSceneRecluster(jobId: string, ok: boolean): void {
+    if (this.degraded || !jobId) return;
+    try {
+      this.db
+        .prepare("UPDATE scene_recluster_jobs SET status = ?, finished_at = ? WHERE job_id = ?")
+        .run(ok ? 'done' : 'failed', new Date().toISOString(), jobId);
+    } catch (err) {
+      this.logger?.warn(`${TAG} 重聚类打标失败: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   patchL1Metadata(id: string, metadata: Record<string, unknown>): boolean {
     if (this.degraded) return false;
     try {
@@ -1299,7 +1419,7 @@ export class MemoryDb {
     if (this.degraded) return [];
     const rows = this.db
       .prepare(
-        'SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id FROM l1_records',
+        'SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id, repo_key_name, repo_key_owner, applicability FROM l1_records',
       )
       .all() as unknown as L1MetaRow[];
     return rows.map(rowToRecord);
@@ -1717,7 +1837,7 @@ export class MemoryDb {
       const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params) as { n: number };
       const rows = this.db
         .prepare(
-          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id FROM l1_records${whereSql} ORDER BY updated_time DESC LIMIT ? OFFSET ?`,
+          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id, repo_key_name, repo_key_owner, applicability FROM l1_records${whereSql} ORDER BY updated_time DESC LIMIT ? OFFSET ?`,
         )
         .all(...params, opts.limit, opts.offset) as unknown as L1MetaRow[];
       return { items: rows.map(rowToRecord), total: totalRow?.n ?? 0 };
@@ -2512,6 +2632,10 @@ interface L1MetaRow {
   valid_from?: string;
   valid_to?: string;
   persistence?: string;
+  /** repo 归属列(旧库/迁移降级时为 undefined → 读侧 fail-open 归一 '')。 */
+  repo_key_name?: string;
+  repo_key_owner?: string;
+  applicability?: string;
 }
 
 /**
@@ -2562,6 +2686,10 @@ function rowToRecord(row: L1MetaRow): MemoryRecord {
     validFrom: row.valid_from ? Date.parse(row.valid_from) || undefined : undefined,
     validTo: row.valid_to ? Date.parse(row.valid_to) || undefined : undefined,
     persistence: normPersistence(row.persistence),
+    // repo 归属回读(I-23 fail-open):缺列/缺值一律 ''(不围栏)
+    repoKeyName: row.repo_key_name ?? '',
+    repoKeyOwner: row.repo_key_owner ?? '',
+    applicability: normApplicability(row.applicability),
   };
 }
 

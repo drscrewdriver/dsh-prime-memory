@@ -39,6 +39,7 @@ import type {
   MemoryScope,
 } from '../types.js';
 import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope, WING_FALLBACK } from '../types.js';
+import { normApplicability, resolveRepoScope } from '../repo-scope.js';
 
 /** 时间轴三元组(抽取产出 → 记录字段)。 */
 type Temporal = Pick<MemoryRecord, 'validFrom' | 'validTo' | 'persistence'>;
@@ -130,6 +131,10 @@ type PendingMemory = ExtractedMemory & {
   /** §E 归属:write 侧已按 `resolveRecordScope` 算好,`toStoreRecord` 原样带出 */
   scope: MemoryScope;
   workspaceId: string;
+  /** 治理归属(ADR-0015 T1.9/T1.10):进管线时一次算定(I-21),写时随 store 行落盘。 */
+  repoKeyName: string;
+  repoKeyOwner: string;
+  applicability: string;
 };
 
 /**
@@ -163,6 +168,12 @@ function toStoreRecord(
     family: m.family,
     scope: m.scope,
     workspaceId: m.workspaceId,
+    // 治理归属(ADR-0015 T1.9/T1.10):进管线时一次算定(I-21 不得事后补录)。
+    // 缺省**不写键**——无治理归属的记录与改动前的 JSONL/DB 形状逐字一致
+    // (零形状漂移,withSourceAnchors 同款纪律);DB 侧列 DEFAULT 即标注。
+    ...(m.repoKeyName ? { repoKeyName: m.repoKeyName } : {}),
+    ...(m.repoKeyOwner ? { repoKeyOwner: m.repoKeyOwner } : {}),
+    ...(m.applicability ? { applicability: m.applicability } : {}),
     ...temporalOf(m.metadata),
   };
 }
@@ -279,6 +290,9 @@ export async function runExtraction(
   const extracted: Array<PendingMemory> = [];
   let lastScene = chainState.lastSceneName;
   let sceneCount = 0;
+  // 治理归属(ADR-0015 T1.7/T1.9):repoKey=basename(归一 cwd),**进管线时一次算定**
+  // (I-21 不得事后补录)。纯字符串派生,识别失败 = ''(不围栏 fail-open)。
+  const repoScope = resolveRepoScope(workspaceId);
   // wing 打标候选(R14 归一化后的启用列表);general(跨域兜底)仅在 auto 档追加进候选
   const hallCandidates = normWingEnabled(cfg.hall?.enabled);
   const halls =
@@ -316,6 +330,12 @@ export async function runExtraction(
           // §E 归属在**进管线时**一次算定,下游(store / conflict / update / merge 各分支)
           // 一律复用它——四个分支各算一次是漏判的温床。
           ...resolveRecordScope(scopeMode, family, workspaceId),
+          // 治理归属(ADR-0015 T1.9/T1.10):repoKey 一次算定;applicability 由抽取
+          // prompt 显式产出、经归一收窄——**绝不从 family 推导**(P0-7 四象限),
+          // 未声明/非法 = ''(不围栏)。
+          repoKeyName: repoScope.repoKey,
+          repoKeyOwner: '',
+          applicability: normApplicability((m as { applicability?: unknown }).applicability),
         });
       }
     }

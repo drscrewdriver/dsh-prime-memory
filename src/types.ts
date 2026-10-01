@@ -284,6 +284,12 @@ export interface MemoryRecord {
   validTo?: number;
   /** 持续性(见 Persistence);缺省 = 未判定。 */
   persistence?: Persistence;
+  /** repo 归属(basename(归一 cwd) 派生,ADR-0015 T1.9 写时算定):'' = 未归属 = 不围栏。 */
+  repoKeyName?: string;
+  /** repo 归属的人工消歧标注(同名不同仓;首版仅人工写)。 */
+  repoKeyOwner?: string;
+  /** 记录级 applicability(ADR-0015 T1.10):'' 未声明(不围栏)| 'this-repo' | 'cross-project';显式不从 family 推导。 */
+  applicability?: string;
 }
 
 /** L2 场景块摘要(META 解析结果)。 */

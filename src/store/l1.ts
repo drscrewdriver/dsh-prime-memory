@@ -179,6 +179,29 @@ export class L1Store {
     return this.db.patchL1Metadata(id, metadata);
   }
 
+  /** repo 归属修补(ADR-0015 T3.3;人工消歧用)。CAS:expectRepoKeyName 非空时要求当前值匹配。 */
+  patchRepoKey(
+    id: string,
+    patch: { repoKeyName?: string; repoKeyOwner?: string },
+    expectRepoKeyName?: string,
+  ): number {
+    return this.db.patchRepoKey(id, patch, expectRepoKeyName);
+  }
+
+  // ── L2 场景重聚类作业队列(治理 W3 T3.10;ruminate 空闲档消费)──────────────
+
+  enqueueSceneRecluster(family: string, sceneNames: readonly string[], batchId: string, source = 'demote'): string {
+    return this.db.enqueueSceneRecluster(family, sceneNames, batchId, source);
+  }
+
+  claimSceneRecluster(): { jobId: string; family: string; sceneNames: string[]; source: string } | null {
+    return this.db.claimSceneRecluster();
+  }
+
+  finishSceneRecluster(jobId: string, ok: boolean): void {
+    this.db.finishSceneRecluster(jobId, ok);
+  }
+
   /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
   getByIds(ids: string[]): MemoryRecord[] {
     return this.db.getL1ByIds(ids);
