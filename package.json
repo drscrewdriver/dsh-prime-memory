@@ -2,6 +2,7 @@
   "name": "dsh-prime-memory",
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "0.16.3",
 =======
   "version": "0.20.0-beta.14",
@@ -9,6 +10,9 @@
 =======
   "version": "0.20.0-beta.15",
 >>>>>>> 51e1ed7 (fix(hall-reclass): 归类后条目误退役 + 点选归类主路径(beta.15))
+=======
+  "version": "0.20.0-beta.16",
+>>>>>>> 1eace08 (feat(hall-grown-reclass): 自生长 slug 拖入 hall 一步收编+归子类(beta.16))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
