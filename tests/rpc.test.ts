@@ -16,6 +16,7 @@ import { SceneStore } from '../src/store/scenes.js';
 import { PersonaStore } from '../src/store/persona.js';
 import { StateStore } from '../src/store/state.js';
 import { SessionModeStore } from '../src/store/session-modes.js';
+import { RoomRegistryStore } from '../src/store/rooms-registry.js';
 import { emptyOccupancyLedger } from '../src/util/context-occupancy.js';
 import { initTokenCost, resetTokenCost } from '../src/token-cost.js';
 import type { MemoryLiveSettings } from '../src/contract.js';
@@ -77,6 +78,8 @@ interface Harness {
   db: MemoryDb;
   modes: SessionModeStore;
   dataDir: string;
+  /** opts.roomRegistry 开时装配的注册表(未开 = undefined)。 */
+  registry?: RoomRegistryStore;
 }
 
 /** 直调端点分发层:经生产同款 buildEndpointDeps 组装 deps,验证 rebuild/ruminate 接线。 */
@@ -101,6 +104,8 @@ async function harness(opts: {
   status?: MemoryStatusSource;
   /** 静态部署 cfg 覆盖(非 llm 子树),用于验证运行时开关与静态值的优先级。 */
   cfgOver?: Partial<MemoryConfig>;
+  /** 装配 Room 注册表(回归:rpcHandler 曾漏带 roomRegistry,面板侧 room-* 恒"未装配")。 */
+  roomRegistry?: boolean;
 } = {}): Promise<Harness> {
   const dataDir = join(await tmp(), `rpc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
   const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
@@ -119,6 +124,11 @@ async function harness(opts: {
   await state.load();
   const modes = new SessionModeStore(dataDir, 'auto');
   await modes.init();
+  let registry: RoomRegistryStore | undefined;
+  if (opts.roomRegistry) {
+    registry = new RoomRegistryStore(dataDir, noopLogger);
+    await registry.init();
+  }
 
   let handler: ((req: unknown, res: unknown) => Promise<void>) | undefined;
   const ctx = {
@@ -142,8 +152,9 @@ async function harness(opts: {
     llm: {} as never,
   } as unknown as Parameters<typeof registerMemoryRpc>[0];
 
-  registerMemoryRpc(ctx, cfg({}, opts.cfgOver ?? {}), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined);
+  registerMemoryRpc(ctx, cfg({}, opts.cfgOver ?? {}), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined, undefined, registry);
   return {
+    registry,
     call: async (endpoint, payload) => {
       // 模拟 HTTP 层:构造 loopback req(流式 body)+ 捕获型 res,过完整 handler
       const req = new PassThrough() as PassThrough & { headers: Record<string, string>; method: string; url: string };
@@ -532,5 +543,27 @@ describe('bench control service', () => {
     surface.rebuildStart();
     expect(rebuild.start).toHaveBeenCalled();
     expect(surface.getDistillUsage()).toEqual({ layers: {} });
+  });
+});
+
+describe('rpc: room registry wiring(HTTP 面全链路)', () => {
+  it('room-register / rooms-get / room-admin 经 registerMemoryRpc 可用(回归:rpcHandler 曾漏带 roomRegistry → 面板侧恒"未装配")', async () => {
+    const h = await harness({ live: liveHandle({ memoryMutate: true }), roomRegistry: true });
+    const reg = await h.call('dsh-memory/room-register', { slug: 'dsh-plugin', label: 'dsh插件' }) as { created: boolean; slug: string };
+    expect(reg.created).toBe(true);
+    expect(reg.slug).toBe('dsh-plugin');
+    // rooms-get 端点层合并注册表(registry 数组下发)
+    const g = await h.call('dsh-memory/rooms-get', {}) as { registry?: Array<{ slug: string; label?: string }> };
+    expect(g.registry?.some((e) => e.slug === 'dsh-plugin' && e.label === 'dsh插件')).toBe(true);
+    // room-admin(破坏性面)走同一 deps:retire → 注册表状态翻转
+    await h.call('dsh-memory/room-admin', { action: 'retire', slug: 'dsh-plugin' });
+    expect(h.registry!.bySlug('dsh-plugin')!.status).toBe('retired');
+    h.db.close();
+  });
+
+  it('未装配注册表时 room-register 报"未装配"(默认 harness 不带 registry)', async () => {
+    const h = await harness({ live: liveHandle({ memoryMutate: true }) });
+    await expect(h.call('dsh-memory/room-register', { slug: 'x' })).rejects.toThrow('未装配');
+    h.db.close();
   });
 });

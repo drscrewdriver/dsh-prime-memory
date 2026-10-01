@@ -429,7 +429,9 @@ export function registerMemoryRpc(
         try {
           const value = await handleEndpoint(endpoint, payload, buildEndpointDeps(
             { ctx, cfg, stores, logger },
-            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo },
+            // longTask/roomRegistry 必须随 sources 下发——漏带 = 面板侧 room-*/longtask-*
+            // 全部"未装配"(工具面直传不受影响;2026-10-02 beta.8 实测回归)
+            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, longTask: longTaskDeps, roomRegistry },
             ruminate,
           ));
           return { ok: true, value };
