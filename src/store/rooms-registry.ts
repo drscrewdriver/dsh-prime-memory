@@ -208,10 +208,12 @@ export class RoomRegistryStore {
     return true;
   }
 
-  /** 改名(merge 1:1 收尾):slug 换名 + 旧 slug 进 aliases。新名与既有条目冲突时走 merge。 */
+  /** 改名(merge 1:1 收尾):slug 换名 + 旧 slug 进 aliases。新名与既有条目冲突时走 merge。
+   *  目标用两级制词表(isRoomSlug)——把 standalone room 归类到 hall 下(改名 major/minor)
+   *  走的就是这条路;isTag 会误拒带 slash 的目标。 */
   async renameSlug(oldSlug: string, newSlug: string): Promise<boolean> {
     this.ensureLoaded();
-    if (!isTag(newSlug)) throw new Error(`非法 Room slug: ${newSlug}`);
+    if (!isRoomSlug(newSlug)) throw new Error(`非法 Room slug: ${newSlug}(两级制:major 或 major/minor)`);
     const found = this.entries.find((e) => e.slug === oldSlug);
     if (!found) return false;
     if (this.entries.some((e) => e.slug === newSlug)) {

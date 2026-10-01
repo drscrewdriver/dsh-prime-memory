@@ -66,6 +66,19 @@ describe('RoomRegistryStore', () => {
     expect(store.bySlug('dup')!.slug).toBe('other');
   });
 
+  it('renameSlug 支持两级目标(把 room 归类到 hall 下)', async () => {
+    const { store } = await mk();
+    await store.register({ slug: 'dsh-bash-terminal' });
+    expect(await store.renameSlug('dsh-bash-terminal', 'dsh-plugin/bash-terminal')).toBe(true);
+    const reclassed = store.bySlug('dsh-plugin/bash-terminal')!;
+    expect(reclassed.aliases).toContain('dsh-bash-terminal');
+    expect(store.bySlug('dsh-bash-terminal')!.slug).toBe('dsh-plugin/bash-terminal'); // 别名可检索
+    // 小类之间跨 hall 迁移同款合法
+    await store.register({ slug: 'work/notes' });
+    expect(await store.renameSlug('work/notes', 'dsh-plugin/notes')).toBe(true);
+    expect(store.bySlug('dsh-plugin/notes')!.aliases).toContain('work/notes');
+  });
+
   it('retire/setStatus;active 过滤', async () => {
     const { store } = await mk();
     await store.register({ slug: 'temp-room' });
