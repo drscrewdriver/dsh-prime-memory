@@ -43,6 +43,13 @@ markMerged/renameSlug + recluster 入队(source='room-merge')。
   restore 语义声明)。
 - 孤儿候选/复查键(roomCandidates/roomReview)同属 metadata,同上。
 
+### 5b. 两级制额度(用户裁定,推翻「上限 200 一刀切」初版)
+slug 支持两级:`major` 或 `major/minor`(如 `dsh-plugin`、`dsh-plugin/merge`)。
+**大类上限 200**;小类不占大类额度(只受全量保险 2000 约束)。理由:200 一刀切
+对"一个大项目群"过于武断——dsh 插件类条目可全归 `dsh-plugin` 大类,再按
+`dsh-plugin/merge` 细分。isTag 词表不放宽(slash 仅在注册表 slug 层允许;
+自生长 tags 仍是单段 slug——标注器喂词表时按 `major(minor1, minor2)` 呈现)。
+
 ### 6. 权限分层
 list/export 无门(本机 loopback;records 类导出 limit 1 万/上限 5 万);
 register/retire 吃 memoryMutate 单门;merge/rename 双保险(memoryMutate +

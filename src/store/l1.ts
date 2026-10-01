@@ -6,7 +6,7 @@
  *
  * 去重/合并的更新记录走 upsert(新 record id + 版本递增),不再全量重写文件。
  */
-import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, mkdirSync, promises as fs, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import type { L1Hit, MemoryFamily, MemoryLogger, MemoryRecord, RoomCount } from '../types.js';
 import { familyForType, isScopeVisible } from '../types.js';
@@ -177,6 +177,108 @@ export class L1Store {
    */
   patchMetadata(id: string, metadata: Record<string, unknown>): boolean {
     return this.db.patchL1Metadata(id, metadata);
+  }
+
+    id: string,
+    patch: { repoKeyName?: string; repoKeyOwner?: string },
+    expectRepoKeyName?: string,
+  ): number {
+    return changed;
+  }
+
+  /**
+   * 归属变了,记忆对场景的归属度就变了——受影响场景的摘要必须由当前事实重算
+   * (I-20 投影哲学)。反查各 id 的 scene_name 入队(消费器在 ruminate 空闲档,
+   * 每轮至多 1 个作业;内部只有文件级操作,无新增 LLM 通道)。
+   */
+    try {
+      const records = this.db.getL1ByIds([...ids]);
+      const byFamilyScene = new Map<string, Set<string>>();
+      for (const r of records) {
+        if (!r.scene_name) continue;
+        const family = r.family ?? 'chat';
+        const set = byFamilyScene.get(family) ?? new Set<string>();
+        set.add(r.scene_name);
+        byFamilyScene.set(family, set);
+      }
+      const batchId = `repo:${Date.now()}`;
+      for (const [family, scenes] of byFamilyScene) {
+      }
+    } catch {
+      /* 反查失败 = 不入队;重算由下一次任何触发兜底(消费器幂等) */
+    }
+  }
+
+
+  }
+
+  }
+
+  }
+
+  // ── Room merge/rename 的游标重写(分类管理 beta.5;破坏性面)──────────────
+
+  /**
+   * 收集某 Room 的全部匹配记录(含已退场行,口径与 Room 计数一致)。
+   * 内部分页拉取,上限 cap 防跑飞;返回记录数组供备份与干跑预览。
+   */
+  listByTagAll(tag: string, cap = 500): MemoryRecord[] {
+    const out: MemoryRecord[] = [];
+    for (let offset = 0; offset < cap; offset += 200) {
+      const page = this.list({ tag, retired: undefined, limit: Math.min(200, cap - out.length), offset });
+      out.push(...page.items);
+      if (page.items.length < 200 || out.length >= cap) break;
+    }
+    return out;
+  }
+
+  /**
+   * 备份某 Room 的匹配记录到 `<dataDir>/rooms-merge-backups/<ts>-<tag>.json`
+   * (执行前快照;破坏性重写前的唯一回滚物料)。返回备份文件路径与条数。
+   */
+  backupTagRecords(tag: string): { file: string; count: number } {
+    const records = this.listByTagAll(tag, 2000);
+    const backupDir = path.join(this.dataDir, 'rooms-merge-backups');
+    if (!existsSync(backupDir)) mkdirSync(backupDir, { recursive: true });
+    const file = path.join(backupDir, `${Date.now()}-${tag.replace(/[^a-z0-9-]/gi, '_')}.json`);
+    writeFileSync(file, JSON.stringify({ tag, exportedAt: new Date().toISOString(), records }, null, 2), 'utf8');
+    return { file, count: records.length };
+  }
+
+  /**
+   * 游标重写:把 metadata.tags 里的 `from` 全部替换为 `to`(**含已退场行**,
+   * 口径与 Room 计数一致)。写前重读-合并-写回(relabel 同款):只动 tags,
+   * roomCandidates/roomReview/hall/cogHall/sourceAnchors 等其余键原样保全。
+   *
+   * 单次上限 cap(500)可续跑:再次调用同一 from 即继续处理剩余行。
+   * 返回重写条数 + 受影响的 (family, scene) 集(供 recluster 'room-merge' 入队)。
+   */
+  rewriteTag(from: string, to: string, cap = 500): {
+    rewritten: number;
+    scanned: number;
+    families: string[];
+    scenes: string[];
+    hasMore: boolean;
+  } {
+    const rows = this.listByTagAll(from, cap + 1);
+    const hasMore = rows.length > cap;
+    const batch = rows.slice(0, cap);
+    let rewritten = 0;
+    const families = new Set<string>();
+    const scenes = new Set<string>();
+    for (const r of batch) {
+      const meta = { ...(r.metadata ?? {}) } as Record<string, unknown>;
+      const tags = Array.isArray(meta.tags) ? (meta.tags as unknown[]).map(String) : [];
+      if (!tags.includes(from)) continue; // 命中是 json_each 判等,数组缺失即无可改
+      const next = tags.map((t) => (t === from ? to : t));
+      meta.tags = [...new Set(next)];
+      if (this.patchMetadata(r.id, meta)) {
+        rewritten++;
+        families.add(r.family ?? 'chat');
+        if (r.scene_name) scenes.add(r.scene_name);
+      }
+    }
+    return { rewritten, scanned: batch.length, families: [...families], scenes: [...scenes], hasMore };
   }
 
   /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
