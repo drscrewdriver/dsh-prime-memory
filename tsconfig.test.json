@@ -14,6 +14,18 @@
     "src/**/*.ts",
     "tests/ruminate.test.ts",
     "tests/stores.test.ts",
+<<<<<<< HEAD
+=======
+    "tests/repo-axis.test.ts",
+    "tests/governance-weights.test.ts",
+    "tests/recluster.test.ts",
+    "tests/room-review.test.ts",
+    "tests/rooms-registry.test.ts",
+    "tests/room-merge.test.ts",
+    "tests/room-admin-endpoint.test.ts",
+    "tests/recall-usage.test.ts",
+    "tests/hall-room.integration.test.ts",
+>>>>>>> 4daed58 (feat(recall-usage): 老化权重展示 + 召回使用统计 —— 进 topN 才算 used(beta.14))
     "tests/rpc.test.ts",
     "tests/redact-wiring.test.ts",
     "tests/pipeline.test.ts",

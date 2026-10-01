@@ -38,6 +38,7 @@ import {
 } from './recall-ack.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
+import type { RecallUsageStore } from '../store/recall-usage.js';
 import type { MemoryLogger } from '../types.js';
 import { scopeFilterOf } from '../workspace.js';
 import { applyRecallBudget, raceRecallTimeout, RECALL_EMBED_CAP_MS } from '../util/recall-budget.js';
@@ -206,6 +207,8 @@ export function registerRecall(
   live: LiveSettingsHandle,
   modes: SessionModeStore,
   dataDir: string,
+  /** 召回使用统计(可选;未装配 = 零成本旁路):进 topN(注入)才算 used。 */
+  usage?: RecallUsageStore,
 ): RecallHooks {
   /** 召回去重存储(同会话已注入的记忆不再重复注入;写穿持久化,重启不丢)。 */
   const dedupe = new RecallDedupeStore(dataDir, logger);
@@ -489,6 +492,7 @@ export function registerRecall(
               injectedIds: [], suppressedCount: scoped.length - fresh.length,
               durationMs: Date.now() - searchStart, outcome: 'suppressed',
             });
+            usage?.recordAttempt(scoped.map((h) => h.id), []);
             return decision;
           }
           const lines = applyRecallBudget(
@@ -503,6 +507,7 @@ export function registerRecall(
               injectedIds: [], suppressedCount: scoped.length - fresh.length,
               durationMs: Date.now() - searchStart, outcome: 'suppressed',
             });
+            usage?.recordAttempt(fresh.map((h) => h.id), []);
             return decision;
           }
           st.lastHits = lines.length;
@@ -540,6 +545,8 @@ export function registerRecall(
             injectedIds: fresh.slice(0, lines.length).map((h) => h.id), suppressedCount: scoped.length - fresh.length,
             durationMs: Date.now() - searchStart, outcome: 'injected',
           });
+          // 使用统计:候选=scoped(尝试),进 topN(注入)=used
+          usage?.recordAttempt(scoped.map((h) => h.id), fresh.slice(0, lines.length).map((h) => h.id));
           // 入账在成功构造注入消息之后、返回 enter 之前——任何前置抛错路径账目零扰动
           const led = ledgerFor(payload.agent.id);
           recordRecallInjection(led, text.length);

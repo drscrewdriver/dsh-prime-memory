@@ -807,13 +807,19 @@ export async function handleEndpoint(endpoint, payload, deps) {
                         return true;
                     });
                 }
+                const pageIds = filtered.slice(offset, offset + limit).map((h) => h.id);
+                const updatedById = new Map(stores.l1.getByIds(pageIds).map((r) => [r.id, r.updatedAt]));
                 const resp = {
-                    items: filtered.slice(offset, offset + limit).map((h) => hitToUiRecord({ ...h, metadata: metaById?.get(h.id) })),
+                    items: filtered.slice(offset, offset + limit).map((h) => hitToUiRecord({ ...h, metadata: metaById?.get(h.id) }, {
+                        agingWeight: agingWeightOf(updatedById.get(h.id), stores.l1.decayHalfLife),
+                        usage: stores.usage?.get(h.id) ?? null,
+                    })),
                     hasMore: filtered.length > offset + limit,
                     total: null,
                     truncated: wanted > SEARCH_CAP,
                     scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
                     wingCatalog,
+                    usageSummary: stores.usage?.summary() ?? null,
                 };
                 return resp;
             }
@@ -821,12 +827,16 @@ export async function handleEndpoint(endpoint, payload, deps) {
             // 接了只会让「仅退场+关键词」永远空结果,不如如实不筛。
             const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, untagged: untaggedSel || undefined, retired: retiredSel, limit, offset });
             const resp = {
-                items: items.map(hitToUiRecord),
+                items: items.map((r) => hitToUiRecord(r, {
+                    agingWeight: agingWeightOf(r.updatedAt, stores.l1.decayHalfLife),
+                    usage: stores.usage?.get(r.id) ?? null,
+                })),
                 hasMore: offset + items.length < total,
                 total,
                 truncated: false,
                 scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
                 wingCatalog,
+                usageSummary: stores.usage?.summary() ?? null,
             };
             return resp;
         }
@@ -1433,7 +1443,14 @@ export async function handleEndpoint(endpoint, payload, deps) {
     }
 }
 /** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
-export function hitToUiRecord(r) {
+/** 老化权重(与读路径 applyDecayWeight 同式):max(0.5, 0.5^(Δ天/半衰期));半衰期 ≤0 = 关 → null。 */
+export function agingWeightOf(updatedAtMs, halfLifeDays, now = Date.now()) {
+    if (!(halfLifeDays > 0))
+        return null;
+    const ageDays = Math.max(0, (now - (updatedAtMs ?? 0)) / 86_400_000);
+    return Math.max(0.5, Math.pow(0.5, ageDays / halfLifeDays));
+}
+export function hitToUiRecord(r, extra) {
     const retired = r.validTo !== undefined;
     const mark = retired ? readSupersedeMarker(r.metadata) : undefined;
     return {
@@ -1459,6 +1476,8 @@ export function hitToUiRecord(r) {
         // 但必须给出可见差异。
         retired,
         retiredReason: retired ? (mark?.reason ?? 'unknown') : null,
+        agingWeight: extra?.agingWeight ?? null,
+        usage: extra?.usage ?? null,
     };
 }
 /**
