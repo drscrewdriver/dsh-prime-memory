@@ -17,7 +17,18 @@
   - **建议状态(`longtask-hint-get`)+ 浮动球(`client/src/longtask-fab.ts`)**:ego-browser 式 vanilla overlay(FAB+面板,拖拽/位置持久化/视口夹紧),**建议不阻断**——仅当「上下文占用达 `contextThresholdPct`」或「todo 漂移达 `driftThreshold`」且长任务未开启时点亮呼吸光晕;面板内:长任务开关(临时,per-session,**不带 mode**——切开关不重置用户档位)、占用/漂移进度条、手动尾部压缩按钮(长任务开启才可用)、任务计数。轮询忙 2s/闲 5s,RPC 失败静默;座位契约不变(settings.section 恰一个,body 单例不占任何座位)。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
 
-## [0.20.0-beta.3] — 2026-10-01
+## [0.20.0-beta.4] — 2026-10-01
+
+> Room 分类管理第一船(**零漂移面**):注册表空 = 与 beta.3 行为逐字一致。merge/rename/retire 破坏性面将随 beta.5(dryRun 默认 true 保留一版)。
+
+### 新增
+
+- **Room 注册表(`rooms-registry.json` sidecar)**:预先注册策划好的 Room(slug/label/description);损坏/为空 → 降级回退纯自生长目录,绝不阻塞面板与标注器;上限 200 防刷。`rooms-get` 端点层合并:注册条目 count=0 也进词表并带 `source`/`label`,响应新增 `registry` 全量字段(客户端可选读)。
+- **导出端点 `dsh-memory/rooms-export`**(kind=rooms|orphans,CSV 直出):rooms = 注册表∪自生长词表带计数;orphans = 无 Room 绑定的活跃记录清单(含候选/复查状态列)。
+- **工具 `memory_room_admin`**(action=list|register):list 列注册表+自生长总览;register 预注册 Room(高权限门,幂等补全)——配合 `memory_room_review` 的逐个复查,agent 有了「注册→预标记→逐个确认」的完整分类管理入口。
+- 客户端:Room chip 带「预注册/自生长」来源标示;孤儿 chip 带待复查语义。
+
+## [0.20.0-beta.3] — 2026-10-01## [0.20.0-beta.3] — 2026-10-01
 
 ### 新增
 

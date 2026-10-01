@@ -84,6 +84,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   // Room 分页(展开态;每页 40)
   const [roomPage, setRoomPage] = useState(0);
   const [orphanCount, setOrphanCount] = useState(0);
+  const [roomRegistry, setRoomRegistry] = useState<Array<{ slug: string; label?: string; description?: string; source: 'pre-registered' | 'grown'; aliases?: string[]; status: 'active' | 'retired' }>>([]);
   // 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场
   const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
   const [rooms, setRooms] = useState<RoomCount[]>([]);
@@ -158,6 +159,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         if (r && r.ok) {
           setRooms(r.value.rooms ?? []);
           setOrphanCount(r.value.orphanCount ?? 0);
+          setRoomRegistry(r.value.registry ?? []);
         }
       })
       .catch(() => {
@@ -380,6 +382,34 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           >
             {roomsOpen ? '▾' : '▸'} Room 分类 · 共 {rooms.length}
           </button>
+          {/* 导出 CSV(分类数据;浏览器 blob 下载) */}
+          {rooms.length > 0 || orphanCount > 0 ? (
+            <button
+              type="button"
+              title="导出分类数据 CSV(Room 词表+计数)"
+              onClick={() => {
+                rpc('dsh-memory/rooms-export', { kind: 'rooms' })
+                  .then((r) => {
+                    if (!r || !r.ok || !r.value?.csv) return;
+                    const blob = new Blob([r.value.csv as string], { type: 'text/csv;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'dsh-memory-rooms.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  })
+                  .catch(() => undefined);
+              }}
+              style={{
+                cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
+                border: '1px solid var(--dsh-mem-border)', background: 'transparent',
+                color: 'var(--dsh-mem-text-2)',
+              }}
+            >
+              导出 CSV
+            </button>
+          ) : null}
           {/* 孤儿 chip:与 Room chip 互斥的筛选入口 */}
           <button
             type="button"
@@ -449,7 +479,10 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                       color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
                     }}
                   >
-                    {r.room + ' · ' + r.count}
+                    {(r as { label?: string }).label
+                      ? (r as { label?: string }).label + ' · ' + r.count
+                      : r.room + ' · ' + r.count}
+                    {(r as { source?: string }).source === 'pre-registered' ? ' ⭐' : ''}
                   </button>
                 );
               })}

@@ -3298,6 +3298,7 @@ var __defProp = Object.defineProperty;
 		  });
 		  const [roomPage, setRoomPage] = (0, import_react15.useState)(0);
 		  const [orphanCount, setOrphanCount] = (0, import_react15.useState)(0);
+		  const [roomRegistry, setRoomRegistry] = (0, import_react15.useState)([]);
 		  const [retiredFilter, setRetiredFilter] = (0, import_react15.useState)("");
 		  const [rooms, setRooms] = (0, import_react15.useState)([]);
 		  const [wingCatalog, setHallCatalog] = (0, import_react15.useState)(null);
@@ -3356,6 +3357,7 @@ var __defProp = Object.defineProperty;
 		      if (r && r.ok) {
 		        setRooms(r.value.rooms ?? []);
 		        setOrphanCount(r.value.orphanCount ?? 0);
+		        setRoomRegistry(r.value.registry ?? []);
 		      }
 		    }).catch(() => {
 		    });
@@ -3562,6 +3564,35 @@ var __defProp = Object.defineProperty;
 		            ]
 		          }
 		        ),
+		        rooms.length > 0 || orphanCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		          "button",
+		          {
+		            type: "button",
+		            title: "导出分类数据 CSV(Room 词表+计数)",
+		            onClick: () => {
+		              rpc("dsh-memory/rooms-export", { kind: "rooms" }).then((r) => {
+		                if (!r || !r.ok || !r.value?.csv) return;
+		                const blob = new Blob([r.value.csv], { type: "text/csv;charset=utf-8" });
+		                const url = URL.createObjectURL(blob);
+		                const a = document.createElement("a");
+		                a.href = url;
+		                a.download = "dsh-memory-rooms.csv";
+		                a.click();
+		                URL.revokeObjectURL(url);
+		              }).catch(() => void 0);
+		            },
+		            style: {
+		              cursor: "pointer",
+		              fontSize: 12,
+		              padding: "2px 8px",
+		              borderRadius: 6,
+		              border: "1px solid var(--dsh-mem-border)",
+		              background: "transparent",
+		              color: "var(--dsh-mem-text-2)"
+		            },
+		            children: "导出 CSV"
+		          }
+		        ) : null,
 		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
 		          "button",
 		          {
@@ -3612,7 +3643,7 @@ var __defProp = Object.defineProperty;
 		        /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: roomsOpen ? 6 : 0 }, children: [
 		          (roomsOpen ? rooms.slice(roomPage * ROOM_PAGE_SIZE, (roomPage + 1) * ROOM_PAGE_SIZE) : rooms.slice(0, 8)).map((r) => {
 		            const on = tagFilter === r.room && !untaggedOnly;
-		            return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		            return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
 		              "button",
 		              {
 		                type: "button",
@@ -3634,7 +3665,10 @@ var __defProp = Object.defineProperty;
 		                  background: on ? "var(--dsh-mem-bg-inset)" : "transparent",
 		                  color: on ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-2)"
 		                },
-		                children: r.room + " · " + r.count
+		                children: [
+		                  r.label ? r.label + " · " + r.count : r.room + " · " + r.count,
+		                  r.source === "pre-registered" ? " ⭐" : ""
+		                ]
 		              },
 		              r.room
 		            );

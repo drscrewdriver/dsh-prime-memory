@@ -3,6 +3,7 @@ import { type MemoryConfig } from './config.js';
 import { type RecallSessionStats } from './hooks/recall.js';
 import type { RebuildController } from './pipeline/rebuild.js';
 import type { RuminateController } from './pipeline/ruminate.js';
+import type { RoomRegistryStore } from './store/rooms-registry.js';
 import { type LiveSettingsHandle } from './settings.js';
 import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
@@ -27,7 +28,7 @@ export interface MemoryStatusSource {
     pending(): number;
 }
 /**
- * 端点全集运行时清单(36 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -105,6 +106,8 @@ interface MemoryRpcSources {
     sessionInfo?: SessionInfoSource;
     /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
     longTask?: LongTaskEndpointDeps;
+    /** Room 注册表(未装配 = rooms-get 不带 registry,rooms-export 不可用)。 */
+    roomRegistry?: RoomRegistryStore;
 }
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
 export type EndpointDepsInput = Omit<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>;
@@ -128,7 +131,9 @@ export declare function registerMemoryRpc(ctx: Context, cfg: MemoryConfig, store
 /** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
 ruminate?: RuminateController, 
 /** 长任务端点依赖(cfg.longTask.enabled 门控;缺省 = 端点恒 disabled)。 */
-longTaskDeps?: LongTaskEndpointDeps): void;
+longTaskDeps?: LongTaskEndpointDeps, 
+/** Room 分类管理依赖(注册表;缺省 = rooms-get 不带 registry、rooms-export 恒 404 语义)。 */
+roomRegistry?: RoomRegistryStore): void;
 export interface EndpointDeps {
     ctx: Context;
     cfg: MemoryConfig;
@@ -153,6 +158,8 @@ export interface EndpointDeps {
     sessionInfo?: SessionInfoSource;
     /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
     longTask?: LongTaskEndpointDeps;
+    /** Room 注册表(未装配 = rooms-get 不带 registry,rooms-export 不可用)。 */
+    roomRegistry?: RoomRegistryStore;
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;

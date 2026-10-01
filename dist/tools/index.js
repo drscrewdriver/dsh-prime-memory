@@ -3,6 +3,7 @@ import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from '../store/r
 import { listConflictPairs, renderConflictResolution, renderConflicts, resolveConflictPair } from '../conflict-service.js';
 import { WING_CATALOG, WING_FALLBACK, normPersistence, normScope, resolveRecordScope } from '../types.js';
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
+import { annotateOrphanCandidates, confirmReview, nextReview, pendingReviewCount, skipReview, } from '../room-review.js';
 import { applyGovernanceWeights } from '../store/governance.js';
 import { resolveRepoScope } from '../repo-scope.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
@@ -32,7 +33,9 @@ function applyManualRedaction(record, cfg, logger) {
 }
 export function registerMemoryTools(ctx, cfg, stores, logger, modes, live, 
 /** 反刍控制器(可选:未装配时 ruminate 工具返回未启用提示)。 */
-ruminate) {
+ruminate, 
+/** Room 注册表(分类管理 beta.4;缺省 = memory_room_admin 返回未装配提示)。 */
+roomRegistry) {
     if (!cfg.tools)
         return;
     /**
@@ -180,6 +183,76 @@ ruminate) {
                     score: Math.round(h.score * 100) / 100,
                 })),
             };
+        },
+    }));
+    // ── memory_room_admin: Room 粒度目录治理(分类管理 beta.4)────────────────
+    // list/register 免预算零风险;merge/rename/retire 属破坏性面(beta.5),暂不注册。
+    ctx.tools.register(defineTool({
+        name: 'memory_room_admin',
+        description: 'Room 分类管理(目录粒度)。action="list" 列出注册表条目与自生长 Room 计数;' +
+            'action="register" 预注册一个 Room(高权限;slug 需小写字母数字连字符,可选人类可读名与归类说明——' +
+            '注册后候选标注器与 tags 标注器会优先把记忆挂到这些 Room 上,是治理碎片化的推荐入口)。',
+        parameters: {
+            action: { type: 'string', required: true, description: 'list(列目录)| register(预注册 Room,高权限)' },
+            slug: { type: 'string', description: 'register 的 Room slug(小写字母数字连字符)' },
+            label: { type: 'string', description: 'register 的人类可读名(可选,可中文)' },
+            description: { type: 'string', description: 'register 的归类说明(可选;喂给标注器帮助归类)' },
+        },
+        output: {
+            schema: {
+                type: 'object',
+                properties: {
+                    notice: { type: 'string' },
+                    rooms: { type: 'string' },
+                    slug: { type: 'string' },
+                    created: { type: 'boolean' },
+                },
+                additionalProperties: false,
+            },
+            render: (_args, value) => [{ type: 'text', text: value.notice ?? JSON.stringify(value) }],
+        },
+        execute: async (args) => {
+            const action = String(args.action ?? '');
+            if (action === 'list') {
+                if (!roomRegistry)
+                    return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };
+                const registry = roomRegistry.list();
+                const counts = stores.l1.listRooms();
+                const countOf = (slug) => counts.find((r) => r.room === slug)?.count ?? 0;
+                const regLines = registry.map((e) => `- ${e.slug}${e.label ? `(${e.label})` : ''} [${e.source}/${e.status}] 现有 ${countOf(e.slug)} 条${e.description ? ` — ${e.description}` : ''}`);
+                const grownOnly = counts.filter((r) => !registry.some((e) => e.slug === r.room));
+                return {
+                    notice: `注册表 ${registry.length} 条(上限 200),自生长未注册 ${grownOnly.length} 个。\n` +
+                        (regLines.join('\n') || '(注册表为空——用 action=register 预注册)') +
+                        `\n自生长未注册:${grownOnly.map((r) => `${r.room}(${r.count})`).join(", ") || "无"}`,
+                    rooms: `${registry.length}+${grownOnly.length}`,
+                };
+            }
+            if (action === 'register') {
+                if (!roomRegistry)
+                    return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };
+                if (!live.get().memoryMutate)
+                    return { notice: MUTATE_OFF_NOTICE };
+                const slug = String(args.slug ?? '').trim();
+                try {
+                    const r = await roomRegistry.register({
+                        slug,
+                        label: typeof args.label === 'string' ? args.label : undefined,
+                        description: typeof args.description === 'string' ? args.description : undefined,
+                    });
+                    return {
+                        notice: r.created
+                            ? `已预注册 Room:${r.entry.slug}${r.entry.label ? `(${r.entry.label})` : ''}。候选标注器将优先把相关记忆挂到它上面。`
+                            : `Room 已存在:${r.entry.slug}(本次只补全了缺失的 label/description)。`,
+                        slug: r.entry.slug,
+                        created: r.created,
+                    };
+                }
+                catch (err) {
+                    return { notice: `注册失败: ${err instanceof Error ? err.message : String(err)}` };
+                }
+            }
+            return { notice: `非法 action:${action}(允许 list/register;merge/rename/retire 将在后续版本提供)。` };
         },
     }));
     // ── conversation_search: L0 原始对话 ──
@@ -778,6 +851,87 @@ ruminate) {
         },
     }));
     // ── 反刍状态查询(查看当前反刍进度) ──
+    // ── memory_room_review:孤儿记忆的 Room 候选逐个复查(agent 长尾治理)──────
+    // next/annotate 只读或预算内标注(无需门);confirm/skip 改写 metadata,
+    // confirm 吃 live.memoryMutate 高权限门(与 memory_delete 同款)。
+    ctx.tools.register(defineTool({
+        name: 'memory_room_review',
+        description: '孤儿记忆(无 Room 绑定)的逐个复查:action="next" 取下一条待复查记录(带系统预标记的候选 Room 与现有词表,agent 依据记录内容判定);' +
+            'action="confirm" 按 id 把 1-3 个 Room slug 写入该记忆(高权限);action="skip" 跳过(不再进队列);' +
+            'action="annotate" 立即对一批孤儿做候选预标记(平时由反刍自动推进)。建议长会话空闲时逐个过,保持分类收敛——优先挂靠现有 Room。',
+        parameters: {
+            action: { type: 'string', required: true, description: 'next(取下一条)| confirm(确认写入)| skip(跳过)| annotate(批量预标记)' },
+            id: { type: 'string', description: 'confirm/skip 的目标记录 id(action=next 返回的 id)' },
+            rooms: { type: 'string', description: 'confirm 的 Room slug 列表(逗号分隔,1-3 个,小写字母数字连字符;可含词表外新 slug)' },
+        },
+        output: {
+            schema: {
+                type: 'object',
+                properties: {
+                    notice: { type: 'string' },
+                    id: { type: 'string' },
+                    content: { type: 'string' },
+                    candidates: { type: 'string' },
+                    roomCatalog: { type: 'string' },
+                    remaining: { type: 'number' },
+                    confirmedTags: { type: 'string' },
+                    annotated: { type: 'number' },
+                    deferred: { type: 'number' },
+                },
+                additionalProperties: false,
+            },
+            render: (_args, value) => [{ type: 'text', text: value.notice ?? JSON.stringify(value) }],
+        },
+        execute: async (args) => {
+            const action = String(args.action ?? '');
+            const io = { l1: stores.l1, logger };
+            if (action === 'next') {
+                const item = nextReview(io.l1);
+                if (!item)
+                    return { notice: '没有待复查的孤儿记忆(roomCandidates 队列为空)。可用 action=annotate 先做一轮候选预标记。' };
+                return {
+                    id: item.id,
+                    content: item.content,
+                    candidates: item.candidates.join(', '),
+                    roomCatalog: item.roomCatalog.map((r) => `${r.room}(${r.count})`).join(', '),
+                    remaining: item.remaining,
+                };
+            }
+            if (action === 'annotate') {
+                const r = await annotateOrphanCandidates(ctx, cfg, io, 40);
+                return {
+                    notice: `候选预标记完成:选中 ${r.selected} 条,产候选 ${r.candidates} 条,写 pending ${r.written} 条。用 action=next 逐个复查。`,
+                    annotated: r.candidates,
+                    deferred: r.selected - r.written,
+                };
+            }
+            if (action === 'confirm') {
+                if (!live.get().memoryMutate)
+                    return { notice: MUTATE_OFF_NOTICE };
+                const id = String(args.id ?? '').trim();
+                if (!id)
+                    return { notice: 'confirm 需要 id(action=next 返回的 id)。' };
+                const rooms = String(args.rooms ?? '')
+                    .split(/[,,、]/)
+                    .map((x) => x.trim())
+                    .filter(Boolean);
+                if (rooms.length === 0)
+                    return { notice: 'confirm 需要 rooms(逗号分隔的 1-3 个 Room slug)。' };
+                const r = confirmReview(io.l1, id, rooms);
+                if (!r)
+                    return { notice: `确认失败:id=${id} 不存在、已被确认过、或 rooms 全部非法(需 1-3 个合法 slug)。` };
+                return { notice: `已挂到 Room:${r.tags.join(', ')}(面板下一次刷新即可见)。`, confirmedTags: r.tags.join(', '), id };
+            }
+            if (action === 'skip') {
+                const id = String(args.id ?? '').trim();
+                if (!id)
+                    return { notice: 'skip 需要 id。' };
+                const ok = skipReview(io.l1, id);
+                return { notice: ok ? `已跳过 ${id}(不再进复查队列)。` : `跳过失败:id=${id} 不存在。`, id };
+            }
+            return { notice: `非法 action:${action}(允许 next/confirm/skip/annotate)。剩余待复查 ${pendingReviewCount(stores.l1)} 条。` };
+        },
+    }));
     ctx.tools.register(defineTool({
         name: 'memory_ruminate_status',
         description: '查询当前记忆反刍的状态与进度(是否运行中、当前阶段、已完成/总会话数等)。\n\n注意:在 DSH Web GUI 的对话中无法直接调用此工具,因为模型可调用工具列表不包含 ruminate_status。如需查询进度,请在记忆库面板的蒸馏面板查看。',
