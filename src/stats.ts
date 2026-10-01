@@ -27,6 +27,7 @@ import type { RebuildController } from './pipeline/rebuild.js';
 import type { RuminateController } from './pipeline/ruminate.js';
 import { mergeRoom, renameRoom } from './room-review.js';
 import type { RoomRegistryStore } from './store/rooms-registry.js';
+import type { RecallUsageStore } from './store/recall-usage.js';
 import { projectDistillChain, validateDistillChain, type DistillChainEntry, type LiveSettingsHandle } from './settings.js';
 import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
@@ -320,6 +321,8 @@ export function registerMemoryRpc(
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 召回使用统计(可选)。 */
+    usage?: RecallUsageStore;
     /** 记忆后端(后台边界);未装配时回退为包 l1 的进程内实现。 */
     backend?: MemoryBackend;
     /** 图谱存储(可选:未装配时图谱端点返空,不报错)。 */
@@ -505,6 +508,8 @@ export interface EndpointDeps {
   stores: {
     l0: L0Store;
     l1: L1Store;
+    /** 召回使用统计(可选:未装配 = 列表不带 usage/usageSummary)。 */
+    usage?: RecallUsageStore;
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
@@ -1172,13 +1177,24 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
             return true;
           });
         }
+        const pageIds = filtered.slice(offset, offset + limit).map((h) => h.id);
+        const updatedById = new Map(stores.l1.getByIds(pageIds).map((r) => [r.id, r.updatedAt]));
         const resp: ListRecordsResponse = {
-          items: filtered.slice(offset, offset + limit).map((h) => hitToUiRecord({ ...h, metadata: metaById?.get(h.id) })),
+          items: filtered.slice(offset, offset + limit).map((h) =>
+            hitToUiRecord(
+              { ...h, metadata: metaById?.get(h.id) },
+              {
+                agingWeight: agingWeightOf(updatedById.get(h.id), stores.l1.decayHalfLife),
+                usage: stores.usage?.get(h.id) ?? null,
+              },
+            ),
+          ),
           hasMore: filtered.length > offset + limit,
           total: null,
           truncated: wanted > SEARCH_CAP,
           scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
           wingCatalog,
+          usageSummary: stores.usage?.summary() ?? null,
         };
         return resp;
       }
@@ -1186,12 +1202,21 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // 接了只会让「仅退场+关键词」永远空结果,不如如实不筛。
       const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, untagged: untaggedSel || undefined, retired: retiredSel, limit, offset });
       const resp: ListRecordsResponse = {
-        items: items.map(hitToUiRecord),
+        items: items.map((r) =>
+          hitToUiRecord(
+            r,
+            {
+              agingWeight: agingWeightOf(r.updatedAt, stores.l1.decayHalfLife),
+              usage: stores.usage?.get(r.id) ?? null,
+            },
+          ),
+        ),
         hasMore: offset + items.length < total,
         total,
         truncated: false,
         scenes: offset === 0 ? stores.l1.distinctScenes() : undefined,
         wingCatalog,
+        usageSummary: stores.usage?.summary() ?? null,
       };
       return resp;
     }
@@ -1803,7 +1828,15 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
 }
 
 /** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
-export function hitToUiRecord(r: {
+/** 老化权重(与读路径 applyDecayWeight 同式):max(0.5, 0.5^(Δ天/半衰期));半衰期 ≤0 = 关 → null。 */
+export function agingWeightOf(updatedAtMs: number | undefined, halfLifeDays: number, now: number = Date.now()): number | null {
+  if (!(halfLifeDays > 0)) return null;
+  const ageDays = Math.max(0, (now - (updatedAtMs ?? 0)) / 86_400_000);
+  return Math.max(0.5, Math.pow(0.5, ageDays / halfLifeDays));
+}
+
+export function hitToUiRecord(
+  r: {
   id: string;
   content: string;
   type: string;
@@ -1819,6 +1852,9 @@ export function hitToUiRecord(r: {
   family?: string;
   /** 退场判据:`valid_to` 闭合即已退场(软删)。由 `listL1`/`getByIds` 透传。 */
   validTo?: number;
+}, extra?: {
+  agingWeight?: number | null;
+  usage?: { attempts: number; used: number; lastAttemptAt: number | null; lastUsedAt: number | null } | null;
 }): UiRecord {
   const retired = r.validTo !== undefined;
   const mark = retired ? readSupersedeMarker(r.metadata) : undefined;
@@ -1845,6 +1881,8 @@ export function hitToUiRecord(r: {
     // 但必须给出可见差异。
     retired,
     retiredReason: retired ? (mark?.reason ?? 'unknown') : null,
+    agingWeight: extra?.agingWeight ?? null,
+    usage: extra?.usage ?? null,
   };
 }
 

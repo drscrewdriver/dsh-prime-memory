@@ -693,6 +693,15 @@ export interface UiRecord {
     sourceAnchors: string[];
     /** 检索相关度(列表路径无 score → null)。 */
     score: number | null;
+    /** 老化权重:读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期))(Δ=updatedAt;半衰期 0=关 → null)。 */
+    agingWeight?: number | null;
+    /** 召回使用统计:**进 topN(被注入)才算 used**;参与尝试未进 = 仅 attempts。缺省 = 未装配。 */
+    usage?: {
+        attempts: number;
+        used: number;
+        lastAttemptAt: number | null;
+        lastUsedAt: number | null;
+    } | null;
     /**
      * 是否已退场(软删)。`true` 时该记录在活动列表里仍以「已退场」态呈现(置灰 + 徽标),
      * 可被 `records-restore` 找回——这正是设计要的「不静默消失、可恢复」,而非真删。
@@ -711,6 +720,13 @@ export interface ListRecordsResponse {
     truncated: boolean;
     /** 场景筛选下拉选项(仅 offset===0 时附带)。 */
     scenes?: string[];
+    /** 召回使用汇总(老化权重效果口径:进 topN 才算 used)。未装配 = undefined。 */
+    usageSummary?: {
+        tracked: number;
+        attempted: number;
+        used: number;
+        rate: number;
+    } | null;
     /**
      * Wing 词表(R8 单一事实源:服务端随 list-records 下发,client 不再手抄;仅 offset===0 时附带)。
      * 含 8 角 + `general`(跨域兜底,存量大 reserved 值仍可筛)。缺省(旧服务端)时 client

@@ -121,6 +121,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           }
           const v = r.value;
           setItems((prev) => (append ? prev.concat(v.items) : v.items));
+          if (v.usageSummary) setUsageSummary(v.usageSummary);
           // 换页（非追加）时勾选集作废：列表内容已不是原来那批
           if (!append) setSel(new Set());
           setHasMore(!!v.hasMore);
@@ -307,6 +308,8 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   };
 
   const countText = total !== null ? '共 ' + total + ' 条' : items.length + ' 条' + (hasMore ? '+' : '');
+  // 召回使用汇总(首屏响应附带;进 topN 才算 used)
+  const [usageSummary, setUsageSummary] = useState<{ tracked: number; attempted: number; used: number; rate: number } | null>(null);
   const selCount = sel.size;
 
   return (
@@ -489,6 +492,9 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       </div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>{loading ? '加载中…' : countText}</span>
+        {usageSummary ? (
+          <span style={S.muted} title="老化权重效果口径:参与召回尝试的记忆中,进 topN(被注入上下文)的比例">{'召回使用 ' + usageSummary.used + '/' + usageSummary.attempted + '(' + usageSummary.rate + '%)'}</span>
+        ) : null}
         {/* 退场筛查:三态分开看——软删记录不隐藏(可恢复),但混排时可一键分流 */}
         <span style={S.muted}>退场筛查</span>
         {([['', '全部'], ['active', '仅活跃'], ['retired', '仅退场']] as const).map(([val, label]) => {
@@ -603,6 +609,28 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                   </span>
                 ) : null}
                 <span style={S.muted}>{'优先级 ' + m.priority}</span>
+                {m.agingWeight != null ? (
+                  <span
+                    style={{
+                      fontSize: 11, padding: '1px 6px', borderRadius: 999, whiteSpace: 'nowrap',
+                      border: '1px solid ' + (m.agingWeight <= 0.6 ? 'var(--dsh-mem-danger)' : 'var(--dsh-mem-border)'),
+                      color: m.agingWeight <= 0.6 ? 'var(--dsh-mem-danger)' : 'var(--dsh-mem-text-2)',
+                    }}
+                    title={'老化权重 ' + Math.round(m.agingWeight * 100) + '%(读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期)));越低越老'}
+                  >
+                    {'老化 ' + Math.round(m.agingWeight * 100) + '%'}
+                  </span>
+                ) : null}
+                {m.usage ? (
+                  <span
+                    style={S.muted}
+                    title={'召回使用 ' + m.usage.used + '/' + m.usage.attempts + '(进 topN 才算 used)'
+                      + (m.usage.lastUsedAt ? ';最近使用 ' + fmtTime(new Date(m.usage.lastUsedAt).toISOString()) : '')
+                      + (m.usage.lastAttemptAt ? ';最近尝试 ' + fmtTime(new Date(m.usage.lastAttemptAt).toISOString()) : '')}
+                  >
+                    {'用 ' + m.usage.used + '/' + m.usage.attempts}
+                  </span>
+                ) : null}
                 {m.score !== null && m.score !== undefined ? (
                   <span style={S.muted}>{'相关度 ' + Number(m.score).toFixed(2)}</span>
                 ) : null}
