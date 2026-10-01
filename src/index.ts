@@ -46,6 +46,7 @@ import { registerSlotRecall } from './hooks/slot-recall.js';
 import { registerLongTaskMonitor } from './hooks/long-task.js';
 import { ContextUsageStore } from './store/context-usage.js';
 import { TodoRefStore } from './store/todo-ref.js';
+import { RoomRegistryStore } from './store/rooms-registry.js';
 import { registerSlotsProjection } from './projection/slots.js';
 import type { MemoryLogger } from './types.js';
 import { errDetail, withFileLog } from './util/filelog.js';
@@ -417,6 +418,9 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   // todo/write 快照参考(仅长任务会话;写 pinned 槽位走 slot-recall 常驻注入)。
   const contextUsage = new ContextUsageStore(logger);
   const todoRef = new TodoRefStore();
+  // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
+  const roomRegistry = new RoomRegistryStore(dataDir, logger);
+  await roomRegistry.init();
   if (storageOk) {
     registerLongTaskMonitor(ctx, {
       cfg: config,
@@ -429,7 +433,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   }
   const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir);
   runner.setAfterRun(recall.invalidateProfile);
-  registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate);
+  registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate, storageOk ? roomRegistry : undefined);
   // 激活槽位(active slot):工具面 + 常驻注入 + 服务端投影(均走 ctx.effect,可撤销)
   registerSlotTools(ctx, config, stores.slots, logger, modes, live, stores.l1);
   const slotRecall = registerSlotRecall(ctx, config, stores.slots, logger, live);
@@ -461,6 +465,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     },
     ruminate,
     storageOk ? { runner, slots: stores.slots, contextUsage, todoRef } : undefined,
+    storageOk ? roomRegistry : undefined,
   );
 
   // bench 控制服务(config.benchControl 门控,默认关):仅基准/调试部署注册,

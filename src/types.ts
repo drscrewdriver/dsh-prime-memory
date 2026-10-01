@@ -66,6 +66,10 @@ export interface RoomCount {
   room: string;
   /** 该 Room 下的记录数(与 `wingL1Counts()` 同口径:含 retired 行)。 */
   count: number;
+  /** 来源标示(rooms-get 端点层合并注册表后附带;'grown' = 自生长,可缺省)。 */
+  source?: 'pre-registered' | 'grown';
+  /** 人类可读名(注册表条目才有;面板 chip 可用 label 展示)。 */
+  label?: string;
 }
 
 /** 记录族标签推断:work_* 前缀 → work,其余(含 auto 档兜底)→ chat。 */

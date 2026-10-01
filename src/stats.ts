@@ -25,6 +25,7 @@ import { emptyRecallStats, type RecallSessionStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import type { RebuildController } from './pipeline/rebuild.js';
 import type { RuminateController } from './pipeline/ruminate.js';
+import type { RoomRegistryStore } from './store/rooms-registry.js';
 import { projectDistillChain, validateDistillChain, type DistillChainEntry, type LiveSettingsHandle } from './settings.js';
 import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
@@ -66,7 +67,7 @@ export interface MemoryStatusSource {
 }
 
 /**
- * 端点全集运行时清单(36 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -85,6 +86,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/longtask-compress-tail',
   'dsh-memory/wing-overview',
   'dsh-memory/rooms-get',
+  'dsh-memory/rooms-export',
   'dsh-memory/wing-backfill',
   'dsh-memory/session-stats',
   'dsh-memory/settings-get',
@@ -256,6 +258,9 @@ import type {
   UiRecord,
   LongTaskHintGetResponse,
   LongTaskCompressTailResponse,
+  RoomCount,
+  RoomsExportRequest,
+  RoomsExportResponse,
 } from './contract.js';
 export type { MemoryStats } from './contract.js';
 
@@ -338,6 +343,8 @@ interface MemoryRpcSources {
   sessionInfo?: SessionInfoSource;
   /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
   longTask?: LongTaskEndpointDeps;
+  /** Room 注册表(未装配 = rooms-get 不带 registry,rooms-export 不可用)。 */
+  roomRegistry?: RoomRegistryStore;
 }
 
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
@@ -363,6 +370,7 @@ export function buildEndpointDeps(
     sessionInfo: sources.sessionInfo,
     ruminate: controller,
     longTask: sources.longTask,
+    roomRegistry: sources.roomRegistry,
   };
   return { ...base, ...injected };
 }
@@ -393,6 +401,8 @@ export function registerMemoryRpc(
   ruminate?: RuminateController,
   /** 长任务端点依赖(cfg.longTask.enabled 门控;缺省 = 端点恒 disabled)。 */
   longTaskDeps?: LongTaskEndpointDeps,
+  /** Room 分类管理依赖(注册表;缺省 = rooms-get 不带 registry、rooms-export 恒 404 语义)。 */
+  roomRegistry?: RoomRegistryStore,
 ): void {
   /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
   let holding = false;
@@ -578,6 +588,8 @@ export interface EndpointDeps {
   sessionInfo?: SessionInfoSource;
   /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
   longTask?: LongTaskEndpointDeps;
+  /** Room 注册表(未装配 = rooms-get 不带 registry,rooms-export 不可用)。 */
+  roomRegistry?: RoomRegistryStore;
 }
 
 /** RPC 字符串入参上限校验:防 loopback 面畸形超长载荷
@@ -596,7 +608,7 @@ function sanitizeSettings(s: MemoryLiveSettings): MemoryLiveSettings {
 
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export async function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown> {
-  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, longTask: longTaskDeps } = deps;
+  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, longTask: longTaskDeps, roomRegistry } = deps;
   switch (endpoint) {
     case 'dsh-memory/stats':
       return buildStats(cfg, stores, status);
@@ -870,11 +882,87 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     // ── Room 分类计数(标签自生长分类;展开 metadata.tags 聚合,零 schema) ──
     case 'dsh-memory/rooms-get': {
       const rooms = stores.l1.listRooms();
-      const v: RoomsGetResponse = { rooms, total: rooms.length, orphanCount: stores.l1.untaggedL1Count() };
+      // 端点层合并注册表(Agent A 设计):注册表 active 条目 count=0 补齐并带
+      // source/label;自生长条目标 source='grown'。不动 listRooms() 的缓存语义。
+      const merged: Array<RoomCount & { label?: string }> = rooms.map((r) => ({ ...r, source: 'grown' }));
+      const registry = roomRegistry?.listActive() ?? [];
+      for (const e of registry) {
+        const idx = merged.findIndex((r) => r.room === e.slug);
+        if (idx === -1) {
+          merged.push({ room: e.slug, count: 0, source: 'pre-registered', label: e.label });
+        } else {
+          merged[idx] = { ...merged[idx], source: 'pre-registered', label: e.label ?? merged[idx].label };
+        }
+      }
+      const v: RoomsGetResponse = {
+        rooms: merged,
+        total: merged.length,
+        orphanCount: stores.l1.untaggedL1Count(),
+        registry: roomRegistry?.list().map((e) => ({
+          slug: e.slug,
+          label: e.label,
+          description: e.description,
+          source: e.source,
+          aliases: e.aliases,
+          status: e.status,
+        })),
+      };
       return v;
     }
 
-    // ── 一键回填(task_15):后台任务,单飞;端点立即返回,进度看 wing-overview ──
+    case 'dsh-memory/rooms-export': {
+      const p = (payload ?? {}) as { kind?: string; limit?: number };
+      const kind = p.kind === 'orphans' ? 'orphans' : p.kind === 'rooms' ? 'rooms' : '';
+      if (!kind) throw new Error(`頖kind: ${String(p.kind)}(允rooms/orphans)` + ')');
+      const limit = Math.min(Math.max(Number(p.limit) || 2000, 1), 10_000);
+      const esc = (v: unknown): string => {
+        const t = String(v ?? '');
+        return /[,\r\n"]/ .test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+      };
+      if (kind === 'rooms') {
+        const registry = roomRegistry?.list() ?? [];
+        const counts = new Map(stores.l1.listRooms().map((r) => [r.room, r.count]));
+        const lines = ['slug,count,source,label,description,status,aliases'];
+        let n = 0;
+        const seen = new Set<string>();
+        for (const e of registry) {
+          lines.push([e.slug, String(counts.get(e.slug) ?? 0), e.source, e.label ?? '', e.description ?? '', e.status, (e.aliases ?? []).join('|')].map(esc).join(','));
+          seen.add(e.slug);
+          n++;
+        }
+        for (const r of stores.l1.listRooms()) {
+          if (seen.has(r.room)) continue;
+          lines.push([r.room, String(r.count), 'grown', '', '', 'active', ''].map(esc).join(','));
+          n++;
+        }
+        const v: RoomsExportResponse = { kind, csv: lines.join('\r\n'), total: n, truncated: false };
+        return v;
+      }
+      // orphans:无 Room 绑定的活跃记录清单(id/type/scene/updated/content/候选/状态)
+      const header = 'id,type,scene_name,updated_at,content,room_candidates,room_review';
+      const lines: string[] = [header];
+      let n = 0;
+      let truncated = false;
+      for (let offset = 0; offset < limit; offset += 200) {
+        const page = stores.l1.list({ untagged: true, retired: false, limit: 200, offset });
+        for (const r of page.items) {
+          if (n >= limit) {
+            truncated = true;
+            break;
+          }
+          const meta = (r.metadata ?? {}) as Record<string, unknown>;
+          lines.push(
+            [r.id, r.type, r.scene_name, new Date(r.updatedAt).toISOString(), r.content,
+             Array.isArray(meta.roomCandidates) ? (meta.roomCandidates as string[]).join('|') : '',
+             String(meta.roomReview ?? '')].map(esc).join(','),
+          );
+          n++;
+        }
+        if (truncated || page.items.length < 200) break;
+      }
+      const v: RoomsExportResponse = { kind, csv: lines.join('\r\n'), total: n, truncated };
+      return v;
+    }
     case 'dsh-memory/wing-backfill': {
       const r = startWingBackfill({
         ctx: deps.ctx,
