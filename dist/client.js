@@ -4132,7 +4132,12 @@ var __defProp = Object.defineProperty;
 		      return;
 		    }
 		    if (majorOf(from) === hall) {
-		      setMsg(`${from} 已在 ${hall} 下。`);
+		      if (registry.some((e) => e.slug === from)) {
+		        setMsg(`${from} 已在 ${hall} 下。`);
+		        return;
+		      }
+		      setPicking(null);
+		      void adopt(from);
 		      return;
 		    }
 		    const f = { action: "rename", from, to: `${hall}/${suffixOf(from)}` };
@@ -4142,6 +4147,13 @@ var __defProp = Object.defineProperty;
 		  };
 		  const execMerge = () => run(async () => {
 		    if (!preview) return;
+		    if (preview.action === "rename" && !registry.some((e) => e.slug === preview.from)) {
+		      const rr = await rpc("dsh-memory/room-register", { slug: preview.from, source: "grown" });
+		      if (!rr || !rr.ok) {
+		        setError(rr && rr.error ? rr.error.message : "收编源失败");
+		        return;
+		      }
+		    }
 		    const r = await rpc("dsh-memory/room-admin", { action: preview.action, from: preview.from, to: preview.to, dryRun: false });
 		    if (r && r.ok) {
 		      setMsg(String(r.value?.notice ?? "完成"));
@@ -4462,8 +4474,41 @@ var __defProp = Object.defineProperty;
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)" }),
 		      grownOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 6 }, children: grownOnly.map((r) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { ...btn, cursor: "default", borderRadius: 999, padding: "2px 8px" }, title: "自生长 slug(未注册)", children: r.room + " · " + r.count }),
-		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: "收编进注册表(source=grown)", onClick: () => adopt(r.room), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: "收编" })
+		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		          "span",
+		          {
+		            style: { ...btn, cursor: hiPriv && !busy ? "grab" : "default", borderRadius: 999, padding: "2px 8px" },
+		            draggable: hiPriv && !busy,
+		            onDragStart: (ev) => {
+		              ev.dataTransfer.setData("text/dsh-room", r.room);
+		              ev.dataTransfer.effectAllowed = "move";
+		            },
+		            title: hiPriv && !busy ? "自生长 slug(未注册)——拖到某个 hall 头上 = 收编并归为其子类" : "自生长 slug(未注册)",
+		            children: r.room + " · " + r.count
+		          }
+		        ),
+		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: "收编进注册表(source=grown,原地)", onClick: () => adopt(r.room), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: "收编" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		          "button",
+		          {
+		            type: "button",
+		            disabled: !hiPriv || busy,
+		            title: "归类到已有 hall 下:点击后选目标 hall(收编+子类一步,记录随迁)",
+		            onClick: () => {
+		              if (picking === r.room) {
+		                setPicking(null);
+		                return;
+		              }
+		              setForm({ action: "rename", from: r.room, to: "" });
+		              setPreview(null);
+		              setPicking(r.room);
+		              setMsg(null);
+		              setError(null);
+		            },
+		            style: { ...btn, opacity: !hiPriv || busy ? 0.5 : 1, ...picking === r.room ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : {} },
+		            children: picking === r.room ? "选 hall…" : "归"
+		          }
+		        )
 		      ] }, r.room)) }) : null
 		    ] }) : null
 		  ] });

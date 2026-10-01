@@ -276,6 +276,28 @@ describe('Hall·Room 集成(HTTP 面全链 × 真实存储)', () => {
     expect(g.rooms.find((x) => x.room === 'dsh-plugin/bash-terminal')?.count).toBe(1);
   });
 
+  it('收编+归类一步(grown-only 拖到 hall 下的后端组合):先 grown 注册目标,再 rename', async () => {
+    // 未注册自生长 slug:记录带 git-commits 标签,注册表无条目
+    await seed(env.l1, 'gc1', ['git-commits']);
+    expect(env.registry.bySlug('git-commits')).toBeUndefined();
+    // 客户端组合 = ①grown 注册目标(H/G)→ ②rename G→H/G(dryRun 预览零写入)
+    const preview = (await env.call('dsh-memory/room-admin', { action: 'rename', from: 'git-commits', to: 'dsh-plugin/git-commits' })) as { dryRun?: boolean; affected?: number };
+    expect(preview.dryRun).toBe(true);
+    expect(preview.affected).toBe(1);
+    expect((await env.call('dsh-memory/rooms-export', { kind: 'records', tag: 'git-commits' }) as { total: number }).total).toBe(1); // 预览未动
+    // 实跑组合 = ①原地收编 from(source=grown;markMered 对未注册 from 会早退)→ ②rename(from 条目随后改名,别名由 renameSlug 挂)
+    await env.call('dsh-memory/room-register', { slug: 'git-commits', source: 'grown' });
+    await env.call('dsh-memory/room-admin', { action: 'rename', from: 'git-commits', to: 'dsh-plugin/git-commits', dryRun: false });
+    expect(env.l1.getByIds(['gc1'])[0]!.metadata?.tags).toEqual(['dsh-plugin/git-commits']);
+    const e = env.registry.bySlug('dsh-plugin/git-commits')!;
+    expect(e.source).toBe('grown'); // 收编身份,不戴 ⭐
+    expect(e.status).toBe('active');
+    expect(e.aliases).toContain('git-commits'); // markMerged 把旧名收进目标别名
+    // 分组视图:已挂到 dsh-plugin hall 下
+    const g = (await env.call('dsh-memory/rooms-get', {})) as { rooms: Array<{ room: string; count: number }> };
+    expect(g.rooms.find((x) => x.room === 'dsh-plugin/git-commits')?.count).toBe(1);
+  });
+
   it('⑦ retire / 恢复往返(HTTP 面)', async () => {
     await env.call('dsh-memory/room-admin', { action: 'retire', slug: 'dsh-plugin/merge' });
     expect(env.registry.bySlug('dsh-plugin/merge')!.status).toBe('retired');
