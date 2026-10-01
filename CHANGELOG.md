@@ -17,7 +17,13 @@
   - **建议状态(`longtask-hint-get`)+ 浮动球(`client/src/longtask-fab.ts`)**:ego-browser 式 vanilla overlay(FAB+面板,拖拽/位置持久化/视口夹紧),**建议不阻断**——仅当「上下文占用达 `contextThresholdPct`」或「todo 漂移达 `driftThreshold`」且长任务未开启时点亮呼吸光晕;面板内:长任务开关(临时,per-session,**不带 mode**——切开关不重置用户档位)、占用/漂移进度条、手动尾部压缩按钮(长任务开启才可用)、任务计数。轮询忙 2s/闲 5s,RPC 失败静默;座位契约不变(settings.section 恰一个,body 单例不占任何座位)。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
 
-## [0.20.0-beta.2] — 2026-10-01
+## [0.20.0-beta.3] — 2026-10-01
+
+### 新增
+
+- **记录面板 Room 分类改进**:①展开/收拢(收拢 = 头部 + 前 8 个高频 Room 预览,开合状态持久化);②展开态全量分页(每页 40,◀▶ 翻页),替代原先「仅显示前 40」的硬截断;③**孤儿记忆筛选**——首位「无绑定 · N」chip 只看没有任何 Room 绑定的记忆(`list-records` 新增 `untagged` 过滤通道,`rooms-get` 新增 `orphanCount`,与 Room 计数同口径);④筛选条件即时可见 + 一键清除。检索路径同款孤儿过滤。
+
+## [0.20.0-beta.2] — 2026-10-01## [0.20.0-beta.2] — 2026-10-01
 
 > dsh-0.2.0-beta 渠道 +1:反刍完整 context 优化(repo 软围栏/场景按项目迁移/闭环)。与 longtask(见 beta.1)同包,真机反馈合并收口。
 
