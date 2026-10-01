@@ -84,7 +84,6 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   // Room 分页(展开态;每页 40)
   const [roomPage, setRoomPage] = useState(0);
   const [orphanCount, setOrphanCount] = useState(0);
-  const [roomRegistry, setRoomRegistry] = useState<Array<{ slug: string; label?: string; description?: string; source: 'pre-registered' | 'grown'; aliases?: string[]; status: 'active' | 'retired' }>>([]);
   // 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场
   const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
   const [rooms, setRooms] = useState<RoomCount[]>([]);
@@ -159,7 +158,6 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         if (r && r.ok) {
           setRooms(r.value.rooms ?? []);
           setOrphanCount(r.value.orphanCount ?? 0);
-          setRoomRegistry(r.value.registry ?? []);
         }
       })
       .catch(() => {

@@ -3298,7 +3298,6 @@ var __defProp = Object.defineProperty;
 		  });
 		  const [roomPage, setRoomPage] = (0, import_react15.useState)(0);
 		  const [orphanCount, setOrphanCount] = (0, import_react15.useState)(0);
-		  const [roomRegistry, setRoomRegistry] = (0, import_react15.useState)([]);
 		  const [retiredFilter, setRetiredFilter] = (0, import_react15.useState)("");
 		  const [rooms, setRooms] = (0, import_react15.useState)([]);
 		  const [wingCatalog, setHallCatalog] = (0, import_react15.useState)(null);
@@ -3357,7 +3356,6 @@ var __defProp = Object.defineProperty;
 		      if (r && r.ok) {
 		        setRooms(r.value.rooms ?? []);
 		        setOrphanCount(r.value.orphanCount ?? 0);
-		        setRoomRegistry(r.value.registry ?? []);
 		      }
 		    }).catch(() => {
 		    });

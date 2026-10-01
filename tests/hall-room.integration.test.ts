@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { registerMemoryRpc, type EndpointDeps } from '../src/stats.js';
+import { registerMemoryRpc } from '../src/stats.js';
 import { MemoryDb } from '../src/store/sqlite.js';
 import { L0Store } from '../src/store/l0.js';
 import { L1Store } from '../src/store/l1.js';

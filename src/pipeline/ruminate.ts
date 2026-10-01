@@ -31,7 +31,6 @@ import { runSceneConsolidation } from './l2.js';
 import { relabelPass, type RelabelStats } from './relabel.js';
 import { processSceneReclusterJobs } from './recluster.js';
 import { annotateOrphanCandidates } from '../room-review.js';
-import type { RoomRegistryStore } from '../store/rooms-registry.js';
 import { runPersona } from './l3.js';
 import type { MemoryRunner } from './runner.js';
 

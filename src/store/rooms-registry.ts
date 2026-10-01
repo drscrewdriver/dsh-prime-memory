@@ -11,7 +11,6 @@
  * 自生长目录**,绝不阻塞 rooms-get / 标注器(R2 红线)。
  */
 import * as path from 'node:path';
-import { promises as fs } from 'node:fs';
 import { isTag } from '../metadata-validators.js';
 import { readJsonStrict, atomicWriteText, ensureDir } from '../util/io.js';
 import type { MemoryLogger } from '../types.js';

@@ -15,7 +15,7 @@ export async function processSceneReclusterJobs(source, scenes, logger, maxJobs 
         const family = job.family === 'work' ? 'work' : 'chat';
         const store = scenes[family];
         // 快照在 try 外声明:catch 的回滚要用它
-        let snapshots = [];
+        const snapshots = [];
         try {
             // ① 内存快照:按场景名(文件 basename)匹配当前存在的摘要文件
             const all = await store.list();

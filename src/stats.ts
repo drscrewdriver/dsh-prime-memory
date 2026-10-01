@@ -39,8 +39,6 @@ import { sourceAnchorLabels } from './pipeline/anchors.js';
 import { readSupersedeMarker } from './store/supersede.js';
 import { isSnapshotName } from './store/l1-snapshot.js';
 import type { PersonaStore } from './store/persona.js';
-import type { SlotStore } from './store/slots.js';
-import type { MemoryRunner } from './pipeline/runner.js';
 import type { SceneStore } from './store/scenes.js';
 import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
@@ -255,9 +253,7 @@ import type {
   SettingsSetResponse,
   UiRecord,
   RoomCount,
-  RoomsExportRequest,
   RoomsExportResponse,
-  RoomRegisterRequest,
   RoomRegisterResponse,
   RoomAdminRequest,
   RoomAdminResponse,

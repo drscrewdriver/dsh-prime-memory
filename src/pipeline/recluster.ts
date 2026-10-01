@@ -24,12 +24,6 @@ export interface ReclusterJobSource {
   finishSceneRecluster(jobId: string, ok: boolean): void;
 }
 
-/** 单个场景文件的内存快照(回滚物料;content=null = 文件本不存在)。 */
-interface SceneSnapshot {
-  name: string;
-  content: string | null;
-}
-
 function baseName(p: string): string {
   return p.split(/[\\/]/).pop() ?? p;
 }
@@ -52,7 +46,7 @@ export async function processSceneReclusterJobs(
     const family: MemoryFamily = job.family === 'work' ? 'work' : 'chat';
     const store = scenes[family];
     // 快照在 try 外声明:catch 的回滚要用它
-    let snapshots: Array<{ name: string; content: string | null }> = [];
+    const snapshots: Array<{ name: string; content: string | null }> = [];
     try {
       // ① 内存快照:按场景名(文件 basename)匹配当前存在的摘要文件
       const all = await store.list();

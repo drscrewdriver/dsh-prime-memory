@@ -286,10 +286,10 @@ export async function mergeRoom(
     const backup = io.l1.backupTagRecords(from);
     io.logger.info(`[memory] Room merge 备份:${from} → ${to},${backup.count} 条 → ${backup.file}`);
     let applied = 0;
-    let hasMore = false;
+    const hasMore = false; // 循环到收敛,单次调用内 hasMore 恒 false(重写返回值沿用结果形状)
     const families = new Set<string>();
     const scenes = new Set<string>();
-    // 游标重写:上限 cap/次,hasMore 时继续(总量受 cap×轮次约束,单飞内收敛)
+    // 游标重写:上限 cap/次,r.hasMore 时继续(总量受 cap×轮次约束,单飞内收敛)
     for (;;) {
       const r = io.l1.rewriteTag(from, to, cap);
       applied += r.rewritten;
