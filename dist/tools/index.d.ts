@@ -22,6 +22,7 @@ import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
 import type { SessionModeStore } from '../store/session-modes.js';
 import type { MemoryFamily, MemoryLogger } from '../types.js';
+import type { RoomRegistryStore } from '../store/rooms-registry.js';
 export declare function registerMemoryTools(ctx: Context, cfg: MemoryConfig, stores: {
     l0: L0Store;
     l1: L1Store;
@@ -31,4 +32,6 @@ export declare function registerMemoryTools(ctx: Context, cfg: MemoryConfig, sto
     graph?: GraphStore;
 }, logger: MemoryLogger, modes: SessionModeStore, live: LiveSettingsHandle, 
 /** 反刍控制器(可选:未装配时 ruminate 工具返回未启用提示)。 */
-ruminate?: RuminateController): void;
+ruminate?: RuminateController, 
+/** Room 注册表(分类管理 beta.4;缺省 = memory_room_admin 返回未装配提示)。 */
+roomRegistry?: RoomRegistryStore): void;

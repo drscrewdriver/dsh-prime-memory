@@ -66,6 +66,23 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [hallFilter, setHallFilter] = useState<string[]>([]);
   // Room 过滤(标签自生长分类):点分类 chip 即按该 tag 筛选记录
   const [tagFilter, setTagFilter] = useState('');
+<<<<<<< HEAD
+=======
+  // 孤儿记忆(无 Room 绑定)筛选:与 tagFilter 互斥
+  const [untaggedOnly, setUntaggedOnly] = useState(false);
+  // Room 区块展开/收拢(持久化;收拢 = 只留头部 + 首行预览)
+  const [roomsOpen, setRoomsOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem('dsh.memory.rooms.open') === '1';
+    } catch {
+      return false;
+    }
+  });
+  // Room 分页(展开态;每页 40)
+  const [roomPage, setRoomPage] = useState(0);
+  const [orphanCount, setOrphanCount] = useState(0);
+  const [roomRegistry, setRoomRegistry] = useState<Array<{ slug: string; label?: string; description?: string; source: 'pre-registered' | 'grown'; aliases?: string[]; status: 'active' | 'retired' }>>([]);
+>>>>>>> a5287da (feat(room-admin-client+docs): 客户端最小档 + ADR-0020(beta.4 收口))
   // 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场
   const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
   const [rooms, setRooms] = useState<RoomCount[]>([]);
@@ -136,7 +153,15 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const loadRooms = useCallback(() => {
     rpc('dsh-memory/rooms-get', {})
       .then((r) => {
+<<<<<<< HEAD
         if (r && r.ok) setRooms(r.value.rooms ?? []);
+=======
+        if (r && r.ok) {
+          setRooms(r.value.rooms ?? []);
+          setOrphanCount(r.value.orphanCount ?? 0);
+          setRoomRegistry(r.value.registry ?? []);
+        }
+>>>>>>> a5287da (feat(room-admin-client+docs): 客户端最小档 + ADR-0020(beta.4 收口))
       })
       .catch(() => {
         /* 端点不可用时静默:Room 区块降级为不显示,不影响列表主功能 */
@@ -334,6 +359,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           {hiPriv ? '高权限：开' : '高权限：关'}
         </NButton>
       </div>
+<<<<<<< HEAD
       {/* ── Room 分类(标签自生长):点 chip 按该 tag 筛选,再点取消 ── */}
       {rooms.length > 0 ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>
@@ -341,6 +367,84 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           {rooms.slice(0, 40).map((r) => {
             const on = tagFilter === r.room;
             return (
+=======
+      {/* ── Room 分类(标签自生长):展开/收拢 + 分页 + 孤儿(无绑定)筛选 ── */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <button
+            type="button"
+            title={roomsOpen ? '收拢 Room 分类' : '展开 Room 分类(全部分页浏览)'}
+            onClick={() => {
+              const next = !roomsOpen;
+              setRoomsOpen(next);
+              setRoomPage(0);
+              try {
+                window.localStorage.setItem('dsh.memory.rooms.open', next ? '1' : '0');
+              } catch {
+                /* 存储不可用 = 会话内仍可切换 */
+              }
+            }}
+            style={{
+              cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
+              border: '1px solid var(--dsh-mem-border)', background: 'transparent',
+              color: 'var(--dsh-mem-text-2)',
+            }}
+          >
+            {roomsOpen ? '▾' : '▸'} Room 分类 · 共 {rooms.length}
+          </button>
+          {/* 导出 CSV(分类数据;浏览器 blob 下载) */}
+          {rooms.length > 0 || orphanCount > 0 ? (
+            <button
+              type="button"
+              title="导出分类数据 CSV(Room 词表+计数)"
+              onClick={() => {
+                rpc('dsh-memory/rooms-export', { kind: 'rooms' })
+                  .then((r) => {
+                    if (!r || !r.ok || !r.value?.csv) return;
+                    const blob = new Blob([r.value.csv as string], { type: 'text/csv;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'dsh-memory-rooms.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  })
+                  .catch(() => undefined);
+              }}
+              style={{
+                cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
+                border: '1px solid var(--dsh-mem-border)', background: 'transparent',
+                color: 'var(--dsh-mem-text-2)',
+              }}
+            >
+              导出 CSV
+            </button>
+          ) : null}
+          {/* 孤儿 chip:与 Room chip 互斥的筛选入口 */}
+          <button
+            type="button"
+            title={untaggedOnly ? '取消孤儿筛选' : '只看没有任何 Room 绑定的记忆'}
+            onClick={() => {
+              const next = !untaggedOnly;
+              setUntaggedOnly(next);
+              if (next) setTagFilter('');
+              const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next ? '' : tagFilter, untagged: next, retired: retiredFilter };
+              setLast(conds);
+              fetchPage(conds, 0, false);
+            }}
+            style={{
+              cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 999,
+              border: untaggedOnly ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+              background: untaggedOnly ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+              color: untaggedOnly ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+            }}
+          >
+            {'无绑定 · ' + orphanCount}
+          </button>
+          {(tagFilter || untaggedOnly) && (
+            <span style={S.muted}>
+              筛选中:{untaggedOnly ? '无绑定' : tagFilter}
+>>>>>>> a5287da (feat(room-admin-client+docs): 客户端最小档 + ADR-0020(beta.4 收口))
               <button
                 key={r.room}
                 type="button"
@@ -368,11 +472,73 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           })}
           {rooms.length > 40 ? <span style={S.muted}>{'（仅显示前 40 / 共 ' + rooms.length + '）'}</span> : null}
         </div>
+<<<<<<< HEAD
       ) : (
         <div style={{ ...S.muted, marginBottom: 10 }}>
           Room 分类：暂无（由反刍涌现的标签自动生成，无需手工建立）
         </div>
       )}
+=======
+        {rooms.length > 0 ? (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: roomsOpen ? 6 : 0 }}>
+              {(roomsOpen ? rooms.slice(roomPage * ROOM_PAGE_SIZE, (roomPage + 1) * ROOM_PAGE_SIZE) : rooms.slice(0, 8)).map((r) => {
+                const on = tagFilter === r.room && !untaggedOnly;
+                return (
+                  <button
+                    key={r.room}
+                    type="button"
+                    title={on ? '取消按该 Room 筛选' : '按该 Room 筛选记录'}
+                    onClick={() => {
+                      const next = on ? '' : r.room;
+                      setTagFilter(next);
+                      setUntaggedOnly(false);
+                      const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, untagged: false, retired: retiredFilter };
+                      setLast(conds);
+                      fetchPage(conds, 0, false);
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+                      background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+                      color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+                    }}
+                  >
+                    {(r as { label?: string }).label
+                      ? (r as { label?: string }).label + ' · ' + r.count
+                      : r.room + ' · ' + r.count}
+                    {(r as { source?: string }).source === 'pre-registered' ? ' ⭐' : ''}
+                  </button>
+                );
+              })}
+              {!roomsOpen && rooms.length > 8 ? (
+                <span style={S.muted}>(收拢中,共 {rooms.length} 个)</span>
+              ) : null}
+            </div>
+            {roomsOpen && rooms.length > ROOM_PAGE_SIZE ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={S.muted}>
+                  第 {roomPage + 1} / {Math.ceil(rooms.length / ROOM_PAGE_SIZE)} 页(共 {rooms.length})
+                </span>
+                <button type="button" title="上一页" disabled={roomPage === 0}
+                  onClick={() => setRoomPage((p) => Math.max(0, p - 1))}
+                  style={{ cursor: roomPage === 0 ? 'default' : 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--dsh-mem-border)', background: 'transparent', color: 'var(--dsh-mem-text-2)' }}
+                >◀</button>
+                <button type="button" title="下一页" disabled={(roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length}
+                  onClick={() => setRoomPage((p) => ((p + 1) * ROOM_PAGE_SIZE < rooms.length ? p + 1 : p))}
+                  style={{ cursor: (roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length ? 'default' : 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--dsh-mem-border)', background: 'transparent', color: 'var(--dsh-mem-text-2)' }}
+                >▶</button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div style={S.muted}>Room 分类:暂无(由反刍涌现的标签自动生成,无需手工建立)</div>
+        )}
+      </div>
+>>>>>>> a5287da (feat(room-admin-client+docs): 客户端最小档 + ADR-0020(beta.4 收口))
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>{loading ? '加载中…' : countText}</span>
         {/* 退场筛查:三态分开看——软删记录不隐藏(可恢复),但混排时可一键分流 */}
