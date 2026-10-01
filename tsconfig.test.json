@@ -17,6 +17,7 @@
     "tests/recluster.test.ts",
     "tests/room-review.test.ts",
     "tests/rooms-registry.test.ts",
+    "tests/room-merge.test.ts",
     "tests/longtask-compress-tail.test.ts",
     "tests/long-task.test.ts",
     "tests/rpc.test.ts",

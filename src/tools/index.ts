@@ -33,8 +33,10 @@ import type { RoomRegistryStore } from '../store/rooms-registry.js';
 import {
   annotateOrphanCandidates,
   confirmReview,
+  mergeRoom,
   nextReview,
   pendingReviewCount,
+  renameRoom,
   skipReview,
 } from '../room-review.js';
 import { applyGovernanceWeights } from '../store/governance.js';
@@ -251,13 +253,18 @@ export function registerMemoryTools(
       name: 'memory_room_admin',
       description:
         'Room 分类管理(目录粒度)。action="list" 列出注册表条目与自生长 Room 计数;' +
-        'action="register" 预注册一个 Room(高权限;slug 需小写字母数字连字符,可选人类可读名与归类说明——' +
-        '注册后候选标注器与 tags 标注器会优先把记忆挂到这些 Room 上,是治理碎片化的推荐入口)。',
+        'action="register" 预注册一个 Room(高权限;两级制——大类上限 200,小类用「大类/小类」细分不占额度,如 dsh-plugin/merge;' +
+        'action="merge" 合并两个 Room(高权限;dryRun 默认 true 只返预览,实跑改写全部匹配记录的 tags 并入队场景重算,执行前自动备份);' +
+        'action="rename" 改名(= merge 1:1 + 注册表改名);action="retire" 退役一个注册 Room(高权限;存量记录不动)。' +
+        'merge/rename 与反刍并发会相互覆盖,请在反刍空闲时执行。',
       parameters: {
-        action: { type: 'string', required: true, description: 'list(列目录)| register(预注册 Room,高权限)' },
+        action: { type: 'string', required: true, description: 'list | register(高权限) | merge(高权限) | rename(高权限) | retire(高权限)' },
         slug: { type: 'string', description: 'register 的 Room slug(小写字母数字连字符)' },
         label: { type: 'string', description: 'register 的人类可读名(可选,可中文)' },
         description: { type: 'string', description: 'register 的归类说明(可选;喂给标注器帮助归类)' },
+        from: { type: 'string', description: 'merge/rename 的源 Room slug' },
+        to: { type: 'string', description: 'merge/rename 的目标 Room slug' },
+        dryRun: { type: 'string', description: 'merge/rename:默认 true 只返预览;"false" 才实际执行' },
       },
       output: {
         schema: {
@@ -312,7 +319,55 @@ export function registerMemoryTools(
             return { notice: `注册失败: ${err instanceof Error ? err.message : String(err)}` };
           }
         }
-        return { notice: `非法 action:${action}(允许 list/register;merge/rename/retire 将在后续版本提供)。` };
+        if (action === 'merge' || action === 'rename') {
+          if (!roomRegistry) return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };
+          if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
+          const from = String(args.from ?? '').trim();
+          const to = String(args.to ?? '').trim();
+          if (!from || !to) return { notice: 'merge/rename 需要 from 与 to 两个 slug。' };
+          const dryRun = String(args.dryRun ?? 'true').toLowerCase() !== 'false';
+          try {
+            const fn = action === 'merge' ? mergeRoom : renameRoom;
+            const r = await fn({ l1: stores.l1, registry: roomRegistry, logger }, from, to, { dryRun });
+            if (r.dryRun) {
+              return {
+                notice:
+                  `[dryRun 预览] ${from} → ${to}:影响 ${r.affected} 条${r.hasMore ? '(超过单次上限,需续跑)' : ''}。` +
+                  `样例:${r.preview.join(', ') || '无'}。确认无误后以 dryRun="false" 执行(执行前自动备份,重写含已退场行,完成后自动入队场景重算)。`,
+                affected: r.affected,
+              };
+            }
+            // 实跑:受影响场景入队重算(source='room-merge')
+            let requeued = 0;
+            for (const family of r.families ?? []) {
+              for (const scene of r.scenes ?? []) {
+                stores.l1.enqueueSceneRecluster(family, [scene], `room-merge:${Date.now()}`, 'room-merge');
+                requeued++;
+              }
+            }
+            return {
+              notice:
+                `${action === 'merge' ? '合并' : '改名'}完成:${from} → ${to},重写 ${r.applied} 条` +
+                `(备份:${r.backupFile ?? '无'})${requeued > 0 ? `;已入队 ${requeued} 个场景重算` : ''}。`,
+              applied: r.applied,
+              id: to,
+            };
+          } catch (err) {
+            return { notice: `${action} 失败: ${err instanceof Error ? err.message : String(err)}` };
+          }
+        }
+        if (action === 'retire') {
+          if (!roomRegistry) return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };
+          if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
+          const slug = String(args.slug ?? '').trim();
+          try {
+            const ok = await roomRegistry.setStatus(slug, 'retired');
+            return { notice: ok ? `已退役 Room:${slug}(存量记录的 tags 不动,仅词表不再推荐)。` : `未找到注册条目:${slug}(自生长 Room 无需退役,会随 tags 自然消失)。`, slug };
+          } catch (err) {
+            return { notice: `退役失败: ${err instanceof Error ? err.message : String(err)}` };
+          }
+        }
+        return { notice: `非法 action:${action}(允许 list/register/merge/rename/retire)。` };
       },
     }),
   );

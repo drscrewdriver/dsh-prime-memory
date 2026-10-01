@@ -41,8 +41,25 @@ export interface RoomReviewStore {
   getByIds(ids: readonly string[]): MemoryRecord[];
   patchMetadata(id: string, metadata: Record<string, unknown>): boolean;
   listRooms(): Array<{ room: string; count: number }>;
-  /** 确认写 tags 后失效 Room 计数缓存(30s TTL)。 */
+    /** 确认写 tags 后失效 Room 计数缓存(30s TTL)。 */
   invalidateRooms(): void;
+}
+
+/** merge/rename 的 store 面(RoomReviewStore + 游标重写与备份;L1Store 已实现)。 */
+export interface RoomMergeStore extends RoomReviewStore {
+  listByTagAll(tag: string, cap?: number): MemoryRecord[];
+  backupTagRecords(tag: string): { file: string; count: number };
+  rewriteTag(
+    from: string,
+    to: string,
+    cap?: number,
+  ): { rewritten: number; scanned: number; families: string[]; scenes: string[]; hasMore: boolean };
+}
+
+/** Room 注册表最小面(merge 收尾;RoomRegistryStore 已满足)。 */
+export interface RoomRegistryMerge {
+  markMerged(fromSlug: string, toSlug: string): Promise<boolean>;
+  renameSlug(oldSlug: string, newSlug: string): Promise<boolean>;
 }
 
 export interface RoomCandidate {
@@ -212,6 +229,92 @@ function pendingQueue(l1: RoomReviewStore): MemoryRecord[] {
     if (page.items.length < 200) break;
   }
   return out.sort((a, b) => a.updatedAt - b.updatedAt);
+}
+
+/** merge 单飞哨兵(模块级;与 ruminate/wing-backfill 的时间错开由调用方保证)。 */
+let roomMergeRunning = false;
+
+export interface MergeRoomResult {
+  dryRun: boolean;
+  /** 影响条数(dryRun=预览数;实跑=实际重写数)。 */
+  affected: number;
+  preview: string[];
+  applied: number;
+  hasMore: boolean;
+  backupFile?: string;
+  /** 实跑时回传:受影响的族与场景(调用方入队 recluster 'room-merge')。 */
+  families?: string[];
+  scenes?: string[];
+}
+
+/**
+ * Room merge/rename 编排(破坏性动作,分类管理 beta.5):
+ *  - dryRun(缺省 true):只统计 affected + 前 6 条预览,**零写入**;
+ *  - 实跑:执行前备份(matching rows → rooms-merge-backups/)→ 游标重写
+ *    (写前重读-合并-写回,其余 metadata 键保全)→ 注册表 markMerged/renameSlug
+ *    → 返回受影响 (family, scene) 供调用方入队 recluster('room-merge');
+ *  - 单飞:并发 merge 直接抛错;与 relabel/ruminate 的时间错开由调用方保证。
+ * 抛错语义:非法参数/注册表冲突直接抛(调用方转 notice)。
+ */
+export async function mergeRoom(
+  io: { l1: RoomMergeStore; registry: RoomRegistryMerge; logger: MemoryLogger },
+  from: string,
+  to: string,
+  opts: { dryRun?: boolean; cap?: number } = {},
+): Promise<MergeRoomResult> {
+  const dryRun = opts.dryRun !== false;
+  const cap = Math.min(Math.max(opts.cap ?? 500, 1), 2000);
+  if (from === to) throw new Error('from 与 to 相同');
+  if (!from.trim()) throw new Error('from 不能为空');
+  if (roomMergeRunning) throw new Error('Room merge 已在进行中(单飞)');
+  const previewRows = io.l1.listByTagAll(from, 7);
+  const affected = io.l1.listByTagAll(from, cap + 1).length;
+  const preview = previewRows.slice(0, 6).map((r) => r.id);
+  if (dryRun) return { dryRun: true, affected, preview, applied: 0, hasMore: affected > cap };
+  if (roomMergeRunning) throw new Error('Room merge 已在进行中(单飞)');
+  roomMergeRunning = true;
+  try {
+    const backup = io.l1.backupTagRecords(from);
+    io.logger.info(`[memory] Room merge 备份:${from} → ${to},${backup.count} 条 → ${backup.file}`);
+    let applied = 0;
+    let hasMore = false;
+    const families = new Set<string>();
+    const scenes = new Set<string>();
+    // 游标重写:上限 cap/次,hasMore 时继续(总量受 cap×轮次约束,单飞内收敛)
+    for (;;) {
+      const r = io.l1.rewriteTag(from, to, cap);
+      applied += r.rewritten;
+      for (const f of r.families) families.add(f);
+      for (const sc of r.scenes) scenes.add(sc);
+      if (!r.hasMore || r.rewritten === 0) break;
+    }
+    await io.registry.markMerged(from, to);
+    io.l1.invalidateRooms();
+    io.logger.info(`[memory] Room merge 完成:${from} → ${to},重写 ${applied} 条;受影响场景 ${scenes.size} 个`);
+    return {
+      dryRun: false,
+      affected,
+      preview,
+      applied,
+      hasMore,
+      backupFile: backup.file,
+      ...(families.size > 0 || scenes.size > 0 ? { families: [...families], scenes: [...scenes] } : {}),
+    };
+  } finally {
+    roomMergeRunning = false;
+  }
+}
+
+/** rename = merge 1:1 + 注册表改名(冲突时抛错提示走 merge)。 */
+export async function renameRoom(
+  io: { l1: RoomMergeStore; registry: RoomRegistryMerge; logger: MemoryLogger },
+  from: string,
+  to: string,
+  opts: { dryRun?: boolean; cap?: number } = {},
+): Promise<MergeRoomResult> {
+  const r = await mergeRoom(io, from, to, opts);
+  if (!r.dryRun && r.applied > 0) await io.registry.renameSlug(from, to);
+  return r;
 }
 
 /** 下一条待复查(供 agent 逐个过):记录摘要 + 候选 + 现有 Room 词表 + 剩余数。 */

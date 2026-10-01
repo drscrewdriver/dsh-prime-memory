@@ -597,6 +597,19 @@ export interface RoomsGetResponse {
   }>;
 }
 
+/** dsh-memory/room-register(预注册 Room;高权限:面板 memoryMutate 开启才生效)。 */
+export interface RoomRegisterRequest {
+  slug: string;
+  label?: string;
+  description?: string;
+}
+export interface RoomRegisterResponse {
+  slug: string;
+  created: boolean;
+  /** 幂等补全时的提示(如「已存在,只补全缺失字段」)。 */
+  notice?: string;
+}
+
 /** dsh-memory/rooms-export(分类数据导出,CSV 直出)。 */
 export interface RoomsExportRequest {
   /** rooms = 词表+计数;orphans = 无 Room 绑定的记录清单。 */
@@ -1326,6 +1339,7 @@ export interface DshMemoryRequestMap {
   'dsh-memory/wing-overview': Record<string, never>;
   'dsh-memory/rooms-get': Record<string, never>;
   'dsh-memory/rooms-export': RoomsExportRequest;
+  'dsh-memory/room-register': RoomRegisterRequest;
   'dsh-memory/wing-backfill': Record<string, never>;
   'dsh-memory/session-stats': SessionStatsRequest;
   'dsh-memory/settings-get': Record<string, never>;
@@ -1375,6 +1389,7 @@ export interface DshMemoryResponseMap {
   'dsh-memory/wing-overview': WingOverviewResponse;
   'dsh-memory/rooms-get': RoomsGetResponse;
   'dsh-memory/rooms-export': RoomsExportResponse;
+  'dsh-memory/room-register': RoomRegisterResponse;
   'dsh-memory/wing-backfill': WingBackfillResponse;
   'dsh-memory/session-stats': SessionStatsResponse;
   'dsh-memory/settings-get': SettingsGetResponse;

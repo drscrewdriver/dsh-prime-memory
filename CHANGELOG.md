@@ -17,7 +17,19 @@
   - **建议状态(`longtask-hint-get`)+ 浮动球(`client/src/longtask-fab.ts`)**:ego-browser 式 vanilla overlay(FAB+面板,拖拽/位置持久化/视口夹紧),**建议不阻断**——仅当「上下文占用达 `contextThresholdPct`」或「todo 漂移达 `driftThreshold`」且长任务未开启时点亮呼吸光晕;面板内:长任务开关(临时,per-session,**不带 mode**——切开关不重置用户档位)、占用/漂移进度条、手动尾部压缩按钮(长任务开启才可用)、任务计数。轮询忙 2s/闲 5s,RPC 失败静默;座位契约不变(settings.section 恰一个,body 单例不占任何座位)。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
 
-## [0.20.0-beta.4] — 2026-10-01
+## [0.20.0-beta.5] — 2026-10-01
+
+> Room 分类管理第二船(**破坏性面**)。dryRun 默认 true——merge/rename 先预览影响面,确认后才实跑;执行前自动备份到 `rooms-merge-backups/`。
+
+### 新增
+
+- **Room 注册表两级制**:slug 支持 `major` 或 `major/minor` 两级(如 `dsh-plugin`、`dsh-plugin/merge`);**大类上限 200**,小类细分不占大类额度(总量保险 2000)。isTag 词表不放宽(slash 仅注册表层允许)。
+- **merge/rename/retire(工具 `memory_room_admin`,高权限)**:merge 游标重写全部匹配记录的 tags(写前重读-合并-写回,roomCandidates/roomReview/hall/anchors 等键保全;含已退场行,与计数口径一致);rename = merge 1:1 + 注册表改名(aliases 收旧名);retire 仅词表退役(存量不动)。merge/rename 与反刍并发会相互覆盖——请错峰执行(工具提示与 ADR-0020 均已声明)。
+- **重写安全三件套**:dryRun 默认只返 affected+预览零写入;执行前自动备份匹配记录到 `rooms-merge-backups/<ts>-<slug>.json`;完成自动 `invalidateRooms` + 按受影响 (family, scene) 入队场景重算(`source='room-merge'`)。
+- **面板 Room 管理子面板**(高权限开启后出现):注册表单(slug/名称/说明,走新 RPC `room-register`)、孤儿清单导出;合并/退役建议走 agent 工具(dryRun 预览更详细)。
+- 端点面 46 → 47(`room-register`)。
+
+## [0.20.0-beta.4] — 2026-10-01## [0.20.0-beta.4] — 2026-10-01
 
 > Room 分类管理第一船(**零漂移面**):注册表空 = 与 beta.3 行为逐字一致。merge/rename/retire 破坏性面将随 beta.5(dryRun 默认 true 保留一版)。
 

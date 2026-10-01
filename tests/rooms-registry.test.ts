@@ -88,6 +88,23 @@ describe('RoomRegistryStore', () => {
     expect(await readFile(file, 'utf8')).toBe('{corrupt json!!');
   });
 
+  it('两级制:大类 200 上限;小类(major/minor)不占大类额度', async () => {
+    const { store } = await mk();
+    await store.register({ slug: 'dsh-plugin' });
+    // 小类不占大类额度,可连续注册
+    for (const minor of ['merge', 'export', 'review']) {
+      await store.register({ slug: `dsh-plugin/${minor}` });
+    }
+    expect(store.bySlug('dsh-plugin/merge')).toBeDefined();
+    expect(store.listActive().some((e) => e.slug === 'dsh-plugin/review')).toBe(true);
+    // 平级 slug 占大类额度:再注册 1 个新大类正常(200 上限由实现保证,此处验证小类不触发)
+    await store.register({ slug: 'other-major' });
+    expect(store.bySlug('other-major')).toBeDefined();
+    // 双斜杠/空段拒绝
+    await expect(store.register({ slug: 'a/b/c' })).rejects.toThrow(/两级制/);
+    await expect(store.register({ slug: 'a//b' })).rejects.toThrow(/两级制/);
+  });
+
   it('持久化回环:重开文件仍在', async () => {
     const d = await mkdtemp(join(tmpdir(), 'dsh-roomreg-'));
     const s1 = new RoomRegistryStore(d);
