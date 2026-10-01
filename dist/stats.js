@@ -456,7 +456,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
         // ── Room 分类计数(标签自生长分类;展开 metadata.tags 聚合,零 schema) ──
         case 'dsh-memory/rooms-get': {
             const rooms = stores.l1.listRooms();
-            const v = { rooms, total: rooms.length };
+            const v = { rooms, total: rooms.length, orphanCount: stores.l1.untaggedL1Count() };
             return v;
         }
         // ── 一键回填(task_15):后台任务,单飞;端点立即返回,进度看 wing-overview ──
@@ -755,6 +755,8 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const tagSel = typeof p.tag === 'string' ? p.tag.trim().slice(0, 64) : '';
             if (tagSel && !isTag(tagSel))
                 throw new Error('tag 非法(需小写字母数字连字符,1-32 字符)');
+            // 孤儿记忆筛选(与 tag 互斥,tag 优先):只认显式布尔,其余视为缺省。
+            const untaggedSel = p.untagged === true && !tagSel;
             // R13 多值归一: halls 数组只留非空字符串(≤40 字符),去重,上限 8(角数);
             // wing 单值保留兼容,归一后与 halls 合并
             const wingSel = Array.from(new Set([
@@ -795,6 +797,13 @@ export async function handleEndpoint(endpoint, payload, deps) {
                             if (!Array.isArray(tags) || !tags.some((t) => t === tagSel))
                                 return false;
                         }
+                        if (untaggedSel) {
+                            // 孤儿:tags 缺失/非数组/全部空串均算无 Room
+                            const tags = m?.tags;
+                            const hasRoom = Array.isArray(tags) && tags.some((t) => typeof t === 'string' && t !== '');
+                            if (hasRoom)
+                                return false;
+                        }
                         return true;
                     });
                 }
@@ -810,7 +819,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
             }
             // 退场筛查仅浏览路径透传;检索路径不接——FTS/向量里本就没有已退场行,
             // 接了只会让「仅退场+关键词」永远空结果,不如如实不筛。
-            const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, retired: retiredSel, limit, offset });
+            const { items, total } = stores.l1.list({ type: p.type || undefined, scene: p.scene || undefined, hall: p.hall || undefined, halls: wingSel.length > 0 ? wingSel : undefined, tag: tagSel || undefined, untagged: untaggedSel || undefined, retired: retiredSel, limit, offset });
             const resp = {
                 items: items.map(hitToUiRecord),
                 hasMore: offset + items.length < total,
