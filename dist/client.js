@@ -3326,6 +3326,7 @@ var __defProp = Object.defineProperty;
 		        }
 		        const v = r.value;
 		        setItems((prev) => append ? prev.concat(v.items) : v.items);
+		        if (v.usageSummary) setUsageSummary(v.usageSummary);
 		        if (!append) setSel(/* @__PURE__ */ new Set());
 		        setHasMore(!!v.hasMore);
 		        setTotal(v.total === void 0 || v.total === null ? null : v.total);
@@ -3464,6 +3465,7 @@ var __defProp = Object.defineProperty;
 		    unknown: "已退场"
 		  };
 		  const countText = total !== null ? "共 " + total + " 条" : items.length + " 条" + (hasMore ? "+" : "");
+		  const [usageSummary, setUsageSummary] = (0, import_react15.useState)(null);
 		  const selCount = sel.size;
 		  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: S.toolbar, children: [
@@ -3746,6 +3748,7 @@ var __defProp = Object.defineProperty;
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: loading ? "加载中…" : countText }),
+		      usageSummary ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, title: "老化权重效果口径:参与召回尝试的记忆中,进 topN(被注入上下文)的比例", children: "召回使用 " + usageSummary.used + "/" + usageSummary.attempted + "(" + usageSummary.rate + "%)" }) : null,
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "退场筛查" }),
 		      [["", "全部"], ["active", "仅活跃"], ["retired", "仅退场"]].map(([val, label]) => {
 		        const on = retiredFilter === val;
@@ -3849,6 +3852,29 @@ var __defProp = Object.defineProperty;
 		                }
 		              ) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "优先级 " + m.priority }),
+		              m.agingWeight != null ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		                "span",
+		                {
+		                  style: {
+		                    fontSize: 11,
+		                    padding: "1px 6px",
+		                    borderRadius: 999,
+		                    whiteSpace: "nowrap",
+		                    border: "1px solid " + (m.agingWeight <= 0.6 ? "var(--dsh-mem-danger)" : "var(--dsh-mem-border)"),
+		                    color: m.agingWeight <= 0.6 ? "var(--dsh-mem-danger)" : "var(--dsh-mem-text-2)"
+		                  },
+		                  title: "老化权重 " + Math.round(m.agingWeight * 100) + "%(读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期)));越低越老",
+		                  children: "老化 " + Math.round(m.agingWeight * 100) + "%"
+		                }
+		              ) : null,
+		              m.usage ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		                "span",
+		                {
+		                  style: S.muted,
+		                  title: "召回使用 " + m.usage.used + "/" + m.usage.attempts + "(进 topN 才算 used)" + (m.usage.lastUsedAt ? ";最近使用 " + fmtTime(new Date(m.usage.lastUsedAt).toISOString()) : "") + (m.usage.lastAttemptAt ? ";最近尝试 " + fmtTime(new Date(m.usage.lastAttemptAt).toISOString()) : ""),
+		                  children: "用 " + m.usage.used + "/" + m.usage.attempts
+		                }
+		              ) : null,
 		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "相关度 " + Number(m.score).toFixed(2) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: S.grow }),
 		              /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: fmtTime(m.updatedAt) }),

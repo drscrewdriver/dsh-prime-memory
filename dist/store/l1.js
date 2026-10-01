@@ -56,6 +56,10 @@ export class L1Store {
         this.decayHalfLifeDays = decayHalfLifeDays ?? 30;
         this.graphLaneProvider = graphLane;
     }
+    /** 读路径时效半衰期(天;0=关)。老化权重展示与召回衰减同一事实源。 */
+    get decayHalfLife() {
+        return this.decayHalfLifeDays;
+    }
     async init() {
         await ensureDir(this.recordsDir);
         await this.importLegacy();

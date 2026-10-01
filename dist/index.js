@@ -37,6 +37,7 @@ import { registerMemoryTools } from './tools/index.js';
 import { registerSlotTools } from './tools/slots.js';
 import { registerSlotRecall } from './hooks/slot-recall.js';
 import { RoomRegistryStore } from './store/rooms-registry.js';
+import { RecallUsageStore } from './store/recall-usage.js';
 import { registerSlotsProjection } from './projection/slots.js';
 import { errDetail, withFileLog } from './util/filelog.js';
 import { buildRouteChain, resolveModelRoute, invalidateEffortCache } from './llm.js';
@@ -159,6 +160,7 @@ export async function apply(ctx, config) {
         }
     }
     const stores = {
+        usage: undefined, // 装配于下方(依赖 dataDir 就绪)
         l0: new L0Store(dataDir, db, embed, logger),
         l1: new L1Store(dataDir, db, embed, config.recall.strategy, logger, config.recall.decayHalfLifeDays, 
         // §D 第 3 路:图谱回链。图谱不可用时 searchNodes 自带 no-op,不影响双路。
@@ -361,7 +363,11 @@ export async function apply(ctx, config) {
     if (storageOk) {
         flushL0 = registerCapture(ctx, config, runner, stores.l0, logger, live, modes);
     }
-    const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir);
+    // 召回使用统计(进 topN 才算 used;热路径只碰内存,去抖落盘)
+    const recallUsage = new RecallUsageStore(dataDir, logger);
+    await recallUsage.init();
+    stores.usage = recallUsage;
+    const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir, recallUsage);
     runner.setAfterRun(recall.invalidateProfile);
     registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate, storageOk ? roomRegistry : undefined);
     // 激活槽位(active slot):工具面 + 常驻注入 + 服务端投影(均走 ctx.effect,可撤销)

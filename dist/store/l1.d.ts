@@ -70,6 +70,8 @@ export declare class L1Store {
     decayHalfLifeDays?: number, 
     /** 图谱路提供者(§D 第 3 路);不传则该路不存在,融合退回双路。 */
     graphLane?: GraphLaneProvider);
+    /** 读路径时效半衰期(天;0=关)。老化权重展示与召回衰减同一事实源。 */
+    get decayHalfLife(): number;
     init(): Promise<void>;
     /** 旧版单文件 records.jsonl 一次性导入检索库,成功后改名 .imported。 */
     private importLegacy;

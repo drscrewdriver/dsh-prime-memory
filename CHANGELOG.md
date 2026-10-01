@@ -17,6 +17,19 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.14] — 2026-10-02
+
+> 记忆卡片新增**老化权重**与**召回使用**展示,并开始为"老化权重效果统计"积累数据。口径(用户裁定):**进 topN(被注入上下文)才算被使用**;参与尝试未进 = 仅计尝试。
+
+### 新增
+
+- **卡片字段**:「老化 N%」chip(读路径衰减系数 `max(0.5, 0.5^(Δ天/半衰期))`,与召回排序同式同源;≤60% 标红=偏老)+「用 used/attempts」计数(title 含最近使用/尝试时间)。工具条新增汇总「召回使用 used/attempted(rate%)」。
+- **统计面**:`RecallUsageStore`(recall-usage.json sidecar,与 rooms-registry 同族纪律——损坏只读降级、绝不阻塞召回读路径);每轮召回在注入/全压制/预算清零三个终态记录(候选 attempts++、注入 used++,时间戳取最新);内存即时 + 去抖 5s 原子落盘,5 万条按最近尝试淘汰;未装配 = 零成本旁路。
+- 契约:UiRecord 增 `agingWeight`/`usage`,ListRecordsResponse 增 `usageSummary`(可选字段,旧客户端零断裂);契约键数不变。
+
+### 效果统计口径(后续分析用)
+- usageSummary:tracked(有统计的记忆数)/ attempted(Σ尝试)/ used(Σ使用)/ rate(使用率%)
+- 细粒度分析(按类型/年龄段的使用分布、半衰期调参依据)数据自本版起积累,分析视图另议。
 ## [0.20.0-beta.13] — 2026-10-02
 
 > 补全归类逻辑:把 room 归到已有 hall 下(此前只能新增 hall,或合并进别的 room 抹掉身份)。面板支持**拖拽归类**——拖 room 放到 hall 头上即可。
