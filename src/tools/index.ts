@@ -232,8 +232,8 @@ export function registerMemoryTools(
     }),
   );
 
-  // ── memory_room_admin: Room 粒度目录治理(分类管理 beta.4)────────────────
-  // list/register 免预算零风险;merge/rename/retire 属破坏性面(beta.5),暂不注册。
+  // ── memory_room_admin: Room 粒度目录治理(分类管理 beta.4;beta.5 起 merge/rename/retire 已注册) ──
+  // list 免预算零风险;merge/rename/retire 走 dryRun 预览→实跑,执行前自动备份,完成入队场景重算。
   ctx.tools.register(
     defineTool({
       name: 'memory_room_admin',
