@@ -156,6 +156,21 @@ function readJsonBody(req) {
         req.on('error', reject);
     });
 }
+/** 压缩后去抖 ruminate:上次触发时刻(模块级;跨轮询/按压共享)。 */
+let lastCompressRuminateAt = 0;
+const COMPRESS_RUMINATE_DEBOUNCE_MS = 10 * 60_000;
+/**
+ * 尾部压缩闭环(T05):压缩入队成功后,冲刷+L2(带 repo 感知)+relabel+recluster
+ * 消费一条龙由 ruminate 轻刷新接管——去抖 10 分钟,失败静默(压缩本身已成功,
+ * 重算由下一次任何触发兜底)。
+ */
+function debouncedCompressRuminate(ruminate, logger) {
+    const now = Date.now();
+    if (!ruminate || now - lastCompressRuminateAt < COMPRESS_RUMINATE_DEBOUNCE_MS)
+        return;
+    lastCompressRuminateAt = now;
+    void ruminate.start().catch((err) => logger.warn(`[memory] 压缩后反刍触发失败(压缩产物保留,重算由下次触发兜底): ${err instanceof Error ? err.message : String(err)}`));
+}
 /**
  * 尾部 turn 压缩:把 (水位线, maxCapturedTurn] 内最近的最近 N 轮强制蒸馏入记忆
  * (force 跳过阈值;L1 去重与水位线双重防重)。off 档会话保持完全隐身(不压缩)。
@@ -552,12 +567,14 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 contextPct !== null &&
                 contextPct >= cfg.longTask.contextThresholdPct) {
                 try {
-                    await compressTailTurns(sessionId, cfg.longTask.tailTurns, {
+                    const ar = await compressTailTurns(sessionId, cfg.longTask.tailTurns, {
                         modes,
                         l0: stores.l0,
                         runner: longTaskDeps.runner,
                         logger: deps.logger,
                     });
+                    if (ar.enqueued > 0)
+                        debouncedCompressRuminate(ruminate, deps.logger);
                 }
                 catch (err) {
                     deps.logger.warn(`[memory] 自动尾部压缩失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -605,6 +622,8 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 enqueued = r.enqueued;
                 fromTurn = r.fromTurn;
                 toTurn = r.toTurn;
+                if (enqueued > 0)
+                    debouncedCompressRuminate(ruminate, deps.logger);
             }
             const v = {
                 sessionId,

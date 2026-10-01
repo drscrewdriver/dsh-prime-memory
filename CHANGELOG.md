@@ -17,7 +17,17 @@
   - **建议状态(`longtask-hint-get`)+ 浮动球(`client/src/longtask-fab.ts`)**:ego-browser 式 vanilla overlay(FAB+面板,拖拽/位置持久化/视口夹紧),**建议不阻断**——仅当「上下文占用达 `contextThresholdPct`」或「todo 漂移达 `driftThreshold`」且长任务未开启时点亮呼吸光晕;面板内:长任务开关(临时,per-session,**不带 mode**——切开关不重置用户档位)、占用/漂移进度条、手动尾部压缩按钮(长任务开启才可用)、任务计数。轮询忙 2s/闲 5s,RPC 失败静默;座位契约不变(settings.section 恰一个,body 单例不占任何座位)。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
 
-## [0.20.0-beta.1] — 2026-10-01
+## [0.20.0-beta.2] — 2026-10-01
+
+> dsh-0.2.0-beta 渠道 +1:反刍完整 context 优化(repo 软围栏/场景按项目迁移/闭环)。与 longtask(见 beta.1)同包,真机反馈合并收口。
+
+### 新增
+
+- **repo 软围栏(ADR-0015,`recall.scopeFence.*`,默认关)**:repoKey=basename(归一 cwd) 写时算定进 L1 metadata(repo_key_name/repo_key_owner/applicability,DEFAULT 零回填,不进 FTS 与快照哈希);召回与 memory_search 出口按 `this-repo`/`cross-project` 软减权重排(×0.2 可调,**只降权不排除**,chat 族与未归属记录不围栏,去重路径哨兵防误入)。零漂移:默认关时召回序 sha1 对拍一致。
+- **场景按项目迁移(L2 repo 感知 + 重聚类)**:L2 整合 prompt 可见 repoKeyName/applicability——this-repo 记录不再并入跨项目场景;`scene_recluster_jobs` 作业队列 + ruminate 空闲档消费器(快照→删摘要投影→失败整体回滚,零新 LLM 通道);repo 归属修补后自动按 repoKey 反查受影响场景入队重算。
+- **压缩闭环**:尾部压缩入队成功后 10 分钟去抖触发一次反刍(冲刷→L2→L3→relabel→重聚类消费),修掉「压缩记录滞留蒸馏桶」的断点。
+
+## [0.20.0-beta.1] — 2026-10-01## [0.20.0-beta.1] — 2026-10-01
 
 > dsh-0.2.0 线首个 beta 渠道发布(`dsh-0.2.0-beta` tag):长任务模式真机预览。除下述内容外,本版同时携带此前 parked 于 `[Unreleased]` 的全部 main 改动(激活槽位/来源锚点/证据读取器/记忆退场闭环/三轴冲突等)——它们已随 0.1.7 线发布,但 main 线尚无对应版本号。
 
