@@ -4,6 +4,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "0.16.3",
 =======
   "version": "0.20.0-beta.14",
@@ -17,6 +18,9 @@
 =======
   "version": "0.20.0-beta.17",
 >>>>>>> 670741f (fix(room-registry): 重启丢两级条目 + normTags 洗 slash 标签 + list-records 两级 tag(beta.17))
+=======
+  "version": "0.20.0-beta.19",
+>>>>>>> 4caa8bf (feat(hall-ux): 指针自制拖拽 + 全局操作栏 + room 行按钮固定/名称换行(beta.19))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
