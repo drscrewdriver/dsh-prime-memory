@@ -10,6 +10,11 @@
  * 已是 string 的变量收窄成 `never`(该分支内无法再 `.slice`,已在 wing-backfill 踩过)。
  */
 export declare function isWingId(v: unknown): boolean;
+/**
+ * 两级 Room slug(`major` 或 `major/minor`,各段满足 isTag;至多一个 slash)。
+ * Room 注册表/归类写回的 tags 域;与 rooms-registry.ts 同一事实源(就近定义避免依赖环)。
+ */
+export declare function isRoomSlug(v: unknown): boolean;
 /** 同为布尔谓词(理由见 isWingId 注释)。 */
 export declare function isTag(v: unknown): boolean;
 /**

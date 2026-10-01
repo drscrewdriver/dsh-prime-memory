@@ -3,6 +3,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "0.16.3",
 =======
   "version": "0.20.0-beta.14",
@@ -13,6 +14,9 @@
 =======
   "version": "0.20.0-beta.16",
 >>>>>>> 1eace08 (feat(hall-grown-reclass): 自生长 slug 拖入 hall 一步收编+归子类(beta.16))
+=======
+  "version": "0.20.0-beta.17",
+>>>>>>> 670741f (fix(room-registry): 重启丢两级条目 + normTags 洗 slash 标签 + list-records 两级 tag(beta.17))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",

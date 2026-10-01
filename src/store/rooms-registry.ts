@@ -11,8 +11,12 @@
  * 自生长目录**,绝不阻塞 rooms-get / 标注器(R2 红线)。
  */
 import * as path from 'node:path';
+<<<<<<< HEAD
 import { promises as fs } from 'node:fs';
 import { isTag } from '../metadata-validators.js';
+=======
+import { isRoomSlug, isTag } from '../metadata-validators.js';
+>>>>>>> 670741f (fix(room-registry): 重启丢两级条目 + normTags 洗 slash 标签 + list-records 两级 tag(beta.17))
 import { readJsonStrict, atomicWriteText, ensureDir } from '../util/io.js';
 import type { MemoryLogger } from '../types.js';
 
@@ -50,15 +54,10 @@ const REGISTRY_MAJOR_CAP = 200;
 const REGISTRY_TOTAL_CAP = 2000;
 
 /**
- * 两级 Room slug:`major` 或 `major/minor`(如 `dsh-plugin`、`dsh-plugin/merge`)。
- * 两段各自满足 isTag 词表;小类归属其大类。
+ * 两级 Room slug(`major` 或 `major/minor`):事实源在 metadata-validators.ts
+ * (normTags 写回闸同源放行),此处 re-export 兼容既有导入。
  */
-export function isRoomSlug(v: unknown): boolean {
-  if (typeof v !== 'string') return false;
-  const parts = v.split('/');
-  if (parts.length > 2) return false;
-  return parts.every((p) => isTag(p));
-}
+export { isRoomSlug } from '../metadata-validators.js';
 
 /** 大类归属:`major/minor` 取 major;平级 slug 自身即大类。 */
 export function majorOf(slug: string): string {
@@ -101,7 +100,7 @@ export class RoomRegistryStore {
     }
     const rooms = Array.isArray(read.value.rooms) ? read.value.rooms : [];
     for (const r of rooms) {
-      if (!r || typeof r.slug !== 'string' || !isTag(r.slug)) continue; // 非法 slug 丢弃(session-modes 同款纪律)
+      if (!r || typeof r.slug !== 'string' || !isRoomSlug(r.slug)) continue; // 非法 slug 丢弃——两级制,isTag 会误丢 hall/minor(beta.17 修)
       this.entries.push({
         slug: r.slug,
         label: typeof r.label === 'string' ? r.label : undefined,
