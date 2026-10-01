@@ -35,6 +35,16 @@ export function isWingId(v: unknown): boolean {
 /** 标签(Room 的构成单元)校验:小写字母数字连字符,1-32 字符。 */
 const TAG_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
+/**
+ * 两级 Room slug(`major` 或 `major/minor`,各段满足 isTag;至多一个 slash)。
+ * Room 注册表/归类写回的 tags 域;与 rooms-registry.ts 同一事实源(就近定义避免依赖环)。
+ */
+export function isRoomSlug(v: unknown): boolean {
+  if (typeof v !== 'string') return false;
+  const parts = v.split('/');
+  return parts.length <= 2 && parts.every((p) => TAG_RE.test(p));
+}
+
 /** 同为布尔谓词(理由见 isWingId 注释)。 */
 export function isTag(v: unknown): boolean {
   return typeof v === 'string' && TAG_RE.test(v);
@@ -50,7 +60,7 @@ export function normTags(v: unknown, max = 3): string[] {
   for (const raw of v) {
     if (typeof raw !== 'string') continue;
     const t = raw.trim().toLowerCase();
-    if (!isTag(t) || out.includes(t)) continue;
+    if (!(isTag(t) || isRoomSlug(t)) || out.includes(t)) continue;
     out.push(t);
     if (out.length >= max) break;
   }

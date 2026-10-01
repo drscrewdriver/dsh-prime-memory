@@ -18,10 +18,10 @@ export interface RoomRegistryEntry {
 }
 export type RoomRegistryInput = Pick<RoomRegistryEntry, 'slug'> & Partial<Pick<RoomRegistryEntry, 'label' | 'description' | 'source' | 'aliases'>>;
 /**
- * 两级 Room slug:`major` 或 `major/minor`(如 `dsh-plugin`、`dsh-plugin/merge`)。
- * 两段各自满足 isTag 词表;小类归属其大类。
+ * 两级 Room slug(`major` 或 `major/minor`):事实源在 metadata-validators.ts
+ * (normTags 写回闸同源放行),此处 re-export 兼容既有导入。
  */
-export declare function isRoomSlug(v: unknown): boolean;
+export { isRoomSlug } from '../metadata-validators.js';
 /** 大类归属:`major/minor` 取 major;平级 slug 自身即大类。 */
 export declare function majorOf(slug: string): string;
 export declare class RoomRegistryStore {

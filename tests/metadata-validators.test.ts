@@ -6,7 +6,7 @@
  * `metadata.hall`,污染生活域轴。
  */
 import { describe, expect, it } from 'vitest';
-import { COGNITIVE_HALLS, isCognitiveHall, isTag, isWingId, normTags } from '../src/metadata-validators.js';
+import { COGNITIVE_HALLS, isCognitiveHall, isRoomSlug, isTag, isWingId, normTags } from '../src/metadata-validators.js';
 import { WING_CATALOG, WING_FALLBACK } from '../src/types.js';
 
 describe('isWingId', () => {
@@ -63,6 +63,11 @@ describe('isTag', () => {
 });
 
 describe('normTags', () => {
+  it('保留两级 room slug(归类写回的 hall/minor 标签不得被洗掉)', () => {
+    expect(isRoomSlug('dsh-plugin/merge')).toBe(true);
+    expect(normTags(['dsh-plugin/merge', 'graphql'])).toEqual(['dsh-plugin/merge', 'graphql']);
+    expect(normTags(['a/b/c', 'ok'])).toEqual(['ok']); // 三级仍拒
+  });
   it('trim + 转小写 + 去重,保留首次出现顺序', () => {
     expect(normTags([' GraphQL ', 'graphql', 'MIGRATION'])).toEqual(['graphql', 'migration']);
   });

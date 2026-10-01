@@ -11,7 +11,7 @@
  * 自生长目录**,绝不阻塞 rooms-get / 标注器(R2 红线)。
  */
 import * as path from 'node:path';
-import { isTag } from '../metadata-validators.js';
+import { isRoomSlug } from '../metadata-validators.js';
 import { readJsonStrict, atomicWriteText, ensureDir } from '../util/io.js';
 /** 版本常量(file-versions 同款集中纪律;registry 为独立 sidecar 文件)。 */
 export const ROOMS_REGISTRY_FILE_VERSION = 1;
@@ -20,17 +20,10 @@ const REGISTRY_MAJOR_CAP = 200;
 /** 全量保险上限(大类+小类总和;防极端滥用)。 */
 const REGISTRY_TOTAL_CAP = 2000;
 /**
- * 两级 Room slug:`major` 或 `major/minor`(如 `dsh-plugin`、`dsh-plugin/merge`)。
- * 两段各自满足 isTag 词表;小类归属其大类。
+ * 两级 Room slug(`major` 或 `major/minor`):事实源在 metadata-validators.ts
+ * (normTags 写回闸同源放行),此处 re-export 兼容既有导入。
  */
-export function isRoomSlug(v) {
-    if (typeof v !== 'string')
-        return false;
-    const parts = v.split('/');
-    if (parts.length > 2)
-        return false;
-    return parts.every((p) => isTag(p));
-}
+export { isRoomSlug } from '../metadata-validators.js';
 /** 大类归属:`major/minor` 取 major;平级 slug 自身即大类。 */
 export function majorOf(slug) {
     const i = slug.indexOf('/');
@@ -68,8 +61,8 @@ export class RoomRegistryStore {
         }
         const rooms = Array.isArray(read.value.rooms) ? read.value.rooms : [];
         for (const r of rooms) {
-            if (!r || typeof r.slug !== 'string' || !isTag(r.slug))
-                continue; // 非法 slug 丢弃(session-modes 同款纪律)
+            if (!r || typeof r.slug !== 'string' || !isRoomSlug(r.slug))
+                continue; // 非法 slug 丢弃——两级制,isTag 会误丢 hall/minor(beta.17 修)
             this.entries.push({
                 slug: r.slug,
                 label: typeof r.label === 'string' ? r.label : undefined,
