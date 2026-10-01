@@ -402,9 +402,12 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   }
   stores.backend = backend;
 
+  // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
+  const roomRegistry = new RoomRegistryStore(dataDir, logger);
+  await roomRegistry.init();
   const ruminate =
     storageOk && !db.isDegraded() && ruminateFile
-      ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile)
+      ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile, roomRegistry)
       : undefined;
 
   let flushL0: (() => Promise<void>) | undefined;

@@ -74,14 +74,27 @@ export declare function roomCandidateChunk(ctx: Context, cfg: MemoryConfig, logg
 export interface OrphanAnnotateIO {
     l1: RoomReviewStore;
     logger: MemoryLogger;
+    /** Room 注册表(可选:未装配 = 词表只用自生长聚合,无注册条目)。 */
+    registry?: {
+        listActive(): Array<{
+            slug: string;
+            label?: string;
+            description?: string;
+        }>;
+    };
 }
 /**
  * 预标记消费器:活跃孤儿(≤limit 条)批量产候选并写 pending。
  * 写前重读合并(与 relabel 同纪律);失败单条跳过、原记录零改动。
  */
 export interface OrphanAnnotateOverrides {
-    /** 测试注入口:替换 LLM 候选标注器(默认走真实 callLLM 路径)。 */
-    chunkAnnotator?: (chunk: MemoryRecord[]) => Promise<Array<{
+    /** 测试注入口:替换 LLM 候选标注器(默认走真实 callLLM 路径);第二参为合并词表。 */
+    chunkAnnotator?: (chunk: MemoryRecord[], catalog: ReadonlyArray<{
+        room: string;
+        count: number;
+        label?: string;
+        description?: string;
+    }>) => Promise<Array<{
         id: string;
         rooms: string[];
     }>>;

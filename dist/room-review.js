@@ -92,12 +92,18 @@ export async function annotateOrphanCandidates(ctx, cfg, io, limit = 40, overrid
     const selected = selectPendingOrphans(io.l1, limit);
     if (selected.length === 0)
         return { selected: 0, candidates: 0, written: 0 };
-    // 全库 Room 词表(计数降序)。整批共享一张词表(一次 LLM 调用),
-    // 同仓优先的精化在逐条候选写入后由 repo-change 重算消费,此处保持简单。
-    const rooms = io.l1.listRooms();
+    // 合并词表:注册表条目排前(附 description,对 LLM 归类价值最高),封顶 120;
+    // 无注册表 = 纯自生长聚合(计数降序)。整批共享一张词表(一次 LLM 调用)。
+    const grown = io.l1.listRooms();
+    const regActive = io.registry?.listActive() ?? [];
+    const regSet = new Set(regActive.map((e) => e.slug));
+    const merged = [
+        ...regActive.map((e) => ({ room: e.slug, count: 0, label: e.label, description: e.description })),
+        ...grown.filter((r) => !regSet.has(r.room)).map((r) => ({ room: r.room, count: r.count })),
+    ].slice(0, 120);
     const rows = overrides.chunkAnnotator !== undefined
-        ? await overrides.chunkAnnotator(selected)
-        : await roomCandidateChunk(ctx, cfg, io.logger, selected, rooms);
+        ? await overrides.chunkAnnotator(selected, merged)
+        : await roomCandidateChunk(ctx, cfg, io.logger, selected, merged);
     let written = 0;
     for (const { id, rooms: candidates } of rows) {
         if (candidates.length === 0)
