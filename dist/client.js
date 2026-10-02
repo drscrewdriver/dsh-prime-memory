@@ -4093,6 +4093,7 @@ var __defProp = Object.defineProperty;
 		    const countOf = new Map(rooms.map((r) => [r.room, r.count]));
 		    const byHall = /* @__PURE__ */ new Map();
 		    for (const e of registry) {
+		      if (e.status !== "active") continue;
 		      const hall = majorOf(e.slug);
 		      const list = byHall.get(hall);
 		      if (list) list.push(e);
