@@ -301,6 +301,15 @@ describe('Hall·Room 集成(HTTP 面全链 × 真实存储)', () => {
     expect(lr.items).toHaveLength(1);
   });
 
+  it('⑥b 编辑:room-admin update 改写 label/description(注册后可重编辑)', async () => {
+    const r = (await env.call('dsh-memory/room-admin', { action: 'update', slug: 'dsh-plugin', label: 'dsh 插件家族', description: 'dsh 系列插件工作记忆' })) as { notice?: string };
+    expect(r.notice).toContain('已更新');
+    const g = (await env.call('dsh-memory/rooms-get', {})) as { registry: Array<{ slug: string; label?: string; description?: string }> };
+    const e = g.registry.find((x) => x.slug === 'dsh-plugin')!;
+    expect(e.label).toBe('dsh 插件家族');
+    expect(e.description).toBe('dsh 系列插件工作记忆');
+  });
+
   it('⑦ retire / 恢复往返(HTTP 面)', async () => {
     await env.call('dsh-memory/room-admin', { action: 'retire', slug: 'dsh-plugin/merge' });
     expect(env.registry.bySlug('dsh-plugin/merge')!.status).toBe('retired');

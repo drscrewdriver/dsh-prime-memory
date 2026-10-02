@@ -1,6 +1,6 @@
 /** Tab：L1 记忆浏览器（搜索/筛选/分页 + 展开详情 + 高权限**退场(软删)** + 已退场区恢复）。 */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { ListRecordsRequest, RetiredRecordView, RoomCount, UiRecord } from '../../../src/contract.js';
+import type { ListRecordsRequest, RetiredRecordView, UiRecord } from '../../../src/contract.js';
 import { TYPE_LABELS, fmtTime } from '../format.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
@@ -44,9 +44,6 @@ const TYPE_CHOICES = [
 /** records-delete 单次上限（契约：ids ≤200）。 */
 const DELETE_LIMIT = 200;
 
-/** Room 分类展开态的分页大小(收拢态固定预览前 8 个)。 */
-const ROOM_PAGE_SIZE = 40;
-
 export function RecordsTab(props: { rpc: RpcFn }) {
   const rpc = props.rpc;
   const limit = 50;
@@ -73,20 +70,9 @@ export function RecordsTab(props: { rpc: RpcFn }) {
   const [tagFilter, setTagFilter] = useState('');
   // 孤儿记忆(无 Room 绑定)筛选:与 tagFilter 互斥
   const [untaggedOnly, setUntaggedOnly] = useState(false);
-  // Room 区块展开/收拢(持久化;收拢 = 只留头部 + 首行预览)
-  const [roomsOpen, setRoomsOpen] = useState(() => {
-    try {
-      return window.localStorage.getItem('dsh.memory.rooms.open') === '1';
-    } catch {
-      return false;
-    }
-  });
-  // Room 分页(展开态;每页 40)
-  const [roomPage, setRoomPage] = useState(0);
   const [orphanCount, setOrphanCount] = useState(0);
   // 退场筛查:''=全部(混排+徽标) / 'active'=仅活跃 / 'retired'=仅已退场
   const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
-  const [rooms, setRooms] = useState<RoomCount[]>([]);
   // Wing 词表(服务端下发,R8);null = 未下发(降级:从已加载记录派生)
   const [wingCatalog, setHallCatalog] = useState<Array<{ id: string; label: string }> | null>(null);
 
@@ -152,17 +138,14 @@ export function RecordsTab(props: { rpc: RpcFn }) {
     fetchPage(conds, 0, false);
   };
 
-  // Room 分类(标签自生长):tags 只在反刍里变,首屏拉一次 + 手动刷新时重拉
+  // 孤儿计数(Room 标签/分类浏览已分离至 Hall 页;此处只留"无绑定"视图)
   const loadRooms = useCallback(() => {
     rpc('dsh-memory/rooms-get', {})
       .then((r) => {
-        if (r && r.ok) {
-          setRooms(r.value.rooms ?? []);
-          setOrphanCount(r.value.orphanCount ?? 0);
-        }
+        if (r && r.ok) setOrphanCount(r.value.orphanCount ?? 0);
       })
       .catch(() => {
-        /* 端点不可用时静默:Room 区块降级为不显示,不影响列表主功能 */
+        /* 端点不可用时静默,不影响列表主功能 */
       });
   }, [rpc]);
 
@@ -359,189 +342,48 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           {hiPriv ? '高权限：开' : '高权限：关'}
         </NButton>
       </div>
-      {/* ── Room 分类(标签自生长):展开/收拢 + 分页 + 孤儿(无绑定)筛选 ── */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <button
-            type="button"
-            title={roomsOpen ? '收拢 Room 分类' : '展开 Room 分类(全部分页浏览)'}
-            onClick={() => {
-              const next = !roomsOpen;
-              setRoomsOpen(next);
-              setRoomPage(0);
-              try {
-                window.localStorage.setItem('dsh.memory.rooms.open', next ? '1' : '0');
-              } catch {
-                /* 存储不可用 = 会话内仍可切换 */
-              }
-            }}
-            style={{
-              cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
-              border: '1px solid var(--dsh-mem-border)', background: 'transparent',
-              color: 'var(--dsh-mem-text-2)',
-            }}
-          >
-            {roomsOpen ? '▾' : '▸'} Room 分类 · 共 {rooms.length}
-          </button>
-          {/* 导出 CSV(分类数据;浏览器 blob 下载) */}
-          {rooms.length > 0 || orphanCount > 0 ? (
-            <>
-              <button
-                type="button"
-                title="导出分类数据 CSV(Room 词表+计数)"
-                onClick={() => {
-                  rpc('dsh-memory/rooms-export', { kind: 'rooms' })
-                    .then((r) => {
-                      if (!r || !r.ok || !r.value?.csv) return;
-                      const blob = new Blob([r.value.csv as string], { type: 'text/csv;charset=utf-8' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'dsh-memory-rooms.csv';
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    })
-                    .catch(() => undefined);
-                }}
-                style={{
-                  cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
-                  border: '1px solid var(--dsh-mem-border)', background: 'transparent',
-                  color: 'var(--dsh-mem-text-2)',
-                }}
-              >
-                导出 CSV
-              </button>
-              <button
-                type="button"
-                title="导出无 Room 绑定的孤儿清单(含候选)"
-                onClick={() => {
-                  rpc('dsh-memory/rooms-export', { kind: 'orphans' })
-                    .then((r) => {
-                      if (!r || !r.ok || !r.value?.csv) return;
-                      const blob = new Blob([r.value.csv as string], { type: 'text/csv;charset=utf-8' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = 'dsh-memory-room-orphans.csv';
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    })
-                    .catch(() => undefined);
-                }}
-                style={{
-                  cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
-                  border: '1px solid var(--dsh-mem-border)', background: 'transparent',
-                  color: 'var(--dsh-mem-text-2)',
-                }}
-              >
-                导出孤儿
-              </button>
-            </>
-          ) : null}
-          {/* 孤儿 chip:与 Room chip 互斥的筛选入口 */}
-          <button
-            type="button"
-            title={untaggedOnly ? '取消孤儿筛选' : '只看没有任何 Room 绑定的记忆'}
-            onClick={() => {
-              const next = !untaggedOnly;
-              setUntaggedOnly(next);
-              if (next) setTagFilter('');
-              const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next ? '' : tagFilter, untagged: next, retired: retiredFilter };
-              setLast(conds);
-              fetchPage(conds, 0, false);
-            }}
-            style={{
-              cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 999,
-              border: untaggedOnly ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
-              background: untaggedOnly ? 'var(--dsh-mem-bg-inset)' : 'transparent',
-              color: untaggedOnly ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
-            }}
-          >
-            {'无绑定 · ' + orphanCount}
-          </button>
-          {(tagFilter || untaggedOnly) && (
-            <span style={S.muted}>
-              筛选中:{untaggedOnly ? '无绑定' : tagFilter}
-              <button
-                type="button"
-                title="清除 Room/孤儿筛选"
-                onClick={() => {
-                  setTagFilter('');
-                  setUntaggedOnly(false);
-                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: '', untagged: false, retired: retiredFilter };
-                  setLast(conds);
-                  fetchPage(conds, 0, false);
-                }}
-                style={{ cursor: 'pointer', marginLeft: 6, background: 'transparent', border: 'none', color: 'var(--dsh-mem-accent)', fontSize: 12 }}
-              >
-                ×清除
-              </button>
-            </span>
-          )}
-        </div>
-        {rooms.length > 0 ? (
-          <>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: roomsOpen ? 6 : 0 }}>
-              {(roomsOpen ? rooms.slice(roomPage * ROOM_PAGE_SIZE, (roomPage + 1) * ROOM_PAGE_SIZE) : rooms.slice(0, 8)).map((r) => {
-                const on = tagFilter === r.room && !untaggedOnly;
-                return (
-                  <button
-                    key={r.room}
-                    type="button"
-                    title={on ? '取消按该 Room 筛选' : '按该 Room 筛选记录'}
-                    onClick={() => {
-                      const next = on ? '' : r.room;
-                      setTagFilter(next);
-                      setUntaggedOnly(false);
-                      const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, untagged: false, retired: retiredFilter };
-                      setLast(conds);
-                      fetchPage(conds, 0, false);
-                    }}
-                    style={{
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      padding: '2px 8px',
-                      borderRadius: 999,
-                      border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
-                      background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
-                      color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
-                    }}
-                  >
-                    {(r as { label?: string }).label
-                      ? (r as { label?: string }).label + ' · ' + r.count
-                      : r.room + ' · ' + r.count}
-                    {(r as { source?: string }).source === 'pre-registered' ? ' ⭐' : ''}
-                  </button>
-                );
-              })}
-              {!roomsOpen && rooms.length > 8 ? (
-                <span style={S.muted}>(收拢中,共 {rooms.length} 个)</span>
-              ) : null}
-            </div>
-            {roomsOpen && rooms.length > ROOM_PAGE_SIZE ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={S.muted}>
-                  第 {roomPage + 1} / {Math.ceil(rooms.length / ROOM_PAGE_SIZE)} 页(共 {rooms.length})
-                </span>
-                <button type="button" title="上一页" disabled={roomPage === 0}
-                  onClick={() => setRoomPage((p) => Math.max(0, p - 1))}
-                  style={{ cursor: roomPage === 0 ? 'default' : 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--dsh-mem-border)', background: 'transparent', color: 'var(--dsh-mem-text-2)' }}
-                >◀</button>
-                <button type="button" title="下一页" disabled={(roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length}
-                  onClick={() => setRoomPage((p) => ((p + 1) * ROOM_PAGE_SIZE < rooms.length ? p + 1 : p))}
-                  style={{ cursor: (roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length ? 'default' : 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--dsh-mem-border)', background: 'transparent', color: 'var(--dsh-mem-text-2)' }}
-                >▶</button>
-              </div>
-            ) : null}
-            {roomsOpen && (
-              <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--dsh-mem-border)' }}>
-                <span style={S.muted}>分类管理(注册 / 收编 / 合并 / 改名 / 退役 / 按 Room 导出):请前往「Hall」标签页。</span>
-              </div>
-            )}
-          </>
-        ) : (
-          <div style={S.muted}>Room 分类:暂无(由反刍涌现的标签自动生成,无需手工建立)</div>
+      {/* ── 孤儿筛选(Room 标签/分类管理已分离至 Hall 页) ── */}
+      <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          title={untaggedOnly ? '取消孤儿筛选' : '只看没有任何 Room 绑定的记忆'}
+          onClick={() => {
+            const next = !untaggedOnly;
+            setUntaggedOnly(next);
+            if (next) setTagFilter('');
+            const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next ? '' : tagFilter, untagged: next, retired: retiredFilter };
+            setLast(conds);
+            fetchPage(conds, 0, false);
+          }}
+          style={{
+            cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 999,
+            border: untaggedOnly ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+            background: untaggedOnly ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+            color: untaggedOnly ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+          }}
+        >
+          {'无绑定 · ' + orphanCount}
+        </button>
+        {(tagFilter || untaggedOnly) && (
+          <span style={S.muted}>
+            筛选中:{untaggedOnly ? '无绑定' : tagFilter}
+            <button
+              type="button"
+              title="清除 Room/孤儿筛选"
+              onClick={() => {
+                setTagFilter('');
+                setUntaggedOnly(false);
+                const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: '', untagged: false, retired: retiredFilter };
+                setLast(conds);
+                fetchPage(conds, 0, false);
+              }}
+              style={{ cursor: 'pointer', marginLeft: 6, background: 'transparent', border: 'none', color: 'var(--dsh-mem-accent)', fontSize: 12 }}
+            >
+              ×清除
+            </button>
+          </span>
         )}
+        <span style={S.muted}>Room 标签/分类管理:见「Hall」标签页。</span>
       </div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>{loading ? '加载中…' : countText}</span>

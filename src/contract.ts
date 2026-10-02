@@ -583,8 +583,12 @@ export interface RoomsExportResponse {
 
 /** dsh-memory/room-admin(Room 破坏性面管理;高权限:面板 memoryMutate 开启才生效)。 */
 export interface RoomAdminRequest {
-  /** merge/rename:from→to(mergeRoom/renameRoom 编排:预览→实跑+自动备份+入队场景重算);retire:slug 退役/恢复。 */
-  action: 'merge' | 'rename' | 'retire';
+  /** merge/rename:from→to(mergeRoom/renameRoom 编排:预览→实跑+自动备份+入队场景重算);retire:slug 退役/恢复;update:改写 label/description。 */
+  action: 'merge' | 'rename' | 'retire' | 'update';
+  /** update 的显示名(可中文;非空才改写)。 */
+  label?: string;
+  /** update 的归类说明(喂标注器;非空才改写)。 */
+  description?: string;
   /** merge/rename 的源 Room slug。 */
   from?: string;
   /** merge/rename 的目标 Room slug。 */

@@ -17,6 +17,21 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.20] — 2026-10-02
+
+> **Room 独立标签页**(与 Hall 分离):room 的存在、名称、条目各有其管理面;记忆页不再堆 Room 标签。
+
+### 新增
+
+- **「Room」标签页**(Hall 之后):扁平列出全部 room(注册条目 ∪ 自生长未注册)——**存在**(注册两级 slug / 收编 grown / 退役·恢复)、**名称**(编辑显示名+归类说明;改名可两级 slug,记录随迁)、**条目**(▸ 展开浏览该 room 的记忆条目,默认收起,首次拉前 10 条);孤儿导出/高权限开关随页。
+- **注册后可重编辑**:新 `room-admin update`(label/description 改写,未提供字段不动)+ store `RoomRegistryStore.update` + 工具 `memory_room_admin action=update` + 面板「编辑」入口——此前注册后 label/说明只能补空不能改写。
+- **room 行内容展开**(Hall 页 room 行同款):默认收起,▸ 展开看条目。
+- **记忆页 Room 区块分离**:移除 slug chips/分页/展开块(与 Hall/Room 页重复),仅保留「无绑定 · N」孤儿筛选与指引文案——room 标签浏览/管理归 Hall/Room 页。
+
+### 变更
+
+- 合并/归类/改名表单与预览 sticky 跟随滚动(hall 多时不再需要上下滑动找确认框)。
+- 指针自制拖拽(ego-browser 同款 pointer 方案,部分 webview 的 HTML5 DnD 不触发的兜底)。
 ## [0.20.0-beta.19] — 2026-10-02
 
 > 归类交互重做(实测反馈:HTML5 拖拽在部分 webview 不触发;点 hall 后预览被埋在源行里像"没反应")。

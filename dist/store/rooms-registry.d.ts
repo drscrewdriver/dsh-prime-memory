@@ -48,6 +48,11 @@ export declare class RoomRegistryStore {
         entry: RoomRegistryEntry;
         created: boolean;
     }>;
+    /** 编辑已有条目的 label/description(注册后可重编辑;未提供的字段不动;未找到=false)。 */
+    update(slug: string, patch: {
+        label?: string;
+        description?: string;
+    }): Promise<boolean>;
     /** 改状态(active↔retired);无变化返回 false。 */
     setStatus(slug: string, status: 'active' | 'retired'): Promise<boolean>;
     /** 改名(merge 1:1 收尾):slug 换名 + 旧 slug 进 aliases。新名与既有条目冲突时走 merge。

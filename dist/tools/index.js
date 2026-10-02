@@ -257,6 +257,25 @@ roomRegistry) {
                     return { notice: `注册失败: ${err instanceof Error ? err.message : String(err)}` };
                 }
             }
+            if (action === 'update') {
+                if (!roomRegistry)
+                    return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };
+                if (!live.get().memoryMutate)
+                    return { notice: MUTATE_OFF_NOTICE };
+                const slug = String(args.slug ?? '').trim();
+                if (!slug)
+                    return { notice: 'update 需要 slug。' };
+                try {
+                    const ok = await roomRegistry.update(slug, {
+                        label: typeof args.label === 'string' ? args.label : undefined,
+                        description: typeof args.description === 'string' ? args.description : undefined,
+                    });
+                    return { notice: ok ? `已更新:${slug}(显示名/归类说明)。` : `无变化:${slug} 未找到或未提供非空字段。`, slug };
+                }
+                catch (err) {
+                    return { notice: `更新失败: ${err instanceof Error ? err.message : String(err)}` };
+                }
+            }
             if (action === 'merge' || action === 'rename') {
                 if (!roomRegistry)
                     return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };

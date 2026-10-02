@@ -118,6 +118,20 @@ describe('RoomRegistryStore', () => {
     await expect(store.register({ slug: 'a//b' })).rejects.toThrow(/两级制/);
   });
 
+  it('update:改写已有条目的 label/description(未提供字段不动;未找到返回 false)', async () => {
+    const { store } = await mk();
+    await store.register({ slug: 'dsh-plugin', label: '旧名', description: '旧说明' });
+    expect(await store.update('dsh-plugin', { label: 'dsh 插件', description: 'dsh 插件相关项目' })).toBe(true);
+    const e = store.bySlug('dsh-plugin')!;
+    expect(e.label).toBe('dsh 插件');
+    expect(e.description).toBe('dsh 插件相关项目');
+    // 只改一个字段,另一个不动
+    await store.update('dsh-plugin', { label: '新名' });
+    expect(store.bySlug('dsh-plugin')!.label).toBe('新名');
+    expect(store.bySlug('dsh-plugin')!.description).toBe('dsh 插件相关项目');
+    expect(await store.update('no-such', { label: 'x' })).toBe(false);
+  });
+
   it('持久化回环保留两级 slug(重启不丢 hall-room 关系)', async () => {
     if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-roomreg-'));
     const a = new RoomRegistryStore(dir);
