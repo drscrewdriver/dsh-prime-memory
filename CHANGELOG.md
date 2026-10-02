@@ -17,6 +17,13 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.1] — 2026-10-03(转正;beta 渠道自 beta.1 起的全部能力定版)
+
+Hall·Room 分类管理全链(两级注册表/merge/rename/retire/update/收编/退场带记录/
+未注册退场补条目)、Hall 与 Room 独立管理页(搜索过滤、默认折叠、指针拖拽归类、
+退场筛选)、老化权重展示 + 召回使用统计(进 topN 才算 used)。转正前最后 beta 为
+0.20.0-beta.26,内容与 0.20.1 一致;`dsh-0.2.0-beta` 渠道继续收后续 beta。
+
 ## [0.20.0-beta.26] — 2026-10-03
 
 ### 新增(Hall/Room 增长后的可用性)
