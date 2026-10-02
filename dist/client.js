@@ -3897,6 +3897,15 @@ var __defProp = Object.defineProperty;
 		  const [editing, setEditing] = (0, import_react16.useState)(null);
 		  const [expandedRooms, setExpandedRooms] = (0, import_react16.useState)(/* @__PURE__ */ new Set());
 		  const [roomRecords, setRoomRecords] = (0, import_react16.useState)({});
+		  const [expandedHalls, setExpandedHalls] = (0, import_react16.useState)(() => {
+		    try {
+		      const v = window.localStorage.getItem("dsh.memory.halls.open");
+		      return v ? new Set(JSON.parse(v)) : /* @__PURE__ */ new Set();
+		    } catch {
+		      return /* @__PURE__ */ new Set();
+		    }
+		  });
+		  const [filter, setFilter] = (0, import_react16.useState)("");
 		  const dragRef = (0, import_react16.useRef)(null);
 		  const [ghost, setGhost] = (0, import_react16.useState)(null);
 		  const onDragLabelDown = (ev, slug) => {
@@ -4107,6 +4116,39 @@ var __defProp = Object.defineProperty;
 		    })).sort((a, b) => a.hall.localeCompare(b.hall));
 		  }, [registry, rooms]);
 		  const grownOnly = (0, import_react16.useMemo)(() => rooms.filter((r) => !registry.some((e) => e.slug === r.room)), [rooms, registry]);
+		  const persistHalls = (next) => {
+		    try {
+		      window.localStorage.setItem("dsh.memory.halls.open", JSON.stringify([...next]));
+		    } catch {
+		    }
+		  };
+		  const toggleHall = (hall) => setExpandedHalls((cur) => {
+		    const next = new Set(cur);
+		    if (next.has(hall)) next.delete(hall);
+		    else next.add(hall);
+		    persistHalls(next);
+		    return next;
+		  });
+		  const setAllHalls = (open) => {
+		    const next = open ? new Set(groups.map((g) => g.hall)) : /* @__PURE__ */ new Set();
+		    setExpandedHalls(next);
+		    persistHalls(next);
+		  };
+		  const normFilter = filter.trim().toLowerCase();
+		  const visibleGroups = (0, import_react16.useMemo)(() => {
+		    if (!normFilter) return groups;
+		    return groups.map((g) => {
+		      const hallHit = g.hall.toLowerCase().includes(normFilter) || (g.label ?? "").toLowerCase().includes(normFilter);
+		      const entries = hallHit ? g.entries : g.entries.filter(
+		        (e) => e.slug.toLowerCase().includes(normFilter) || (e.label ?? "").toLowerCase().includes(normFilter) || (e.aliases ?? []).some((a) => a.toLowerCase().includes(normFilter))
+		      );
+		      return { ...g, entries };
+		    }).filter((g) => g.entries.length > 0);
+		  }, [groups, normFilter]);
+		  const visibleGrown = (0, import_react16.useMemo)(
+		    () => normFilter ? grownOnly.filter((r) => r.room.toLowerCase().includes(normFilter)) : grownOnly,
+		    [grownOnly, normFilter]
+		  );
 		  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { ...S.flexRow, marginBottom: 8 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关" }),
@@ -4164,6 +4206,22 @@ var __defProp = Object.defineProperty;
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", style: btn, onClick: loadAll, title: "重拉注册表与计数", children: "刷新" })
+		    ] }),
+		    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		        "input",
+		        {
+		          value: filter,
+		          onChange: (e) => setFilter(e.target.value),
+		          placeholder: "搜索 hall/room(slug、显示名、别名)",
+		          style: { ...S.input, width: 250, fontSize: 12 }
+		        }
+		      ),
+		      filter ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", style: btn, onClick: () => setFilter(""), children: "清除" }) : null,
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: `匹配 ${visibleGroups.reduce((s2, g) => s2 + g.entries.length, 0)} room / ${visibleGroups.length} hall` }),
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.grow }),
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", style: btn, title: "展开全部 hall 的子 room", onClick: () => setAllHalls(true), children: "展开全部" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", style: btn, title: "收起全部 hall(只留 hall 头)", onClick: () => setAllHalls(false), children: "收起全部" })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
@@ -4268,163 +4326,187 @@ var __defProp = Object.defineProperty;
 		    msg ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.hint, children: msg }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.error, children: error }) : null,
 		    ghost ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { position: "fixed", left: ghost.x + 12, top: ghost.y + 12, zIndex: 9999, pointerEvents: "none", fontSize: 12, padding: "2px 10px", borderRadius: 999, border: "1px solid var(--dsh-mem-accent)", background: "var(--dsh-mem-bg-inset)", color: "var(--dsh-mem-accent)" }, children: ghost.text }) : null,
-		    groups.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("p", { style: S.intro, children: "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。" }) : groups.map((g) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginBottom: 10, border: "1px solid var(--dsh-mem-border)", borderRadius: 8, overflow: "hidden" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
-		        "div",
-		        {
-		          "data-hall": g.hall,
-		          onDragOver: (ev) => {
-		            if (!hiPriv || busy) return;
-		            ev.preventDefault();
-		            ev.dataTransfer.dropEffect = "move";
-		            setDragOverHall(g.hall);
-		          },
-		          onDragLeave: () => setDragOverHall((cur) => cur === g.hall ? null : cur),
-		          onDrop: (ev) => {
-		            ev.preventDefault();
-		            setDragOverHall(null);
-		            if (!hiPriv || busy) return;
-		            const from = ev.dataTransfer.getData("text/dsh-room");
-		            if (from) beginReclass(from, g.hall);
-		          },
-		          onClick: () => {
-		            if (!picking || busy) return;
-		            const from = picking;
-		            setPicking(null);
-		            beginReclass(from, g.hall);
-		          },
-		          style: {
-		            display: "flex",
-		            alignItems: "center",
-		            gap: 8,
-		            padding: "5px 10px",
-		            background: "var(--dsh-mem-bg-inset)",
-		            outline: dragOverHall === g.hall || picking !== null ? "2px dashed var(--dsh-mem-accent)" : void 0,
-		            outlineOffset: dragOverHall === g.hall || picking !== null ? "-2px" : void 0,
-		            cursor: picking ? "pointer" : void 0
-		          },
-		          title: picking ? "点击此 hall:把「" + picking + "」归入 " + g.hall + " 下(major/minor,预览后确认)" : hiPriv ? "拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)" : void 0,
-		          children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { fontSize: 12, fontWeight: 600 }, children: [
-		              g.hall,
-		              g.label ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: " (" + g.label + ")" }) : null
-		            ] }),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: `合计 ${g.total} 条 · ${g.entries.length} 个 room` }),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.grow }),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
-		              "button",
-		              {
-		                type: "button",
-		                disabled: !hiPriv || busy,
-		                title: `预填注册表单为 ${g.hall}/…(注册该 hall 下的小类)`,
-		                onClick: () => setRegSlug(g.hall + "/"),
-		                style: btn,
-		                children: "+小类"
+		    visibleGroups.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("p", { style: S.intro, children: normFilter ? "无匹配的 hall/room。" : "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。" }) : visibleGroups.map((g) => {
+		      const hallOpen = !!normFilter || expandedHalls.has(g.hall);
+		      return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginBottom: 10, border: "1px solid var(--dsh-mem-border)", borderRadius: 8, overflow: "hidden" }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+		          "div",
+		          {
+		            "data-hall": g.hall,
+		            onDragOver: (ev) => {
+		              if (!hiPriv || busy) return;
+		              ev.preventDefault();
+		              ev.dataTransfer.dropEffect = "move";
+		              setDragOverHall(g.hall);
+		            },
+		            onDragLeave: () => setDragOverHall((cur) => cur === g.hall ? null : cur),
+		            onDrop: (ev) => {
+		              ev.preventDefault();
+		              setDragOverHall(null);
+		              if (!hiPriv || busy) return;
+		              const from = ev.dataTransfer.getData("text/dsh-room");
+		              if (from) beginReclass(from, g.hall);
+		            },
+		            onClick: () => {
+		              if (picking) {
+		                if (!busy) {
+		                  const from = picking;
+		                  setPicking(null);
+		                  beginReclass(from, g.hall);
+		                }
+		                return;
 		              }
-		            )
-		          ]
-		        }
-		      ),
-		      g.entries.map((e) => {
-		        const standalone = e.slug === g.hall;
-		        const count = rooms.find((r) => r.room === e.slug)?.count ?? 0;
-		        const retired = e.status === "retired";
-		        return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { padding: "4px 10px", borderTop: "1px solid var(--dsh-mem-border)", opacity: retired ? 0.55 : 1 }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: "2px 8px", alignItems: "baseline" }, children: [
+		              toggleHall(g.hall);
+		            },
+		            style: {
+		              display: "flex",
+		              alignItems: "center",
+		              gap: 8,
+		              padding: "5px 10px",
+		              background: "var(--dsh-mem-bg-inset)",
+		              outline: dragOverHall === g.hall || picking !== null ? "2px dashed var(--dsh-mem-accent)" : void 0,
+		              outlineOffset: dragOverHall === g.hall || picking !== null ? "-2px" : void 0,
+		              cursor: "pointer"
+		            },
+		            title: picking ? "点击此 hall:把「" + picking + "」归入 " + g.hall + " 下(major/minor,预览后确认)" : hiPriv ? "拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)" : void 0,
+		            children: [
 		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
 		                "button",
 		                {
 		                  type: "button",
-		                  title: expandedRooms.has(e.slug) ? "收起内容" : "展开查看该 Room 的记录内容(默认收起)",
-		                  onClick: () => void toggleRoomExpand(e.slug),
+		                  title: hallOpen ? "收起子 room" : "展开子 room(默认折叠)",
+		                  onClick: (ev) => {
+		                    ev.stopPropagation();
+		                    toggleHall(g.hall);
+		                  },
 		                  style: { ...btn, borderRadius: 999, padding: "1px 7px", flexShrink: 0 },
-		                  children: expandedRooms.has(e.slug) ? "▾" : "▸"
+		                  children: hallOpen ? "▾" : "▸"
 		                }
 		              ),
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
-		                "span",
+		              /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { fontSize: 12, fontWeight: 600 }, children: [
+		                g.hall,
+		                g.label ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: " (" + g.label + ")" }) : null
+		              ] }),
+		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: `合计 ${g.total} 条 · ${g.entries.length} 个 room` }),
+		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.grow }),
+		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		                "button",
 		                {
-		                  style: { fontSize: 12, cursor: hiPriv && !busy ? "grab" : "default", touchAction: "none" },
-		                  onPointerDown: (ev) => onDragLabelDown(ev, e.slug),
-		                  onPointerMove: onDragLabelMove,
-		                  onPointerUp: onDragLabelUp,
-		                  title: hiPriv && !busy ? "按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)" : e.description ? `${e.slug} — ${e.description}` : e.slug,
-		                  children: [
-		                    standalone ? e.slug : "· " + e.slug.slice(g.hall.length + 1),
-		                    e.source === "pre-registered" ? " ⭐" : ""
-		                  ]
+		                  type: "button",
+		                  disabled: !hiPriv || busy,
+		                  title: `预填注册表单为 ${g.hall}/…(注册该 hall 下的小类)`,
+		                  onClick: (ev) => {
+		                    ev.stopPropagation();
+		                    setRegSlug(g.hall + "/");
+		                  },
+		                  style: btn,
+		                  children: "+小类"
 		                }
-		              ),
-		              e.label ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: e.label }) : null,
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: count + " 条" }),
-		              retired ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: "已退役" }) : null,
-		              (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { ...S.muted, wordBreak: "break-all" }, children: "别名: " + (e.aliases ?? []).join(", ") }) : null
-		            ] }),
-		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }, children: [
-		              !hiPriv ? null : /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_jsx_runtime16.Fragment, { children: [
-		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "编辑显示名/归类说明", onClick: () => {
-		                  setEditing({ slug: e.slug, label: e.label ?? "", description: e.description ?? "" });
-		                  setForm(null);
-		                  setPreview(null);
-		                  setPicking(null);
-		                }, style: btn, children: "编辑" }),
+		              )
+		            ]
+		          }
+		        ),
+		        hallOpen ? g.entries.map((e) => {
+		          const standalone = e.slug === g.hall;
+		          const count = rooms.find((r) => r.room === e.slug)?.count ?? 0;
+		          const retired = e.status === "retired";
+		          return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { padding: "4px 10px", borderTop: "1px solid var(--dsh-mem-border)", opacity: retired ? 0.55 : 1 }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [
+		              /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: "2px 8px", alignItems: "baseline" }, children: [
 		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
 		                  "button",
 		                  {
 		                    type: "button",
-		                    disabled: busy,
-		                    title: picking === e.slug ? "再点一次取消挑选;然后点击目标 hall 头完成归类" : "归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)",
-		                    onClick: () => {
-		                      if (picking === e.slug) {
-		                        setPicking(null);
-		                        return;
-		                      }
-		                      setForm({ action: "rename", from: e.slug, to: "" });
-		                      setPreview(null);
-		                      setPicking(e.slug);
-		                      setMsg(null);
-		                      setError(null);
-		                    },
-		                    style: { ...btn, ...picking === e.slug ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : {} },
-		                    children: picking === e.slug ? "选 hall…" : "归类"
+		                    title: expandedRooms.has(e.slug) ? "收起内容" : "展开查看该 Room 的记录内容(默认收起)",
+		                    onClick: () => void toggleRoomExpand(e.slug),
+		                    style: { ...btn, borderRadius: 999, padding: "1px 7px", flexShrink: 0 },
+		                    children: expandedRooms.has(e.slug) ? "▾" : "▸"
 		                  }
 		                ),
-		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: `改名(= merge 1:1 + 注册表改名)`, onClick: () => {
-		                  setForm({ action: "rename", from: e.slug, to: "" });
-		                  setPreview(null);
-		                }, style: btn, children: "改名" }),
-		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "合并到另一个 Room(dryRun 预览→确认实跑)", onClick: () => {
-		                  setForm({ action: "merge", from: e.slug, to: "" });
-		                  setPreview(null);
-		                }, style: btn, children: "合并" }),
-		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: retired ? "恢复该 Room 到词表" : "退役该 Room(存量 tags 不动)", onClick: () => retire(e.slug, retired), style: { ...btn, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } }, children: retired ? "恢复" : "退役" }),
-		                !retired ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)", onClick: () => retire(e.slug, false, true), style: { ...btn, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: "退场" }) : null
+		                /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
+		                  "span",
+		                  {
+		                    style: { fontSize: 12, cursor: hiPriv && !busy ? "grab" : "default", touchAction: "none" },
+		                    onPointerDown: (ev) => onDragLabelDown(ev, e.slug),
+		                    onPointerMove: onDragLabelMove,
+		                    onPointerUp: onDragLabelUp,
+		                    title: hiPriv && !busy ? "按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)" : e.description ? `${e.slug} — ${e.description}` : e.slug,
+		                    children: [
+		                      standalone ? e.slug : "· " + e.slug.slice(g.hall.length + 1),
+		                      e.source === "pre-registered" ? " ⭐" : ""
+		                    ]
+		                  }
+		                ),
+		                e.label ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: e.label }) : null,
+		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: count + " 条" }),
+		                retired ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: "已退役" }) : null,
+		                (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: { ...S.muted, wordBreak: "break-all" }, children: "别名: " + (e.aliases ?? []).join(", ") }) : null
 		              ] }),
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "导出该 Room 的记录清单 CSV", onClick: () => exportRecords(e.slug), style: btn, children: "导出" })
-		            ] })
-		          ] }),
-		          expandedRooms.has(e.slug) ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { margin: "4px 0 2px", padding: "4px 8px", border: "1px dashed var(--dsh-mem-border)", borderRadius: 6 }, children: [
-		            (roomRecords[e.slug]?.items ?? []).map((it) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { fontSize: 11, padding: "3px 0", borderBottom: "1px solid var(--dsh-mem-border)" }, children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + it.type, children: TYPE_LABELS[it.type] || it.type }),
-		              " ",
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: it.updatedAt ? fmtTime(it.updatedAt) : "" }),
-		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { marginTop: 2, wordBreak: "break-all", color: "var(--dsh-mem-text-2)" }, children: it.content.length > 120 ? it.content.slice(0, 120) + "…" : it.content })
-		            ] }, it.id)),
-		            (roomRecords[e.slug]?.items.length ?? 0) === 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.muted, children: "该 Room 暂无记录。" }) : null,
-		            (roomRecords[e.slug]?.total ?? 0) > (roomRecords[e.slug]?.items.length ?? 0) ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { ...S.muted, fontSize: 11 }, children: "共 " + roomRecords[e.slug].total + " 条,仅显示前 " + roomRecords[e.slug].items.length + " 条" }) : null
-		          ] }) : null
-		        ] }, e.slug);
-		      })
-		    ] }, g.hall)),
-		    grownOnly.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginTop: 4 }, children: [
+		              /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }, children: [
+		                !hiPriv ? null : /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(import_jsx_runtime16.Fragment, { children: [
+		                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "编辑显示名/归类说明", onClick: () => {
+		                    setEditing({ slug: e.slug, label: e.label ?? "", description: e.description ?? "" });
+		                    setForm(null);
+		                    setPreview(null);
+		                    setPicking(null);
+		                  }, style: btn, children: "编辑" }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		                    "button",
+		                    {
+		                      type: "button",
+		                      disabled: busy,
+		                      title: picking === e.slug ? "再点一次取消挑选;然后点击目标 hall 头完成归类" : "归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)",
+		                      onClick: () => {
+		                        if (picking === e.slug) {
+		                          setPicking(null);
+		                          return;
+		                        }
+		                        setForm({ action: "rename", from: e.slug, to: "" });
+		                        setPreview(null);
+		                        setPicking(e.slug);
+		                        setMsg(null);
+		                        setError(null);
+		                      },
+		                      style: { ...btn, ...picking === e.slug ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : {} },
+		                      children: picking === e.slug ? "选 hall…" : "归类"
+		                    }
+		                  ),
+		                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: `改名(= merge 1:1 + 注册表改名)`, onClick: () => {
+		                    setForm({ action: "rename", from: e.slug, to: "" });
+		                    setPreview(null);
+		                  }, style: btn, children: "改名" }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "合并到另一个 Room(dryRun 预览→确认实跑)", onClick: () => {
+		                    setForm({ action: "merge", from: e.slug, to: "" });
+		                    setPreview(null);
+		                  }, style: btn, children: "合并" }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: retired ? "恢复该 Room 到词表" : "退役该 Room(存量 tags 不动)", onClick: () => retire(e.slug, retired), style: { ...btn, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } }, children: retired ? "恢复" : "退役" }),
+		                  !retired ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)", onClick: () => retire(e.slug, false, true), style: { ...btn, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: "退场" }) : null
+		                ] }),
+		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "导出该 Room 的记录清单 CSV", onClick: () => exportRecords(e.slug), style: btn, children: "导出" })
+		              ] })
+		            ] }),
+		            expandedRooms.has(e.slug) ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { margin: "4px 0 2px", padding: "4px 8px", border: "1px dashed var(--dsh-mem-border)", borderRadius: 6 }, children: [
+		              (roomRecords[e.slug]?.items ?? []).map((it) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { fontSize: 11, padding: "3px 0", borderBottom: "1px solid var(--dsh-mem-border)" }, children: [
+		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + it.type, children: TYPE_LABELS[it.type] || it.type }),
+		                " ",
+		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: it.updatedAt ? fmtTime(it.updatedAt) : "" }),
+		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { marginTop: 2, wordBreak: "break-all", color: "var(--dsh-mem-text-2)" }, children: it.content.length > 120 ? it.content.slice(0, 120) + "…" : it.content })
+		              ] }, it.id)),
+		              (roomRecords[e.slug]?.items.length ?? 0) === 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: S.muted, children: "该 Room 暂无记录。" }) : null,
+		              (roomRecords[e.slug]?.total ?? 0) > (roomRecords[e.slug]?.items.length ?? 0) ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { ...S.muted, fontSize: 11 }, children: "共 " + roomRecords[e.slug].total + " 条,仅显示前 " + roomRecords[e.slug].items.length + " 条" }) : null
+		            ] }) : null
+		          ] }, e.slug);
+		        }) : null
+		      ] }, g.hall);
+		    }),
+		    visibleGrown.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginTop: 4 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("button", { type: "button", onClick: () => setGrownOpen(!grownOpen), style: btn, title: grownOpen ? "收起未注册自生长 Room" : "展开未注册自生长 Room", children: [
 		        grownOpen ? "▾" : "▸",
 		        " 自生长未注册 · 共 ",
-		        grownOnly.length
+		        visibleGrown.length
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { style: S.muted, children: "(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)" }),
-		      grownOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 6 }, children: grownOnly.map((r) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 }, children: [
+		      grownOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 6 }, children: visibleGrown.map((r) => /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
 		          "span",
 		          {
@@ -4499,6 +4581,7 @@ var __defProp = Object.defineProperty;
 		  const [renaming, setRenaming] = (0, import_react17.useState)(null);
 		  const [expanded, setExpanded] = (0, import_react17.useState)(/* @__PURE__ */ new Set());
 		  const [retiredFilter, setRetiredFilter] = (0, import_react17.useState)("");
+		  const [filter, setFilter] = (0, import_react17.useState)("");
 		  const [records, setRecords] = (0, import_react17.useState)({});
 		  const loadAll = (0, import_react17.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
@@ -4649,6 +4732,10 @@ var __defProp = Object.defineProperty;
 		    if (retiredFilter === "retired") return row2.entry?.status === "retired";
 		    return true;
 		  });
+		  const normFilter = filter.trim().toLowerCase();
+		  const visibleRows = normFilter ? rows.filter(
+		    (row2) => row2.slug.toLowerCase().includes(normFilter) || (row2.entry?.label ?? "").toLowerCase().includes(normFilter) || (row2.entry?.aliases ?? []).some((a) => a.toLowerCase().includes(normFilter))
+		  ) : rows;
 		  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { ...S.flexRow, marginBottom: 8, flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { style: S.muted, children: "Room 级管理:存在(注册/收编/退役)· 名称(显示名/说明/改名)· 条目(展开浏览) · 归类到 hall 请到「Hall」页" }),
@@ -4699,7 +4786,7 @@ var __defProp = Object.defineProperty;
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", disabled: busy, onClick: () => setRenaming(null), style: btn2, children: "取消" }),
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { style: S.muted, children: "记录随迁;与反刍并发会互相覆盖,请在反刍空闲时执行。" })
 		    ] }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { style: S.muted, children: "退场筛选" }),
 		      [["", "全部"], ["active", "活跃"], ["retired", "已退役"]].map(([val, label]) => {
 		        const on = retiredFilter === val;
@@ -4722,7 +4809,18 @@ var __defProp = Object.defineProperty;
 		          },
 		          val
 		        );
-		      })
+		      }),
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: S.grow }),
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+		        "input",
+		        {
+		          value: filter,
+		          onChange: (e) => setFilter(e.target.value),
+		          placeholder: "搜索 room(slug、显示名、别名)",
+		          style: { ...S.input, width: 230, fontSize: 12 }
+		        }
+		      ),
+		      filter ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", style: btn2, onClick: () => setFilter(""), children: "清除" }) : null
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("input", { value: reg.slug, onChange: (e) => setReg({ ...reg, slug: e.target.value }), placeholder: "slug(如 dsh-plugin 或 dsh-plugin/merge)", disabled: !hiPriv || busy, style: { ...S.input, width: 210, fontSize: 12 } }),
@@ -4733,7 +4831,7 @@ var __defProp = Object.defineProperty;
 		    ] }),
 		    msg ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: S.hint, children: msg }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: S.error, children: error }) : null,
-		    rows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { style: S.intro, children: "暂无 Room:对话/反刍会从标签涌现,或在上方注册。" }) : rows.map((row2) => {
+		    visibleRows.length === 0 ? normFilter ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { style: S.intro, children: "无匹配的 Room。" }) : /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { style: S.intro, children: "暂无 Room:对话/反刍会从标签涌现,或在上方注册。" }) : visibleRows.map((row2) => {
 		      const e = row2.entry;
 		      const retired = e?.status === "retired";
 		      const grownOnly = !e;
