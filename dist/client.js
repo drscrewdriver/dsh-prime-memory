@@ -4758,8 +4758,10 @@ var __defProp = Object.defineProperty;
 		          (records[row2.slug]?.items ?? []).map((it) => /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { fontSize: 11, padding: "3px 0", borderBottom: "1px solid var(--dsh-mem-border)" }, children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-" + it.type, children: TYPE_LABELS[it.type] || it.type }),
 		            " ",
+		            it.retired ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: "[已退场]" }) : null,
+		            " ",
 		            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { style: S.muted, children: it.updatedAt ? fmtTime(it.updatedAt) : "" }),
-		            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: { marginTop: 2, wordBreak: "break-all", color: "var(--dsh-mem-text-2)" }, children: it.content.length > 140 ? it.content.slice(0, 140) + "…" : it.content })
+		            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: { marginTop: 2, wordBreak: "break-all", color: "var(--dsh-mem-text-2)", opacity: it.retired ? 0.55 : 1 }, children: it.content.length > 140 ? it.content.slice(0, 140) + "…" : it.content })
 		          ] }, it.id)),
 		          (records[row2.slug]?.items.length ?? 0) === 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: S.muted, children: "该 Room 暂无记忆条目。" }) : null,
 		          (records[row2.slug]?.total ?? 0) > (records[row2.slug]?.items.length ?? 0) ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: { ...S.muted, fontSize: 11 }, children: "共 " + records[row2.slug].total + " 条,仅显示前 " + records[row2.slug].items.length + " 条" }) : null
