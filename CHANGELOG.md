@@ -6,6 +6,31 @@
 > **UI 截图约定**：带界面变化的条目在 `assets/changelog/<版本号>/<两位编号>-<简述>.png`
 > 存真机截图，并在条目内以相对路径引用，读者可在更新日志里直接看到新版本 UI 的样子。
 
+## [0.18.5] — 2026-10-02(未发布,0.2.0 Hall·Room 功能下放)
+
+### 新增(自 0.2.0-beta.4–beta.25 下放;对应 main 6037ebc..847c3f7 链)
+
+- **Hall·Room 分类管理**:两级制 Room slug(`major` / `major/minor`)注册表 sidecar
+  (`rooms-registry.json`,损坏只读降级)、`memory_room_admin` 工具与
+  `room-admin`/`room-register`/`rooms-export`(rooms|orphans|records) RPC 面、
+  merge/rename/retire/update 破坏性面(预览→备份→游标重写,含已退场行)、
+  自生长 Room 一步收编(source=grown)、未注册 slug 退场自动补 retired 条目。
+- **面板**:Hall 管理标签页(指针自制拖拽归类、全局 sticky 操作栏、子 room 仅显示 active)、
+  Room 独立标签页(存在/名称/条目管理、退场筛选 chips)、记忆页孤儿筛选与
+  「导出孤儿」回迁。
+- **标注器词表接入注册表**:候选标注与 tags 标注优先把记忆挂到注册表 Room。
+- **老化权重展示 + 召回使用统计**:`agingWeightOf` 半衰期权重、卡片「老化 N%」chip、
+  `RecallUsageStore`(进 topN 才算 used;损坏只读降级)。
+- **测试**:Hall·Room HTTP 面集成测试(25 用例)、rooms-registry/room-review/
+  room-merge/room-admin-endpoint/recall-usage 单测,endpoint 契约计数 43→46。
+
+### 适配差异(相对 0.2.0 线)
+
+- 不含 longtask 全族(main 上已净零)、ADR-0015 repo 软围栏/治理权重/场景重聚类
+  队列(0.2.0 线专属);merge/rename 的「场景重算入队」随之省略(备份/重写/收别名
+  语义不变)。
+- `agent/session-start` 仍并入 `agent/created`(0.1.7-rc.2 宿主适配保留)。
+
 ## [0.18.4] — 2026-09-28
 
 ### 新增

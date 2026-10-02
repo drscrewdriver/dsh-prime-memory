@@ -8,7 +8,7 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { buildEndpointDeps, handleEndpoint, type EndpointDeps } from '../src/stats.js';
 import { MemoryDb } from '../src/store/sqlite.js';
 import { L1Store } from '../src/store/l1.js';
@@ -107,7 +107,6 @@ describe('dsh-memory/room-admin', () => {
   it('merge 实跑:重写 + 备份 + 入队场景重算(room-merge)', async () => {
     const { deps, l1 } = await mkDeps();
     await seed(l1, 'a1', ['alpha']);
-    const spy = vi.spyOn(l1, 'enqueueSceneRecluster');
     const r = (await handleEndpoint('dsh-memory/room-admin', { action: 'merge', from: 'alpha', to: 'beta', dryRun: false }, deps)) as {
       dryRun?: boolean;
       affected?: number;
@@ -119,7 +118,6 @@ describe('dsh-memory/room-admin', () => {
     expect(r.backupFile).toBeTruthy();
     expect(r.notice).toContain('合并完成');
     expect(l1.getByIds(['a1'])[0]!.metadata?.tags).toEqual(['beta']);
-    expect(spy).toHaveBeenCalledWith('work', expect.anything(), expect.anything(), 'room-merge');
   });
 
   it('retire/恢复往返', async () => {

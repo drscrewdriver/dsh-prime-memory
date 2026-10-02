@@ -416,9 +416,6 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   if (storageOk) {
     flushL0 = registerCapture(ctx, config, runner, stores.l0, logger, live, modes);
   }
-  // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
-  const roomRegistry = new RoomRegistryStore(dataDir, logger);
-  await roomRegistry.init();
   // 召回使用统计(进 topN 才算 used;热路径只碰内存,去抖落盘)
   const recallUsage = new RecallUsageStore(dataDir, logger);
   await recallUsage.init();

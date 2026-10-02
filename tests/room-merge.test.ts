@@ -14,7 +14,6 @@ import { NoopEmbeddingService } from '../src/store/embedding.js';
 import { RoomRegistryStore } from '../src/store/rooms-registry.js';
 import { mergeRoom, renameRoom } from '../src/room-review.js';
 import type { MemoryLogger, MemoryRecord } from '../src/types.js';
-import type { MemoryConfig } from '../src/config.js';
 
 let dir: string;
 const dbs: MemoryDb[] = [];
@@ -72,7 +71,7 @@ describe('mergeRoom', () => {
   });
 
   it('实跑:重写 tags,其余 metadata 键保全,含已退场行,备份落盘', async () => {
-    const { l1, registry, root } = await mkL1();
+    const { l1, registry } = await mkL1();
     await seed(l1, 'live1', ['alpha'], { metadata: { tags: ['alpha'], roomCandidates: ['x'], roomReview: 'pending', hall: 'work' } });
     await seed(l1, 'mixed', ['alpha', 'keep'], { metadata: { tags: ['alpha', 'keep'], cogHall: 'work' } });
     await seed(l1, 'retired1', ['alpha'], { validTo: now + 1000 });

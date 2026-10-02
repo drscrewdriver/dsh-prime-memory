@@ -3,6 +3,8 @@ import { type MemoryConfig } from './config.js';
 import { type RecallSessionStats } from './hooks/recall.js';
 import type { RebuildController } from './pipeline/rebuild.js';
 import type { RuminateController } from './pipeline/ruminate.js';
+import type { RoomRegistryStore } from './store/rooms-registry.js';
+import type { RecallUsageStore } from './store/recall-usage.js';
 import { type LiveSettingsHandle } from './settings.js';
 import type { GraphStore } from './store/graph-store.js';
 import type { L0Store } from './store/l0.js';
@@ -23,7 +25,7 @@ export interface MemoryStatusSource {
     pending(): number;
 }
 /**
- * 端点全集运行时清单(36 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -77,6 +79,9 @@ interface MemoryRpcSources {
     rebuild?: RebuildController;
     embedManager?: EmbeddingManager;
     sessionInfo?: SessionInfoSource;
+    /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
+    /** Room 注册表(未装配 = rooms-get 不带 registry,rooms-export 不可用)。 */
+    roomRegistry?: RoomRegistryStore;
 }
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
 export type EndpointDepsInput = Omit<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>;
@@ -92,19 +97,25 @@ export declare function registerMemoryRpc(ctx: Context, cfg: MemoryConfig, store
     scenes: Record<MemoryFamily, SceneStore>;
     persona: Record<MemoryFamily, PersonaStore>;
     state: StateStore;
+    /** 召回使用统计(可选)。 */
+    usage?: RecallUsageStore;
     /** 记忆后端(后台边界);未装配时回退为包 l1 的进程内实现。 */
     backend?: MemoryBackend;
     /** 图谱存储(可选:未装配时图谱端点返空,不报错)。 */
     graph?: GraphStore;
 }, logger: MemoryLogger, status?: MemoryStatusSource, live?: LiveSettingsHandle, modes?: SessionModeStore, dataDir?: string, rebuild?: RebuildController, embedManager?: EmbeddingManager, sessionInfo?: SessionInfoSource, 
 /** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
-ruminate?: RuminateController): void;
+ruminate?: RuminateController, 
+/** Room 分类管理依赖(注册表;缺省 = rooms-get 不带 registry、rooms-export 恒 404 语义)。 */
+roomRegistry?: RoomRegistryStore): void;
 export interface EndpointDeps {
     ctx: Context;
     cfg: MemoryConfig;
     stores: {
         l0: L0Store;
         l1: L1Store;
+        /** 召回使用统计(可选:未装配 = 列表不带 usage/usageSummary)。 */
+        usage?: RecallUsageStore;
         scenes: Record<MemoryFamily, SceneStore>;
         persona: Record<MemoryFamily, PersonaStore>;
         state: StateStore;
@@ -121,10 +132,15 @@ export interface EndpointDeps {
     ruminate?: RuminateController;
     embedManager?: EmbeddingManager;
     sessionInfo?: SessionInfoSource;
+    /** 长任务端点依赖(未装配 = 端点恒 disabled,面板不挂载)。 */
+    /** Room 注册表(未装配 = rooms-get 不带 registry,rooms-export 不可用)。 */
+    roomRegistry?: RoomRegistryStore;
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;
 /** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
+/** 老化权重(与读路径 applyDecayWeight 同式):max(0.5, 0.5^(Δ天/半衰期));半衰期 ≤0 = 关 → null。 */
+export declare function agingWeightOf(updatedAtMs: number | undefined, halfLifeDays: number, now?: number): number | null;
 export declare function hitToUiRecord(r: {
     id: string;
     content: string;
@@ -141,4 +157,12 @@ export declare function hitToUiRecord(r: {
     family?: string;
     /** 退场判据:`valid_to` 闭合即已退场(软删)。由 `listL1`/`getByIds` 透传。 */
     validTo?: number;
+}, extra?: {
+    agingWeight?: number | null;
+    usage?: {
+        attempts: number;
+        used: number;
+        lastAttemptAt: number | null;
+        lastUsedAt: number | null;
+    } | null;
 }): UiRecord;
