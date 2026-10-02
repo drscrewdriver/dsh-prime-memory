@@ -7,6 +7,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "0.16.3",
 =======
   "version": "0.20.0-beta.14",
@@ -29,6 +30,9 @@
 =======
   "version": "0.20.0-beta.21",
 >>>>>>> 1b04425 (feat(room-retire): 退役带记录(retire withRecords)+ 孤儿导出回迁记忆页(beta.21))
+=======
+  "version": "0.20.0-beta.22",
+>>>>>>> 5afbf20 (fix(room-retire-visibility): 退场效果可见性 + Room 页退场筛选(beta.22))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",

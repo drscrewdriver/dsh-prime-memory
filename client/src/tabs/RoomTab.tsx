@@ -318,8 +318,9 @@ export function RoomTab(props: { rpc: RpcFn }) {
                   {(records[row.slug]?.items ?? []).map((it) => (
                     <div key={it.id} style={{ fontSize: 11, padding: '3px 0', borderBottom: '1px solid var(--dsh-mem-border)' }}>
                       <span className={'dsh-mem-tag dsh-mem-tag-' + it.type}>{TYPE_LABELS[it.type] || it.type}</span>{' '}
+                      {it.retired ? <span style={{ ...S.muted, color: 'var(--dsh-mem-danger)' }}>[已退场]</span> : null}{' '}
                       <span style={S.muted}>{it.updatedAt ? fmtTime(it.updatedAt) : ''}</span>
-                      <div style={{ marginTop: 2, wordBreak: 'break-all', color: 'var(--dsh-mem-text-2)' }}>
+                      <div style={{ marginTop: 2, wordBreak: 'break-all', color: 'var(--dsh-mem-text-2)', opacity: it.retired ? 0.55 : 1 }}>
                         {it.content.length > 140 ? it.content.slice(0, 140) + '…' : it.content}
                       </div>
                     </div>
