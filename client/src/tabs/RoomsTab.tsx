@@ -297,6 +297,8 @@ export function RoomsTab(props: { rpc: RpcFn }) {
     const countOf = new Map(rooms.map((r) => [r.room, r.count]));
     const byHall = new Map<string, RegEntry[]>();
     for (const e of registry) {
+      // hall 下的子 room 只显示 active(retired 的去 Room 页看——用户裁定)
+      if (e.status !== 'active') continue;
       const hall = majorOf(e.slug);
       const list = byHall.get(hall);
       if (list) list.push(e);

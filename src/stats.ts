@@ -727,6 +727,11 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         const slug = String(p.slug ?? '').trim();
         if (!slug) throw new Error('retire 需要 slug');
         const active = p.active === true;
+        // 自生长未注册 slug 退场:自动补一条 grown 注册条目再置 retired——
+        // 否则词表无物可变,面板按钮无法切换为「恢复」(用户实测反馈)
+        if (!active && p.withRecords === true && !roomRegistry.bySlug(slug)) {
+          await roomRegistry.register({ slug, source: 'grown' });
+        }
         const changed = await roomRegistry.setStatus(slug, active ? 'active' : 'retired');
         // 带记录退场(软删,可恢复):该 room 下全部**活跃**记录分批 retire(每批 ≤200,与 records-delete 同原语)
         let retiredRecords = 0;

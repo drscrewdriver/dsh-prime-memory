@@ -324,6 +324,19 @@ describe('Hall·Room 集成(HTTP 面全链 × 真实存储)', () => {
     expect(ids).toContain('d2');
   });
 
+  it('⑥d 自生长未注册 room 退场:自动补 retired 注册条目(按钮即刻变恢复)', async () => {
+    await seed(env.l1, 'gone1', ['ghost-room']);
+    // 未注册 slug 直接退场
+    const r = (await env.call('dsh-memory/room-admin', { action: 'retire', slug: 'ghost-room', withRecords: true })) as { notice?: string; retiredRecords?: number };
+    expect(r.retiredRecords).toBe(1);
+    // 注册表出现条目(status=retired)→ 面板行即时变「已退役/恢复」
+    expect(env.registry.bySlug('ghost-room')!.status).toBe('retired');
+    expect(env.registry.bySlug('ghost-room')!.source).toBe('grown');
+    // 恢复:active=true → 词表回归(active,grown 身份)
+    await env.call('dsh-memory/room-admin', { action: 'retire', slug: 'ghost-room', active: true });
+    expect(env.registry.bySlug('ghost-room')!.status).toBe('active');
+  });
+
   it('⑦ retire / 恢复往返(HTTP 面)', async () => {
     await env.call('dsh-memory/room-admin', { action: 'retire', slug: 'dsh-plugin/merge' });
     expect(env.registry.bySlug('dsh-plugin/merge')!.status).toBe('retired');
