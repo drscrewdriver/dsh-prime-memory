@@ -4050,6 +4050,10 @@ var __defProp = Object.defineProperty;
 		    if (r && r.ok) {
 		      setMsg(String(r.value?.notice ?? "完成"));
 		      loadAll();
+		      if (expandedRooms.has(slug)) {
+		        const rr = await rpc("dsh-memory/list-records", { tag: slug, limit: 10, retired: false });
+		        if (rr && rr.ok) setRoomRecords((m) => ({ ...m, [slug]: { items: rr.value.items, total: rr.value.total ?? null } }));
+		      }
 		    } else setError(r && r.error ? r.error.message : "操作失败");
 		  });
 		  const saveEditing = () => run(async () => {
@@ -4068,7 +4072,7 @@ var __defProp = Object.defineProperty;
 		      setExpandedRooms(next);
 		      return;
 		    }
-		    const r = await rpc("dsh-memory/list-records", { tag: slug, limit: 10 });
+		    const r = await rpc("dsh-memory/list-records", { tag: slug, limit: 10, retired: false });
 		    if (r && r.ok) {
 		      const next = new Set(expandedRooms);
 		      next.add(slug);

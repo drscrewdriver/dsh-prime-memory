@@ -17,6 +17,11 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.24] — 2026-10-02
+
+### 修复
+
+- **Hall 页展开/退场与 Room 页对齐**:Hall 页 room 行展开同样只拉活跃记录(`retired:false`);退场确认后若该 room 展开中自动刷新展开区。(beta.23 仅补齐了 Room 页,Hall 页漏同步——用户实测"按退场看不到效果"的另一处。)
 ## [0.20.0-beta.23] — 2026-10-02
 
 > **Room 页退场筛选补齐**(beta.22 的筛选 chips 因补丁脚本中途失败未落盘,仅徽标进了包——本次逐项 Edit 落盘并全绿验证)。
