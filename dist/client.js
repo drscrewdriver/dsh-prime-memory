@@ -4493,6 +4493,7 @@ var __defProp = Object.defineProperty;
 		  const [editing, setEditing] = (0, import_react17.useState)(null);
 		  const [renaming, setRenaming] = (0, import_react17.useState)(null);
 		  const [expanded, setExpanded] = (0, import_react17.useState)(/* @__PURE__ */ new Set());
+		  const [retiredFilter, setRetiredFilter] = (0, import_react17.useState)("");
 		  const [records, setRecords] = (0, import_react17.useState)({});
 		  const loadAll = (0, import_react17.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
@@ -4597,6 +4598,10 @@ var __defProp = Object.defineProperty;
 		    if (r && r.ok) {
 		      setMsg(String(r.value?.notice ?? "完成"));
 		      loadAll();
+		      if (expanded.has(slug)) {
+		        const rr = await rpc("dsh-memory/list-records", { tag: slug, limit: 10, retired: false });
+		        if (rr && rr.ok) setRecords((m) => ({ ...m, [slug]: { items: rr.value.items, total: rr.value.total ?? null } }));
+		      }
 		    } else setError(r && r.error ? r.error.message : "操作失败");
 		  });
 		  const exportRecords = (slug) => run(async () => {
@@ -4622,7 +4627,7 @@ var __defProp = Object.defineProperty;
 		      setExpanded(next);
 		      return;
 		    }
-		    const r = await rpc("dsh-memory/list-records", { tag: slug, limit: 10 });
+		    const r = await rpc("dsh-memory/list-records", { tag: slug, limit: 10, retired: false });
 		    if (r && r.ok) {
 		      const next = new Set(expanded);
 		      next.add(slug);
@@ -4634,7 +4639,11 @@ var __defProp = Object.defineProperty;
 		  const rows = [
 		    ...registry.map((e) => ({ slug: e.slug, count: countOf(e.slug), entry: e })),
 		    ...counts.filter((c) => !registry.some((e) => e.slug === c.room)).map((c) => ({ slug: c.room, count: c.count }))
-		  ];
+		  ].filter((row2) => {
+		    if (retiredFilter === "active") return row2.entry?.status !== "retired";
+		    if (retiredFilter === "retired") return row2.entry?.status === "retired";
+		    return true;
+		  });
 		  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { ...S.flexRow, marginBottom: 8, flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { style: S.muted, children: "Room 级管理:存在(注册/收编/退役)· 名称(显示名/说明/改名)· 条目(展开浏览) · 归类到 hall 请到「Hall」页" }),
@@ -4685,6 +4694,31 @@ var __defProp = Object.defineProperty;
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", disabled: busy, onClick: () => setRenaming(null), style: btn2, children: "取消" }),
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { style: S.muted, children: "记录随迁;与反刍并发会互相覆盖,请在反刍空闲时执行。" })
 		    ] }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { style: S.muted, children: "退场筛选" }),
+		      [["", "全部"], ["active", "活跃"], ["retired", "已退役"]].map(([val, label]) => {
+		        const on = retiredFilter === val;
+		        return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+		          "button",
+		          {
+		            type: "button",
+		            title: val === "" ? "全部 room" : val === "active" ? "只看词表未退役的 room" : "只看已退役的 room",
+		            onClick: () => setRetiredFilter(val),
+		            style: {
+		              cursor: "pointer",
+		              fontSize: 12,
+		              padding: "2px 10px",
+		              borderRadius: 999,
+		              border: on ? "1px solid var(--dsh-mem-accent)" : "1px solid var(--dsh-mem-border)",
+		              background: on ? "var(--dsh-mem-bg-inset)" : "transparent",
+		              color: on ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-2)"
+		            },
+		            children: label
+		          },
+		          val
+		        );
+		      })
+		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("input", { value: reg.slug, onChange: (e) => setReg({ ...reg, slug: e.target.value }), placeholder: "slug(如 dsh-plugin 或 dsh-plugin/merge)", disabled: !hiPriv || busy, style: { ...S.input, width: 210, fontSize: 12 } }),
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("input", { value: reg.label, onChange: (e) => setReg({ ...reg, label: e.target.value }), placeholder: "名称(可中文)", disabled: !hiPriv || busy, style: { ...S.input, width: 110, fontSize: 12 } }),
