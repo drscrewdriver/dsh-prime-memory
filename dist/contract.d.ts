@@ -574,6 +574,8 @@ export interface RoomAdminRequest {
     slug?: string;
     /** retire:true=恢复 active;缺省/false=退役。 */
     active?: boolean;
+    /** retire:同时把该 room 下全部**活跃**记录退场(软删,可在「已退场」区恢复)。 */
+    withRecords?: boolean;
     /** merge/rename:缺省 true 只返预览;实跑需显式 false。 */
     dryRun?: boolean;
 }
@@ -589,6 +591,8 @@ export interface RoomAdminResponse {
     hasMore?: boolean;
     /** 实跑时改写前备份文件名(rooms-merge-backups/)。 */
     backupFile?: string;
+    /** retire withRecords 实际退场的记录条数(软删,可恢复)。 */
+    retiredRecords?: number;
 }
 /** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */
 export interface WingBackfillResponse {

@@ -751,12 +751,25 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         if (!slug) throw new Error('retire 需要 slug');
         const active = p.active === true;
         const changed = await roomRegistry.setStatus(slug, active ? 'active' : 'retired');
+        // 带记录退场(软删,可恢复):该 room 下全部**活跃**记录分批 retire(每批 ≤200,与 records-delete 同原语)
+        let retiredRecords = 0;
+        if (p.withRecords === true && !active) {
+          for (let offset = 0; ; offset += 200) {
+            const page = stores.l1.list({ tag: slug, retired: false, limit: 200, offset });
+            if (page.items.length === 0) break;
+            const n = stores.l1.retire(page.items.map((r) => r.id), { at: new Date().toISOString(), reason: 'manual' });
+            retiredRecords += n;
+            if (page.items.length < 200) break;
+          }
+          deps.logger.info(`[memory] Room 退役带记录:${slug},退场 ${retiredRecords} 条(软删,可恢复)`);
+        }
         const v: RoomAdminResponse = {
+          retiredRecords: retiredRecords > 0 ? retiredRecords : undefined,
           notice: changed
             ? active
               ? `已恢复:${slug}`
-              : `已退役:${slug}(存量记录的 tags 不动,仅词表不再推荐)。`
-            : `未找到注册条目或状态无变化:${slug}(自生长 Room 无需退役,会随 tags 自然消失)。`,
+              : `已退役:${slug}(存量记录的 tags 不动,仅词表不再推荐)。${retiredRecords > 0 ? `已连同退场 ${retiredRecords} 条记录(软删,可在「已退场」区恢复)。` : ''}`
+            : `未找到注册条目或状态无变化:${slug}。${retiredRecords > 0 ? `已退场 ${retiredRecords} 条记录(软删,可恢复)。` : ''}`,
         };
         return v;
       }

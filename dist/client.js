@@ -3565,7 +3565,36 @@ var __defProp = Object.defineProperty;
 		          }
 		        )
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "Room 标签/分类管理:见「Hall」标签页。" })
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		        "button",
+		        {
+		          type: "button",
+		          title: "导出无 Room 绑定的孤儿清单 CSV(含候选)",
+		          onClick: () => {
+		            rpc("dsh-memory/rooms-export", { kind: "orphans" }).then((r) => {
+		              if (!r || !r.ok || !r.value?.csv) return;
+		              const blob = new Blob([r.value.csv], { type: "text/csv;charset=utf-8" });
+		              const url = URL.createObjectURL(blob);
+		              const a = document.createElement("a");
+		              a.href = url;
+		              a.download = "dsh-memory-room-orphans.csv";
+		              a.click();
+		              URL.revokeObjectURL(url);
+		            }).catch(() => void 0);
+		          },
+		          style: {
+		            cursor: "pointer",
+		            fontSize: 12,
+		            padding: "2px 8px",
+		            borderRadius: 6,
+		            border: "1px solid var(--dsh-mem-border)",
+		            background: "transparent",
+		            color: "var(--dsh-mem-text-2)"
+		          },
+		          children: "导出孤儿"
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: "Room 标签/分类管理:见「Hall」「Room」标签页。" })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: S.muted, children: loading ? "加载中…" : countText }),
@@ -4012,11 +4041,12 @@ var __defProp = Object.defineProperty;
 		      loadAll();
 		    } else setError(r && r.error ? r.error.message : "执行失败");
 		  });
-		  const retire = (slug, active) => run(async () => {
-		    if (!active && !window.confirm(`退役 Room:${slug}?
-		
-		存量记录的 tags 不动,仅词表不再推荐;可随时恢复。`)) return;
-		    const r = await rpc("dsh-memory/room-admin", { action: "retire", slug, active });
+		  const retire = (slug, active, withRecords = false) => run(async () => {
+		    if (!active) {
+		      const tip = withRecords ? `退役 Room:${slug} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)` : `退役 Room:${slug}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)`;
+		      if (!window.confirm(tip)) return;
+		    }
+		    const r = await rpc("dsh-memory/room-admin", { action: "retire", slug, active, withRecords: withRecords || void 0 });
 		    if (r && r.ok) {
 		      setMsg(String(r.value?.notice ?? "完成"));
 		      loadAll();
@@ -4363,7 +4393,8 @@ var __defProp = Object.defineProperty;
 		                  setForm({ action: "merge", from: e.slug, to: "" });
 		                  setPreview(null);
 		                }, style: btn, children: "合并" }),
-		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: retired ? "恢复该 Room 到词表" : "退役该 Room(存量 tags 不动)", onClick: () => retire(e.slug, retired), style: { ...btn, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } }, children: retired ? "恢复" : "退役" })
+		                /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: retired ? "恢复该 Room 到词表" : "退役该 Room(存量 tags 不动)", onClick: () => retire(e.slug, retired), style: { ...btn, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } }, children: retired ? "恢复" : "退役" }),
+		                !retired ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)", onClick: () => retire(e.slug, false, true), style: { ...btn, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: "退场" }) : null
 		              ] }),
 		              /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("button", { type: "button", disabled: busy, title: "导出该 Room 的记录清单 CSV", onClick: () => exportRecords(e.slug), style: btn, children: "导出" })
 		            ] })
@@ -4557,11 +4588,12 @@ var __defProp = Object.defineProperty;
 		      loadAll();
 		    } else setError(r && r.error ? r.error.message : "更新失败");
 		  });
-		  const retire = (slug, active) => run(async () => {
-		    if (!active && !window.confirm(`退役 Room:${slug}?
-		
-		存量记录的 tags 不动,仅词表不再推荐;可随时恢复。`)) return;
-		    const r = await rpc("dsh-memory/room-admin", { action: "retire", slug, active });
+		  const retire = (slug, active, withRecords = false) => run(async () => {
+		    if (!active) {
+		      const tip = withRecords ? `退役 Room:${slug} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)` : `退役 Room:${slug}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)`;
+		      if (!window.confirm(tip)) return;
+		    }
+		    const r = await rpc("dsh-memory/room-admin", { action: "retire", slug, active, withRecords: withRecords || void 0 });
 		    if (r && r.ok) {
 		      setMsg(String(r.value?.notice ?? "完成"));
 		      loadAll();
@@ -4709,9 +4741,16 @@ var __defProp = Object.defineProperty;
 		                  style: { ...btn2, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } },
 		                  children: retired ? "恢复" : "退役"
 		                }
-		              )
+		              ),
+		              !retired ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", disabled: busy, title: "退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)", onClick: () => retire(row2.slug, false, true), style: { ...btn2, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: "退场" }) : null
 		            ] }),
-		            grownOnly ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: "收编进注册表(source=grown)", onClick: () => adopt(row2.slug), style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: "收编" }) : null,
+		            grownOnly ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(import_jsx_runtime17.Fragment, { children: [
+		              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: "收编进注册表(source=grown)", onClick: () => adopt(row2.slug), style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: "收编" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: "退场该 Room 下全部记忆(软删,可在「已退场」区恢复)", onClick: () => {
+		                setRenaming(null);
+		                retire(row2.slug, false, true);
+		              }, style: { ...btn2, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: "退场" })
+		            ] }) : null,
 		            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", disabled: busy, title: "导出该 Room 的记录清单 CSV", onClick: () => exportRecords(row2.slug), style: btn2, children: "导出" })
 		          ] })
 		        ] }),
