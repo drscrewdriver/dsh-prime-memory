@@ -92,6 +92,34 @@ export declare class L1Store {
      * 返回 false 表示 id 不存在或写入失败——调用方须记账,不许静默。
      */
     patchMetadata(id: string, metadata: Record<string, unknown>): boolean;
+    /**
+     * 收集某 Room 的全部匹配记录(含已退场行,口径与 Room 计数一致)。
+     * 内部分页拉取,上限 cap 防跑飞;返回记录数组供备份与干跑预览。
+     */
+    listByTagAll(tag: string, cap?: number): MemoryRecord[];
+    /**
+     * 备份某 Room 的匹配记录到 `<dataDir>/rooms-merge-backups/<ts>-<tag>.json`
+     * (执行前快照;破坏性重写前的唯一回滚物料)。返回备份文件路径与条数。
+     */
+    backupTagRecords(tag: string): {
+        file: string;
+        count: number;
+    };
+    /**
+     * 游标重写:把 metadata.tags 里的 `from` 全部替换为 `to`(**含已退场行**,
+     * 口径与 Room 计数一致)。写前重读-合并-写回(relabel 同款):只动 tags,
+     * roomCandidates/roomReview/hall/cogHall/sourceAnchors 等其余键原样保全。
+     *
+     * 单次上限 cap(500)可续跑:再次调用同一 from 即继续处理剩余行。
+     * 返回重写条数 + 受影响的 (family, scene) 集(供 recluster 'room-merge' 入队)。
+     */
+    rewriteTag(from: string, to: string, cap?: number): {
+        rewritten: number;
+        scanned: number;
+        families: string[];
+        scenes: string[];
+        hasMore: boolean;
+    };
     /** 按 id 精确取记录(去重决策的版本号查询用,避免全表扫描)。 */
     getByIds(ids: string[]): MemoryRecord[];
     /**

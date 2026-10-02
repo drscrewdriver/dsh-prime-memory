@@ -17,6 +17,13 @@ export interface RoomRegistryEntry {
     updatedAt: string;
 }
 export type RoomRegistryInput = Pick<RoomRegistryEntry, 'slug'> & Partial<Pick<RoomRegistryEntry, 'label' | 'description' | 'source' | 'aliases'>>;
+/**
+ * 两级 Room slug(`major` 或 `major/minor`):事实源在 metadata-validators.ts
+ * (normTags 写回闸同源放行),此处 re-export 兼容既有导入。
+ */
+export { isRoomSlug } from '../metadata-validators.js';
+/** 大类归属:`major/minor` 取 major;平级 slug 自身即大类。 */
+export declare function majorOf(slug: string): string;
 export declare class RoomRegistryStore {
     private readonly logger?;
     private readonly file;

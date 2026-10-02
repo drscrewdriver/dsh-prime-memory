@@ -342,127 +342,6 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           {hiPriv ? '高权限：开' : '高权限：关'}
         </NButton>
       </div>
-<<<<<<< HEAD
-      {/* ── Room 分类(标签自生长):展开/收拢 + 分页 + 孤儿(无绑定)筛选 ── */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <button
-            type="button"
-            title={roomsOpen ? '收拢 Room 分类' : '展开 Room 分类(全部分页浏览)'}
-            onClick={() => {
-              const next = !roomsOpen;
-              setRoomsOpen(next);
-              setRoomPage(0);
-              try {
-                window.localStorage.setItem('dsh.memory.rooms.open', next ? '1' : '0');
-              } catch {
-                /* 存储不可用 = 会话内仍可切换 */
-              }
-            }}
-            style={{
-              cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
-              border: '1px solid var(--dsh-mem-border)', background: 'transparent',
-              color: 'var(--dsh-mem-text-2)',
-            }}
-          >
-            {roomsOpen ? '▾' : '▸'} Room 分类 · 共 {rooms.length}
-          </button>
-          {/* 孤儿 chip:与 Room chip 互斥的筛选入口 */}
-          <button
-            type="button"
-            title={untaggedOnly ? '取消孤儿筛选' : '只看没有任何 Room 绑定的记忆'}
-            onClick={() => {
-              const next = !untaggedOnly;
-              setUntaggedOnly(next);
-              if (next) setTagFilter('');
-              const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next ? '' : tagFilter, untagged: next, retired: retiredFilter };
-              setLast(conds);
-              fetchPage(conds, 0, false);
-            }}
-            style={{
-              cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 999,
-              border: untaggedOnly ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
-              background: untaggedOnly ? 'var(--dsh-mem-bg-inset)' : 'transparent',
-              color: untaggedOnly ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
-            }}
-          >
-            {'无绑定 · ' + orphanCount}
-          </button>
-          {(tagFilter || untaggedOnly) && (
-            <span style={S.muted}>
-              筛选中:{untaggedOnly ? '无绑定' : tagFilter}
-              <button
-                type="button"
-                title="清除 Room/孤儿筛选"
-                onClick={() => {
-                  setTagFilter('');
-                  setUntaggedOnly(false);
-                  const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: '', untagged: false, retired: retiredFilter };
-                  setLast(conds);
-                  fetchPage(conds, 0, false);
-                }}
-                style={{ cursor: 'pointer', marginLeft: 6, background: 'transparent', border: 'none', color: 'var(--dsh-mem-accent)', fontSize: 12 }}
-              >
-                ×清除
-              </button>
-            </span>
-          )}
-        </div>
-        {rooms.length > 0 ? (
-          <>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: roomsOpen ? 6 : 0 }}>
-              {(roomsOpen ? rooms.slice(roomPage * ROOM_PAGE_SIZE, (roomPage + 1) * ROOM_PAGE_SIZE) : rooms.slice(0, 8)).map((r) => {
-                const on = tagFilter === r.room && !untaggedOnly;
-                return (
-                  <button
-                    key={r.room}
-                    type="button"
-                    title={on ? '取消按该 Room 筛选' : '按该 Room 筛选记录'}
-                    onClick={() => {
-                      const next = on ? '' : r.room;
-                      setTagFilter(next);
-                      setUntaggedOnly(false);
-                      const conds = { query: query.trim(), type: typeFilter, scene: sceneFilter, halls: hallFilter, tag: next, untagged: false, retired: retiredFilter };
-                      setLast(conds);
-                      fetchPage(conds, 0, false);
-                    }}
-                    style={{
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      padding: '2px 8px',
-                      borderRadius: 999,
-                      border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
-                      background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
-                      color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
-                    }}
-                  >
-                    {r.room + ' · ' + r.count}
-                  </button>
-                );
-              })}
-              {!roomsOpen && rooms.length > 8 ? (
-                <span style={S.muted}>(收拢中,共 {rooms.length} 个)</span>
-              ) : null}
-            </div>
-            {roomsOpen && rooms.length > ROOM_PAGE_SIZE ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={S.muted}>
-                  第 {roomPage + 1} / {Math.ceil(rooms.length / ROOM_PAGE_SIZE)} 页(共 {rooms.length})
-                </span>
-                <button type="button" title="上一页" disabled={roomPage === 0}
-                  onClick={() => setRoomPage((p) => Math.max(0, p - 1))}
-                  style={{ cursor: roomPage === 0 ? 'default' : 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--dsh-mem-border)', background: 'transparent', color: 'var(--dsh-mem-text-2)' }}
-                >◀</button>
-                <button type="button" title="下一页" disabled={(roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length}
-                  onClick={() => setRoomPage((p) => ((p + 1) * ROOM_PAGE_SIZE < rooms.length ? p + 1 : p))}
-                  style={{ cursor: (roomPage + 1) * ROOM_PAGE_SIZE >= rooms.length ? 'default' : 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6, border: '1px solid var(--dsh-mem-border)', background: 'transparent', color: 'var(--dsh-mem-text-2)' }}
-                >▶</button>
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <div style={S.muted}>Room 分类:暂无(由反刍涌现的标签自动生成,无需手工建立)</div>
-=======
       {/* ── 孤儿筛选(Room 标签/分类管理已分离至 Hall 页) ── */}
       <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <button
@@ -503,7 +382,6 @@ export function RecordsTab(props: { rpc: RpcFn }) {
               ×清除
             </button>
           </span>
->>>>>>> 94bcd17 (feat(room-tab): Room 独立标签页 —— 存在/名称/条目管理 + 注册后可重编辑(beta.20))
         )}
         <button
           type="button"

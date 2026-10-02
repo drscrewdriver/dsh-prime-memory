@@ -338,18 +338,10 @@ export function registerMemoryTools(
                 affected: r.affected,
               };
             }
-            // 实跑:受影响场景入队重算(source='room-merge')
-            let requeued = 0;
-            for (const family of r.families ?? []) {
-              for (const scene of r.scenes ?? []) {
-                stores.l1.enqueueSceneRecluster(family, [scene], `room-merge:${Date.now()}`, 'room-merge');
-                requeued++;
-              }
-            }
             return {
               notice:
                 `${action === 'merge' ? '合并' : '改名'}完成:${from} → ${to},重写 ${r.applied} 条` +
-                `(备份:${r.backupFile ?? '无'})${requeued > 0 ? `;已入队 ${requeued} 个场景重算` : ''}。`,
+                `(备份:${r.backupFile ?? '无'})。`,
               applied: r.applied,
               id: to,
             };

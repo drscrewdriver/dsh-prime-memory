@@ -18,6 +18,7 @@ import { EFFORT_CHOICES, resolveDataDir } from './config.js';
 import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
+import { mergeRoom, renameRoom } from './room-review.js';
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
 import { getTraceStore } from './store/trace.js';
@@ -35,7 +36,7 @@ import { snapshotTokenCost } from './token-cost.js';
 const require = createRequire(import.meta.url);
 export const PLUGIN_VERSION = require('../package.json').version;
 /**
- * 端点全集运行时清单(36 个,与 tests/contract-keys.test.ts 的 ENDPOINTS 及
+ * 端点全集运行时清单(与 tests/contract-keys.test.ts 的 ENDPOINTS 及
  * contract.ts 类型映射表三方对齐,漂移由键集 diff 测试暴露)。
  * 注意:本清单同时是 HTTP 前缀路由 `/dsh-memory/rpc/<短名>` 的**放行白名单**
  * (见下方 SHORT_ENDPOINTS),漏一条 = 该端点在面板里静默消失(404 被客户端
@@ -52,6 +53,9 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/session-mode-set',
     'dsh-memory/wing-overview',
     'dsh-memory/rooms-get',
+    'dsh-memory/rooms-export',
+    'dsh-memory/room-register',
+    'dsh-memory/room-admin',
     'dsh-memory/wing-backfill',
     'dsh-memory/session-stats',
     'dsh-memory/settings-get',
@@ -168,12 +172,15 @@ export function buildEndpointDeps(base, sources, controller) {
         embedManager: sources.embedManager,
         sessionInfo: sources.sessionInfo,
         ruminate: controller,
+        roomRegistry: sources.roomRegistry,
     };
     return { ...base, ...injected };
 }
 export function registerMemoryRpc(ctx, cfg, stores, logger, status, live, modes, dataDir, rebuild, embedManager, sessionInfo, 
 /** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
-ruminate) {
+ruminate, 
+/** Room 分类管理依赖(注册表;缺省 = rooms-get 不带 registry、rooms-export 恒 404 语义)。 */
+roomRegistry) {
     /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
     let holding = false;
     /** 当前 handle 绑定的 connection 实例(internal/service 第二参;用于识别实例替换)。 */
@@ -191,7 +198,7 @@ ruminate) {
             // 端点处理器:HTTP 层与旧 connection.rpc 的 handler 共用同一分发。
             const rpcHandler = async (endpoint, payload) => {
                 try {
-                    const value = await handleEndpoint(endpoint, payload, buildEndpointDeps({ ctx, cfg, stores, logger }, { status, live, modes, dataDir, rebuild, embedManager, sessionInfo }, ruminate));
+                    const value = await handleEndpoint(endpoint, payload, buildEndpointDeps({ ctx, cfg, stores, logger }, { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry }, ruminate));
                     return { ok: true, value };
                 }
                 catch (err) {
@@ -339,7 +346,7 @@ function sanitizeSettings(s) {
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export async function handleEndpoint(endpoint, payload, deps) {
-    const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo } = deps;
+    const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry } = deps;
     switch (endpoint) {
         case 'dsh-memory/stats':
             return buildStats(cfg, stores, status);
@@ -456,10 +463,223 @@ export async function handleEndpoint(endpoint, payload, deps) {
         // ── Room 分类计数(标签自生长分类;展开 metadata.tags 聚合,零 schema) ──
         case 'dsh-memory/rooms-get': {
             const rooms = stores.l1.listRooms();
-            const v = { rooms, total: rooms.length, orphanCount: stores.l1.untaggedL1Count() };
+            // 端点层合并注册表(Agent A 设计):注册表 active 条目 count=0 补齐并带
+            // source/label(source 用条目真实来源——收编 grown ≠ 预注册,⭐角标靠它区分);
+            // 自生长条目标 source='grown'。不动 listRooms() 的缓存语义。
+            const merged = rooms.map((r) => ({ ...r, source: 'grown' }));
+            const registry = roomRegistry?.listActive() ?? [];
+            for (const e of registry) {
+                const idx = merged.findIndex((r) => r.room === e.slug);
+                if (idx === -1) {
+                    merged.push({ room: e.slug, count: 0, source: e.source, label: e.label });
+                }
+                else {
+                    merged[idx] = { ...merged[idx], source: e.source, label: e.label ?? merged[idx].label };
+                }
+            }
+            const v = {
+                rooms: merged,
+                total: merged.length,
+                orphanCount: stores.l1.untaggedL1Count(),
+                registry: roomRegistry?.list().map((e) => ({
+                    slug: e.slug,
+                    label: e.label,
+                    description: e.description,
+                    source: e.source,
+                    aliases: e.aliases,
+                    status: e.status,
+                })),
+            };
             return v;
         }
-        // ── 一键回填(task_15):后台任务,单飞;端点立即返回,进度看 wing-overview ──
+        case 'dsh-memory/room-register': {
+            if (!roomRegistry)
+                throw new Error('Room 注册表未装配(需要插件重载以初始化)。');
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放:请在记忆库面板开启「高权限模式」后,模型才能预注册 Room。');
+            const p = (payload ?? {});
+            const slug = String(p.slug ?? '').trim();
+            if (!slug)
+                throw new Error('slug 不能为空');
+            const r = await roomRegistry.register({
+                slug,
+                label: typeof p.label === 'string' ? p.label : undefined,
+                description: typeof p.description === 'string' ? p.description : undefined,
+                source: p.source === 'grown' ? 'grown' : undefined,
+            });
+            const v = {
+                slug: r.entry.slug,
+                created: r.created,
+                notice: r.created ? '已预注册。' : '已存在(只补全了缺失的 label/description)。',
+            };
+            return v;
+        }
+        // ── Room 破坏性面管理(merge/rename/retire;与 memory_room_admin 工具同编排) ──
+        case 'dsh-memory/room-admin': {
+            if (!roomRegistry)
+                throw new Error('Room 注册表未装配(需要插件重载以初始化)。');
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放:请在记忆库面板开启「高权限模式」后,才能执行 Room 管理。');
+            const p = (payload ?? {});
+            if (p.action === 'update') {
+                const slug = String(p.slug ?? '').trim();
+                if (!slug)
+                    throw new Error('update 需要 slug');
+                const changed = await roomRegistry.update(slug, {
+                    label: typeof p.label === 'string' ? p.label : undefined,
+                    description: typeof p.description === 'string' ? p.description : undefined,
+                });
+                const v = {
+                    notice: changed
+                        ? `已更新:${slug}(显示名/归类说明,标注器下次即用新词)`
+                        : `无变化:${slug} 未找到或未提供任何非空字段`,
+                };
+                return v;
+            }
+            if (p.action === 'retire') {
+                const slug = String(p.slug ?? '').trim();
+                if (!slug)
+                    throw new Error('retire 需要 slug');
+                const active = p.active === true;
+                // 自生长未注册 slug 退场:自动补一条 grown 注册条目再置 retired——
+                // 否则词表无物可变,面板按钮无法切换为「恢复」(用户实测反馈)
+                if (!active && p.withRecords === true && !roomRegistry.bySlug(slug)) {
+                    await roomRegistry.register({ slug, source: 'grown' });
+                }
+                const changed = await roomRegistry.setStatus(slug, active ? 'active' : 'retired');
+                // 带记录退场(软删,可恢复):该 room 下全部**活跃**记录分批 retire(每批 ≤200,与 records-delete 同原语)
+                let retiredRecords = 0;
+                if (p.withRecords === true && !active) {
+                    for (let offset = 0;; offset += 200) {
+                        const page = stores.l1.list({ tag: slug, retired: false, limit: 200, offset });
+                        if (page.items.length === 0)
+                            break;
+                        const n = stores.l1.retire(page.items.map((r) => r.id), { at: new Date().toISOString(), reason: 'manual' });
+                        retiredRecords += n;
+                        if (page.items.length < 200)
+                            break;
+                    }
+                    deps.logger.info(`[memory] Room 退役带记录:${slug},退场 ${retiredRecords} 条(软删,可恢复)`);
+                }
+                const v = {
+                    retiredRecords: retiredRecords > 0 ? retiredRecords : undefined,
+                    notice: changed
+                        ? active
+                            ? `已恢复:${slug}`
+                            : `已退役:${slug}(存量记录的 tags 不动,仅词表不再推荐)。${retiredRecords > 0 ? `已连同退场 ${retiredRecords} 条记录(软删,可在「已退场」区恢复)。` : ''}`
+                        : `未找到注册条目或状态无变化:${slug}。${retiredRecords > 0 ? `已退场 ${retiredRecords} 条记录(软删,可恢复)。` : ''}`,
+                };
+                return v;
+            }
+            if (p.action === 'merge' || p.action === 'rename') {
+                const from = String(p.from ?? '').trim();
+                const to = String(p.to ?? '').trim();
+                if (!from || !to)
+                    throw new Error('merge/rename 需要 from 与 to 两个 slug');
+                const dryRun = p.dryRun !== false;
+                const r = await (p.action === 'merge' ? mergeRoom : renameRoom)({ l1: stores.l1, registry: roomRegistry, logger: deps.logger }, from, to, { dryRun });
+                if (r.dryRun) {
+                    const v = {
+                        notice: `[dryRun 预览] ${from} → ${to}:影响 ${r.affected} 条${r.hasMore ? '(超过单次上限,需续跑)' : ''}。` +
+                            `样例:${r.preview.join(', ') || '无'}。确认无误后以 dryRun=false 执行(执行前自动备份,完成后自动入队场景重算)。`,
+                        dryRun: true,
+                        affected: r.affected,
+                        preview: r.preview,
+                        hasMore: r.hasMore,
+                    };
+                    return v;
+                }
+                const v = {
+                    notice: `${p.action === 'merge' ? '合并' : '改名'}完成:${from} → ${to},重写 ${r.applied} 条` +
+                        `(备份:${r.backupFile ?? '无'})。`,
+                    dryRun: false,
+                    affected: r.applied,
+                    backupFile: r.backupFile,
+                };
+                return v;
+            }
+            throw new Error(`非法 action:${String(p.action)}(允许 merge/rename/retire)`);
+        }
+        case 'dsh-memory/rooms-export': {
+            const p = (payload ?? {});
+            const kind = p.kind === 'orphans' ? 'orphans' : p.kind === 'rooms' ? 'rooms' : p.kind === 'records' ? 'records' : '';
+            if (!kind)
+                throw new Error(`非法 kind: ${String(p.kind)}(允许 rooms/orphans/records)`);
+            const limit = Math.min(Math.max(Number(p.limit) || 2000, 1), 10_000);
+            const esc = (v) => {
+                const t = String(v ?? '');
+                return /[,\r\n"]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+            };
+            if (kind === 'rooms') {
+                const registry = roomRegistry?.list() ?? [];
+                const counts = new Map(stores.l1.listRooms().map((r) => [r.room, r.count]));
+                const lines = ['slug,count,source,label,description,status,aliases'];
+                let n = 0;
+                const seen = new Set();
+                for (const e of registry) {
+                    lines.push([e.slug, String(counts.get(e.slug) ?? 0), e.source, e.label ?? '', e.description ?? '', e.status, (e.aliases ?? []).join('|')].map(esc).join(','));
+                    seen.add(e.slug);
+                    n++;
+                }
+                for (const r of stores.l1.listRooms()) {
+                    if (seen.has(r.room))
+                        continue;
+                    lines.push([r.room, String(r.count), 'grown', '', '', 'active', ''].map(esc).join(','));
+                    n++;
+                }
+                const v = { kind, csv: lines.join('\r\n'), total: n, truncated: false };
+                return v;
+            }
+            if (kind === 'records') {
+                const tag = String(p.tag ?? '').trim();
+                if (!tag)
+                    throw new Error('kind=records 需要 tag(目标 Room slug)');
+                const header = 'id,type,scene_name,updated_at,tags,content';
+                const lines = [header];
+                let n = 0;
+                let truncated2 = false;
+                for (let offset = 0; offset < limit; offset += 200) {
+                    const page = stores.l1.list({ tag, retired: undefined, limit: 200, offset });
+                    for (const r of page.items) {
+                        if (n >= limit) {
+                            truncated2 = true;
+                            break;
+                        }
+                        const meta = (r.metadata ?? {});
+                        const tags = Array.isArray(meta.tags) ? meta.tags.join('|') : '';
+                        lines.push([r.id, r.type, r.scene_name, new Date(r.updatedAt).toISOString(), tags, r.content].map(esc).join(','));
+                        n++;
+                    }
+                    if (truncated2 || page.items.length < 200)
+                        break;
+                }
+                const v = { kind, csv: lines.join('\r\n'), total: n, truncated: truncated2 };
+                return v;
+            }
+            // orphans:无 Room 绑定的活跃记录清单(id/type/scene/updated/content/候选/状态)
+            const header = 'id,type,scene_name,updated_at,content,room_candidates,room_review';
+            const lines = [header];
+            let n = 0;
+            let truncated = false;
+            for (let offset = 0; offset < limit; offset += 200) {
+                const page = stores.l1.list({ untagged: true, retired: false, limit: 200, offset });
+                for (const r of page.items) {
+                    if (n >= limit) {
+                        truncated = true;
+                        break;
+                    }
+                    const meta = (r.metadata ?? {});
+                    lines.push([r.id, r.type, r.scene_name, new Date(r.updatedAt).toISOString(), r.content,
+                        Array.isArray(meta.roomCandidates) ? meta.roomCandidates.join('|') : '',
+                        String(meta.roomReview ?? '')].map(esc).join(','));
+                    n++;
+                }
+                if (truncated || page.items.length < 200)
+                    break;
+            }
+            const v = { kind, csv: lines.join('\r\n'), total: n, truncated };
+            return v;
+        }
         case 'dsh-memory/wing-backfill': {
             const r = startWingBackfill({
                 ctx: deps.ctx,

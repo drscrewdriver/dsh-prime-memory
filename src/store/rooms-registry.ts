@@ -11,12 +11,7 @@
  * 自生长目录**,绝不阻塞 rooms-get / 标注器(R2 红线)。
  */
 import * as path from 'node:path';
-<<<<<<< HEAD
-import { promises as fs } from 'node:fs';
-import { isTag } from '../metadata-validators.js';
-=======
-import { isRoomSlug, isTag } from '../metadata-validators.js';
->>>>>>> 670741f (fix(room-registry): 重启丢两级条目 + normTags 洗 slash 标签 + list-records 两级 tag(beta.17))
+import { isRoomSlug } from '../metadata-validators.js';
 import { readJsonStrict, atomicWriteText, ensureDir } from '../util/io.js';
 import type { MemoryLogger } from '../types.js';
 

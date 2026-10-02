@@ -6,64 +6,19 @@
     "declaration": false,
     "declarationMap": false,
     "sourceMap": false,
-    "types": [
-      "node"
-    ]
+    "types": ["node"]
   },
   "include": [
     "src/**/*.ts",
     "tests/ruminate.test.ts",
     "tests/stores.test.ts",
-<<<<<<< HEAD
-=======
-    "tests/repo-axis.test.ts",
-    "tests/governance-weights.test.ts",
-    "tests/recluster.test.ts",
-    "tests/room-review.test.ts",
     "tests/rooms-registry.test.ts",
+    "tests/room-review.test.ts",
     "tests/room-merge.test.ts",
     "tests/room-admin-endpoint.test.ts",
     "tests/recall-usage.test.ts",
     "tests/hall-room.integration.test.ts",
->>>>>>> 4daed58 (feat(recall-usage): 老化权重展示 + 召回使用统计 —— 进 topN 才算 used(beta.14))
-    "tests/rpc.test.ts",
-    "tests/redact-wiring.test.ts",
-    "tests/pipeline.test.ts",
-    "tests/llm-gateway.test.ts",
-    "tests/l1-receipts-backtracking.test.ts",
-    "tests/graph-store.test.ts",
-    "tests/l1-retire.test.ts",
-    "tests/l1-receipts-query.test.ts",
-    "tests/graph-budget.test.ts",
-    "tests/conflict-freeze-semantics.test.ts",
-    "tests/tools.test.ts",
-    "tests/session-mode-inheritance.test.ts",
-    "tests/prompt-boundary.test.ts",
-    "tests/conflict-rejected.test.ts",
-    "tests/conflict-freeze-safety.test.ts",
-    "tests/l1-receipts-write.test.ts",
-    "tests/graph-pipeline.test.ts",
-    "tests/conflict-freeze-same-batch.test.ts",
-    "tests/conflict-freeze-closure.test.ts",
-    "tests/wing-migrate.test.ts",
-    "tests/wing-label-parse.test.ts",
-    "tests/slots-tools.test.ts",
-    "tests/relabel.test.ts",
-    "tests/recall-ack.test.ts",
-    "tests/rebuild-wiring.test.ts",
-    "tests/l1-supersede-path.test.ts",
-    "tests/hooks.test.ts",
-    "tests/graph-rebuildability.test.ts",
-    "tests/conflict-freeze-switch.test.ts",
-    "tests/capture-recovery.test.ts",
-    "tests/capture-config.test.ts",
-    "tests/capture-anchors.test.ts",
-    "tests/rooms-registry.test.ts"
+    "tests/metadata-validators.test.ts"
   ],
-  "exclude": [
-    "src/smoke.ts",
-    "dist",
-    "dist-smoke",
-    "node_modules"
-  ]
+  "exclude": ["src/smoke.ts", "dist", "dist-smoke", "node_modules"]
 }

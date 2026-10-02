@@ -1,50 +1,6 @@
 {
   "name": "dsh-prime-memory",
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
   "version": "0.16.3",
-=======
-  "version": "0.20.0-beta.14",
->>>>>>> 4daed58 (feat(recall-usage): 老化权重展示 + 召回使用统计 —— 进 topN 才算 used(beta.14))
-=======
-  "version": "0.20.0-beta.15",
->>>>>>> 51e1ed7 (fix(hall-reclass): 归类后条目误退役 + 点选归类主路径(beta.15))
-=======
-  "version": "0.20.0-beta.16",
->>>>>>> 1eace08 (feat(hall-grown-reclass): 自生长 slug 拖入 hall 一步收编+归子类(beta.16))
-=======
-  "version": "0.20.0-beta.17",
->>>>>>> 670741f (fix(room-registry): 重启丢两级条目 + normTags 洗 slash 标签 + list-records 两级 tag(beta.17))
-=======
-  "version": "0.20.0-beta.19",
->>>>>>> 4caa8bf (feat(hall-ux): 指针自制拖拽 + 全局操作栏 + room 行按钮固定/名称换行(beta.19))
-=======
-  "version": "0.20.0-beta.20",
->>>>>>> 94bcd17 (feat(room-tab): Room 独立标签页 —— 存在/名称/条目管理 + 注册后可重编辑(beta.20))
-=======
-  "version": "0.20.0-beta.21",
->>>>>>> 1b04425 (feat(room-retire): 退役带记录(retire withRecords)+ 孤儿导出回迁记忆页(beta.21))
-=======
-  "version": "0.20.0-beta.22",
->>>>>>> 5afbf20 (fix(room-retire-visibility): 退场效果可见性 + Room 页退场筛选(beta.22))
-=======
-  "version": "0.20.0-beta.23",
->>>>>>> 9ce2045 (fix(room-filter): Room 页退场筛选 chips 补齐(beta.23;b22 补丁脚本失败未落盘))
-=======
-  "version": "0.20.0-beta.24",
->>>>>>> 24a6517 (fix(hall-tab): Hall 页展开只拉活跃 + 退场后自动刷新展开区(beta.24;b23 漏同步))
-=======
-  "version": "0.20.0-beta.25",
->>>>>>> 847c3f7 (fix(room-retire): 自生长退场自动补 retired 条目 + Hall 子 room 仅显示 active(beta.25))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",

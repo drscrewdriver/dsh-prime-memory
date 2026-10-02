@@ -189,42 +189,6 @@ export class L1Store {
     return this.db.patchL1Metadata(id, metadata);
   }
 
-    id: string,
-    patch: { repoKeyName?: string; repoKeyOwner?: string },
-    expectRepoKeyName?: string,
-  ): number {
-    return changed;
-  }
-
-  /**
-   * 归属变了,记忆对场景的归属度就变了——受影响场景的摘要必须由当前事实重算
-   * (I-20 投影哲学)。反查各 id 的 scene_name 入队(消费器在 ruminate 空闲档,
-   * 每轮至多 1 个作业;内部只有文件级操作,无新增 LLM 通道)。
-   */
-    try {
-      const records = this.db.getL1ByIds([...ids]);
-      const byFamilyScene = new Map<string, Set<string>>();
-      for (const r of records) {
-        if (!r.scene_name) continue;
-        const family = r.family ?? 'chat';
-        const set = byFamilyScene.get(family) ?? new Set<string>();
-        set.add(r.scene_name);
-        byFamilyScene.set(family, set);
-      }
-      const batchId = `repo:${Date.now()}`;
-      for (const [family, scenes] of byFamilyScene) {
-      }
-    } catch {
-      /* 反查失败 = 不入队;重算由下一次任何触发兜底(消费器幂等) */
-    }
-  }
-
-
-  }
-
-  }
-
-  }
 
   // ── Room merge/rename 的游标重写(分类管理 beta.5;破坏性面)──────────────
 

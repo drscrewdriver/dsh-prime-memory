@@ -413,26 +413,11 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   if (storageOk) {
     flushL0 = registerCapture(ctx, config, runner, stores.l0, logger, live, modes);
   }
-<<<<<<< HEAD
-  // 长任务模式(cfg.longTask.enabled 门控,默认关):官方 usage 上下文计量 +
-  // todo/write 快照参考(仅长任务会话;写 pinned 槽位走 slot-recall 常驻注入)。
-  // Room 注册表(分类管理 beta.4;损坏降级为纯自生长目录)
-
-  if (storageOk) {
-      cfg: config,
-      modes,
-      slots: stores.slots,
-      logger,
-    });
-  }
-  const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir);
-=======
   // 召回使用统计(进 topN 才算 used;热路径只碰内存,去抖落盘)
   const recallUsage = new RecallUsageStore(dataDir, logger);
   await recallUsage.init();
   stores.usage = recallUsage;
   const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir, recallUsage);
->>>>>>> 4daed58 (feat(recall-usage): 老化权重展示 + 召回使用统计 —— 进 topN 才算 used(beta.14))
   runner.setAfterRun(recall.invalidateProfile);
   registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate, storageOk ? roomRegistry : undefined);
   // 激活槽位(active slot):工具面 + 常驻注入 + 服务端投影(均走 ctx.effect,可撤销)

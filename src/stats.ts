@@ -45,7 +45,7 @@ import type { SessionModeStore } from './store/session-modes.js';
 import type { EmbeddingManager } from './store/embedding-source.js';
 import type { StateStore } from './store/state.js';
 import { WING_CATALOG, WING_FALLBACK, type MemoryFamily, type MemoryLogger, type MemoryMode } from './types.js';
-import { isRoomSlug, isTag } from './metadata-validators.js';
+import { isRoomSlug } from './metadata-validators.js';
 import { InProcMemoryBackend, type MemoryBackend } from './store/memory-backend.js';
 import { isWingCorner } from './store/session-modes.js';
 import { startWingBackfill } from './wing-backfill.js';
@@ -245,19 +245,16 @@ import type {
   RecallDisabledReason,
   RuminateStatusResponse,
   ScenesResponse,
-  WingBackfillResponse,
   WingOverviewResponse,
   RoomsGetResponse,
+  RoomCount,
   SessionModeGetResponse,
   SessionModeSetResponse,
   SessionStatsResponse,
   SettingsGetResponse,
   SettingsSetResponse,
   UiRecord,
-  RoomCount,
-  RoomsExportRequest,
   RoomsExportResponse,
-  RoomRegisterRequest,
   RoomRegisterResponse,
   RoomAdminRequest,
   RoomAdminResponse,
@@ -307,7 +304,6 @@ export function buildEndpointDeps(
     embedManager: sources.embedManager,
     sessionInfo: sources.sessionInfo,
     ruminate: controller,
-    longTask: sources.longTask,
     roomRegistry: sources.roomRegistry,
   };
   return { ...base, ...injected };
@@ -339,7 +335,6 @@ export function registerMemoryRpc(
   sessionInfo?: SessionInfoSource,
   /** 反刍控制器(存储降级时为 undefined):经 buildEndpointDeps 落入 deps.ruminate。 */
   ruminate?: RuminateController,
-  /** 长任务端点依赖(cfg.longTask.enabled 门控;缺省 = 端点恒 disabled)。 */
   /** Room 分类管理依赖(注册表;缺省 = rooms-get 不带 registry、rooms-export 恒 404 语义)。 */
   roomRegistry?: RoomRegistryStore,
 ): void {
@@ -361,7 +356,7 @@ export function registerMemoryRpc(
         try {
           const value = await handleEndpoint(endpoint, payload, buildEndpointDeps(
             { ctx, cfg, stores, logger },
-            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo },
+            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry },
             ruminate,
           ));
           return { ok: true, value };
@@ -548,7 +543,7 @@ function sanitizeSettings(s: MemoryLiveSettings): MemoryLiveSettings {
 
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export async function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown> {
-  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, longTask: longTaskDeps, roomRegistry } = deps;
+  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry } = deps;
   switch (endpoint) {
     case 'dsh-memory/stats':
       return buildStats(cfg, stores, status);
@@ -681,7 +676,32 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     // ── Room 分类计数(标签自生长分类;展开 metadata.tags 聚合,零 schema) ──
     case 'dsh-memory/rooms-get': {
       const rooms = stores.l1.listRooms();
-      const v: RoomsGetResponse = { rooms, total: rooms.length, orphanCount: stores.l1.untaggedL1Count() };
+      // 端点层合并注册表(Agent A 设计):注册表 active 条目 count=0 补齐并带
+      // source/label(source 用条目真实来源——收编 grown ≠ 预注册,⭐角标靠它区分);
+      // 自生长条目标 source='grown'。不动 listRooms() 的缓存语义。
+      const merged: Array<RoomCount & { label?: string }> = rooms.map((r) => ({ ...r, source: 'grown' }));
+      const registry = roomRegistry?.listActive() ?? [];
+      for (const e of registry) {
+        const idx = merged.findIndex((r) => r.room === e.slug);
+        if (idx === -1) {
+          merged.push({ room: e.slug, count: 0, source: e.source, label: e.label });
+        } else {
+          merged[idx] = { ...merged[idx], source: e.source, label: e.label ?? merged[idx].label };
+        }
+      }
+      const v: RoomsGetResponse = {
+        rooms: merged,
+        total: merged.length,
+        orphanCount: stores.l1.untaggedL1Count(),
+        registry: roomRegistry?.list().map((e) => ({
+          slug: e.slug,
+          label: e.label,
+          description: e.description,
+          source: e.source,
+          aliases: e.aliases,
+          status: e.status,
+        })),
+      };
       return v;
     }
 
@@ -779,18 +799,10 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           };
           return v;
         }
-        // 实跑:受影响场景入队重算(source='room-merge';与工具同口径)
-        let requeued = 0;
-        for (const family of r.families ?? []) {
-          for (const scene of r.scenes ?? []) {
-            stores.l1.enqueueSceneRecluster(family, [scene], `room-merge:${Date.now()}`, 'room-merge');
-            requeued++;
-          }
-        }
         const v: RoomAdminResponse = {
           notice:
             `${p.action === 'merge' ? '合并' : '改名'}完成:${from} → ${to},重写 ${r.applied} 条` +
-            `(备份:${r.backupFile ?? '无'})${requeued > 0 ? `;已入队 ${requeued} 个场景重算` : ''}。`,
+            `(备份:${r.backupFile ?? '无'})。`,
           dryRun: false,
           affected: r.applied,
           backupFile: r.backupFile,

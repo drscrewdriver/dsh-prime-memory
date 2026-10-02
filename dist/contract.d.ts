@@ -507,12 +507,91 @@ export interface WingOverviewResponse {
  * 降级/无 tags 时 `rooms` 为空数组(面板显示"暂无"),不报错。
  */
 export interface RoomsGetResponse {
-    /** Room 列表(按记录数降序,同数按名升序)。 */
+    /** Room 列表(按记录数降序,同数按名升序;注册表条目 count=0 并带 source/label)。
+     *  条目可选字段 source/label 由端点层合并注册表后附带(客户端可选读,零断裂)。 */
     rooms: RoomCount[];
     /** Room 总数(= rooms.length,冗余只为前端少写一次 .length)。 */
     total: number;
     /** 孤儿记忆数:没有任何 Room(tags 为空/缺失)的记录条数(与 rooms 同口径含已退场)。 */
     orphanCount: number;
+    /** 注册表条目(全量含 retired;分类管理面板用;未装配 = undefined)。 */
+    registry?: Array<{
+        slug: string;
+        label?: string;
+        description?: string;
+        source: 'pre-registered' | 'grown';
+        aliases?: string[];
+        status: 'active' | 'retired';
+    }>;
+}
+/** dsh-memory/room-register(预注册 Room;高权限:面板 memoryMutate 开启才生效)。 */
+export interface RoomRegisterRequest {
+    slug: string;
+    label?: string;
+    description?: string;
+    /** 收编自生长 slug 时传 grown(缺省 pre-registered;已存在条目忽略此字段)。 */
+    source?: 'pre-registered' | 'grown';
+}
+export interface RoomRegisterResponse {
+    slug: string;
+    created: boolean;
+    /** 幂等补全时的提示(如「已存在,只补全缺失字段」)。 */
+    notice?: string;
+}
+/** dsh-memory/rooms-export(分类数据导出,CSV 直出)。 */
+export interface RoomsExportRequest {
+    /** rooms = 词表+计数;orphans = 无 Room 绑定的记录清单;records = 按 Room 的记录清单(tag 必传)。 */
+    kind: 'rooms' | 'orphans' | 'records';
+    /** 各 kind 通用上限(1..10000,默认 2000)。 */
+    limit?: number;
+    /** kind=records 的目标 Room slug。 */
+    tag?: string;
+}
+export interface RoomsExportResponse {
+    kind: 'rooms' | 'orphans' | 'records';
+    /** CSV 文本(首行表头;
+   行尾;RFC 4180 转义)。 */
+    csv: string;
+    /** 数据行数(不含表头)。 */
+    total: number;
+    /** truncated = 达到 limit 上限,结果可能不完整。 */
+    truncated: boolean;
+}
+/** dsh-memory/room-admin(Room 破坏性面管理;高权限:面板 memoryMutate 开启才生效)。 */
+export interface RoomAdminRequest {
+    /** merge/rename:from→to(mergeRoom/renameRoom 编排:预览→实跑+自动备份+入队场景重算);retire:slug 退役/恢复;update:改写 label/description。 */
+    action: 'merge' | 'rename' | 'retire' | 'update';
+    /** update 的显示名(可中文;非空才改写)。 */
+    label?: string;
+    /** update 的归类说明(喂标注器;非空才改写)。 */
+    description?: string;
+    /** merge/rename 的源 Room slug。 */
+    from?: string;
+    /** merge/rename 的目标 Room slug。 */
+    to?: string;
+    /** retire 的目标 Room slug。 */
+    slug?: string;
+    /** retire:true=恢复 active;缺省/false=退役。 */
+    active?: boolean;
+    /** retire:同时把该 room 下全部**活跃**记录退场(软删,可在「已退场」区恢复)。 */
+    withRecords?: boolean;
+    /** merge/rename:缺省 true 只返预览;实跑需显式 false。 */
+    dryRun?: boolean;
+}
+export interface RoomAdminResponse {
+    notice: string;
+    /** merge/rename 本次是否 dryRun(预览)。 */
+    dryRun?: boolean;
+    /** merge/rename 影响的记录条数(实跑 = 已改写条数)。 */
+    affected?: number;
+    /** 预览样例(受影响记录 id 的前几条)。 */
+    preview?: string[];
+    /** true = 超过单次上限,需续跑。 */
+    hasMore?: boolean;
+    /** 实跑时改写前备份文件名(rooms-merge-backups/)。 */
+    backupFile?: string;
+    /** retire withRecords 实际退场的记录条数(软删,可恢复)。 */
+    retiredRecords?: number;
 }
 /** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */
 export interface WingBackfillResponse {
@@ -1224,6 +1303,9 @@ export interface DshMemoryRequestMap {
     'dsh-memory/session-mode-set': SessionModeSetRequest;
     'dsh-memory/wing-overview': Record<string, never>;
     'dsh-memory/rooms-get': Record<string, never>;
+    'dsh-memory/rooms-export': RoomsExportRequest;
+    'dsh-memory/room-register': RoomRegisterRequest;
+    'dsh-memory/room-admin': RoomAdminRequest;
     'dsh-memory/wing-backfill': Record<string, never>;
     'dsh-memory/session-stats': SessionStatsRequest;
     'dsh-memory/settings-get': Record<string, never>;
@@ -1269,6 +1351,9 @@ export interface DshMemoryResponseMap {
     'dsh-memory/session-mode-set': SessionModeSetResponse;
     'dsh-memory/wing-overview': WingOverviewResponse;
     'dsh-memory/rooms-get': RoomsGetResponse;
+    'dsh-memory/rooms-export': RoomsExportResponse;
+    'dsh-memory/room-register': RoomRegisterResponse;
+    'dsh-memory/room-admin': RoomAdminResponse;
     'dsh-memory/wing-backfill': WingBackfillResponse;
     'dsh-memory/session-stats': SessionStatsResponse;
     'dsh-memory/settings-get': SettingsGetResponse;

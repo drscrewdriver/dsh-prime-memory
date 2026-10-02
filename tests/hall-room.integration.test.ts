@@ -240,11 +240,6 @@ describe('Hall·Room 集成(HTTP 面全链 × 真实存储)', () => {
     expect(m.metadata?.roomReview).toBe('pending');
     expect(m.metadata?.hall).toBe('work');
     expect(env.l1.getByIds(['r1'])[0]!.metadata?.tags).toEqual(['dsh-plugin/merge']);
-    // 场景重算入队(source='room-merge')
-    const claimed = env.l1.claimSceneRecluster();
-    expect(claimed).not.toBeNull();
-    expect(claimed!.source).toBe('room-merge');
-    if (claimed) env.l1.finishSceneRecluster(claimed.jobId, true);
   });
 
   it('⑥ rename:记录 1:1 重写 + 注册表收旧名为别名', async () => {

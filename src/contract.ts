@@ -534,8 +534,6 @@ export interface RoomsGetResponse {
   total: number;
   /** 孤儿记忆数:没有任何 Room(tags 为空/缺失)的记录条数(与 rooms 同口径含已退场)。 */
   orphanCount: number;
-<<<<<<< HEAD
-=======
   /** 注册表条目(全量含 retired;分类管理面板用;未装配 = undefined)。 */
   registry?: Array<{
     slug: string;
@@ -615,12 +613,8 @@ export interface RoomAdminResponse {
   hasMore?: boolean;
   /** 实跑时改写前备份文件名(rooms-merge-backups/)。 */
   backupFile?: string;
-<<<<<<< HEAD
->>>>>>> 94bcd17 (feat(room-tab): Room 独立标签页 —— 存在/名称/条目管理 + 注册后可重编辑(beta.20))
-=======
   /** retire withRecords 实际退场的记录条数(软删,可恢复)。 */
   retiredRecords?: number;
->>>>>>> 1b04425 (feat(room-retire): 退役带记录(retire withRecords)+ 孤儿导出回迁记忆页(beta.21))
 }
 
 /** dsh-memory/wing-backfill(一键回填,后台任务;端点立即返回,进度以 wing-overview 轮询)。 */

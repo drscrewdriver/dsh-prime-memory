@@ -11,12 +11,24 @@
  * 自生长目录**,绝不阻塞 rooms-get / 标注器(R2 红线)。
  */
 import * as path from 'node:path';
-import { isTag } from '../metadata-validators.js';
+import { isRoomSlug } from '../metadata-validators.js';
 import { readJsonStrict, atomicWriteText, ensureDir } from '../util/io.js';
 /** 版本常量(file-versions 同款集中纪律;registry 为独立 sidecar 文件)。 */
 export const ROOMS_REGISTRY_FILE_VERSION = 1;
-/** 注册表上限(防刷:词表膨胀会直接进标注器 prompt;真需求超限时先 retire/合并)。 */
-const REGISTRY_CAP = 200;
+/** 大类(顶层)注册上限(防刷)。小类(`major/minor`)不占大类额度,另有总量保险。 */
+const REGISTRY_MAJOR_CAP = 200;
+/** 全量保险上限(大类+小类总和;防极端滥用)。 */
+const REGISTRY_TOTAL_CAP = 2000;
+/**
+ * 两级 Room slug(`major` 或 `major/minor`):事实源在 metadata-validators.ts
+ * (normTags 写回闸同源放行),此处 re-export 兼容既有导入。
+ */
+export { isRoomSlug } from '../metadata-validators.js';
+/** 大类归属:`major/minor` 取 major;平级 slug 自身即大类。 */
+export function majorOf(slug) {
+    const i = slug.indexOf('/');
+    return i === -1 ? slug : slug.slice(0, i);
+}
 /** aliases 上限(合并/改名历史)。 */
 const ALIASES_CAP = 16;
 export class RoomRegistryStore {
@@ -49,8 +61,8 @@ export class RoomRegistryStore {
         }
         const rooms = Array.isArray(read.value.rooms) ? read.value.rooms : [];
         for (const r of rooms) {
-            if (!r || typeof r.slug !== 'string' || !isTag(r.slug))
-                continue; // 非法 slug 丢弃(session-modes 同款纪律)
+            if (!r || typeof r.slug !== 'string' || !isRoomSlug(r.slug))
+                continue; // 非法 slug 丢弃——两级制,isTag 会误丢 hall/minor(beta.17 修)
             this.entries.push({
                 slug: r.slug,
                 label: typeof r.label === 'string' ? r.label : undefined,
@@ -88,8 +100,9 @@ export class RoomRegistryStore {
     async register(input) {
         this.ensureLoaded();
         const slug = String(input.slug ?? '').trim().toLowerCase();
-        if (!slug || !isTag(slug))
-            throw new Error(`非法 Room slug: ${String(input.slug)}(需小写字母数字连字符)`);
+        if (!slug || !isRoomSlug(slug)) {
+            throw new Error(`非法 Room slug: ${String(input.slug)}(两级制:major 或 major/minor,各段小写字母数字连字符)`);
+        }
         const found = this.entries.find((e) => e.slug === slug || (e.aliases ?? []).includes(slug));
         if (found) {
             let changed = false;
@@ -108,8 +121,17 @@ export class RoomRegistryStore {
             }
             return { entry: { ...found }, created: false };
         }
-        if (this.entries.length >= REGISTRY_CAP) {
-            throw new Error(`Room 注册表已达上限(${REGISTRY_CAP}),请先 retire/合并部分条目`);
+        // 额度两级制(用户裁定:200 上限只管大类;小类细分不占大类额度):
+        // 大类 = slug 无 '/' 的条目 ∪ 已用 major 前缀;小类只受总量保险约束。
+        const isMinor = slug.includes('/');
+        if (isMinor && this.entries.length >= REGISTRY_TOTAL_CAP) {
+            throw new Error(`Room 注册表总量已达上限(${REGISTRY_TOTAL_CAP}),请先合并/退役部分条目`);
+        }
+        if (!isMinor) {
+            const majors = new Set(this.entries.map((e) => majorOf(e.slug)));
+            if (!majors.has(slug) && majors.size >= REGISTRY_MAJOR_CAP) {
+                throw new Error(`大类已达上限(${REGISTRY_MAJOR_CAP}):请用「大类/小类」细分(如 ${slug}/子项),或合并/退役部分大类`);
+            }
         }
         const now = new Date().toISOString();
         const entry = {
