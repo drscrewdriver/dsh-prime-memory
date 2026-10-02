@@ -47,6 +47,8 @@ export function RoomTab(props: { rpc: RpcFn }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   // 退场筛选:''=全部 / 'active'=活跃(词表未退役) / 'retired'=已退役
   const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
+  // 名称搜索过滤:slug、显示名、别名,大小写不敏感(与退场筛选叠加)
+  const [filter, setFilter] = useState('');
   const [records, setRecords] = useState<Record<string, { items: UiRecord[]; total: number | null }>>({});
 
   const loadAll = useCallback(() => {
@@ -215,6 +217,14 @@ export function RoomTab(props: { rpc: RpcFn }) {
     if (retiredFilter === 'retired') return row.entry?.status === 'retired';
     return true;
   });
+  const normFilter = filter.trim().toLowerCase();
+  const visibleRows = normFilter
+    ? rows.filter((row) =>
+        row.slug.toLowerCase().includes(normFilter) ||
+        (row.entry?.label ?? '').toLowerCase().includes(normFilter) ||
+        (row.entry?.aliases ?? []).some((a) => a.toLowerCase().includes(normFilter)),
+      )
+    : rows;
 
   return (
     <div>
@@ -259,8 +269,8 @@ export function RoomTab(props: { rpc: RpcFn }) {
         </div>
       ) : null}
 
-      {/* 退场筛选:全部 / 活跃(词表未退役) / 已退役 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+      {/* 退场筛选:全部 / 活跃(词表未退役) / 已退役 + 名称搜索 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
         <span style={S.muted}>退场筛选</span>
         {([['', '全部'], ['active', '活跃'], ['retired', '已退役']] as const).map(([val, label]) => {
           const on = retiredFilter === val;
@@ -281,6 +291,14 @@ export function RoomTab(props: { rpc: RpcFn }) {
             </button>
           );
         })}
+        <div style={S.grow} />
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="搜索 room(slug、显示名、别名)"
+          style={{ ...S.input, width: 230, fontSize: 12 }}
+        />
+        {filter ? <button type="button" style={btn} onClick={() => setFilter('')}>清除</button> : null}
       </div>
 
       {/* 注册表单 */}
@@ -295,10 +313,10 @@ export function RoomTab(props: { rpc: RpcFn }) {
       {msg ? <div style={S.hint}>{msg}</div> : null}
       {error ? <div style={S.error}>{error}</div> : null}
 
-      {rows.length === 0 ? (
-        <p style={S.intro}>暂无 Room:对话/反刍会从标签涌现,或在上方注册。</p>
+      {visibleRows.length === 0 ? (
+        normFilter ? <p style={S.intro}>无匹配的 Room。</p> : <p style={S.intro}>暂无 Room:对话/反刍会从标签涌现,或在上方注册。</p>
       ) : (
-        rows.map((row) => {
+        visibleRows.map((row) => {
           const e = row.entry;
           const retired = e?.status === 'retired';
           const grownOnly = !e;

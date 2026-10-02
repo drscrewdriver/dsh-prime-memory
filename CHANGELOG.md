@@ -23,6 +23,9 @@
   `RecallUsageStore`(进 topN 才算 used;损坏只读降级)。
 - **测试**:Hall·Room HTTP 面集成测试(25 用例)、rooms-registry/room-review/
   room-merge/room-admin-endpoint/recall-usage 单测,endpoint 契约计数 43→46。
+- **Hall/Room 名称搜索过滤 + Hall 分组默认折叠**(0.20.0-beta.26 同步):
+  Hall 页搜索框(slug/显示名/别名,匹配组自动展开)、hall 头折叠默认收起 +
+  展开全部/收起全部 + localStorage 记忆;Room 页同款搜索框与退场筛选叠加。
 
 ### 适配差异(相对 0.2.0 线)
 

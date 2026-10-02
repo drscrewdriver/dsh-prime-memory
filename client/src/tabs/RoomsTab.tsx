@@ -81,6 +81,15 @@ export function RoomsTab(props: { rpc: RpcFn }) {
   // room 内容展开(默认收起,免一次性渲染过多;首次展开拉前 10 条)
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
   const [roomRecords, setRoomRecords] = useState<Record<string, { items: UiRecord[]; total: number | null }>>({});
+  // Hall 分组折叠:默认全折叠(只显示 hall 头),展开状态本地记忆
+  const [expandedHalls, setExpandedHalls] = useState<Set<string>>(() => {
+    try {
+      const v = window.localStorage.getItem('dsh.memory.halls.open');
+      return v ? new Set(JSON.parse(v) as string[]) : new Set<string>();
+    } catch { return new Set<string>(); }
+  });
+  // 名称搜索过滤:hall/room 的 slug、显示名、别名,大小写不敏感
+  const [filter, setFilter] = useState('');
   // 指针自制拖拽(HTML5 DnD 在部分 webview 不触发,ego-browser 同款纯 pointer 方案)
   const dragRef = useRef<{ from: string; x: number; y: number; active: boolean } | null>(null);
   const [ghost, setGhost] = useState<{ x: number; y: number; text: string } | null>(null);
@@ -316,6 +325,47 @@ export function RoomsTab(props: { rpc: RpcFn }) {
 
   const grownOnly = useMemo(() => rooms.filter((r) => !registry.some((e) => e.slug === r.room)), [rooms, registry]);
 
+  const persistHalls = (next: Set<string>) => {
+    try { window.localStorage.setItem('dsh.memory.halls.open', JSON.stringify([...next])); } catch { /* 存储不可用 = 会话内仍生效 */ }
+  };
+  const toggleHall = (hall: string) =>
+    setExpandedHalls((cur) => {
+      const next = new Set(cur);
+      if (next.has(hall)) next.delete(hall);
+      else next.add(hall);
+      persistHalls(next);
+      return next;
+    });
+  const setAllHalls = (open: boolean) => {
+    const next = open ? new Set(groups.map((g) => g.hall)) : new Set<string>();
+    setExpandedHalls(next);
+    persistHalls(next);
+  };
+
+  // 搜索过滤:hall 自身命中(slug/显示名)→ 显示全部子 room;否则只留命中的子 room
+  // (slug/显示名/别名);整组无命中 → 隐藏。搜索时 hall 自动展开(折叠态会藏住匹配项)。
+  const normFilter = filter.trim().toLowerCase();
+  const visibleGroups = useMemo(() => {
+    if (!normFilter) return groups;
+    return groups
+      .map((g) => {
+        const hallHit = g.hall.toLowerCase().includes(normFilter) || (g.label ?? '').toLowerCase().includes(normFilter);
+        const entries = hallHit
+          ? g.entries
+          : g.entries.filter((e) =>
+              e.slug.toLowerCase().includes(normFilter) ||
+              (e.label ?? '').toLowerCase().includes(normFilter) ||
+              (e.aliases ?? []).some((a) => a.toLowerCase().includes(normFilter)),
+            );
+        return { ...g, entries };
+      })
+      .filter((g) => g.entries.length > 0);
+  }, [groups, normFilter]);
+  const visibleGrown = useMemo(
+    () => (normFilter ? grownOnly.filter((r) => r.room.toLowerCase().includes(normFilter)) : grownOnly),
+    [grownOnly, normFilter],
+  );
+
   return (
     <div>
       <div style={{ ...S.flexRow, marginBottom: 8 }}>
@@ -357,6 +407,21 @@ export function RoomsTab(props: { rpc: RpcFn }) {
           onClick={toggleHiPriv}
         >{hiPriv ? '高权限:开' : '高权限:关'}</button>
         <button type="button" style={btn} onClick={loadAll} title="重拉注册表与计数">刷新</button>
+      </div>
+
+      {/* 搜索过滤 + 折叠批量操作 */}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="搜索 hall/room(slug、显示名、别名)"
+          style={{ ...S.input, width: 250, fontSize: 12 }}
+        />
+        {filter ? <button type="button" style={btn} onClick={() => setFilter('')}>清除</button> : null}
+        <span style={S.muted}>{`匹配 ${visibleGroups.reduce((s2, g) => s2 + g.entries.length, 0)} room / ${visibleGroups.length} hall`}</span>
+        <div style={S.grow} />
+        <button type="button" style={btn} title="展开全部 hall 的子 room" onClick={() => setAllHalls(true)}>展开全部</button>
+        <button type="button" style={btn} title="收起全部 hall(只留 hall 头)" onClick={() => setAllHalls(false)}>收起全部</button>
       </div>
 
       {/* 注册表单(高权限):两级 slug 一次注册 */}
@@ -447,11 +512,13 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         </div>
       ) : null}
 
-      {/* Hall 分组树 */}
-      {groups.length === 0 ? (
-        <p style={S.intro}>{'注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。'}</p>
+      {/* Hall 分组树(默认折叠,只显示 hall 头;搜索时自动展开匹配组) */}
+      {visibleGroups.length === 0 ? (
+        <p style={S.intro}>{normFilter ? '无匹配的 hall/room。' : '注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。'}</p>
       ) : (
-        groups.map((g) => (
+        visibleGroups.map((g) => {
+        const hallOpen = !!normFilter || expandedHalls.has(g.hall);
+        return (
           <div key={g.hall} style={{ marginBottom: 10, border: '1px solid var(--dsh-mem-border)', borderRadius: 8, overflow: 'hidden' }}>
             <div
               data-hall={g.hall}
@@ -470,10 +537,15 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                 if (from) beginReclass(from, g.hall);
               }}
               onClick={() => {
-                if (!picking || busy) return;
-                const from = picking;
-                setPicking(null);
-                beginReclass(from, g.hall);
+                if (picking) {
+                  if (!busy) {
+                    const from = picking;
+                    setPicking(null);
+                    beginReclass(from, g.hall);
+                  }
+                  return;
+                }
+                toggleHall(g.hall);
               }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px',
@@ -482,12 +554,18 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                   ? '2px dashed var(--dsh-mem-accent)'
                   : undefined,
                 outlineOffset: dragOverHall === g.hall || picking !== null ? '-2px' : undefined,
-                cursor: picking ? 'pointer' : undefined,
+                cursor: 'pointer',
               }}
               title={picking
                 ? '点击此 hall:把「' + picking + '」归入 ' + g.hall + ' 下(major/minor,预览后确认)'
                 : hiPriv ? '拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)' : undefined}
             >
+              <button
+                type="button"
+                title={hallOpen ? '收起子 room' : '展开子 room(默认折叠)'}
+                onClick={(ev) => { ev.stopPropagation(); toggleHall(g.hall); }}
+                style={{ ...btn, borderRadius: 999, padding: '1px 7px', flexShrink: 0 }}
+              >{hallOpen ? '▾' : '▸'}</button>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {g.hall}
                 {g.label ? <span style={S.muted}>{' (' + g.label + ')'}</span> : null}
@@ -498,11 +576,11 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                 type="button"
                 disabled={!hiPriv || busy}
                 title={`预填注册表单为 ${g.hall}/…(注册该 hall 下的小类)`}
-                onClick={() => setRegSlug(g.hall + '/')}
+                onClick={(ev) => { ev.stopPropagation(); setRegSlug(g.hall + '/'); }}
                 style={btn}
               >+小类</button>
             </div>
-            {g.entries.map((e) => {
+            {hallOpen ? g.entries.map((e) => {
               const standalone = e.slug === g.hall;
               const count = rooms.find((r) => r.room === e.slug)?.count ?? 0;
               const retired = e.status === 'retired';
@@ -580,21 +658,22 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                   ) : null}
                 </div>
               );
-            })}
+            }) : null}
           </div>
-        ))
+        );
+        })
       )}
 
       {/* 未注册自生长区 */}
-      {grownOnly.length > 0 ? (
+      {visibleGrown.length > 0 ? (
         <div style={{ marginTop: 4 }}>
           <button type="button" onClick={() => setGrownOpen(!grownOpen)} style={btn} title={grownOpen ? '收起未注册自生长 Room' : '展开未注册自生长 Room'}>
-            {grownOpen ? '▾' : '▸'} 自生长未注册 · 共 {grownOnly.length}
+            {grownOpen ? '▾' : '▸'} 自生长未注册 · 共 {visibleGrown.length}
           </button>
           <span style={S.muted}>{'(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)'}</span>
           {grownOpen ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 6 }}>
-              {grownOnly.map((r) => (
+              {visibleGrown.map((r) => (
                 <span key={r.room} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <span
                     style={{ ...btn, cursor: hiPriv && !busy ? 'grab' : 'default', borderRadius: 999, padding: '2px 8px', touchAction: 'none' }}
