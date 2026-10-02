@@ -310,6 +310,20 @@ describe('Hall·Room 集成(HTTP 面全链 × 真实存储)', () => {
     expect(e.description).toBe('dsh 系列插件工作记忆');
   });
 
+  it('⑥c 退役带记录(retire withRecords):词表退役 + 该 room 下活跃记录全部软删(可恢复)', async () => {
+    await env.call('dsh-memory/room-register', { slug: 'doomed' });
+    await seed(env.l1, 'd1', ['doomed']);
+    await seed(env.l1, 'd2', ['doomed']);
+    const r = (await env.call('dsh-memory/room-admin', { action: 'retire', slug: 'doomed', withRecords: true })) as { notice?: string; retiredRecords?: number };
+    expect(env.registry.bySlug('doomed')!.status).toBe('retired');
+    expect(r.retiredRecords).toBe(2);
+    // 软删:退场名单可见,活跃列表不可见
+    const retired = (await env.call('dsh-memory/records-retired', { limit: 100, offset: 0 })) as { items: Array<{ id: string }> };
+    const ids = retired.items.map((x) => x.id);
+    expect(ids).toContain('d1');
+    expect(ids).toContain('d2');
+  });
+
   it('⑦ retire / 恢复往返(HTTP 面)', async () => {
     await env.call('dsh-memory/room-admin', { action: 'retire', slug: 'dsh-plugin/merge' });
     expect(env.registry.bySlug('dsh-plugin/merge')!.status).toBe('retired');

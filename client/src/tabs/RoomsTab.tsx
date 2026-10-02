@@ -235,10 +235,15 @@ export function RoomsTab(props: { rpc: RpcFn }) {
       } else setError(r && r.error ? r.error.message : '执行失败');
     });
 
-  const retire = (slug: string, active: boolean) =>
+  const retire = (slug: string, active: boolean, withRecords = false) =>
     run(async () => {
-      if (!active && !window.confirm(`退役 Room:${slug}?\n\n存量记录的 tags 不动,仅词表不再推荐;可随时恢复。`)) return;
-      const r = await rpc('dsh-memory/room-admin', { action: 'retire', slug, active });
+      if (!active) {
+        const tip = withRecords
+          ? `退役 Room:${slug} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)`
+          : `退役 Room:${slug}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)`;
+        if (!window.confirm(tip)) return;
+      }
+      const r = await rpc('dsh-memory/room-admin', { action: 'retire', slug, active, withRecords: withRecords || undefined });
       if (r && r.ok) {
         setMsg(String(r.value?.notice ?? '完成'));
         loadAll();
@@ -541,6 +546,9 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                         <button type="button" disabled={busy} title={`改名(= merge 1:1 + 注册表改名)`} onClick={() => { setForm({ action: 'rename', from: e.slug, to: '' }); setPreview(null); }} style={btn}>改名</button>
                         <button type="button" disabled={busy} title="合并到另一个 Room(dryRun 预览→确认实跑)" onClick={() => { setForm({ action: 'merge', from: e.slug, to: '' }); setPreview(null); }} style={btn}>合并</button>
                         <button type="button" disabled={busy} title={retired ? '恢复该 Room 到词表' : '退役该 Room(存量 tags 不动)'} onClick={() => retire(e.slug, retired)} style={{ ...btn, ...(retired ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : { color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }) }}>{retired ? '恢复' : '退役'}</button>
+                      {!retired ? (
+                        <button type="button" disabled={busy} title="退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)" onClick={() => retire(e.slug, false, true)} style={{ ...btn, color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }}>退场</button>
+                      ) : null}
                       </>
                     )}
                     <button type="button" disabled={busy} title="导出该 Room 的记录清单 CSV" onClick={() => exportRecords(e.slug)} style={btn}>导出</button>

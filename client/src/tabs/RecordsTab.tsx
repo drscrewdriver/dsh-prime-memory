@@ -511,7 +511,32 @@ export function RecordsTab(props: { rpc: RpcFn }) {
             </button>
           </span>
         )}
-        <span style={S.muted}>Room 标签/分类管理:见「Hall」标签页。</span>
+        <button
+          type="button"
+          title="导出无 Room 绑定的孤儿清单 CSV(含候选)"
+          onClick={() => {
+            rpc('dsh-memory/rooms-export', { kind: 'orphans' })
+              .then((r) => {
+                if (!r || !r.ok || !r.value?.csv) return;
+                const blob = new Blob([r.value.csv as string], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'dsh-memory-room-orphans.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+              })
+              .catch(() => undefined);
+          }}
+          style={{
+            cursor: 'pointer', fontSize: 12, padding: '2px 8px', borderRadius: 6,
+            border: '1px solid var(--dsh-mem-border)', background: 'transparent',
+            color: 'var(--dsh-mem-text-2)',
+          }}
+        >
+          导出孤儿
+        </button>
+        <span style={S.muted}>Room 标签/分类管理:见「Hall」「Room」标签页。</span>
       </div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>{loading ? '加载中…' : countText}</span>
