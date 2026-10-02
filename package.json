@@ -10,6 +10,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "0.16.3",
 =======
   "version": "0.20.0-beta.14",
@@ -41,6 +42,9 @@
 =======
   "version": "0.20.0-beta.24",
 >>>>>>> 24a6517 (fix(hall-tab): Hall 页展开只拉活跃 + 退场后自动刷新展开区(beta.24;b23 漏同步))
+=======
+  "version": "0.20.0-beta.25",
+>>>>>>> 847c3f7 (fix(room-retire): 自生长退场自动补 retired 条目 + Hall 子 room 仅显示 active(beta.25))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
