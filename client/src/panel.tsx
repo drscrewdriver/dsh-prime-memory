@@ -1,4 +1,4 @@
-/** 记忆设置分节的主面板：Tab 框架（概览 / 记忆 / 冲突 / 场景 / Hall / 画像 / 成本 / 日志）。 */
+/** 记忆设置分节的主面板：Tab 框架（概览 / 记忆 / 冲突 / 场景 / Hall / Room / 画像 / 成本 / 日志）。 */
 import { useEffect, useState } from 'react';
 import type { RpcFn } from './rpc.js';
 import { watchSidebarIcon } from './sidebar-icon.js';
@@ -11,6 +11,7 @@ import { OverviewTab } from './tabs/OverviewTab.js';
 import { PersonaTab } from './tabs/PersonaTab.js';
 import { RecordsTab } from './tabs/RecordsTab.js';
 import { RoomsTab } from './tabs/RoomsTab.js';
+import { RoomTab } from './tabs/RoomTab.js';
 import { ScenesTab } from './tabs/ScenesTab.js';
 
 /**
@@ -26,6 +27,7 @@ const TABS: Array<[string, string]> = [
   ['conflicts', '冲突'],
   ['scenes', '场景'],
   ['rooms', 'Hall'],
+  ['room', 'Room'],
   ['persona', '画像'],
   ['cost', '成本'],
   ['log', '日志'],
@@ -47,6 +49,7 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
   else if (tab === 'conflicts') body = <ConflictsTab rpc={rpc} />;
   else if (tab === 'scenes') body = <ScenesTab rpc={rpc} />;
   else if (tab === 'rooms') body = <RoomsTab rpc={rpc} />;
+  else if (tab === 'room') body = <RoomTab rpc={rpc} />;
   else if (tab === 'persona') body = <PersonaTab rpc={rpc} />;
   else if (tab === 'cost') body = <CostTab rpc={rpc} />;
   else body = <LogTab rpc={rpc} />;

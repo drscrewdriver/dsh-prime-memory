@@ -5,6 +5,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "0.16.3",
 =======
   "version": "0.20.0-beta.14",
@@ -21,6 +22,9 @@
 =======
   "version": "0.20.0-beta.19",
 >>>>>>> 4caa8bf (feat(hall-ux): 指针自制拖拽 + 全局操作栏 + room 行按钮固定/名称换行(beta.19))
+=======
+  "version": "0.20.0-beta.20",
+>>>>>>> 94bcd17 (feat(room-tab): Room 独立标签页 —— 存在/名称/条目管理 + 注册后可重编辑(beta.20))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",

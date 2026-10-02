@@ -9,6 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RpcFn } from '../rpc.js';
+import type { UiRecord } from '../../../src/contract.js';
+import { fmtTime, TYPE_LABELS } from '../format.js';
 import { S } from '../styles.js';
 
 /** 大类归属(slug 首段;与 src/store/rooms-registry.ts majorOf 同义,客户端本地复刻
@@ -74,6 +76,11 @@ export function RoomsTab(props: { rpc: RpcFn }) {
   const [dragOverHall, setDragOverHall] = useState<string | null>(null);
   // 点选归类(拖拽不可用的 webview 兜底):点「归类」进入挑选态,再点目标 hall 头完成
   const [picking, setPicking] = useState<string | null>(null);
+  // 编辑显示名/归类说明(注册后可重编辑)
+  const [editing, setEditing] = useState<{ slug: string; label: string; description: string } | null>(null);
+  // room 内容展开(默认收起,免一次性渲染过多;首次展开拉前 10 条)
+  const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
+  const [roomRecords, setRoomRecords] = useState<Record<string, { items: UiRecord[]; total: number | null }>>({});
   // 指针自制拖拽(HTML5 DnD 在部分 webview 不触发,ego-browser 同款纯 pointer 方案)
   const dragRef = useRef<{ from: string; x: number; y: number; active: boolean } | null>(null);
   const [ghost, setGhost] = useState<{ x: number; y: number; text: string } | null>(null);
@@ -238,6 +245,35 @@ export function RoomsTab(props: { rpc: RpcFn }) {
       } else setError(r && r.error ? r.error.message : '操作失败');
     });
 
+  const saveEditing = () =>
+    run(async () => {
+      if (!editing) return;
+      const r = await rpc('dsh-memory/room-admin', { action: 'update', slug: editing.slug, label: editing.label, description: editing.description });
+      if (r && r.ok) {
+        setMsg(String(r.value?.notice ?? '已更新'));
+        setEditing(null);
+        loadAll();
+      } else setError(r && r.error ? r.error.message : '更新失败');
+    });
+
+  /** room 内容展开/收起(读操作,不吃高权限门;首次展开拉前 10 条)。 */
+  const toggleRoomExpand = (slug: string) =>
+    run(async () => {
+      if (expandedRooms.has(slug)) {
+        const next = new Set(expandedRooms);
+        next.delete(slug);
+        setExpandedRooms(next);
+        return;
+      }
+      const r = await rpc('dsh-memory/list-records', { tag: slug, limit: 10 });
+      if (r && r.ok) {
+        const next = new Set(expandedRooms);
+        next.add(slug);
+        setExpandedRooms(next);
+        setRoomRecords((m) => ({ ...m, [slug]: { items: r.value.items, total: r.value.total ?? null } }));
+      } else setError(r && r.error ? r.error.message : '加载失败');
+    });
+
   const exportRecords = (slug: string) =>
     run(async () => {
       const r = await rpc('dsh-memory/rooms-export', { kind: 'records', tag: slug });
@@ -343,9 +379,18 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         {!hiPriv && <span style={S.muted}>管理操作需先开启高权限模式</span>}
       </div>
 
-      {/* 全局操作栏:合并/归类/改名的表单与预览常驻页首(不随行滚动、不被埋) */}
+      {/* 全局操作栏:合并/归类/改名的表单与预览常驻页首(sticky 跟随滚动,不被埋) */}
+      {editing ? (
+        <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--dsh-mem-bg-inset)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap', padding: '6px 8px', border: '1px solid var(--dsh-mem-accent)', borderRadius: 8 }}>
+          <span style={S.muted}>编辑 {editing.slug}</span>
+          <input value={editing.label} onChange={(ev) => setEditing({ ...editing, label: ev.target.value })} placeholder="显示名(可中文)" disabled={busy} style={{ ...S.input, width: 140, fontSize: 12 }} />
+          <input value={editing.description} onChange={(ev) => setEditing({ ...editing, description: ev.target.value })} placeholder="归类说明(喂标注器)" disabled={busy} style={{ ...S.input, width: 200, fontSize: 12 }} />
+          <button type="button" disabled={busy} onClick={saveEditing} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}>保存</button>
+          <button type="button" disabled={busy} onClick={() => setEditing(null)} style={btn}>取消</button>
+        </div>
+      ) : null}
       {form ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap', padding: '6px 8px', border: '1px solid var(--dsh-mem-accent)', borderRadius: 8 }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--dsh-mem-bg-inset)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap', padding: '6px 8px', border: '1px solid var(--dsh-mem-accent)', borderRadius: 8 }}>
           <span style={S.muted}>{form.action === 'merge' ? '合并' : '归类/改名'} {form.from} →</span>
           <input
             value={form.to}
@@ -374,7 +419,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         </div>
       ) : null}
       {preview ? (
-        <div style={{ marginBottom: 8, padding: '6px 8px', border: '1px solid var(--dsh-mem-danger)', borderRadius: 8, fontSize: 12 }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--dsh-mem-bg-inset)', marginBottom: 8, padding: '6px 8px', border: '1px solid var(--dsh-mem-danger)', borderRadius: 8, fontSize: 12 }}>
           <div>{preview.notice}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
             <button type="button" disabled={busy} onClick={execMerge} style={{ ...btn, color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }}>确认执行{preview.action === 'merge' ? '合并' : '归类/改名'}</button>
@@ -453,6 +498,12 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                 <div key={e.slug} style={{ padding: '4px 10px', borderTop: '1px solid var(--dsh-mem-border)', opacity: retired ? 0.55 : 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', gap: '2px 8px', alignItems: 'baseline' }}>
+                    <button
+                      type="button"
+                      title={expandedRooms.has(e.slug) ? '收起内容' : '展开查看该 Room 的记录内容(默认收起)'}
+                      onClick={() => void toggleRoomExpand(e.slug)}
+                      style={{ ...btn, borderRadius: 999, padding: '1px 7px', flexShrink: 0 }}
+                    >{expandedRooms.has(e.slug) ? '▾' : '▸'}</button>
                     <span
                       style={{ fontSize: 12, cursor: hiPriv && !busy ? 'grab' : 'default', touchAction: 'none' }}
                       onPointerDown={(ev) => onDragLabelDown(ev, e.slug)}
@@ -473,6 +524,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                     {!hiPriv ? null : (
                       <>
+                        <button type="button" disabled={busy} title="编辑显示名/归类说明" onClick={() => { setEditing({ slug: e.slug, label: e.label ?? '', description: e.description ?? '' }); setForm(null); setPreview(null); setPicking(null); }} style={btn}>编辑</button>
                         <button
                           type="button"
                           disabled={busy}
@@ -494,6 +546,23 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                     <button type="button" disabled={busy} title="导出该 Room 的记录清单 CSV" onClick={() => exportRecords(e.slug)} style={btn}>导出</button>
                   </div>
                   </div>
+                  {expandedRooms.has(e.slug) ? (
+                    <div style={{ margin: '4px 0 2px', padding: '4px 8px', border: '1px dashed var(--dsh-mem-border)', borderRadius: 6 }}>
+                      {(roomRecords[e.slug]?.items ?? []).map((it) => (
+                        <div key={it.id} style={{ fontSize: 11, padding: '3px 0', borderBottom: '1px solid var(--dsh-mem-border)' }}>
+                          <span className={'dsh-mem-tag dsh-mem-tag-' + it.type}>{TYPE_LABELS[it.type] || it.type}</span>{' '}
+                          <span style={S.muted}>{it.updatedAt ? fmtTime(it.updatedAt) : ''}</span>
+                          <div style={{ marginTop: 2, wordBreak: 'break-all', color: 'var(--dsh-mem-text-2)' }}>
+                            {it.content.length > 120 ? it.content.slice(0, 120) + '…' : it.content}
+                          </div>
+                        </div>
+                      ))}
+                      {(roomRecords[e.slug]?.items.length ?? 0) === 0 ? <div style={S.muted}>该 Room 暂无记录。</div> : null}
+                      {(roomRecords[e.slug]?.total ?? 0) > (roomRecords[e.slug]?.items.length ?? 0) ? (
+                        <div style={{ ...S.muted, fontSize: 11 }}>{'共 ' + roomRecords[e.slug]!.total + ' 条,仅显示前 ' + roomRecords[e.slug]!.items.length + ' 条'}</div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}

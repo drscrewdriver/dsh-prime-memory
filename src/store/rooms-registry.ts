@@ -195,6 +195,27 @@ export class RoomRegistryStore {
     return { entry: { ...entry }, created: true };
   }
 
+  /** 编辑已有条目的 label/description(注册后可重编辑;未提供的字段不动;未找到=false)。 */
+  async update(slug: string, patch: { label?: string; description?: string }): Promise<boolean> {
+    this.ensureLoaded();
+    const found = this.entries.find((e) => e.slug === slug);
+    if (!found) return false;
+    let changed = false;
+    if (typeof patch.label === 'string' && patch.label.trim()) {
+      found.label = patch.label.trim().slice(0, 60);
+      changed = true;
+    }
+    if (typeof patch.description === 'string' && patch.description.trim()) {
+      found.description = patch.description.trim().slice(0, 300);
+      changed = true;
+    }
+    if (!changed) return false;
+    found.updatedAt = new Date().toISOString();
+    this.rev++;
+    await this.persist();
+    return true;
+  }
+
   /** 改状态(active↔retired);无变化返回 false。 */
   async setStatus(slug: string, status: 'active' | 'retired'): Promise<boolean> {
     this.ensureLoaded();

@@ -710,6 +710,20 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       if (!roomRegistry) throw new Error('Room 注册表未装配(需要插件重载以初始化)。');
       if (!live?.get().memoryMutate) throw new Error('记忆写删未开放:请在记忆库面板开启「高权限模式」后,才能执行 Room 管理。');
       const p = (payload ?? {}) as RoomAdminRequest;
+      if (p.action === 'update') {
+        const slug = String(p.slug ?? '').trim();
+        if (!slug) throw new Error('update 需要 slug');
+        const changed = await roomRegistry.update(slug, {
+          label: typeof p.label === 'string' ? p.label : undefined,
+          description: typeof p.description === 'string' ? p.description : undefined,
+        });
+        const v: RoomAdminResponse = {
+          notice: changed
+            ? `已更新:${slug}(显示名/归类说明,标注器下次即用新词)`
+            : `无变化:${slug} 未找到或未提供任何非空字段`,
+        };
+        return v;
+      }
       if (p.action === 'retire') {
         const slug = String(p.slug ?? '').trim();
         if (!slug) throw new Error('retire 需要 slug');
