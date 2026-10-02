@@ -45,6 +45,8 @@ export function RoomTab(props: { rpc: RpcFn }) {
   const [editing, setEditing] = useState<{ slug: string; label: string; description: string } | null>(null);
   const [renaming, setRenaming] = useState<{ slug: string; to: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // 退场筛选:''=全部 / 'active'=活跃(词表未退役) / 'retired'=已退役
+  const [retiredFilter, setRetiredFilter] = useState<'' | 'active' | 'retired'>('');
   const [records, setRecords] = useState<Record<string, { items: UiRecord[]; total: number | null }>>({});
 
   const loadAll = useCallback(() => {
@@ -163,6 +165,11 @@ export function RoomTab(props: { rpc: RpcFn }) {
       if (r && r.ok) {
         setMsg(String(r.value?.notice ?? '完成'));
         loadAll();
+        // 退场效果立现:该 room 正展开时刷新其活跃条目(退场后即"暂无记忆条目")
+        if (expanded.has(slug)) {
+          const rr = await rpc('dsh-memory/list-records', { tag: slug, limit: 10, retired: false });
+          if (rr && rr.ok) setRecords((m) => ({ ...m, [slug]: { items: rr.value.items, total: rr.value.total ?? null } }));
+        }
       } else setError(r && r.error ? r.error.message : '操作失败');
     });
 
@@ -189,7 +196,7 @@ export function RoomTab(props: { rpc: RpcFn }) {
         setExpanded(next);
         return;
       }
-      const r = await rpc('dsh-memory/list-records', { tag: slug, limit: 10 });
+      const r = await rpc('dsh-memory/list-records', { tag: slug, limit: 10, retired: false });
       if (r && r.ok) {
         const next = new Set(expanded);
         next.add(slug);
@@ -199,11 +206,15 @@ export function RoomTab(props: { rpc: RpcFn }) {
     });
 
   const countOf = (slug: string) => counts.find((c) => c.room === slug)?.count ?? 0;
-  /** 全量 room 视图:注册条目(含 retired)∪ 自生长未注册(伪行,grown 标记)。 */
-  const rows: Array<{ slug: string; count: number; entry?: RegEntry }> = [
+  /** 全量 room 视图:注册条目(含 retired)∪ 自生长未注册(伪行,grown 标记);按退场筛选。 */
+  const rows: Array<{ slug: string; count: number; entry?: RegEntry }> = ([
     ...registry.map((e) => ({ slug: e.slug, count: countOf(e.slug), entry: e })),
     ...counts.filter((c) => !registry.some((e) => e.slug === c.room)).map((c) => ({ slug: c.room, count: c.count })),
-  ];
+  ] as Array<{ slug: string; count: number; entry?: RegEntry }>).filter((row) => {
+    if (retiredFilter === 'active') return row.entry?.status !== 'retired';
+    if (retiredFilter === 'retired') return row.entry?.status === 'retired';
+    return true;
+  });
 
   return (
     <div>
@@ -247,6 +258,30 @@ export function RoomTab(props: { rpc: RpcFn }) {
           <span style={S.muted}>记录随迁;与反刍并发会互相覆盖,请在反刍空闲时执行。</span>
         </div>
       ) : null}
+
+      {/* 退场筛选:全部 / 活跃(词表未退役) / 已退役 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={S.muted}>退场筛选</span>
+        {([['', '全部'], ['active', '活跃'], ['retired', '已退役']] as const).map(([val, label]) => {
+          const on = retiredFilter === val;
+          return (
+            <button
+              key={val}
+              type="button"
+              title={val === '' ? '全部 room' : val === 'active' ? '只看词表未退役的 room' : '只看已退役的 room'}
+              onClick={() => setRetiredFilter(val)}
+              style={{
+                cursor: 'pointer', fontSize: 12, padding: '2px 10px', borderRadius: 999,
+                border: on ? '1px solid var(--dsh-mem-accent)' : '1px solid var(--dsh-mem-border)',
+                background: on ? 'var(--dsh-mem-bg-inset)' : 'transparent',
+                color: on ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* 注册表单 */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 10 }}>

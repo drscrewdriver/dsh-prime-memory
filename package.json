@@ -8,6 +8,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "0.16.3",
 =======
   "version": "0.20.0-beta.14",
@@ -33,6 +34,9 @@
 =======
   "version": "0.20.0-beta.22",
 >>>>>>> 5afbf20 (fix(room-retire-visibility): 退场效果可见性 + Room 页退场筛选(beta.22))
+=======
+  "version": "0.20.0-beta.23",
+>>>>>>> 9ce2045 (fix(room-filter): Room 页退场筛选 chips 补齐(beta.23;b22 补丁脚本失败未落盘))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
