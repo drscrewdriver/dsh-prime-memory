@@ -9,6 +9,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   "version": "0.16.3",
 =======
   "version": "0.20.0-beta.14",
@@ -37,6 +38,9 @@
 =======
   "version": "0.20.0-beta.23",
 >>>>>>> 9ce2045 (fix(room-filter): Room 页退场筛选 chips 补齐(beta.23;b22 补丁脚本失败未落盘))
+=======
+  "version": "0.20.0-beta.24",
+>>>>>>> 24a6517 (fix(hall-tab): Hall 页展开只拉活跃 + 退场后自动刷新展开区(beta.24;b23 漏同步))
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",

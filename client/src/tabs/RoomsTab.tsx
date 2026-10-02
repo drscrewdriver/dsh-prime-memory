@@ -247,6 +247,11 @@ export function RoomsTab(props: { rpc: RpcFn }) {
       if (r && r.ok) {
         setMsg(String(r.value?.notice ?? '完成'));
         loadAll();
+        // 退场效果立现:该 room 正展开时刷新其活跃条目
+        if (expandedRooms.has(slug)) {
+          const rr = await rpc('dsh-memory/list-records', { tag: slug, limit: 10, retired: false });
+          if (rr && rr.ok) setRoomRecords((m) => ({ ...m, [slug]: { items: rr.value.items, total: rr.value.total ?? null } }));
+        }
       } else setError(r && r.error ? r.error.message : '操作失败');
     });
 
@@ -270,7 +275,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         setExpandedRooms(next);
         return;
       }
-      const r = await rpc('dsh-memory/list-records', { tag: slug, limit: 10 });
+      const r = await rpc('dsh-memory/list-records', { tag: slug, limit: 10, retired: false });
       if (r && r.ok) {
         const next = new Set(expandedRooms);
         next.add(slug);
