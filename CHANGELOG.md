@@ -17,6 +17,17 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.0-beta.26] — 2026-10-03
+
+### 新增(Hall/Room 增长后的可用性)
+
+- **Hall/Room 名称搜索过滤**:Hall 页新增搜索框(slug、显示名、别名,大小写不敏感)
+  —— hall 自身命中显示全部子 room,否则只留命中的子 room,整组无命中即隐藏;
+  搜索时匹配组自动展开(折叠态不再藏住结果);自生长未注册区同滤。
+  Room 页同款搜索框,与退场筛选 chips 叠加生效。
+- **Hall 分组折叠,默认全折叠**:hall 头只显示「合计 N 条 · M 个 room」,点头部或
+  ▸/▾ 钮展开/收起子 room;「展开全部/收起全部」批量钮;展开状态 localStorage 记忆
+  (`dsh.memory.halls.open`)。归类点选(点 hall 头完成归类)优先级不变。
 ## [0.20.0-beta.25] — 2026-10-02
 
 > 自生长 room 退场后状态不可见修复 + Hall 子 room 显示规则(用户裁定)。
