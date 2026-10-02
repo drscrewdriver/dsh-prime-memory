@@ -65,11 +65,12 @@ describe('RecallUsageStore', () => {
 
   it('持久化回环:重开文件统计仍在', async () => {
     if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-recallusage-'));
-    const p = new RecallUsageStore(dir);
+    const d = join(dir, 'persist-' + Math.random().toString(36).slice(2));
+    const p = new RecallUsageStore(d);
     await p.init();
     p.recordAttempt(['k1'], ['k1']);
     await p.flush();
-    const q = new RecallUsageStore(dir);
+    const q = new RecallUsageStore(d);
     await q.init();
     expect(q.get('k1')!.used).toBe(1);
   });
