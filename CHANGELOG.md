@@ -17,6 +17,17 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.2] — 2026-10-03
+
+### 修复
+
+- **投影 `memorySlots` 判脏放宽到任意事件**:此前仅在 `tool/result`(settled、非 error)时按 store rev 判脏——写入后依赖"恰好再来一条工具结果"才刷新,跨会话查看更要等查看会话自己的工具调用;真机暴露出写入后侧栏长期停在空帧。改为任意已提交事件做 O(1) rev 比较,rev 变即重建推送;isError 守卫移除(rev 只在真实变更后递增,事件只是触发器,不是数据源)。
+- **常驻注入改 `<system-reminder>` 标签帧**(对齐 dsh-agent-instructions 的 AGENTS.md 注入 house style):user 角色承载不变,但以标签框 + 权威性声明(免回应/勿复述/不覆盖系统提示与用户直接指令)呈现——修掉弱模型把槽位内容当用户发言原样复述、干扰正常回复的问题;槽位正文中的闭合标签转义(`</system-reminder>`),防止槽位内容伪造帧边界。
+
+### 新增
+
+- **`memory_search` 结果透出 `id`(L1 record_id)**:解除"检索拿不到 id → 无法写槽位 refs / 喂 memory_receipts"的死锁;schema 描述注明 id 的两个去向。
+- **wire view 透出 `refs` + `refViews`**:`mem_*` 类引用在投影帧构建时经 L1 `getByIds` 解析为 `[type] 名称简述`(content 首行,80 字截断),brief-sidebar(≥0.5.0-beta.2)直接渲染,路径/URL 类引用保持字面;缺失/已退场记录不产生条目。解析发生在帧构建时——引用集在写槽位时即冻结,L1 记录事后编辑不回灌旧帧。自实现 schema 对附加字段"存在才校验",旧 checkpoint 行整条通过(stateVersion 不动)。
 ## [0.20.1] — 2026-10-03(转正;beta 渠道自 beta.1 起的全部能力定版)
 
 Hall·Room 分类管理全链(两级注册表/merge/rename/retire/update/收编/退场带记录/
