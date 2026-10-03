@@ -83,7 +83,18 @@ function resolveRefViews(refs, l1) {
     const recordRefs = refs.filter((r) => r.startsWith(RECORD_REF_PREFIX));
     if (recordRefs.length === 0 || l1 === undefined)
         return undefined;
-    const byId = new Map(l1.getByIds(recordRefs).map((r) => [r.id, r]));
+    try {
+        return resolveRefViewsUnsafe(recordRefs, l1);
+    }
+    catch {
+        // L1 查询失败(sqlite 忙/后端降级/记录态异常)绝不能让投影 apply 抛错——
+        // registry 的 drive 无异常保护,一抛整条会话事件驱动(乃至宿主)跟着倒。
+        // 降级:本次帧不带 refViews,前端回落显示原始 refs。
+        return undefined;
+    }
+}
+function resolveRefViewsUnsafe(recordRefs, l1) {
+    const byId = new Map(l1.getByIds([...recordRefs]).map((r) => [r.id, r]));
     const views = [];
     for (const ref of recordRefs) {
         const record = byId.get(ref);

@@ -158,7 +158,18 @@ const REF_TITLE_MAX = 80;
 function resolveRefViews(refs: readonly string[], l1: L1LookupFace | undefined): SlotRefView[] | undefined {
   const recordRefs = refs.filter((r) => r.startsWith(RECORD_REF_PREFIX));
   if (recordRefs.length === 0 || l1 === undefined) return undefined;
-  const byId = new Map(l1.getByIds(recordRefs).map((r) => [r.id, r]));
+  try {
+    return resolveRefViewsUnsafe(recordRefs, l1);
+  } catch {
+    // L1 查询失败(sqlite 忙/后端降级/记录态异常)绝不能让投影 apply 抛错——
+    // registry 的 drive 无异常保护,一抛整条会话事件驱动(乃至宿主)跟着倒。
+    // 降级:本次帧不带 refViews,前端回落显示原始 refs。
+    return undefined;
+  }
+}
+
+function resolveRefViewsUnsafe(recordRefs: readonly string[], l1: L1LookupFace): SlotRefView[] | undefined {
+  const byId = new Map(l1.getByIds([...recordRefs]).map((r) => [r.id, r]));
   const views: SlotRefView[] = [];
   for (const ref of recordRefs) {
     const record = byId.get(ref);
