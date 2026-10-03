@@ -22,12 +22,27 @@ import type { MemoryLogger } from '../src/types.js';
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools';
 
 let dir: string;
+const openDbs: MemoryDb[] = [];
 async function tmp(): Promise<string> {
   if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-tools-'));
   return dir;
 }
 afterAll(async () => {
-  if (dir) await rm(dir, { recursive: true, force: true });
+  openDbs.forEach((db) => {
+    try { db.close(); } catch { /* 已关 */ }
+  });
+  openDbs.length = 0;
+  if (!dir) return;
+  // Windows Defender 会短暂锁住刚写完的 memory.db,rm 重试 5 次兜底
+  for (let i = 0; i < 5; i++) {
+    try {
+      await rm(dir, { recursive: true, force: true });
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  }
+  await rm(dir, { recursive: true, force: true });
 });
 
 const noopLogger: MemoryLogger = { info: () => {}, warn: () => {}, error: () => {} };
@@ -96,6 +111,7 @@ describe('memory tools', () => {
     const dataDir = join(await tmp(), `tools-${Date.now()}`);
     const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
     db.init();
+    openDbs.push(db);
     const l1 = new L1Store(dataDir, db, undefined, 'hybrid', noopLogger, 0);
     const l0 = new L0Store(dataDir, db);
     await l1.init();
@@ -446,5 +462,7 @@ describe('memory tools', () => {
     const good = (await write!.execute({ title: '好引用', kind: 'rule', pinned: true, refs: 'mem_real1,notes/a.md' })) as { id?: string };
     expect(good.id).toMatch(/^slot_/);
     expect(slots.list()).toHaveLength(1);
+    // 释放 sqlite 句柄,否则 Windows 下 afterAll 的 rm 会 EBUSY
+    stores.db.close();
   });
 });

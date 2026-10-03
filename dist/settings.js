@@ -80,6 +80,11 @@ const ALWAYS_ON = {
     embedRemoteDimensions: 0,
     memoryMutate: false,
     conflictFreeze: false,
+    toolRoom: true,
+    toolGraph: true,
+    toolRuminate: true,
+    toolConflict: true,
+    toolMutate: true,
 };
 /** 自带自定义设置页(settings.section 顶层「记忆」分节,client 半挂载):
  *  关掉宿主按 volatile 字段自动生成的表单页,避免同一个插件出现两份设置入口。
@@ -204,5 +209,11 @@ function resolveSettings(value) {
         memoryMutate: v.memoryMutate === true,
         // §C 人工冲突裁决:严格 === true(默认关,冻结消耗注意力)
         conflictFreeze: v.conflictFreeze === true,
+        // 工具分组封印:严格 !== false(缺省/异常值 = 未封印,工具照常注册)
+        toolRoom: v.toolRoom !== false,
+        toolGraph: v.toolGraph !== false,
+        toolRuminate: v.toolRuminate !== false,
+        toolConflict: v.toolConflict !== false,
+        toolMutate: v.toolMutate !== false,
     };
 }

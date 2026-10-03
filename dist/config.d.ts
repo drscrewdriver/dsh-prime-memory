@@ -322,6 +322,11 @@ export declare function liveSettingsSchema(): Schema<NoInfer<Schemastery.ObjectS
     embedRemoteDimensions: Schema<number, number, "defined">;
     memoryMutate: Schema<boolean, boolean, "defined">;
     conflictFreeze: Schema<boolean, boolean, "defined">;
+    toolRoom: Schema<boolean, boolean, "defined">;
+    toolGraph: Schema<boolean, boolean, "defined">;
+    toolRuminate: Schema<boolean, boolean, "defined">;
+    toolConflict: Schema<boolean, boolean, "defined">;
+    toolMutate: Schema<boolean, boolean, "defined">;
 }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
     enabled: Schema<boolean, boolean, "defined">;
     capture: Schema<boolean, boolean, "defined">;
@@ -419,6 +424,11 @@ export declare function liveSettingsSchema(): Schema<NoInfer<Schemastery.ObjectS
     embedRemoteDimensions: Schema<number, number, "defined">;
     memoryMutate: Schema<boolean, boolean, "defined">;
     conflictFreeze: Schema<boolean, boolean, "defined">;
+    toolRoom: Schema<boolean, boolean, "defined">;
+    toolGraph: Schema<boolean, boolean, "defined">;
+    toolRuminate: Schema<boolean, boolean, "defined">;
+    toolConflict: Schema<boolean, boolean, "defined">;
+    toolMutate: Schema<boolean, boolean, "defined">;
 }>>>, "volatile">;
 export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
     dataDir: Schema<string, string, "defined">;
@@ -826,6 +836,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
+        toolRoom: Schema<boolean, boolean, "defined">;
+        toolGraph: Schema<boolean, boolean, "defined">;
+        toolRuminate: Schema<boolean, boolean, "defined">;
+        toolConflict: Schema<boolean, boolean, "defined">;
+        toolMutate: Schema<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         capture: Schema<boolean, boolean, "defined">;
@@ -923,6 +938,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
+        toolRoom: Schema<boolean, boolean, "defined">;
+        toolGraph: Schema<boolean, boolean, "defined">;
+        toolRuminate: Schema<boolean, boolean, "defined">;
+        toolConflict: Schema<boolean, boolean, "defined">;
+        toolMutate: Schema<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, Schemastery.ObjectT<NoInfer<{
     dataDir: Schema<string, string, "defined">;
@@ -1330,6 +1350,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
+        toolRoom: Schema<boolean, boolean, "defined">;
+        toolGraph: Schema<boolean, boolean, "defined">;
+        toolRuminate: Schema<boolean, boolean, "defined">;
+        toolConflict: Schema<boolean, boolean, "defined">;
+        toolMutate: Schema<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         capture: Schema<boolean, boolean, "defined">;
@@ -1427,6 +1452,11 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
+        toolRoom: Schema<boolean, boolean, "defined">;
+        toolGraph: Schema<boolean, boolean, "defined">;
+        toolRuminate: Schema<boolean, boolean, "defined">;
+        toolConflict: Schema<boolean, boolean, "defined">;
+        toolMutate: Schema<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, "plain">;
 export declare function resolveDataDir(cfg: MemoryConfig): string;

@@ -421,6 +421,11 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolRoom: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolGraph: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolRuminate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolConflict: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         capture: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -518,6 +523,11 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolRoom: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolGraph: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolRuminate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolConflict: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, Schemastery.ObjectT<NoInfer<{
     dataDir: import("@deepseek-ai/schemastery").default<string, string, "defined">;
@@ -925,6 +935,11 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolRoom: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolGraph: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolRuminate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolConflict: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         capture: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -1022,6 +1037,11 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolRoom: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolGraph: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolRuminate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolConflict: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        toolMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, "plain">;
 export declare function apply(ctx: Context, config: MemoryConfig): Promise<void>;

@@ -3118,6 +3118,11 @@ var __defProp = Object.defineProperty;
 		  }
 		  const mutate = settingsData && settingsData.settings ? !!settingsData.settings.memoryMutate : false;
 		  const cfEnabled = settingsData && settingsData.settings ? !!settingsData.settings.conflictFreeze : false;
+		  const toolRoom = settingsData && settingsData.settings ? settingsData.settings.toolRoom !== false : true;
+		  const toolGraph = settingsData && settingsData.settings ? settingsData.settings.toolGraph !== false : true;
+		  const toolRuminate = settingsData && settingsData.settings ? settingsData.settings.toolRuminate !== false : true;
+		  const toolConflict = settingsData && settingsData.settings ? settingsData.settings.toolConflict !== false : true;
+		  const toolMutate = settingsData && settingsData.settings ? settingsData.settings.toolMutate !== false : true;
 		  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { children: [
 		    settingsData && settingsData.supported === false ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("p", { style: S.hint, children: "settings 服务不可用，记忆模式开关未启用（记忆保持全开）。" }) : settingsData ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { style: S.switchPanel, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { style: S.panelLabel, children: "记忆模式" }),
@@ -3177,6 +3182,62 @@ var __defProp = Object.defineProperty;
 		          checked: mutate,
 		          onChange: (v) => {
 		            toggle("memoryMutate", v);
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { style: S.panelLabel, children: "工具封印" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+		        SwitchRow,
+		        {
+		          label: "Room 管理工具",
+		          desc: toolRoom ? "已注册：memory_room_admin / memory_room_review（目录治理）" : "已封印：两个工具从模型工具列表移除",
+		          checked: toolRoom,
+		          onChange: (v) => {
+		            toggle("toolRoom", v);
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+		        SwitchRow,
+		        {
+		          label: "图谱工具",
+		          desc: toolGraph ? "已注册：memory_search_graph / memory_expand_graph_node" : "已封印：图谱读工具从模型工具列表移除",
+		          checked: toolGraph,
+		          onChange: (v) => {
+		            toggle("toolGraph", v);
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+		        SwitchRow,
+		        {
+		          label: "反刍工具",
+		          desc: toolRuminate ? "已注册：memory_ruminate / _cancel / _status" : "已封印：反刍三件从模型工具列表移除",
+		          checked: toolRuminate,
+		          onChange: (v) => {
+		            toggle("toolRuminate", v);
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+		        SwitchRow,
+		        {
+		          label: "冲突工具",
+		          desc: toolConflict ? "已注册：memory_conflicts / _rejected / resolve_conflict" : "已封印：冲突三件从模型工具列表移除",
+		          checked: toolConflict,
+		          onChange: (v) => {
+		            toggle("toolConflict", v);
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
+		        SwitchRow,
+		        {
+		          label: "写删工具",
+		          desc: toolMutate ? "已注册：memory_add / memory_import / memory_delete（仍需高权限模式）" : "已封印：L1 写删工具从模型工具列表移除（槽位三件不受此开关影响）",
+		          checked: toolMutate,
+		          onChange: (v) => {
+		            toggle("toolMutate", v);
 		          }
 		        }
 		      ),

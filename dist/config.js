@@ -69,6 +69,13 @@ export function liveSettingsSchema() {
         memoryMutate: Schema.boolean().default(false),
         // §C 人工冲突裁决总开关:默认 false(冻结消耗注意力,不可默认全开)
         conflictFreeze: Schema.boolean().default(false),
+        // 工具分组封印(v0.21.0):false = 该组工具不注册,从模型工具列表消失。
+        // 核心读(memory_search/read_scene/receipts/conversation_search)与槽位三件不受控。
+        toolRoom: Schema.boolean().default(true),
+        toolGraph: Schema.boolean().default(true),
+        toolRuminate: Schema.boolean().default(true),
+        toolConflict: Schema.boolean().default(true),
+        toolMutate: Schema.boolean().default(true),
     }).volatile();
 }
 export const memorySchema = Schema.object({

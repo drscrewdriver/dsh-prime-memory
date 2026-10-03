@@ -804,6 +804,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 supported: live?.supported ?? false,
                 settings: sanitizeSettings(s ?? {
                     enabled: true, capture: true, distill: true, recall: true,
+                    toolRoom: true, toolGraph: true, toolRuminate: true, toolConflict: true, toolMutate: true,
                     reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
                     distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
                     distillLayerChains: { l1: [], l2: [], l3: [] },
@@ -849,7 +850,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const patch = (payload ?? {});
             const clean = {};
             // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
-            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze']) {
+            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate']) {
                 if (typeof patch[key] === 'boolean')
                     clean[key] = patch[key];
             }
