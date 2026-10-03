@@ -145,27 +145,21 @@ interface ProjectionRegistryLike {
 
 /**
  * apply(state, event):同步。
- * - 仅 tool/result(settled,非 error)才检查:tool/call 在 store 变更提交前发生,按
- *   call 折会读到 stale;tool/result settled 才保证变更已落库(对齐 deliverables-fold)。
- * - 闭包 SlotStore,同步读 revision():rev 未变 → 本插件槽位未动 → 返回同引用
- *   (满足 I1b,避免 republish thrash);rev 变 → 重建快照。
- * - 任何无关事件 → 返回同引用(不 spread)。
+ * - **任意已提交事件都判脏**(v0.18.4 起):此前仅在 tool/result(settled、非 error)
+ *   时检查,实际运行中暴露出脆弱性——写入后的投影帧依赖"该会话恰好再来一条
+ *   tool/result"才刷新;跨会话场景(会话 A 写、会话 B 看)更是要等 B 自己的下一次
+ *   工具调用。改为对所有事件做 O(1) revision 比较:rev 未变 → 同引用(满足 I1b,
+ *   无 republish thrash);rev 变 → 立即重建。写入后的下一条任意事件(用户消息、
+ *   turn 边界、其他工具结果)都会把新帧推给客户端。
+ * - isError 守卫一并移除:rev 只在 store 真实变更后递增(persist 内联 RMW),
+ *   事件成败与否不影响"store 是否变了"这一事实;错误事件后重建读到的仍是
+ *   当前真实快照,不会引入错误数据。
  */
 function applySlotsEvent(
   state: SlotsProjectionState,
   event: { type: string; data: unknown },
   store: SlotStore,
 ): SlotsProjectionState {
-  if (event.type !== 'tool/result') return state;
-  const data = event.data as
-    | { message?: { role?: unknown; isError?: unknown; content?: readonly { isError?: unknown }[] } }
-    | undefined;
-  // v4 native（宿主 ≥0.1.7-rc.1）：isError 在 message 顶层；v3 wrapper：块上 isError（历史兼容）。
-  const isError =
-    data?.message?.isError === true ||
-    (Array.isArray(data?.message?.content) &&
-      data!.message!.content!.some((c) => (c as { isError?: unknown }).isError === true));
-  if (isError) return state;
   if (store.revision() === state.rev) return state;
   return buildState(store);
 }

@@ -28,6 +28,17 @@
 - **读侧双形状兼容**：召回份额估算的署名判据 `isOwnRecallSource` 同时接受新署名与 v3 旧行——只改写侧会让占用面板"记忆召回份额"静默归零（无异常无报错）。`MessageSourceMap` 经模块增强登记 `plugin:memory`（dsh-llm 0.1.7 的 map 为 `user|model|tool|'system-prompt'`，无 plugin catch-all，merge-extensible per-producer）。
 - **tool-result v4 native 适配（N1）**：`store/evidence-source.ts` 的取证文本读取新增 native 分支（v4 一等 `role:'tool'` 消息：content 直接为 text/reasoning 块、`isError` 在 message 顶层；宿主 `assertBlock` 硬拒旧 `tool-result` wrapper 块），旧块下钻路径保留作历史兼容——否则 v4 下取证文本静默恒空。`projection/slots.ts` 的 isError 守卫同步 native 化。
 
+## [0.18.6] — 2026-10-04
+
+### 修复
+
+- **投影 `memorySlots` 判脏放宽到任意事件**(同步主线 v0.20.2):不再仅 tool/result 时按 store rev 判脏,任意已提交事件 O(1) 比较,写入后下一条任意事件即刷新侧栏帧。
+- **常驻注入改 `<system-reminder>` 标签帧**(同步主线 v0.20.2,对齐 dsh-agent-instructions house style):免回应/勿复述权威声明 + 正文闭合标签转义,修掉弱模型复读槽位内容的问题。
+
+### 新增
+
+- **`memory_search` 结果透出 `id`**(schema/映射/渲染文本三处,同步主线 v0.20.3):解除检索拿不到 record_id 的死锁。
+
 ## [Unreleased]
 
 ### 新增

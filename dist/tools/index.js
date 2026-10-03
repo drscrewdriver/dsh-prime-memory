@@ -130,6 +130,7 @@ ruminate) {
                         items: {
                             type: 'object',
                             properties: {
+                                id: { type: 'string', description: 'L1 record_id:可写入槽位 refs 或喂给 memory_receipts' },
                                 content: { type: 'string' },
                                 type: { type: 'string' },
                                 scene_name: { type: 'string' },
