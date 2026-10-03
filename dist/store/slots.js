@@ -274,7 +274,7 @@ export class SlotStore {
             await this.persist();
         return n;
     }
-    /** 投影只读快照(全量,不含 body)。 */
+    /** 投影只读快照(全量,不含 body;refs 存在才带上)。 */
     projectionSnapshot() {
         return {
             count: this.slots.length,
@@ -285,6 +285,7 @@ export class SlotStore {
                 kind: s.kind,
                 status: s.status,
                 priority: s.priority,
+                ...(s.refs.length > 0 ? { refs: [...s.refs] } : {}),
             })),
         };
     }

@@ -50,6 +50,8 @@ export interface SlotView {
     kind: SlotKind;
     status: SlotStatus;
     priority: number;
+    /** 原始引用(v0.20.2 透出,供展示侧解析 L1 record_id → 名称简述)。 */
+    refs?: string[];
 }
 export declare class SlotStore {
     private readonly file;
@@ -118,7 +120,7 @@ export declare class SlotStore {
      * 返回过期条数。
      */
     expireDue(now?: number): Promise<number>;
-    /** 投影只读快照(全量,不含 body)。 */
+    /** 投影只读快照(全量,不含 body;refs 存在才带上)。 */
     projectionSnapshot(): {
         count: number;
         openCount: number;

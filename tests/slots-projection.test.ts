@@ -69,7 +69,7 @@ function registerableService(defs: CapturedDef[]) {
   return { register: (def: CapturedDef) => { defs.push(def); return () => {}; } };
 }
 
-async function captured(): Promise<{ def: CapturedDef; store: SlotStore }> {
+async function captured(l1?: unknown): Promise<{ def: CapturedDef; store: SlotStore }> {
   const store = await newStore();
   const defs: CapturedDef[] = [];
   const ctx = {
@@ -84,7 +84,7 @@ async function captured(): Promise<{ def: CapturedDef; store: SlotStore }> {
       });
     },
   } as unknown as Context;
-  registerSlotsProjection(ctx, store);
+  registerSlotsProjection(ctx, store, l1 as undefined);
   const def = defs[0];
   if (!def) throw new Error('未捕获到 projection 定义');
   return { def, store };
@@ -158,6 +158,21 @@ describe('init / apply / view 语义', () => {
     }
   });
 
+  it('apply:任意事件都判脏——rev 变了,非 tool/result 事件也重建(v0.18.4)', async () => {
+    const { def, store } = await captured();
+    const before = def.init();
+    await store.upsert({ title: '跨会话规则', kind: 'rule', pinned: true, priority: 90 });
+    // 用户消息 / turn 边界等任意事件到达即刷新,不再依赖下一条 tool/result
+    for (const event of [
+      { type: 'user/message', data: {} },
+      { type: 'turn/start', data: { turn: 2 } },
+    ]) {
+      const next = def.apply(before, event);
+      expect(Object.is(next, before)).toBe(false);
+      expect(next).toMatchObject({ rev: 1, count: 1, openCount: 1 });
+    }
+  });
+
   it('apply:tool/result 时 rev 变了才重建快照(task_33)', async () => {
     const { def, store } = await captured();
     const before = def.init();
@@ -174,11 +189,15 @@ describe('init / apply / view 语义', () => {
     expect(closed.slots[0]?.status).toBe('done');
   });
 
-  it('apply:已失败(settled error)的 tool/result 不重建', async () => {
+  it('apply:错误事件不再抑制重建——rev 是唯一判据(v0.18.4 语义变更)', async () => {
     const { def, store } = await captured();
     const before = def.init();
     await store.upsert({ title: 'A' });
-    expect(Object.is(def.apply(before, TOOL_RESULT_ERROR), before)).toBe(true);
+    // 旧行为:错误 tool/result 返回同引用。新行为:store 已真实变更(rev 1),
+    // 无论到达的事件成败,重建都读当前真实快照——事件只是触发器,不是数据源。
+    const next = def.apply(before, TOOL_RESULT_ERROR);
+    expect(Object.is(next, before)).toBe(false);
+    expect(next).toMatchObject({ rev: 1, count: 1 });
   });
 
   it('view 引用稳定(I1)且不含 body(F9)', async () => {
@@ -329,5 +348,63 @@ describe.skipIf(RegistryCtor === undefined)('真 SessionProjectionRegistry 集�
     // 卸载:注销后 key 从快照消失(客户端读成能力缺席)
     for (const dispose of disposers) dispose();
     expect(registry.snapshot(session).values[MEMORY_SLOTS_KEY]).toBeUndefined();
+  });
+});
+
+describe('refs / refViews 解析(v0.20.2)', () => {
+  const L1 = {
+    getByIds: (ids: string[]) =>
+      ids.filter((id) => !id.includes('gone')).map((id) => ({
+        id,
+        content: '回复永远是中文,技术名词保留英文。' + (id.includes('long') ? '很长的正文'.repeat(30) : ''),
+        type: 'work_fact',
+      })),
+  };
+
+  it('wire view 透出 refs,record_id 解析成名称简述', async () => {
+    const { def, store } = await captured(L1);
+    await store.upsert({
+      title: '语言规则',
+      kind: 'rule',
+      pinned: true,
+      refs: ['mem_abc123', 'notes/a.md', 'https://x.y'],
+    });
+    const view = def.wire.view(def.init());
+    const slot = view.slots[0]!;
+    expect(slot.refs).toEqual(['mem_abc123', 'notes/a.md', 'https://x.y']);
+    expect(slot.refViews).toEqual([{ ref: 'mem_abc123', title: '[work_fact] 回复永远是中文,技术名词保留英文。' }]);
+  });
+
+  it('超长 content 截断;缺失记录不产生条目;无 record_id 时 refViews 缺席', async () => {
+    const { def, store } = await captured(L1);
+    await store.upsert({ title: '长文', refs: ['mem_long1', 'mem_gone'] });
+    let view = def.wire.view(def.init());
+    let slot = view.slots[0]!;
+    expect(slot.refViews).toHaveLength(1);
+    expect(slot.refViews![0]!.ref).toBe('mem_long1');
+    expect(slot.refViews![0]!.title.length).toBeLessThanOrEqual('[work_fact] '.length + 81);
+
+    const bare = await captured(L1);
+    await bare.store.upsert({ title: '只有路径', refs: ['notes/b.md'] });
+    view = bare.def.wire.view(bare.def.init());
+    expect(view.slots[0]!.refViews).toBeUndefined();
+    expect(view.slots[0]!.refs).toEqual(['notes/b.md']);
+  });
+
+  it('parser:refs/refViews 存在才校验;旧 checkpoint 无新字段整条通过(A5)', async () => {
+    const legacy = { rev: 1, count: 1, openCount: 1, slots: [{ id: 's1', title: '旧', kind: 'rule', status: 'open', priority: 1 }] };
+    expect(() => stateSchema.parse(legacy)).not.toThrow();
+    expect(() =>
+      stateSchema.parse({
+        rev: 1, count: 1, openCount: 1,
+        slots: [{ id: 's1', title: '新', kind: 'rule', status: 'open', priority: 1, refs: ['mem_x', 7], refViews: [{ ref: 'mem_x' }] }],
+      }),
+    ).toThrow();
+    expect(() =>
+      stateSchema.parse({
+        rev: 1, count: 1, openCount: 1,
+        slots: [{ id: 's1', title: '新', kind: 'rule', status: 'open', priority: 1, refs: ['mem_x'], refViews: [{ ref: 'mem_x', title: 't' }] }],
+      }),
+    ).not.toThrow();
   });
 });

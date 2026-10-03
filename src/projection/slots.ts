@@ -20,6 +20,21 @@ export interface SlotsViewSlot {
   kind: string;
   status: string;
   priority: number;
+  /** 原始引用(L1 record_id / 文件路径 / URL);存在才校验,旧 checkpoint 无此字段照常通过。 */
+  refs?: string[];
+  /**
+   * L1 record_id 类引用的解析视图(v0.20.2):ref → 名称简述(content 首行截断)。
+   * 前端展示用;解析发生在投影帧构建时(帧随 slots rev 刷新,L1 记录后续编辑
+   * 不回灌旧帧——引用集在写入时即冻结,可接受)。缺失/已退场记录不产生条目,
+   * 前端回落显示原始 ref。
+   */
+  refViews?: SlotRefView[];
+}
+
+/** 一条 record_id 引用的展示解析。 */
+export interface SlotRefView {
+  ref: string;
+  title: string;
 }
 
 export interface SlotsProjectionState {
@@ -95,6 +110,23 @@ function parseSlotsPayload<T>(value: unknown, what: string): T {
     if (typeof priority !== 'number' || !Number.isInteger(priority) || priority < 0 || priority > 100) {
       invalid(at, 'priority 必须是 0-100 的整数');
     }
+    // refs / refViews:存在才校验(附加字段,旧 checkpoint 行没有也必须整条通过)
+    if (item.refs !== undefined) {
+      if (!Array.isArray(item.refs)) invalid(at, 'refs 必须是字符串数组');
+      item.refs.forEach((r, i) => {
+        if (typeof r !== 'string') invalid(at + '.refs[' + i + ']', '必须是字符串');
+      });
+    }
+    if (item.refViews !== undefined) {
+      if (!Array.isArray(item.refViews)) invalid(at, 'refViews 必须是数组');
+      item.refViews.forEach((v, i) => {
+        const at2 = at + '.refViews[' + i + ']';
+        const view = requireRecord(v, at2);
+        if (typeof view.ref !== 'string' || typeof view.title !== 'string') {
+          invalid(at2, 'ref/title 必须是字符串');
+        }
+      });
+    }
   });
   return value as T;
 }
@@ -109,9 +141,42 @@ export const viewSchema: SchemaLike<SlotsView> = {
   parse: (value) => parseSlotsPayload<SlotsView>(value, 'memorySlots.view'),
 };
 
-function buildState(store: SlotStore): SlotsProjectionState {
+/** 投影需要的 L1 只读面(结构化声明,避免跨模块类型耦合)。 */
+export interface L1LookupFace {
+  getByIds(ids: string[]): Array<{ id: string; content: string; type: string }>;
+}
+
+/** L1 record_id 的引用形态(newId('mem') 生成)。 */
+const RECORD_REF_PREFIX = 'mem_';
+/** refView 名称简述的截断上限(展示用,全文走 memory_receipts / memory_read_scene)。 */
+const REF_TITLE_MAX = 80;
+
+/**
+ * 把槽位 refs 里的 L1 record_id 解析成名称简述([type] content 首行截断)。
+ * 只解析 record_id 类引用;路径/URL 保持字面。缺失/已退场记录不产生条目。
+ */
+function resolveRefViews(refs: readonly string[], l1: L1LookupFace | undefined): SlotRefView[] | undefined {
+  const recordRefs = refs.filter((r) => r.startsWith(RECORD_REF_PREFIX));
+  if (recordRefs.length === 0 || l1 === undefined) return undefined;
+  const byId = new Map(l1.getByIds(recordRefs).map((r) => [r.id, r]));
+  const views: SlotRefView[] = [];
+  for (const ref of recordRefs) {
+    const record = byId.get(ref);
+    if (record === undefined) continue;
+    const firstLine = record.content.split('\n', 1)[0] ?? '';
+    const summary = firstLine.length > REF_TITLE_MAX ? firstLine.slice(0, REF_TITLE_MAX) + '…' : firstLine;
+    views.push({ ref, title: '[' + record.type + '] ' + summary });
+  }
+  return views.length > 0 ? views : undefined;
+}
+
+function buildState(store: SlotStore, l1: L1LookupFace | undefined): SlotsProjectionState {
   const snap = store.projectionSnapshot();
-  return { rev: store.revision(), count: snap.count, openCount: snap.openCount, slots: snap.slots };
+  const slots = snap.slots.map((slot) => {
+    if (slot.refs === undefined) return slot;
+    return { ...slot, refViews: resolveRefViews(slot.refs, l1) };
+  });
+  return { rev: store.revision(), count: snap.count, openCount: snap.openCount, slots };
 }
 
 /**
@@ -145,32 +210,27 @@ interface ProjectionRegistryLike {
 
 /**
  * apply(state, event):同步。
- * - 仅 tool/result(settled,非 error)才检查:tool/call 在 store 变更提交前发生,按
- *   call 折会读到 stale;tool/result settled 才保证变更已落库(对齐 deliverables-fold)。
- * - 闭包 SlotStore,同步读 revision():rev 未变 → 本插件槽位未动 → 返回同引用
- *   (满足 I1b,避免 republish thrash);rev 变 → 重建快照。
- * - 任何无关事件 → 返回同引用(不 spread)。
+ * - **任意已提交事件都判脏**(v0.18.4 起):此前仅在 tool/result(settled、非 error)
+ *   时检查,实际运行中暴露出脆弱性——写入后的投影帧依赖"该会话恰好再来一条
+ *   tool/result"才刷新;跨会话场景(会话 A 写、会话 B 看)更是要等 B 自己的下一次
+ *   工具调用。改为对所有事件做 O(1) revision 比较:rev 未变 → 同引用(满足 I1b,
+ *   无 republish thrash);rev 变 → 立即重建。写入后的下一条任意事件(用户消息、
+ *   turn 边界、其他工具结果)都会把新帧推给客户端。
+ * - isError 守卫一并移除:rev 只在 store 真实变更后递增(persist 内联 RMW),
+ *   事件成败与否不影响"store 是否变了"这一事实;错误事件后重建读到的仍是
+ *   当前真实快照,不会引入错误数据。
  */
 function applySlotsEvent(
   state: SlotsProjectionState,
   event: { type: string; data: unknown },
   store: SlotStore,
+  l1: L1LookupFace | undefined,
 ): SlotsProjectionState {
-  if (event.type !== 'tool/result') return state;
-  const data = event.data as
-    | { message?: { role?: unknown; isError?: unknown; content?: readonly { isError?: unknown }[] } }
-    | undefined;
-  // v4 native（宿主 ≥0.1.7-rc.1）：isError 在 message 顶层；v3 wrapper：块上 isError（历史兼容）。
-  const isError =
-    data?.message?.isError === true ||
-    (Array.isArray(data?.message?.content) &&
-      data!.message!.content!.some((c) => (c as { isError?: unknown }).isError === true));
-  if (isError) return state;
   if (store.revision() === state.rev) return state;
-  return buildState(store);
+  return buildState(store, l1);
 }
 
-export function registerSlotsProjection(ctx: Context, store: SlotStore): void {
+export function registerSlotsProjection(ctx: Context, store: SlotStore, l1?: L1LookupFace): void {
   ctx.inject(['sessionProjections'], (injected) => {
     const registry = (injected as unknown as { sessionProjections?: ProjectionRegistryLike })
       .sessionProjections;
@@ -178,8 +238,8 @@ export function registerSlotsProjection(ctx: Context, store: SlotStore): void {
     registry.register({
       key: MEMORY_SLOTS_KEY,
       stateSchema,
-      init: () => buildState(store),
-      apply: (state, event) => applySlotsEvent(state, event, store),
+      init: () => buildState(store, l1),
+      apply: (state, event) => applySlotsEvent(state, event, store, l1),
       wire: { viewSchema, view },
       stateVersion: 0,
     });

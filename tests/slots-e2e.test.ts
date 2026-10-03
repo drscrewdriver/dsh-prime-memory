@@ -111,7 +111,10 @@ describe('端到端 E1 → E4', () => {
     expect(written.id).toMatch(/^slot_/);
 
     const { decision, injected } = await nextTurn();
-    expect(injected).toContain('【激活槽位 · 常驻上下文】');
+    // 宿主 house style:<system-reminder> 标签框(含免回应声明)
+    expect(injected.startsWith('<system-reminder>\n')).toBe(true);
+    expect(injected).toContain('无需回应');
+    expect(injected.trimEnd().endsWith('</system-reminder>')).toBe(true);
     expect(injected).toContain(`[rule] ${RULE_TITLE}: ${RULE_BODY}`);
     // 注入消息排在用户消息之前,并带插件署名来源(与 recall 同款范式)
     expect(decision.messages[0]?.source).toEqual({ kind: 'plugin:memory', form: 'recall' });

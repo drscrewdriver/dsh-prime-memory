@@ -426,7 +426,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   // 激活槽位(active slot):工具面 + 常驻注入 + 服务端投影(均走 ctx.effect,可撤销)
   registerSlotTools(ctx, config, stores.slots, logger, modes, live, stores.l1);
   const slotRecall = registerSlotRecall(ctx, config, stores.slots, logger, live);
-  registerSlotsProjection(ctx, stores.slots);
+  registerSlotsProjection(ctx, stores.slots, stores.l1);
   void slotRecall;
   registerMemoryRpc(
     ctx,

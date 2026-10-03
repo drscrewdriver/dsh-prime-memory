@@ -17,6 +17,20 @@ export interface SlotsViewSlot {
     kind: string;
     status: string;
     priority: number;
+    /** 原始引用(L1 record_id / 文件路径 / URL);存在才校验,旧 checkpoint 无此字段照常通过。 */
+    refs?: string[];
+    /**
+     * L1 record_id 类引用的解析视图(v0.20.2):ref → 名称简述(content 首行截断)。
+     * 前端展示用;解析发生在投影帧构建时(帧随 slots rev 刷新,L1 记录后续编辑
+     * 不回灌旧帧——引用集在写入时即冻结,可接受)。缺失/已退场记录不产生条目,
+     * 前端回落显示原始 ref。
+     */
+    refViews?: SlotRefView[];
+}
+/** 一条 record_id 引用的展示解析。 */
+export interface SlotRefView {
+    ref: string;
+    title: string;
 }
 export interface SlotsProjectionState {
     rev: number;
@@ -51,5 +65,13 @@ interface SchemaLike<T> {
 export declare const stateSchema: SchemaLike<SlotsProjectionState>;
 /** wire view 校验:registry 在 view 出网前调用(也覆盖 live drive 的发布路径)。 */
 export declare const viewSchema: SchemaLike<SlotsView>;
-export declare function registerSlotsProjection(ctx: Context, store: SlotStore): void;
+/** 投影需要的 L1 只读面(结构化声明,避免跨模块类型耦合)。 */
+export interface L1LookupFace {
+    getByIds(ids: string[]): Array<{
+        id: string;
+        content: string;
+        type: string;
+    }>;
+}
+export declare function registerSlotsProjection(ctx: Context, store: SlotStore, l1?: L1LookupFace): void;
 export {};

@@ -77,6 +77,8 @@ export interface SlotView {
   kind: SlotKind;
   status: SlotStatus;
   priority: number;
+  /** 原始引用(v0.20.2 透出,供展示侧解析 L1 record_id → 名称简述)。 */
+  refs?: string[];
 }
 
 const KIND_SET = new Set<SlotKind>(SLOT_KINDS);
@@ -347,7 +349,7 @@ export class SlotStore {
     return n;
   }
 
-  /** 投影只读快照(全量,不含 body)。 */
+  /** 投影只读快照(全量,不含 body;refs 存在才带上)。 */
   projectionSnapshot(): { count: number; openCount: number; slots: SlotView[] } {
     return {
       count: this.slots.length,
@@ -358,6 +360,7 @@ export class SlotStore {
         kind: s.kind,
         status: s.status,
         priority: s.priority,
+        ...(s.refs.length > 0 ? { refs: [...s.refs] } : {}),
       })),
     };
   }
