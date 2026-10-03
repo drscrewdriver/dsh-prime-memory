@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { registerMemoryTools } from '../src/tools/index.js';
+import { registerSlotTools } from '../src/tools/slots.js';
+import { SlotStore } from '../src/store/slots.js';
 import { MemoryDb } from '../src/store/sqlite.js';
 import { L0Store } from '../src/store/l0.js';
 import { L1Store } from '../src/store/l1.js';
@@ -35,7 +37,8 @@ interface RegisteredTool {
   execute: (args: Record<string, unknown>, exec?: { agent?: { id?: string } }) => Promise<unknown>;
 }
 
-function harness(opts: { liveMutate?: boolean; sessionMode?: (sid: string) => string } = {}) {
+function harness(opts: { liveMutate?: boolean; sessionMode?: (sid: string) => string; captureEvents?: boolean } = {}) {
+  const events: Array<(paths: string[]) => void> = [];
   // 基线不含 conflictFreeze 键(留空 = 不覆盖,见 runner.ts 的 !== undefined 判定),故用断言;
   // 空数组按契约类型加宽(never[] 会让断言两侧失去重叠)
   const live = {
@@ -62,8 +65,22 @@ function harness(opts: { liveMutate?: boolean; sessionMode?: (sid: string) => st
   const registered: RegisteredTool[] = [];
   const ctx = {
     tools: {
-      register: (t: ToolDefinition) => registered.push(t as unknown as RegisteredTool),
+      register: (t: ToolDefinition) => {
+        registered.push(t as unknown as RegisteredTool);
+        return () => {
+          const i = registered.findIndex((x) => x.name === (t as unknown as RegisteredTool).name);
+          if (i >= 0) registered.splice(i, 1);
+        };
+      },
     },
+    ...(opts.captureEvents
+      ? {
+          on: (event: string, fn: (paths: string[]) => void) => {
+            if (event === 'loader/volatile-update') events.push(fn);
+            return () => {};
+          },
+        }
+      : {}),
   } as unknown as Parameters<typeof registerMemoryTools>[0];
 
   const cfg = {
@@ -71,7 +88,7 @@ function harness(opts: { liveMutate?: boolean; sessionMode?: (sid: string) => st
     recall: { maxResults: 5 },
   } as unknown as MemoryConfig;
 
-  return { ctx, cfg, modes, liveHandle, registered };
+  return { ctx, cfg, modes, liveHandle, registered, events };
 }
 
 describe('memory tools', () => {
@@ -388,5 +405,46 @@ describe('memory tools', () => {
     const crossFamily = (await expand.execute({ id: auto.items[0]!.id }, { agent: { id: 'work-sess' } })) as { notice: string };
     expect(crossFamily.notice).toContain('不存在');
     stores.db.close();
+  });
+  // ── 工具分组封印 + mem_ 引用校验(v0.21.0)──
+  it('封印组:volatile-update 后该组工具反注册,解封后重注册', async () => {
+    const stores = await setupStores();
+    const h = harness({ captureEvents: true });
+    registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
+    const names = () => h.registered.map((t) => t.name);
+    expect(names()).toContain('memory_room_admin');
+    expect(names()).toContain('memory_search');
+
+    (h.liveHandle.get() as { toolRoom?: boolean }).toolRoom = false;
+    h.events.forEach((fn) => fn(['toolRoom']));
+    expect(names()).not.toContain('memory_room_admin');
+    expect(names()).toContain('memory_search'); // 核心读不受控
+
+    (h.liveHandle.get() as { toolRoom?: boolean }).toolRoom = true;
+    h.events.forEach((fn) => fn(['toolRoom']));
+    expect(names()).toContain('memory_room_admin');
+  });
+
+  it('slot 写入:mem_ 引用必须真实存在,幻觉 id 被拒且不落库', async () => {
+    const stores = await setupStores();
+    await stores.l1.appendNew([
+      { id: 'mem_real1', content: '真实记忆', type: 'work_fact', priority: 50, scene_name: '基建', timestamps: [Date.now()], createdAt: Date.now(), updatedAt: Date.now() },
+    ]);
+    const h = harness({ liveMutate: true });
+    const slots = new SlotStore(join(await tmp(), `slots-v21-${Date.now()}.json`), noopLogger);
+    await slots.load();
+    registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
+    registerSlotTools(h.ctx, h.cfg, slots, noopLogger, h.modes, h.liveHandle, stores.l1);
+    const write = h.registered.find((t) => t.name === 'memory_slot_write');
+    expect(write).toBeDefined();
+
+    const bad = (await write!.execute({ title: '坏引用', kind: 'rule', pinned: true, refs: 'mem_ghost,notes/a.md' })) as { notice?: string };
+    expect(bad.notice).toContain('写入被拒');
+    expect(bad.notice).toContain('mem_ghost');
+    expect(slots.list()).toHaveLength(0);
+
+    const good = (await write!.execute({ title: '好引用', kind: 'rule', pinned: true, refs: 'mem_real1,notes/a.md' })) as { id?: string };
+    expect(good.id).toMatch(/^slot_/);
+    expect(slots.list()).toHaveLength(1);
   });
 });

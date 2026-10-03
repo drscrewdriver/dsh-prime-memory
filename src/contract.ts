@@ -60,6 +60,12 @@ export type LayerRouteKey = 'l1' | 'l2' | 'l3';
 export interface MemoryLiveSettings {
   /** 总开关:关 = 捕获/蒸馏/召回注入全停(数据保留) */
   enabled: boolean;
+  /** 工具分组封印:false = 该组工具不注册,从模型工具列表消失。核心读(memory_search/read_scene/receipts/conversation_search)与槽位三件不受控 */
+  toolRoom: boolean;
+  toolGraph: boolean;
+  toolRuminate: boolean;
+  toolConflict: boolean;
+  toolMutate: boolean;
   /** L0 捕获(原始对话落盘) */
   capture: boolean;
   /** L1 抽取 + L2/L3 蒸馏 */

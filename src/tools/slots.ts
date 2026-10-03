@@ -135,7 +135,7 @@ export function registerSlotTools(
     defineTool({
       name: 'memory_slot_write',
       description:
-        '写入一个激活槽位(active slot)。适合把跨会话需要持续生效的规则、待办、锚点或外部指针固化下来;pinned=true 的 open 槽位会常驻注入每轮对话上下文。需高权限模式开启。',
+        '写入一个激活槽位(active slot)。适合把跨会话需要持续生效的规则、待办、锚点或外部指针固化下来;pinned=true 的 open 槽位会常驻注入每轮对话上下文。需高权限模式开启。refs 中的 L1 record_id 必须真实存在(用 memory_search 返回的 id),否则写入被拒。',
       parameters: {
         title: { type: 'string', required: true, description: '槽位标题(≤60 字,一句话概括)' },
         kind: { type: 'string', description: '槽位类型:rule(规则)/todo(待办)/anchor(锚点)/pointer(指针,正文可空)' },
@@ -178,6 +178,21 @@ export function registerSlotTools(
           status: typeof args.status === 'string' ? (args.status as SlotInput['status']) : undefined,
           origin: 'user',
         };
+        // mem_ 引用必须真实存在(v0.21.0):保证"search 激活的记忆"进入引用的是
+        // 真实 record_id——模型幻觉/拼错的 id 直接拒绝并给出修正路径,不让坏引用
+        // 静默进槽位(否则 brief 侧解析不出名称简述)。文件路径/URL 类 refs 不校验。
+        const memRefs = (input.refs ?? []).filter((r) => r.startsWith('mem_'));
+        if (memRefs.length > 0 && l1) {
+          const found = new Set(l1.getByIds([...memRefs]).map((r) => r.id));
+          const missing = memRefs.filter((id) => !found.has(id));
+          if (missing.length > 0) {
+            return {
+              notice:
+                `写入被拒:refs 中的 L1 record_id 不存在(${missing.join(', ')})。` +
+                `请先用 memory_search 搜索,使用其返回的 id;文件路径/URL 类 refs 无需此校验。`,
+            };
+          }
+        }
         try {
           const slot = await slots.upsert(input);
           logger.info(`[memory] 写入激活槽位(${slot.kind},pinned=${slot.pinned}):${slot.title.slice(0, 60)}`);

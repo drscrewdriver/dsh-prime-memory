@@ -12,7 +12,7 @@ import { RebuildPanel } from './RebuildPanel.js';
 import { RuminatePanel } from './RuminatePanel.js';
 
 /** 可通过开关切换的 settings 键。 */
-type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate' | 'conflictFreeze';
+type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate' | 'conflictFreeze' | 'toolRoom' | 'toolGraph' | 'toolRuminate' | 'toolConflict' | 'toolMutate';
 
 export function OverviewTab(props: { rpc: RpcFn }) {
   const rpc = props.rpc;
@@ -105,6 +105,11 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   }
   const mutate = settingsData && settingsData.settings ? !!settingsData.settings.memoryMutate : false;
   const cfEnabled = settingsData && settingsData.settings ? !!settingsData.settings.conflictFreeze : false;
+  const toolRoom = settingsData && settingsData.settings ? settingsData.settings.toolRoom !== false : true;
+  const toolGraph = settingsData && settingsData.settings ? settingsData.settings.toolGraph !== false : true;
+  const toolRuminate = settingsData && settingsData.settings ? settingsData.settings.toolRuminate !== false : true;
+  const toolConflict = settingsData && settingsData.settings ? settingsData.settings.toolConflict !== false : true;
+  const toolMutate = settingsData && settingsData.settings ? settingsData.settings.toolMutate !== false : true;
 
   return (
     <div>
@@ -162,6 +167,39 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             onChange={(v) => {
               toggle('memoryMutate', v);
             }}
+          />
+          {/* 分组：工具封印（v0.21.0）——false = 该组工具不注册,从模型工具列表消失;
+              核心读(memory_search / read_scene / receipts / conversation_search)与槽位三件不受控 */}
+          <div style={S.panelLabel}>工具封印</div>
+          <SwitchRow
+            label="Room 管理工具"
+            desc={toolRoom ? '已注册：memory_room_admin / memory_room_review（目录治理）' : '已封印：两个工具从模型工具列表移除'}
+            checked={toolRoom}
+            onChange={(v) => { toggle('toolRoom', v); }}
+          />
+          <SwitchRow
+            label="图谱工具"
+            desc={toolGraph ? '已注册：memory_search_graph / memory_expand_graph_node' : '已封印：图谱读工具从模型工具列表移除'}
+            checked={toolGraph}
+            onChange={(v) => { toggle('toolGraph', v); }}
+          />
+          <SwitchRow
+            label="反刍工具"
+            desc={toolRuminate ? '已注册：memory_ruminate / _cancel / _status' : '已封印：反刍三件从模型工具列表移除'}
+            checked={toolRuminate}
+            onChange={(v) => { toggle('toolRuminate', v); }}
+          />
+          <SwitchRow
+            label="冲突工具"
+            desc={toolConflict ? '已注册：memory_conflicts / _rejected / resolve_conflict' : '已封印：冲突三件从模型工具列表移除'}
+            checked={toolConflict}
+            onChange={(v) => { toggle('toolConflict', v); }}
+          />
+          <SwitchRow
+            label="写删工具"
+            desc={toolMutate ? '已注册：memory_add / memory_import / memory_delete（仍需高权限模式）' : '已封印：L1 写删工具从模型工具列表移除（槽位三件不受此开关影响）'}
+            checked={toolMutate}
+            onChange={(v) => { toggle('toolMutate', v); }}
           />
           {/* 分组三：人工冲突裁决（§C 冻结开关）——开启后冲突对停放到待人工裁决区 */}
           <div style={S.panelLabel}>人工冲突裁决</div>

@@ -17,6 +17,13 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.21.0] — 2026-10-04
+
+### 新增
+
+- **工具分组封印（记忆库面板 → 记忆 → 工具封印）**:5 组开关(room 管理 / graph 图谱 / ruminate 反刍 / conflict 冲突 / mutate 写删,覆盖 13 个工具)。关闭 = 该组工具**不注册**,从模型工具列表直接消失(不是执行期拒绝);翻转经 volatile 热更即时生效,无需重启。核心读(memory_search / memory_read_scene / memory_receipts / conversation_search)与槽位三件不受控。背景:多数分组工具(如 Room 治理、反刍)日常使用频率极低,常驻工具列表徒占注意力并诱导模型误调用。
+- **memory_slot_write 的 mem_ 引用存在性校验**:refs 中 `mem_*` 形态的 L1 record_id 写入前经 `getByIds` 存在性校验,幻觉/拼错的 id 直接拒绝并提示走 memory_search——保证"search 激活的记忆"进入槽位引用的必然是真实记录(brief 侧的名称简述解析因此有可靠输入)。文件路径/URL 类 refs 不校验。
+
 ## [0.20.4] — 2026-10-04(本地构建,未发布)
 
 ### 修复

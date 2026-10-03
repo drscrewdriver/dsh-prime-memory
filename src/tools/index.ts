@@ -101,6 +101,48 @@ export function registerMemoryTools(
 ): void {
   if (!cfg.tools) return;
 
+  // ── 工具分组封印(v0.21.0):sealable 组的注册经 reg() 登记,按 live 开关动态
+  // 注册/反注册。封印 = 从模型工具列表消失(反注册),不是执行期拒绝;开关经
+  // 设置页 volatile 热更(loader/volatile-update)即时生效,无需重启。
+  // 核心读(memory_search / conversation_search / memory_read_scene /
+  // memory_receipts)与槽位三件(slots.ts)不参与封印。
+  const toolDisposers = new Map<string, Array<() => void>>();
+  const toolMakers = new Map<string, Array<() => () => void>>();
+  const toolSealed = (group: string): boolean => {
+    const snap = live.get();
+    switch (group) {
+      case 'room': return snap.toolRoom === false;
+      case 'graph': return snap.toolGraph === false;
+      case 'ruminate': return snap.toolRuminate === false;
+      case 'conflict': return snap.toolConflict === false;
+      case 'mutate': return snap.toolMutate === false;
+      default: return false;
+    }
+  };
+  const reg = (group: string, make: () => () => void): void => {
+    const makers = toolMakers.get(group) ?? [];
+    makers.push(make);
+    toolMakers.set(group, makers);
+    if (!toolSealed(group)) {
+      const disposers = toolDisposers.get(group) ?? [];
+      disposers.push(make());
+      toolDisposers.set(group, disposers);
+    }
+  };
+  const applyToolSeals = (): void => {
+    for (const [group, disposers] of [...toolDisposers]) {
+      if (!toolSealed(group)) continue;
+      disposers.forEach((dispose) => dispose());
+      toolDisposers.delete(group);
+      logger.warn(`[memory] 工具组已封印: ${group}`);
+    }
+    for (const [group, makers] of [...toolMakers]) {
+      if (toolSealed(group) || toolDisposers.has(group)) continue;
+      toolDisposers.set(group, makers.map((make) => make()));
+      logger.warn(`[memory] 工具组已解封: ${group}`);
+    }
+  };
+
   /**
    * 沿父链解析**有效档位归属会话**(§A 修复)。
    *
@@ -250,7 +292,7 @@ export function registerMemoryTools(
 
   // ── memory_room_admin: Room 粒度目录治理(分类管理 beta.4;beta.5 起 merge/rename/retire 已注册) ──
   // list 免预算零风险;merge/rename/retire 走 dryRun 预览→实跑,执行前自动备份,完成入队场景重算。
-  ctx.tools.register(
+  reg('room', () => ctx.tools.register(
     defineTool({
       name: 'memory_room_admin',
       description:
@@ -387,7 +429,7 @@ export function registerMemoryTools(
         return { notice: `非法 action:${action}(允许 list/register/merge/rename/retire)。` };
       },
     }),
-  );
+  ));
 
   // ── conversation_search: L0 原始对话 ──
   ctx.tools.register(
@@ -596,7 +638,7 @@ export function registerMemoryTools(
   } as const;
 
   // memory_add:显式"记得X"直接落库一条 L1 记忆(绕过抽取管线,需高权限)。
-  ctx.tools.register(
+  reg('mutate', () => ctx.tools.register(
     defineTool({
       name: 'memory_add',
       description:
@@ -636,10 +678,10 @@ export function registerMemoryTools(
         return { id: record.id };
       },
     }),
-  );
+  ));
 
   // memory_import:批量写入(工具刷写通道——外部记忆包导入/迁移,免逐条调用)。
-  ctx.tools.register(
+  reg('mutate', () => ctx.tools.register(
     defineTool({
       name: 'memory_import',
       description:
@@ -738,10 +780,10 @@ export function registerMemoryTools(
         return { written: records.length, ids: records.map((r) => r.id), skipped };
       },
     }),
-  );
+  ));
 
   // memory_delete:显式"忘了 X"——按语义检索命中后删除(高权限门控)。
-  ctx.tools.register(
+  reg('mutate', () => ctx.tools.register(
     defineTool({
       name: 'memory_delete',
       description:
@@ -813,13 +855,13 @@ export function registerMemoryTools(
         return { deleted: n, ids };
       },
     }),
-  );
+  ));
 
   // ── 图谱工具(读;受与 memory_search 同款的档位/注入拒读门 + 族过滤) ──
   const GRAPH_OFF_NOTICE = '图谱功能未启用:部署配置 graph.enabled 未开启,当前没有可用的知识图谱。';
 
   // memory_search_graph: 图谱节点检索(紧凑节点卡)
-  ctx.tools.register(
+  reg('graph', () => ctx.tools.register(
     defineTool({
       name: 'memory_search_graph',
       description:
@@ -877,10 +919,10 @@ export function registerMemoryTools(
         };
       },
     }),
-  );
+  ));
 
   // memory_expand_graph_node: 展开单个节点(facts 全量含历史 + 关系边)
-  ctx.tools.register(
+  reg('graph', () => ctx.tools.register(
     defineTool({
       name: 'memory_expand_graph_node',
       description:
@@ -937,14 +979,14 @@ export function registerMemoryTools(
         return { node: lines.join('\n') };
       },
     }),
-  );
+  ));
 
   // ── 反刍工具(按需触发 L1→L2→L3 消化,受蒸馏开关门控) ──
   const RUMINATE_OFF_NOTICE = '反刍功能未开放:请在记忆库面板开启「蒸馏」开关后使用。';
   const RUMINATE_UNAVAIL_NOTICE = '反刍未初始化:存储处于降级态,无法反刍。';
   const RUMINATE_RUNNING_NOTICE = '反刍已在进行中,请稍后再试。';
 
-  ctx.tools.register(
+  reg('ruminate', () => ctx.tools.register(
     defineTool({
       name: 'memory_ruminate',
       description:
@@ -989,10 +1031,10 @@ export function registerMemoryTools(
         }
       },
     }),
-  );
+  ));
 
   // ── 取消反刍(按需取消正在进行的反刍) ──
-  ctx.tools.register(
+  reg('ruminate', () => ctx.tools.register(
     defineTool({
       name: 'memory_ruminate_cancel',
       description:
@@ -1025,13 +1067,13 @@ export function registerMemoryTools(
         }
       },
     }),
-  );
+  ));
 
   // ── 反刍状态查询(查看当前反刍进度) ──
   // ── memory_room_review:孤儿记忆的 Room 候选逐个复查(agent 长尾治理)──────
   // next/annotate 只读或预算内标注(无需门);confirm/skip 改写 metadata,
   // confirm 吃 live.memoryMutate 高权限门(与 memory_delete 同款)。
-  ctx.tools.register(
+  reg('room', () => ctx.tools.register(
     defineTool({
       name: 'memory_room_review',
       description:
@@ -1105,9 +1147,9 @@ export function registerMemoryTools(
         return { notice: `非法 action:${action}(允许 next/confirm/skip/annotate)。剩余待复查 ${pendingReviewCount(stores.l1)} 条。` };
       },
     }),
-  );
+  ));
 
-  ctx.tools.register(
+  reg('ruminate', () => ctx.tools.register(
     defineTool({
       name: 'memory_ruminate_status',
       description:
@@ -1150,7 +1192,7 @@ export function registerMemoryTools(
         };
       },
     }),
-  );
+  ));
 
   // ── memory_receipts: §B 决策凭证回溯(读;受与 memory_search 同款档位门) ──
   // 为什么给它一个模型可见的工具:凭证链的价值全在"事后能问"。若只有 RPC 端点,
@@ -1228,7 +1270,7 @@ export function registerMemoryTools(
   // 但那个工具**一直不存在** —— 模型照着描述调用只会拿到"工具不存在"。
   // 裁决端点在、读端点与读工具两端都缺,队列于是成了只进不出的黑洞
   // (安全阀超时自动了结会成为唯一出路,那正是 §C 想避免的)。
-  ctx.tools.register(
+  reg('conflict', () => ctx.tools.register(
     defineTool({
       name: 'memory_conflicts',
       description:
@@ -1292,13 +1334,13 @@ export function registerMemoryTools(
         );
       },
     }),
-  );
+  ));
 
   // ── memory_conflicts_rejected: §C 丢弃留痕的读出口 ──
   // LLM 输出不满足 pair 格式的冲突决策会被记入 `conflict_rejected` 表,
   // 但此前只有写入没有读取——人无法知道"哪些冲突被判定为不合法"。
   // 本工具补上读方向,与 `dsh-memory/conflicts-rejected` RPC 端点共用同一形状。
-  ctx.tools.register(
+  reg('conflict', () => ctx.tools.register(
     defineTool({
       name: 'memory_conflicts_rejected',
       description:
@@ -1364,13 +1406,13 @@ export function registerMemoryTools(
         };
       },
     }),
-  );
+  ));
 
   // ── memory_resolve_conflict: §C 矛盾冻结的人工裁决出口 ──
   // 冻结把裁决权交还给人,那么**必须**有一个"人能把结论说回去"的出口——
   // 否则待裁决队列是个只进不出的黑洞,安全阀(task_24)会成为唯一出路,
   // 那等于把 opt-in 的冻结悄悄退回成"超时后机器自己判"。
-  ctx.tools.register(
+  reg('conflict', () => ctx.tools.register(
     defineTool({
       name: 'memory_resolve_conflict',
       description:
@@ -1413,8 +1455,15 @@ export function registerMemoryTools(
         );
       },
     }),
-  );
+  ));
 
+  applyToolSeals();
+  // 设置页翻开关 → volatile 热更 → 重新应用封印(反注册/重注册)。
+  // 守卫:测试 fake ctx / 极老宿主没有事件面时静默跳过(封印仅失去热更,
+  // 重启后仍生效)。
+  if (typeof ctx.on === 'function') {
+    ctx.on('loader/volatile-update', () => applyToolSeals());
+  }
   logger.info('[memory] 工具已注册: memory_search / conversation_search / memory_read_scene / memory_receipts / memory_search_graph / memory_expand_graph_node,及高权限 memory_add/memory_import/memory_delete / memory_resolve_conflict / memory_ruminate / memory_ruminate_cancel / memory_ruminate_status');
 }
 
