@@ -1448,11 +1448,16 @@ function renderGraphCards(
 }
 
 function renderMemoryItems(
-  items: Array<{ content?: string; type?: string; scene_name?: string; score?: number }>,
+  items: Array<{ id?: string; content?: string; type?: string; scene_name?: string; score?: number }>,
 ): string {
   if (!items || items.length === 0) return '(没有找到相关记忆)';
+  // id 必须进渲染文本:模型看到的是 render 产物而非原始 JSON——漏了它,
+  // "search 返回 record_id" 对模型等于没返回(真机教训,v0.20.3)。
   return items
-    .map((it, i) => `${i + 1}. [${it.type ?? ''}]${it.scene_name ? ` (${it.scene_name})` : ''} ${it.content ?? ''}`)
+    .map((it, i) => {
+      const head = `${i + 1}. [${it.type ?? ''}]${it.scene_name ? ` (${it.scene_name})` : ''} ${it.content ?? ''}`;
+      return it.id ? `${head} — id: ${it.id}` : head;
+    })
     .join('\n');
 }
 

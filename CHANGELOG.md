@@ -17,6 +17,12 @@
   - **建议状态(`longtask-hint-get`)以纯端点提供**:判定 = 上下文占用达 `contextThresholdPct` 或 todo 漂移达 `driftThreshold`(部署配置可调);配合 `longtask-compress-tail` 作手动压缩入口。
   - **撤下浮动球 UI(`client/src/longtask-fab.ts`;beta.1 起曾随包发布)**:悬浮建议面板的归属本在 context-compression 侧(「建议启动压缩」是其领域),pm 属误载——2026-10-02 用户裁定撤下。撤下不违座位契约(settings.section 恰一个 + 输入栏 pill,body 单例不占座位),但全应用级 overlay 会与其他插件的悬浮 UI 抢占屏幕角落;长任务开关与手动压缩入口待长任务定版时落记忆设置分节。
   - **`session-mode-set` 的 `mode` 转为可选**:与 `longTask` 二选一必传——纯切长任务开关不再被迫发送档位(旧客户端恒传 mode,行为不变)。响应 `mode` 改回当前生效值。
+## [0.20.3] — 2026-10-03
+
+### 修复
+
+- **`memory_search` 的渲染文本补上 id**:v0.20.2 把 record_id 加进了输出 JSON 与 schema,但模型看到的是 render 产物而非原始 JSON——渲染行没带 id,对模型等于没返回(真机复测发现)。现在每条结果以 `— id: mem_xxx` 结尾,可直接写入槽位 refs。
+
 ## [0.20.2] — 2026-10-03
 
 ### 修复
