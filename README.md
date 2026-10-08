@@ -471,6 +471,20 @@ fsync），断电等极端崩溃最多丢最后一小段尾部，检索库可用
 [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
 项目中的 **MemoryCore**，感谢原项目开放的设计与实现。
 
+## 记忆治理
+
+dsh-prime-memory 内置一套**默认全关**的记忆治理机制(设置页"记忆治理"区可热切):
+
+- **写入门**(`extract.gate.*Mode`,off|warn|enforce):蒸馏产物的 priority 硬门/形状门/乱码门/近重复门与可选 LLM 质量过滤;`warn` 只留痕不丢弃,全部丢弃/告警写入留痕表,`dsh-memory/write-gate-stats` 可查。
+- **repo 软围栏**(`recall.scopeFence.enabled`):work 族记忆按产出 repo(basename(cwd))归属,跨仓召回仅**降权不删除**;声明 `applicability='cross-project'` 的记忆绝不围栏。
+- **激活老化**(`recall.activation.enabled`):注入即被动计数、面板"这条有用"人工采用(重置衰减锚点);抬升 clamp ≤1 不改变打分标度。
+- **分级地板**(`recall.decayFloorByType`):按类型/优先级分档地板(instruction 0.9 / 低优先级 0.2 / 其余分档),默认关=恒 0.5。
+- **tier 降权**(`governance.tier.enabled`):`wiki` 档检索面降权但保留索引,`memory_search includeWiki` 可查;重建保留 tier。
+- **CSV 批量裁决**:`dsh-memory/records-export-csv` 导出副本 → 人工裁决 → `records-apply-verdicts` 回传(**省略 dryRun 即干跑**,执行前自动落快照,乐观并发逐行校验);冲突队列批量裁决可显式撤销(`conflict-batch-undo`)。
+
+详见 `docs/adr/0014`–`0019`(priority 标度/repo 围栏/分级地板/激活老化/批量撤销/tier 正交)。
+
+
 ## License
 
 [MIT](LICENSE)

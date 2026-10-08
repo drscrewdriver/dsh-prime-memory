@@ -149,7 +149,14 @@ async function run(ctx) {
       probeTotal: (scenario.probes?.length) || 0,
     });
     progressEvent(`▶ 场景 ${idx + 1}/${files.length}：${scenario.id}`);
-    const r = await runScenario(ctx, scenario, { arm, selection, judge, dataDir, outDir, workspace, markers });
+    // 治理升级 T0.3：每场景独立且**不同名**子目录（repoKey=basename(归一 cwd)）。
+    // 旧行为一个 rep 内全部场景共用同一 cwd → basename 恒同 → repo 围栏在 bench
+    // 中结构性无法触发（恒 fail-open，计划 C3/P1-3）。目录名取 scenario.id（清洗
+    // 非法字符）后 basename 可区分，围栏才可测；git init/remote 与 repoKey 无关
+    // （计划 v2 Issue 9：O-3 身份源=basename(cwd)，git 已被 P0-6 否决）。
+    const scenarioWorkspace = path.join(workspace, String(scenario.id).replace(/[^\w.-]+/g, '_'));
+    fs.mkdirSync(scenarioWorkspace, { recursive: true });
+    const r = await runScenario(ctx, scenario, { arm, selection, judge, dataDir, outDir, workspace: scenarioWorkspace, markers });
     r.file = file;
     r.durationMs = Date.now() - t0;
     r.noiseBefore = noiseBefore;

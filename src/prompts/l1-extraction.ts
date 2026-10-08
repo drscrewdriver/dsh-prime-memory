@@ -78,12 +78,18 @@ ${CONTENT_IS_DATA_CLAUSE}
         "content": "完整、独立的记忆陈述（按对应类型的句式要求）",
         "type": "persona|episodic|instruction",
         "priority": 80,
+        "applicability": "cross-project",
         "source_message_ids": ["消息ID_1", "消息ID_2"],
         "metadata": {}
       }
     ]
   }
 ]
+
+applicability 字段说明（记忆的适用范围，治理用）：
+- "cross-project"：跨项目通用（个人偏好、通用技能、行业惯例等，换一个项目仍然成立）
+- "this-repo"：绑定当前项目/仓库（项目特定配置、命名约定、内网地址等）
+- 无法判断时省略该字段（系统按"不限定"处理，绝不误伤跨项目知识）
 
 metadata 字段说明：
 - episodic 类型：如能确定活动时间，填入 {"activity_start_time": "ISO8601", "activity_end_time": "ISO8601"}
@@ -282,12 +288,18 @@ metadata 建议：
         "content": "完整、独立、适合团队共享的工作记忆陈述",
         "type": "work_fact|work_task|work_method|work_artifact",
         "priority": 80,
+        "applicability": "this-repo",
         "source_message_ids": ["消息ID_1", "消息ID_2"],
         "metadata": {}
       }
     ]
   }
 ]
+
+applicability 字段说明（记忆的适用范围，治理用）：
+- "this-repo"：绑定当前项目/仓库（本项目配置、命名约定、内网地址、本团队特有流程等）
+- "cross-project"：跨项目通用（行业惯例、通用工具用法、可迁移方法论等——**换一个项目仍然成立**的知识）
+- 无法判断时省略该字段（系统按"不限定"处理，绝不误伤跨项目知识）
 
 metadata 字段说明：
 - 所有类型都可以输出空对象 {}。
@@ -411,12 +423,18 @@ ${CONTENT_IS_DATA_CLAUSE}
         "type": "persona|episodic|instruction|work_fact|work_task|work_method|work_artifact",
         "family": "chat|work",
         "priority": 80,
+        "applicability": "cross-project",
         "source_message_ids": ["消息ID_1", "消息ID_2"],
         "metadata": {}
       }
     ]
   }
 ]
+
+applicability 字段说明（记忆的适用范围，治理用）：
+- "cross-project"：跨项目通用（个人偏好、通用技能、行业惯例等，换一个项目仍然成立）
+- "this-repo"：绑定当前项目/仓库（项目特定配置、命名约定、内网地址等）
+- 无法判断时省略该字段（系统按"不限定"处理，绝不误伤跨项目知识）
 
 metadata 字段说明：
 - episodic 类型：如能确定活动时间，填入 {"activity_start_time": "ISO8601", "activity_end_time": "ISO8601"}
@@ -437,6 +455,25 @@ metadata 字段说明：
 export function getExtractMemoriesSystemPrompt(mode: ExtractMode): string {
   if (mode === 'auto') return EXTRACT_ALL_MEMORIES_SYSTEM_PROMPT;
   return mode === 'work' ? EXTRACT_WORK_MEMORIES_SYSTEM_PROMPT : EXTRACT_MEMORIES_SYSTEM_PROMPT;
+}
+
+/**
+ * 写入门·LLM 质量过滤系统 prompt(治理 W1,T1.5)。
+ * 刻意的 fail-open 姿态写进 prompt 本身:拿不准 → 保留。过滤是增益不是门槛
+ * ——宁可放行一条平庸记忆,不可错杀一条真记忆(与乱码门"绝不误杀"同向)。
+ */
+export function getQualityFilterSystemPrompt(): string {
+  return `你是记忆库的质量过滤闸门。用户会给出一批刚从对话中蒸馏出的候选记忆（带 record_id）。
+
+只挑出**明显不合格**的记忆，即同时满足：无信息量（纯寒暄/语气词/空泛到无法指导任何未来行为）或语义破碎（语句不完整到无法理解其主张）。
+
+判定纪律（红线）：
+- 拿不准 → 一律保留。过滤器只拦"明显垃圾"，绝不追求"只留精华"。
+- 绝不基于语言、领域或长度做判断——简短但明确的记忆是合格的。
+- 专业内容、代码片段、表格、emoji 表达的记忆一律视为合法。
+
+输出：仅返回一个 JSON 字符串数组，内容是应**丢弃**的 record_id；没有应丢弃的返回 []。
+不要输出任何解释或 Markdown 代码块修饰符。`;
 }
 
 /**

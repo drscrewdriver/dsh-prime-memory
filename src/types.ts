@@ -183,6 +183,18 @@ export function resolveRecordFamily(
  */
 export type MemoryScope = 'global' | 'workspace';
 
+/**
+ * tier 治理轴(治理升级 O-7):`active`(正常参与召回)| `wiki`(检索面降权但保留
+ * FTS/向量索引,工具 includeWiki 可命中)。**没有 archived 值**——退场只由
+ * `validTo` 表示(复用 retire()/records-restore()),两轴正交无双表示(计划 v2 Issue 5)。
+ */
+export type RecordTier = 'active' | 'wiki';
+
+/** tier 归一:缺失/非法一律 `active`(I-23 读回 fail-open——读不到治理归属 ≈ 正常记忆,绝不让记忆凭空消失)。 */
+export function normTier(raw: unknown): RecordTier {
+  return typeof raw === 'string' && raw.toLowerCase() === 'wiki' ? 'wiki' : 'active';
+}
+
 /** 配置侧的作用域**模式**取值(与记录级归属同词汇,但语义是「新记忆默认归哪档」)。 */
 export type ScopeMode = MemoryScope;
 
@@ -284,6 +296,18 @@ export interface MemoryRecord {
   validTo?: number;
   /** 持续性(见 Persistence);缺省 = 未判定。 */
   persistence?: Persistence;
+  /**
+   * tier 治理归属(O-7):active(默认)| wiki(检索面降权保留索引)。
+   * **治理归属非事实**——rebuild 重建时按 record_id 对账保留而非重算(ADR-0007 增补)。
+   * 不进快照哈希、不进 FTS(治理 Wave 1 T1.8)。
+   */
+  tier?: RecordTier;
+  /** repo 归属(basename(归一cwd) 派生,T1.9 写时算定):'' = 未归属 = 不围栏。 */
+  repoKeyName?: string;
+  /** repo 归属的人工消歧标注(同名不同仓;T1.7,首版仅人工写)。 */
+  repoKeyOwner?: string;
+  /** 记录级 applicability(T1.10):'' 未声明(不围栏)| 'this-repo' | 'cross-project'(绝不围栏,P0-7)。 */
+  applicability?: string;
 }
 
 /** L2 场景块摘要(META 解析结果)。 */

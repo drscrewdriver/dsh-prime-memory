@@ -80,7 +80,16 @@ export interface ConflictRejected {
  *   该对**留在待裁决队列**里。放进 `resolution` 列会污染"已裁决"的判据
  *   (`resolved_at = ''`),故它只作为**入参取值**存在。
  */
-export type ConflictResolution = 'winner' | 'loser' | 'both' | 'auto' | 'defer';
+export type ConflictResolution = 'winner' | 'loser' | 'both' | 'auto' | 'defer' | 'batch';
+
+/**
+ * `batch`(治理 W3,T3.5/P0-11):人工在 CSV 批量裁决里给出的结论。
+ * **独立词表值,绝不复用** auto/winner/loser/both——审计必须能一眼辨认
+ * "这一行是人批量拍的板"(ADR-0010 条 6 同源)。
+ * 与终局动词(winner/loser/both/auto)**不同**:batch 是粗筛,可经
+ * `conflict-batch-undo` 显式撤销(清 resolved_at/resolution、恢复败方,
+ * 留痕不静默清列);终局动词不可撤销(ADR-0018)。
+ */
 
 /** 未裁决时 `resolved_at` / `resolution` 的取值(空串,不用 NULL)。 */
 export const CONFLICT_UNRESOLVED = '';

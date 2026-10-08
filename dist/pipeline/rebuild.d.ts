@@ -33,6 +33,8 @@ export declare class RebuildController {
     private readonly logger;
     private readonly live;
     private status;
+    /** 治理归属快照(T3.12):捕获于清空前,回填于重建收尾。 */
+    private governanceAttr;
     private chunks;
     private cancelRequested;
     /** 快照时刻(收尾时按它区分重建产物与重建后新对话的记录)。 */

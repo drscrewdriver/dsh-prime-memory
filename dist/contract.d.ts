@@ -97,6 +97,11 @@ export interface MemoryLiveSettings {
     /** §C 人工冲突裁决总开关:true = 去重判定"两边都像对的"时冻结冲突对,停放到待人工裁决区;
      *  false = 默认,冲突按 LLM 的 winner/loser 自动了结。运行时覆盖静态 config 的 conflictFreeze.enabled。 */
     conflictFreeze: boolean;
+    /** 治理热切键=4(治理升级;与静态 config OR 语义,任一层开即生效,ADR-0016/0017) */
+    recallScopeFenceEnabled: boolean;
+    recallActivationEnabled: boolean;
+    recallDecayFloorByType: boolean;
+    governanceTierEnabled: boolean;
 }
 /** 召回停用原因(session-stats recall.enabled=false 时带出;短路序第一个为假的因子)。 */
 export type RecallDisabledReason = 'deploy' | 'global' | 'session' | 'mode';
@@ -1238,6 +1243,13 @@ export interface DshMemoryRequestMap {
     'dsh-memory/cleanup-retired': CleanupRetiredRequest;
     'dsh-memory/snapshots-list': SnapshotsListRequest;
     'dsh-memory/snapshot-restore': SnapshotRestoreRequest;
+    'dsh-memory/write-gate-stats': WriteGateStatsRequest;
+    'dsh-memory/records-mark-adopted': RecordsMarkAdoptedRequest;
+    'dsh-memory/records-export-csv': RecordsExportCsvRequest;
+    'dsh-memory/records-verdict-preview': RecordsApplyVerdictsRequest;
+    'dsh-memory/records-apply-verdicts': RecordsApplyVerdictsRequest;
+    'dsh-memory/conflict-batch-apply': ConflictBatchApplyRequest;
+    'dsh-memory/conflict-batch-undo': ConflictBatchUndoRequest;
 }
 export interface DshMemoryResponseMap {
     'dsh-memory/stats': StatsResponse;
@@ -1283,6 +1295,136 @@ export interface DshMemoryResponseMap {
     'dsh-memory/cleanup-retired': CleanupRetiredResponse;
     'dsh-memory/snapshots-list': SnapshotsListResponse;
     'dsh-memory/snapshot-restore': SnapshotRestoreResponse;
+    'dsh-memory/write-gate-stats': WriteGateStatsResponse;
+    'dsh-memory/records-mark-adopted': RecordsMarkAdoptedResponse;
+    'dsh-memory/records-export-csv': RecordsExportCsvResponse;
+    'dsh-memory/records-verdict-preview': VerdictApplyResultContract;
+    'dsh-memory/records-apply-verdicts': VerdictApplyResultContract;
+    'dsh-memory/conflict-batch-apply': ConflictBatchApplyResponse;
+    'dsh-memory/conflict-batch-undo': ConflictBatchUndoResponse;
+}
+export interface ConflictBatchApplyRequest {
+    /** 批次 id(本次调用生成或客户端给定;落库使这批可审计可回滚,T3.6)。 */
+    batchId: string;
+    rows: Array<{
+        pairId: string;
+        /** 人工结论:winner | loser | both(终局语义由既有 retire/保留执行)。 */
+        outcome: 'winner' | 'loser' | 'both';
+        /** 乐观并发快照:导出时的 created_at;不符行级拒绝(T3.7)。 */
+        createdAtSnapshot?: string;
+    }>;
+    /** 省略即干跑(I-14)。 */
+    dryRun?: boolean;
+}
+export interface ConflictBatchApplyResponse {
+    requested: number;
+    applied: number;
+    truncated: number;
+    skippedStale: number;
+    skippedInvalid: number;
+    notFound: number;
+    dryRun: boolean;
+    rows: Array<{
+        pairId: string;
+        status: 'applied' | 'skippedStale' | 'skippedInvalid' | 'notFound' | 'noop';
+        notice?: string;
+    }>;
+}
+/** dsh-memory/records-export-csv(治理 W3,T3.1:游标分页导出副本)。 */
+export interface RecordsExportCsvRequest {
+    /** 导出上限(默认 10000,防止一次拉全库)。 */
+    limit?: number;
+    /** true = 仅已退场;false(默认)= 仅活跃。 */
+    retired?: boolean;
+}
+export interface RecordsExportCsvResponse {
+    csv: string;
+    total: number;
+    /** CSV 表头(供客户端校验列序)。 */
+    columns: string[];
+}
+/** 裁决行(T3.2;与治理服务层的 VerdictApplyRow 同形)。 */
+export interface VerdictRowResultContract {
+    id: string;
+    verdict: string;
+    status: 'applied' | 'skippedStale' | 'skippedHighImpact' | 'skippedInvalid' | 'notFound' | 'noop';
+    notice?: string;
+}
+/** dsh-memory/records-apply-verdicts 与 records-verdict-preview 的返回体(T3.2/T3.7)。 */
+export interface VerdictApplyResultContract {
+    requested: number;
+    applied: number;
+    truncated: number;
+    skippedStale: number;
+    skippedHighImpact: number;
+    skippedInvalid: number;
+    notFound: number;
+    noop: number;
+    dryRun: boolean;
+    snapshot?: string;
+    rows: VerdictRowResultContract[];
+}
+export interface RecordsApplyVerdictsRequest {
+    rows: Array<{
+        id: string;
+        verdict: string;
+        updatedAt?: number;
+        repo?: string;
+        note?: string;
+    }>;
+    /** **省略即干跑**(I-14:省略=安全是唯一合法默认)。 */
+    dryRun?: boolean;
+    /** 高影响项(instruction / persona≥80)二次确认。 */
+    confirmHighImpact?: boolean;
+}
+export interface ConflictBatchUndoRequest {
+    /** 要撤销的批次 id(records-apply-conflict-batch 落库时写入的值)。 */
+    batchId: string;
+}
+export interface ConflictBatchUndoResponse {
+    /** 撤销(清 resolved_at/resolution + 恢复败方)的对数。 */
+    undone: number;
+    /** 留痕说明(撤销是显式动作,行与 batch_id 保留可审计,ADR-0018)。 */
+    notice?: string;
+}
+/** dsh-memory/records-mark-adopted(治理 W2,T2.4/O-2:人工"这条有用"采用标记)。 */
+export interface RecordsMarkAdoptedRequest {
+    /** 采用的记忆 id(1~100 条;面板单条按钮传 1 个,CSV 通道可批量)。 */
+    ids: string[];
+}
+export interface RecordsMarkAdoptedResponse {
+    /** 受理条数(激活未开启时 0,附 notice)。 */
+    applied: number;
+    /** 激活功能未开启时的提示(面板据此引导开启,而非静默无效)。 */
+    notice?: string;
+}
+/** dsh-memory/write-gate-stats(治理 W1,T1.6:写入门丢弃/告警统计与最近留痕)。 */
+export interface WriteGateStatsRequest {
+    /** 最近留痕条数(默认 20,上限 200)。 */
+    limit?: number;
+}
+export interface WriteGateStatsResponse {
+    /** 按门×模式聚合的计数。 */
+    byGate: Array<{
+        gate: string;
+        mode: string;
+        count: number;
+    }>;
+    /** 留痕总行数。 */
+    total: number;
+    /** 最近留痕(时间倒序)。 */
+    recent: Array<{
+        recordId: string;
+        runId: string;
+        gate: string;
+        mode: string;
+        priorityRaw: string;
+        reason: string;
+        contentChars: number;
+        decidedAt: string;
+    }>;
+    /** 宿主不支持治理留痕表时 true(面板据此显示占位而非报错)。 */
+    supported?: boolean;
 }
 /** 全部端点名(client 调用与 host case 表的共用字面量来源)。 */
 export type DshMemoryEndpoint = keyof DshMemoryResponseMap;

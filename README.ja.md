@@ -355,6 +355,20 @@ dsh ホストはプラグインのログをコンソールへ出力します。�
 
 核心記憶能力（階層的蒸留パイプライン、プロンプト設計、二重書き込みストレージ）は [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory) の **MemoryCore** を参考にしています。
 
+## メモリガバナンス
+
+dsh-prime-memory は**デフォルト無効**のガバナンス機構を同梱します(設定パネルでホット切替):
+
+- **書き込みゲート**(`extract.gate.*Mode`、off|warn|enforce):priority/形状/文字化け/重複ゲートとオプションの LLM 品質フィルタ。`warn` は記録のみ。破棄・警告はすべてレシート化され `dsh-memory/write-gate-stats` で参照可能。
+- **repo ソフトフェンス**(`recall.scopeFence.enabled`):work 系メモリを生成元 repo(cwd の basename)に帰属させ、cross-repo 召回は**減点のみで削除しない**。`applicability='cross-project'` は絶対にフェンスされない。
+- **活性エージング**(`recall.activation.enabled`):注入の受動カウンタと手動「役に立った」マーク(減衰アンカーをリセット)。ブーストは clamp ≤1 でスコア尺度を変えない。
+- **段階的減衰フロア**(`recall.decayFloorByType`):タイプ/優先度別のフロア(instruction 0.9 / 低優先度 0.2 など)。オフ = 平坦 0.5。
+- **tier 降格**(`governance.tier.enabled`):`wiki` tier は検索面で減点されるがインデックス保持。`memory_search includeWiki` で回避可。再構築でも tier は保持。
+- **CSV 一括裁定**:`dsh-memory/records-export-csv` でコピーをエクスポート → オフラインで裁定 → `records-apply-verdicts` で適用(**dryRun 省略 = ドライラン**、実行前にスナップショット、行単位の楽観的並行制御)。競合一括裁定は `conflict-batch-undo` で明示取消可能。
+
+判定記録は `docs/adr/0014`–`0019` を参照。
+
+
 ## License
 
 [MIT](LICENSE)

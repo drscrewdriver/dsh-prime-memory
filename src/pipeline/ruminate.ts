@@ -29,6 +29,7 @@ import type { ConversationMessage, ExtractMode, MemoryFamily, MemoryLogger } fro
 import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
 import { relabelPass, type RelabelStats } from './relabel.js';
+import { processSceneReclusterJobs } from './recluster.js';
 import { runPersona } from './l3.js';
 import type { MemoryRunner } from './runner.js';
 
@@ -299,6 +300,14 @@ export class RuminateController {
         this.status.sub = null;
         // 重标定失败不拖垮反刍整体(蒸馏/L2/L3 产物保留)
         this.logger.warn(`[memory] 反刍重标定失败(不影响本次产物): ${errDetail(err)}`);
+      }
+      // 场景重聚类消费(治理 W3,T3.10/T3.11):demote-to-wiki 的派生修复在
+      // 空闲档落地;每次至多 1 个作业,内部吞错绝不拖垮反刍。
+      try {
+        const reprocessed = await processSceneReclusterJobs(this.stores.l1, this.stores.scenes, this.logger);
+        if (reprocessed > 0) this.status.detail = `场景重聚类 ${reprocessed} 个作业已派发重算`;
+      } catch (err) {
+        this.logger.warn(`[memory] 场景重聚类调度失败(忽略): ${errDetail(err)}`);
       }
 
       this.status.phase = 'done';

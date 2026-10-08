@@ -4,18 +4,120 @@
  * - normalizeRrf:RRF 原始分按实际路数归一化到 0~1(hybrid 展示分);
  * - bm25RankToScore:FTS5 bm25 rank(负值=更相关)转 0~1 分数;
  * - applyDecayWeight:#29 时效衰减加权(读路径专用);
+ * - markDedupPath / assertNotDedupPath:去重路径运行时哨兵(治理红线,见下);
  * - buildFtsQuery / tokenizeForFts:FTS5 查询构造与写入侧分词。
  *   分词走 util/text.ts 的 tokenize,读写两侧共用同一分词器,保证查询 token
  *   与索引 token 对齐;FTS 索引按分词器版本戳自动重建(sqlite.ts)。
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { tokenize } from '../util/text.js';
+import { normalizeStoredPriority, PRIORITY_ABSOLUTE_INSTRUCTION, PRIORITY_DEFAULT_STORE } from './priority.js';
 
 /** 标准 RRF 常数(原论文值);k 越大越偏向低排名项(分布更平滑)。 */
 export const RRF_K = 60;
 
 /** 衰减地板(#29 时效加权的安全边界):老记忆最多损失一半排序分,永不沉底。
- *  内部常量不进配置——它是安全机制不是调参旋钮。 */
+ *
+ * flat 档(默认):本常量恒 0.5 且**不进配置**——它是安全机制不是调参旋钮
+ * (测试钉死,tests/memory-db.test.ts);95.2% bench 基线在 floor=0.5 下测得,
+ * 改它=作废基线(I-6/P0-8)。
+ *
+ * graded 档(治理 W2,T2.6):`recall.decayFloorByType=true` 时按类型/优先级
+ * 分级(`gradedFloorOf`),低优先级档 0.2 是**用户裁决的观察态**(O-1)——
+ * 突破 0.5 下界的行为悬崖由 bench flat 对照臂量化,默认关。
+ */
 export const DECAY_FLOOR = 0.5;
+
+// ── 激活抬升常量(治理 W2,T2.5;安全机制不进配置,ADR-0006 条9 同款) ──
+/** 激活抬升上限:decayFactor 恒 ≤1(clamp 公式,歧义①解——治理不污染 score 标度)。 */
+export const ACTIVATION_MAX_BOOST = 0.3;
+/** 被动注入计数的抬升系数(有损下界,P1-9;log1p 饱和)。 */
+export const ACTIVATION_INJ_COEF = 0.05;
+/** 人工采用标记的抬升系数(强信号,注入的 3 倍;O-2)。 */
+export const ACTIVATION_ADP_COEF = 0.15;
+
+/**
+ * 激活抬升(治理 W2,T2.5):boost = min(MAX_BOOST, log1p(inj)×0.05 + log1p(adp)×0.15)。
+ * 无激活数据(undefined)→ 0(存量零漂移:不奖不罚)。
+ */
+export function activationBoostOf(
+  counts: { injectionCount?: unknown; adoptedCount?: unknown } | undefined,
+): number {
+  if (!counts) return 0;
+  const inj = Math.max(0, Number(counts.injectionCount) || 0);
+  const adp = Math.max(0, Number(counts.adoptedCount) || 0);
+  return Math.min(
+    ACTIVATION_MAX_BOOST,
+    Math.log1p(inj) * ACTIVATION_INJ_COEF + Math.log1p(adp) * ACTIVATION_ADP_COEF,
+  );
+}
+
+/**
+ * 分级地板(治理 W2,T2.6;仅 `recall.decayFloorByType=true` 时被调用)。
+ * 判 **normalizePriority 收敛后落库的 rec.priority**(O-9,不猜原始值)。
+ * 档位表(spec §二,`-1` 哨兵**先于 <50** 判定):instruction(含-1)→0.9 /
+ * priority<50→0.2 / persona≥80→0.9 / persona→0.5 / work_fact·work_method→0.5 /
+ * work_task·work_artifact·episodic→0.3 / 兜底 0.5。代码库无 safety 类型(评审纠正)。
+ */
+export function gradedFloorOf(rec: { type?: unknown; priority?: unknown } | undefined): number {
+  if (!rec) return DECAY_FLOOR;
+  const type = typeof rec.type === 'string' ? rec.type : '';
+  const p = Number(rec.priority ?? PRIORITY_DEFAULT_STORE);
+  const finite = Number.isFinite(p);
+  if (type === 'instruction' && p === PRIORITY_ABSOLUTE_INSTRUCTION) return 0.9;
+  if (finite && p >= 0 && p < 50) return 0.2;
+  if (type === 'instruction') return 0.9;
+  if (type === 'persona') return finite && p >= 80 ? 0.9 : 0.5;
+  if (type === 'work_fact' || type === 'work_method') return 0.5;
+  if (type === 'work_task' || type === 'work_artifact' || type === 'episodic') return 0.3;
+  return 0.5;
+}
+
+// ── 去重路径运行时哨兵(治理升级 Wave 0,T0.2)────────────────────────────
+// 红线只写在注释挡不住机械失误(P0-1:治理权重混进去重候选路径 → 去重漏检 →
+// 同事实双记录正反馈,且症状完全隐形)。searchCandidates 进入时用
+// AsyncLocalStorage 标记"当前处于去重路径";治理代码入口调用
+// assertNotDedupPath('自己名字') 自证清白——误入即抛,把隐形污染变成显式崩溃。
+// dev/test 生效,生产构建整体 no-op(零行为面)。
+
+const dedupPathStorage = new AsyncLocalStorage<true>();
+
+/** 哨兵开关:生产(NODE_ENV=production)关闭,其余(dev/test)生效。 */
+export const GOVERNANCE_SENTINEL_ACTIVE = process.env.NODE_ENV !== 'production';
+
+/**
+ * 标记"回调及其异步下游处于 searchCandidates(去重候选)路径内"。
+ * 仅 MemoryDb.searchCandidates 入口调用;生产 no-op 直通。
+ */
+export function markDedupPath<T>(fn: () => T): T {
+  if (!GOVERNANCE_SENTINEL_ACTIVE) return fn();
+  return dedupPathStorage.run(true, fn);
+}
+
+/**
+ * 治理代码(召回侧权重/floorOf/激活等)入口自证清白:若当前处于去重候选
+ * 路径内则抛错。`who` 传函数/模块名,崩溃信息可直接定位肇事者。
+ * 生产 no-op。
+ */
+export function assertNotDedupPath(who: string): void {
+  if (!GOVERNANCE_SENTINEL_ACTIVE) return;
+  if (dedupPathStorage.getStore()) {
+    throw new Error(
+      `[governance] ${who} 出现在 searchCandidates(去重候选)路径内——违反 search-utils 红线:` +
+      '去重候选必须无视治理权重(衰减/地板/激活/scope/tier),否则去重漏检、同事实双记录累积(P0-1)',
+    );
+  }
+}
+
+/** 治理扩展位(治理 W2,T2.5/T2.6):全部可选,缺省 = 逐字现状(flat 地板 + updatedAt 锚 + 无抬升)。 */
+export interface DecayWeightOptions<T> {
+  /** 分级地板resolver(decayFloorByType=true 时传 gradedFloorOf;缺省恒 DECAY_FLOOR)。 */
+  floorOf?: (hit: T) => number;
+  /** 老化锚点 resolver(激活启用时传 decayAnchorAt ?? updatedAt;缺省用 updatedAtOf)。 */
+  anchorAtOf?: (hit: T) => number | undefined;
+  /** 激活抬升 resolver(activation.enabled 时传 activationBoostOf;缺省恒 0)。 */
+  boostOf?: (hit: T) => number;
+}
 
 /**
  * 时效衰减加权(#29,读路径专用):score × max(FLOOR, 0.5^(Δ天/半衰期)) 后重排序。
@@ -25,20 +127,27 @@ export const DECAY_FLOOR = 0.5;
  *   hit 的原 score 字段不被改写(排序用加权分,展示仍反映检索相关度);
  * - halfLifeDays ≤ 0 直接原样返回(开关关闭);
  * - 仅用于召回/工具检索;searchCandidates(去重候选)不得应用——写路径找同语义
- *   旧记录要无视新旧,衰减会让去重漏检(同事实双记录)。
+ *   旧记录要无视新旧,衰减会让去重漏检(同事实双记录);
+ * - **治理 W2(T2.5)**:opts 提供分级地板/激活锚点/激活抬升三个扩展位,合成
+ *   `decayFactor = min(1, max(floorOf, 0.5^(Δ/半衰期)) × (1 + boost))` ——
+ *   clamp ≤1 保证标度不变(歧义①解);全 opts 缺省时与升级前**逐字等价**(I-10)。
  */
 export function applyDecayWeight<T extends { score: number }>(
   hits: T[],
   halfLifeDays: number,
   updatedAtOf: (hit: T) => number | undefined,
   now: number = Date.now(),
+  opts: DecayWeightOptions<T> = {},
 ): T[] {
   if (!(halfLifeDays > 0) || hits.length === 0) return hits;
   const weight = (h: T): number => {
-    const t = updatedAtOf(h);
-    if (t == null || !Number.isFinite(t)) return DECAY_FLOOR;
+    const anchorOf = opts.anchorAtOf ?? updatedAtOf;
+    const t = anchorOf(h);
+    const floor = opts.floorOf ? opts.floorOf(h) : DECAY_FLOOR;
+    const boost = opts.boostOf ? opts.boostOf(h) : 0;
+    if (t == null || !Number.isFinite(t)) return Math.min(1, floor * (1 + boost));
     const days = Math.max(0, (now - t) / 86_400_000);
-    return Math.max(DECAY_FLOOR, 0.5 ** (days / halfLifeDays));
+    return Math.min(1, Math.max(floor, 0.5 ** (days / halfLifeDays)) * (1 + boost));
   };
   return hits
     .map((h) => ({ h, weighted: h.score * weight(h) }))

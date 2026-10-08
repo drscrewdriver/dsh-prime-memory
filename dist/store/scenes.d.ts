@@ -16,6 +16,8 @@ export declare class SceneStore {
      * 文件名自动归一化(空格→短横线、剔除非法字符),非法则抛错。
      */
     write(name: string, content: string): Promise<string>;
+    /** 原样读场景文件(重聚类回滚快照用,治理 W3);不存在/非法名返回 null。 */
+    readRaw(name: string): Promise<string | null>;
     /** 场景导航索引(召回注入用)。 */
     navigation(): Promise<string>;
 }

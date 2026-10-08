@@ -38,6 +38,7 @@ import type {
 import type { MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import { normPersistence } from '../types.js';
 import { isZeroVector, vecToBuffer } from './vec-utils.js';
+import { normalizeStoredPriority } from './priority.js';
 
 const TAG = '[memory][graph]';
 
@@ -94,7 +95,7 @@ function rowToRecord(r: Record<string, unknown>): MemoryRecord {
     id: String(r.record_id),
     content: String(r.content),
     type: String(r.type ?? ''),
-    priority: Number(r.priority ?? 50),
+    priority: normalizeStoredPriority(r.priority),
     scene_name: String(r.scene_name ?? ''),
     timestamps: String(r.timestamp_str ?? '')
       .split(',')

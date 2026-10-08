@@ -56,6 +56,16 @@ export interface MemoryConfig {
         backgroundMessages: number;
         /** 去重候选池大小(每条新记忆的相似候选数)。 */
         candidatePool: number;
+        /** 写入门(治理升级 W1):各子门独立 off|warn|enforce,默认 off=直通零漂移。 */
+        gate: {
+            priorityMode: string;
+            shapeMode: string;
+            garbledMode: string;
+            nearDupMode: string;
+            llmFilterMode: string;
+            /** 导入路径 priority 下限(治理 T1.12:导入显式不过门,仅此下限生效;默认 0=全放)。 */
+            importMinPriority: number;
+        };
     };
     l2: {
         enabled: boolean;
@@ -89,6 +99,8 @@ export interface MemoryConfig {
         /** 超时降级(天):停放超过该天数的待裁决对在下一轮蒸馏开头被自动了结。
          *  **0 = 不做超时降级**(显式关闭,而非"立刻全部超时")。 */
         timeoutDays: number;
+        /** 队列接 scope(治理 W4,T4.2,默认关=队列查询逐字不变,I-10)。 */
+        scopeAware: boolean;
     };
     recall: {
         enabled: boolean;
@@ -109,6 +121,26 @@ export interface MemoryConfig {
         /** 时效衰减半衰期(天,0=关):score × max(0.5, 0.5^(Δ天/半衰期)),
          *  只影响相关度相近候选间的名次(老记忆最多损失一半排序分,不淘汰)。 */
         decayHalfLifeDays: number;
+        /** repo 软围栏(治理升级 W1,默认关=不减权不围栏,零漂移)。 */
+        scopeFence: {
+            enabled: boolean;
+            /** repo 不匹配时的乘子(与域门禁 0.4 叠乘 ≥0.08;软减权非硬排除)。 */
+            crossRepoMultiplier: number;
+        };
+        /** 激活老化(治理升级 W2,默认关=衰减权重逐字不变)。 */
+        activation: {
+            enabled: boolean;
+            /** 缺失时间戳策略:exempt(存量归一为 updatedAt,不按最老)| oldest(显式选沉底)。 */
+            missingTimestampPolicy: string;
+        };
+        /** 分级地板(治理升级 W2,默认关=floorOf≡0.5 逐字现状;true=按类型/优先级分档)。 */
+        decayFloorByType: boolean;
+    };
+    /** tier 检索降权(治理升级 W3,默认关=全视为 active,判据不变)。 */
+    governance: {
+        tier: {
+            enabled: boolean;
+        };
     };
     embedding: {
         /** 向量检索总开关;关闭时纯 FTS 运行。 */
@@ -316,6 +348,10 @@ export declare function liveSettingsSchema(): Schema<NoInfer<Schemastery.ObjectS
     embedRemoteDimensions: Schema<number, number, "defined">;
     memoryMutate: Schema<boolean, boolean, "defined">;
     conflictFreeze: Schema<boolean, boolean, "defined">;
+    recallScopeFenceEnabled: Schema<boolean, boolean, "defined">;
+    recallActivationEnabled: Schema<boolean, boolean, "defined">;
+    recallDecayFloorByType: Schema<boolean, boolean, "defined">;
+    governanceTierEnabled: Schema<boolean, boolean, "defined">;
 }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
     enabled: Schema<boolean, boolean, "defined">;
     capture: Schema<boolean, boolean, "defined">;
@@ -413,6 +449,10 @@ export declare function liveSettingsSchema(): Schema<NoInfer<Schemastery.ObjectS
     embedRemoteDimensions: Schema<number, number, "defined">;
     memoryMutate: Schema<boolean, boolean, "defined">;
     conflictFreeze: Schema<boolean, boolean, "defined">;
+    recallScopeFenceEnabled: Schema<boolean, boolean, "defined">;
+    recallActivationEnabled: Schema<boolean, boolean, "defined">;
+    recallDecayFloorByType: Schema<boolean, boolean, "defined">;
+    governanceTierEnabled: Schema<boolean, boolean, "defined">;
 }>>>, "volatile">;
 export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
     dataDir: Schema<string, string, "defined">;
@@ -444,12 +484,42 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         idleSeconds: Schema<number, number, "defined">;
         backgroundMessages: Schema<number, number, "defined">;
         candidatePool: Schema<number, number, "defined">;
+        gate: Schema<Schemastery.ObjectS<NoInfer<{
+            priorityMode: Schema<string, string, "defined">;
+            shapeMode: Schema<string, string, "defined">;
+            garbledMode: Schema<string, string, "defined">;
+            nearDupMode: Schema<string, string, "defined">;
+            llmFilterMode: Schema<string, string, "defined">;
+            importMinPriority: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            priorityMode: Schema<string, string, "defined">;
+            shapeMode: Schema<string, string, "defined">;
+            garbledMode: Schema<string, string, "defined">;
+            nearDupMode: Schema<string, string, "defined">;
+            llmFilterMode: Schema<string, string, "defined">;
+            importMinPriority: Schema<number, number, "defined">;
+        }>>, "plain">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         minMessages: Schema<number, number, "defined">;
         idleSeconds: Schema<number, number, "defined">;
         backgroundMessages: Schema<number, number, "defined">;
         candidatePool: Schema<number, number, "defined">;
+        gate: Schema<Schemastery.ObjectS<NoInfer<{
+            priorityMode: Schema<string, string, "defined">;
+            shapeMode: Schema<string, string, "defined">;
+            garbledMode: Schema<string, string, "defined">;
+            nearDupMode: Schema<string, string, "defined">;
+            llmFilterMode: Schema<string, string, "defined">;
+            importMinPriority: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            priorityMode: Schema<string, string, "defined">;
+            shapeMode: Schema<string, string, "defined">;
+            garbledMode: Schema<string, string, "defined">;
+            nearDupMode: Schema<string, string, "defined">;
+            llmFilterMode: Schema<string, string, "defined">;
+            importMinPriority: Schema<number, number, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     l2: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -478,10 +548,12 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxPending: Schema<number, number, "defined">;
         timeoutDays: Schema<number, number, "defined">;
+        scopeAware: Schema<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxPending: Schema<number, number, "defined">;
         timeoutDays: Schema<number, number, "defined">;
+        scopeAware: Schema<boolean, boolean, "defined">;
     }>>, "plain">;
     recall: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -494,6 +566,21 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: Schema<number, number, "defined">;
         decayHalfLifeDays: Schema<number, number, "defined">;
+        scopeFence: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, "plain">;
+        activation: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            missingTimestampPolicy: Schema<string, string, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            missingTimestampPolicy: Schema<string, string, "defined">;
+        }>>, "plain">;
+        decayFloorByType: Schema<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxResults: Schema<number, number, "defined">;
@@ -505,6 +592,34 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: Schema<number, number, "defined">;
         decayHalfLifeDays: Schema<number, number, "defined">;
+        scopeFence: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, "plain">;
+        activation: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            missingTimestampPolicy: Schema<string, string, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            missingTimestampPolicy: Schema<string, string, "defined">;
+        }>>, "plain">;
+        decayFloorByType: Schema<boolean, boolean, "defined">;
+    }>>, "plain">;
+    governance: Schema<Schemastery.ObjectS<NoInfer<{
+        tier: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+        }>>, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        tier: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     embedding: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -806,6 +921,10 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
+        recallScopeFenceEnabled: Schema<boolean, boolean, "defined">;
+        recallActivationEnabled: Schema<boolean, boolean, "defined">;
+        recallDecayFloorByType: Schema<boolean, boolean, "defined">;
+        governanceTierEnabled: Schema<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         capture: Schema<boolean, boolean, "defined">;
@@ -903,6 +1022,10 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
+        recallScopeFenceEnabled: Schema<boolean, boolean, "defined">;
+        recallActivationEnabled: Schema<boolean, boolean, "defined">;
+        recallDecayFloorByType: Schema<boolean, boolean, "defined">;
+        governanceTierEnabled: Schema<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, Schemastery.ObjectT<NoInfer<{
     dataDir: Schema<string, string, "defined">;
@@ -934,12 +1057,42 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         idleSeconds: Schema<number, number, "defined">;
         backgroundMessages: Schema<number, number, "defined">;
         candidatePool: Schema<number, number, "defined">;
+        gate: Schema<Schemastery.ObjectS<NoInfer<{
+            priorityMode: Schema<string, string, "defined">;
+            shapeMode: Schema<string, string, "defined">;
+            garbledMode: Schema<string, string, "defined">;
+            nearDupMode: Schema<string, string, "defined">;
+            llmFilterMode: Schema<string, string, "defined">;
+            importMinPriority: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            priorityMode: Schema<string, string, "defined">;
+            shapeMode: Schema<string, string, "defined">;
+            garbledMode: Schema<string, string, "defined">;
+            nearDupMode: Schema<string, string, "defined">;
+            llmFilterMode: Schema<string, string, "defined">;
+            importMinPriority: Schema<number, number, "defined">;
+        }>>, "plain">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         minMessages: Schema<number, number, "defined">;
         idleSeconds: Schema<number, number, "defined">;
         backgroundMessages: Schema<number, number, "defined">;
         candidatePool: Schema<number, number, "defined">;
+        gate: Schema<Schemastery.ObjectS<NoInfer<{
+            priorityMode: Schema<string, string, "defined">;
+            shapeMode: Schema<string, string, "defined">;
+            garbledMode: Schema<string, string, "defined">;
+            nearDupMode: Schema<string, string, "defined">;
+            llmFilterMode: Schema<string, string, "defined">;
+            importMinPriority: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            priorityMode: Schema<string, string, "defined">;
+            shapeMode: Schema<string, string, "defined">;
+            garbledMode: Schema<string, string, "defined">;
+            nearDupMode: Schema<string, string, "defined">;
+            llmFilterMode: Schema<string, string, "defined">;
+            importMinPriority: Schema<number, number, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     l2: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -968,10 +1121,12 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxPending: Schema<number, number, "defined">;
         timeoutDays: Schema<number, number, "defined">;
+        scopeAware: Schema<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxPending: Schema<number, number, "defined">;
         timeoutDays: Schema<number, number, "defined">;
+        scopeAware: Schema<boolean, boolean, "defined">;
     }>>, "plain">;
     recall: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -984,6 +1139,21 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: Schema<number, number, "defined">;
         decayHalfLifeDays: Schema<number, number, "defined">;
+        scopeFence: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, "plain">;
+        activation: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            missingTimestampPolicy: Schema<string, string, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            missingTimestampPolicy: Schema<string, string, "defined">;
+        }>>, "plain">;
+        decayFloorByType: Schema<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         maxResults: Schema<number, number, "defined">;
@@ -995,6 +1165,34 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         strategy: Schema<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: Schema<number, number, "defined">;
         decayHalfLifeDays: Schema<number, number, "defined">;
+        scopeFence: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            crossRepoMultiplier: Schema<number, number, "defined">;
+        }>>, "plain">;
+        activation: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            missingTimestampPolicy: Schema<string, string, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+            missingTimestampPolicy: Schema<string, string, "defined">;
+        }>>, "plain">;
+        decayFloorByType: Schema<boolean, boolean, "defined">;
+    }>>, "plain">;
+    governance: Schema<Schemastery.ObjectS<NoInfer<{
+        tier: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+        }>>, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        tier: Schema<Schemastery.ObjectS<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: Schema<boolean, boolean, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     embedding: Schema<Schemastery.ObjectS<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
@@ -1296,6 +1494,10 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
+        recallScopeFenceEnabled: Schema<boolean, boolean, "defined">;
+        recallActivationEnabled: Schema<boolean, boolean, "defined">;
+        recallDecayFloorByType: Schema<boolean, boolean, "defined">;
+        governanceTierEnabled: Schema<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: Schema<boolean, boolean, "defined">;
         capture: Schema<boolean, boolean, "defined">;
@@ -1393,6 +1595,10 @@ export declare const memorySchema: Schema<Schemastery.ObjectS<NoInfer<{
         embedRemoteDimensions: Schema<number, number, "defined">;
         memoryMutate: Schema<boolean, boolean, "defined">;
         conflictFreeze: Schema<boolean, boolean, "defined">;
+        recallScopeFenceEnabled: Schema<boolean, boolean, "defined">;
+        recallActivationEnabled: Schema<boolean, boolean, "defined">;
+        recallDecayFloorByType: Schema<boolean, boolean, "defined">;
+        governanceTierEnabled: Schema<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, "plain">;
 export declare function resolveDataDir(cfg: MemoryConfig): string;

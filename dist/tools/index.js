@@ -5,6 +5,9 @@ import { WING_CATALOG, WING_FALLBACK, normPersistence, normScope, resolveRecordS
 import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
 import { GRAPH_STATUS_LABELS } from '../prompts/graph-projection.js';
 import { redactSecrets } from '../util/redact.js';
+import { normalizeImportPriority } from '../store/priority.js';
+import { applyGovernanceWeights } from '../store/governance.js';
+import { resolveRepoScope } from '../repo-scope.js';
 const OFF_NOTICE = '本会话的记忆档位为"关闭":该会话对记忆系统完全隐身,不读取也不写入记忆。';
 const WRITE_ONLY_NOTICE = '本会话为只写模式:记忆照常沉淀,但不读取。';
 const GLOBAL_OFF_NOTICE = '记忆注入已全局停用:本会话不读取记忆(沉淀照常)。';
@@ -120,6 +123,7 @@ ruminate) {
             query: { type: 'string', required: true, description: '搜索查询文本(自然语言)' },
             limit: { type: 'number', description: '最大返回条数(默认 5)' },
             type: { type: 'string', description: '按记忆类型过滤(如 persona/episodic/instruction/work_fact/work_task/work_method/work_artifact)' },
+            includeWiki: { type: 'boolean', description: '含 tier=wiki 的降权记忆(治理 W3;默认 tier 降权生效,显式传入可绕)' },
         },
         output: {
             schema: {
@@ -158,8 +162,21 @@ ruminate) {
                 // 零漂移由 `scopeFilterOf` 一处收口保证，不靠各调用点各自判断。
                 workspaceId: scopeFilterOf(cfg.scope, exec),
             });
+            // 治理权重(治理 W1,T1.10b):工具检索出口与 recall 同款软围栏重排
+            // (spec §二组合语义:score 不改写、只换序;默认关,关闭时逐字现状)。
+            let outHits = hits;
+            if (cfg.recall.scopeFence?.enabled === true) {
+                const recordsById = new Map(stores.l1.getByIds(hits.map((h) => h.id)).map((r) => [r.id, r]));
+                // includeWiki(治理 W3,T3.9):显式要求含 wiki 降权记录时,跳过 tier 乘子
+                outHits = applyGovernanceWeights(hits, recordsById, {
+                    enabled: true,
+                    currentRepoKey: resolveRepoScope(workspaceIdOf(exec)).repoKey,
+                    crossRepoMultiplier: cfg.recall.scopeFence.crossRepoMultiplier,
+                    ...(args.includeWiki === true ? {} : { tierEnabled: cfg.governance?.tier?.enabled === true }),
+                });
+            }
             return {
-                items: hits.map((h) => ({
+                items: outHits.map((h) => ({
                     content: h.content,
                     type: h.type,
                     scene_name: h.scene_name,
@@ -308,12 +325,11 @@ ruminate) {
             metadata.conflict = true;
         if (item.rewritten === true)
             metadata.rewritten = true;
-        const priority = Number(item.priority);
         return {
             id: newMemId(),
             content,
             type,
-            priority: Number.isFinite(priority) && priority >= 0 ? Math.min(priority, 100) : 80,
+            priority: normalizeImportPriority(item.priority),
             scene_name: sceneName,
             timestamps: Array.from(new Set([validFrom ?? createdAt, createdAt, updatedAt])).sort((a, b) => a - b),
             createdAt,

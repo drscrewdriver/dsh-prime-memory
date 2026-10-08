@@ -60,6 +60,16 @@ export interface MemoryConfig {
     backgroundMessages: number;
     /** 去重候选池大小(每条新记忆的相似候选数)。 */
     candidatePool: number;
+    /** 写入门(治理升级 W1):各子门独立 off|warn|enforce,默认 off=直通零漂移。 */
+    gate: {
+      priorityMode: string;
+      shapeMode: string;
+      garbledMode: string;
+      nearDupMode: string;
+      llmFilterMode: string;
+      /** 导入路径 priority 下限(治理 T1.12:导入显式不过门,仅此下限生效;默认 0=全放)。 */
+      importMinPriority: number;
+    };
   };
   l2: {
     enabled: boolean;
@@ -93,6 +103,8 @@ export interface MemoryConfig {
     /** 超时降级(天):停放超过该天数的待裁决对在下一轮蒸馏开头被自动了结。
      *  **0 = 不做超时降级**(显式关闭,而非"立刻全部超时")。 */
     timeoutDays: number;
+    /** 队列接 scope(治理 W4,T4.2,默认关=队列查询逐字不变,I-10)。 */
+    scopeAware: boolean;
   };
   recall: {
     enabled: boolean;
@@ -113,6 +125,26 @@ export interface MemoryConfig {
     /** 时效衰减半衰期(天,0=关):score × max(0.5, 0.5^(Δ天/半衰期)),
      *  只影响相关度相近候选间的名次(老记忆最多损失一半排序分,不淘汰)。 */
     decayHalfLifeDays: number;
+    /** repo 软围栏(治理升级 W1,默认关=不减权不围栏,零漂移)。 */
+    scopeFence: {
+      enabled: boolean;
+      /** repo 不匹配时的乘子(与域门禁 0.4 叠乘 ≥0.08;软减权非硬排除)。 */
+      crossRepoMultiplier: number;
+    };
+    /** 激活老化(治理升级 W2,默认关=衰减权重逐字不变)。 */
+    activation: {
+      enabled: boolean;
+      /** 缺失时间戳策略:exempt(存量归一为 updatedAt,不按最老)| oldest(显式选沉底)。 */
+      missingTimestampPolicy: string;
+    };
+    /** 分级地板(治理升级 W2,默认关=floorOf≡0.5 逐字现状;true=按类型/优先级分档)。 */
+    decayFloorByType: boolean;
+  };
+  /** tier 检索降权(治理升级 W3,默认关=全视为 active,判据不变)。 */
+  governance: {
+    tier: {
+      enabled: boolean;
+    };
   };
   embedding: {
     /** 向量检索总开关;关闭时纯 FTS 运行。 */
@@ -264,6 +296,13 @@ export function liveSettingsSchema() {
     memoryMutate: Schema.boolean().default(false),
     // §C 人工冲突裁决总开关:默认 false(冻结消耗注意力,不可默认全开)
     conflictFreeze: Schema.boolean().default(false),
+    // ── 治理 live 键=4(治理升级,设置页可热切;与静态 config 键 OR 语义——
+    // 任一层开即生效,默认 false=零漂移。乘子/档位/策略留静态 config 不进 live,
+    // 防"调坏召回"面,ADR-0016)──
+    recallScopeFenceEnabled: Schema.boolean().default(false),
+    recallActivationEnabled: Schema.boolean().default(false),
+    recallDecayFloorByType: Schema.boolean().default(false),
+    governanceTierEnabled: Schema.boolean().default(false),
   }).volatile();
 }
 
@@ -294,6 +333,17 @@ export const memorySchema = Schema.object({
     idleSeconds: Schema.number().min(0).max(86_400).default(300),
     backgroundMessages: Schema.number().min(0).max(50).default(10),
     candidatePool: Schema.number().min(1).max(20).default(5),
+    // 写入门(治理 W1):各子门独立 mode。枚举键禁 Schema.union(P0-10:非法值
+    // 抛错=进程退出),一律 Schema.string + 消费侧 normalizeGateMode 归一。
+    gate: Schema.object({
+      priorityMode: Schema.string().default('off'),
+      shapeMode: Schema.string().default('off'),
+      garbledMode: Schema.string().default('off'),
+      nearDupMode: Schema.string().default('off'),
+      llmFilterMode: Schema.string().default('off'),
+      // 导入路径显式不过门(T1.12):仅此下限生效,0=全放
+      importMinPriority: Schema.number().min(0).max(100).default(0),
+    }),
   }),
   l2: Schema.object({
     enabled: Schema.boolean().default(true),
@@ -318,6 +368,9 @@ export const memorySchema = Schema.object({
     maxPending: Schema.number().min(0).max(10_000).default(100),
     // 30 天:足够跨过假期与项目间歇,又不至于让互相矛盾的两条记忆长期并列召回。
     timeoutDays: Schema.number().min(0).max(3650).default(30),
+    // 队列接 scope(治理 W4):默认关=零漂移;开启也必须保住"存量 global 行任何
+    // 工作区可见"(`?=''` 哨兵 OR 分支,P1-13)
+    scopeAware: Schema.boolean().default(false),
   }),
   recall: Schema.object({
     enabled: Schema.boolean().default(true),
@@ -332,6 +385,26 @@ export const memorySchema = Schema.object({
     scoreThreshold: Schema.number().min(0).max(1).default(0.3),
     // 时效衰减:乘法软加权 + 地板 0.5;0=关(bench 基线可比性可 pin 0)
     decayHalfLifeDays: Schema.number().min(0).max(3650).default(30),
+    // repo 软围栏(治理 W1):默认关=零漂移。开启也只是软减权非硬排除(P0-7:
+    // cross-project 绝不围栏,四象限不塌缩)
+    scopeFence: Schema.object({
+      enabled: Schema.boolean().default(false),
+      crossRepoMultiplier: Schema.number().min(0).max(1).default(0.2),
+    }),
+    // 激活老化(治理 W2):默认关=applyDecay 权重逐字不变。missingTimestampPolicy
+    // 枚举键禁 union(P0-10):Schema.string + 消费侧归一,非法落 exempt。
+    activation: Schema.object({
+      enabled: Schema.boolean().default(false),
+      missingTimestampPolicy: Schema.string().default('exempt'),
+    }),
+    // 分级地板(治理 W2):布尔用 Schema.boolean()(无 union 面);false=floorOf≡0.5。
+    decayFloorByType: Schema.boolean().default(false),
+  }),
+  // tier 检索降权(治理 W3):默认关=零漂移;wiki=0.05 降权保留索引,工具 includeWiki 可绕
+  governance: Schema.object({
+    tier: Schema.object({
+      enabled: Schema.boolean().default(false),
+    }),
   }),
   embedding: Schema.object({
     enabled: Schema.boolean().default(false),

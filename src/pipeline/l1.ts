@@ -23,8 +23,11 @@ import {
   validateConflictPair,
 } from '../store/conflicts.js';
 import type { ConflictPair, ConflictRejected } from '../store/conflicts.js';
-import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
+import { formatExtractionPrompt, getExtractMemoriesSystemPrompt, getQualityFilterSystemPrompt } from '../prompts/l1-extraction.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
+import { normalizePriority } from '../store/priority.js';
+import { applyLlmQualityFilter, applyWriteGate, judgeNearDupGate, normalizeGateMode, type GateRejection } from './l1-gate.js';
+import { normApplicability, resolveRepoScope } from '../repo-scope.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
 import type { L1Store } from '../store/l1.js';
 import type { MemoryState } from '../store/state.js';
@@ -130,6 +133,10 @@ type PendingMemory = ExtractedMemory & {
   /** §E 归属:write 侧已按 `resolveRecordScope` 算好,`toStoreRecord` 原样带出 */
   scope: MemoryScope;
   workspaceId: string;
+  /** 治理归属(治理 W1,T1.9/T1.10):进管线时一次算定(I-21),写时随 store 行 + JSONL 落盘。 */
+  repoKeyName: string;
+  repoKeyOwner: string;
+  applicability: string;
 };
 
 /**
@@ -150,7 +157,7 @@ function toStoreRecord(
     id: m.record_id,
     content: m.content,
     type: m.type,
-    priority: Number(m.priority) || 60,
+    priority: normalizePriority(m.priority, m.type),
     scene_name: m.scene_name,
     timestamps: [Number.isNaN(ts) ? now : ts],
     createdAt: now,
@@ -163,6 +170,12 @@ function toStoreRecord(
     family: m.family,
     scope: m.scope,
     workspaceId: m.workspaceId,
+    // 治理归属(治理 W1,T1.9/T1.10):进管线时一次算定(I-21 不得事后补录)。
+    // 缺省**不写键**——无治理归属的记录与改动前的 JSONL/DB 形状逐字一致
+    // (零形状漂移,withSourceAnchors 同款纪律);DB 侧列 DEFAULT 即标注。
+    ...(m.repoKeyName ? { repoKeyName: m.repoKeyName } : {}),
+    ...(m.repoKeyOwner ? { repoKeyOwner: m.repoKeyOwner } : {}),
+    ...(m.applicability ? { applicability: m.applicability } : {}),
     ...temporalOf(m.metadata),
   };
 }
@@ -279,6 +292,9 @@ export async function runExtraction(
   const extracted: Array<PendingMemory> = [];
   let lastScene = chainState.lastSceneName;
   let sceneCount = 0;
+  // 治理归属(治理 W1,T1.7/T1.9):repoKey=basename(归一 cwd),**进管线时一次算定**
+  // (I-21 不得事后补录)。纯字符串派生,识别失败 = ''(不围栏 fail-open)。
+  const repoScope = resolveRepoScope(workspaceId);
   // wing 打标候选(R14 归一化后的启用列表);general(跨域兜底)仅在 auto 档追加进候选
   const hallCandidates = normWingEnabled(cfg.hall?.enabled);
   const halls =
@@ -316,6 +332,12 @@ export async function runExtraction(
           // §E 归属在**进管线时**一次算定,下游(store / conflict / update / merge 各分支)
           // 一律复用它——四个分支各算一次是漏判的温床。
           ...resolveRecordScope(scopeMode, family, workspaceId),
+          // 治理归属(治理 W1,T1.9/T1.10):repoKey 一次算定;applicability 由抽取
+          // prompt 显式产出、经归一收窄——**绝不从 family 推导**(P0-7 四象限),
+          // 未声明/非法 = ''(不围栏)。
+          repoKeyName: repoScope.repoKey,
+          repoKeyOwner: '',
+          applicability: normApplicability((m as { applicability?: unknown }).applicability),
         });
       }
     }
@@ -324,6 +346,58 @@ export async function runExtraction(
   if (extracted.length === 0) {
     logger.info(`[memory] L1 抽取完成:无可提取记忆(mode=${mode},${pending.length} 条消息,${sceneCount} 个情境)`);
     // 成功但零产出:同样推进时间戳/场景,与失败(lastExtractAt 保持 0)区分开
+    markExtracted(states, mode, lastScene);
+    return { stored: 0, skipped: false, sceneName: lastScene, newRecords: [] };
+  }
+
+  // ── Step 1.5: 写入门(治理 W1,T1.2-T1.5)────────────────────────────────
+  // 插在抽取之后、去重之前:priority 门判**原始值**(在 toStoreRecord 的 `||60`
+  // 强转之前,P0-5)。全子门 off 时 applyWriteGate 逐字返回输入(零漂移,I-10)。
+  // 丢弃/告警全部留痕(T1.6),留痕落库在下方凭证块之后(需要 runId)。
+  const gateRejections: GateRejection[] = [];
+  {
+    const gateCfg = cfg.extract.gate ?? {};
+    const mechanical = applyWriteGate(extracted, gateCfg);
+    gateRejections.push(...mechanical.rejections);
+    if (mechanical.kept.length !== extracted.length) {
+      extracted.length = 0;
+      extracted.push(...mechanical.kept);
+    }
+    // 可选 LLM 质量过滤(T1.5):默认 off;LLM 不可用/超时/判不了 → fail-open 全放行。
+    const llm = await applyLlmQualityFilter(
+      extracted,
+      async (batch) => {
+        const user = batch.map((m) => `- ${m.record_id}\t[${String(m.type ?? '?')}] ${m.content}`).join('\n');
+        const raw = await callLLM(ctx, cfg, {
+          system: getQualityFilterSystemPrompt(),
+          user,
+          maxTokens: Math.min(4096, resolveLayerTokens(cfg, 'extract')),
+          layer: 'l1-extract',
+          logger,
+        });
+        const dropIds = parseJsonLogged<unknown[]>(raw, '写入门质量过滤', logger);
+        const dropSet = new Set(Array.isArray(dropIds) ? dropIds.filter((x): x is string => typeof x === 'string') : []);
+        return new Map(batch.map((m) => [m.record_id, dropSet.has(m.record_id) ? ('drop' as const) : ('keep' as const)]));
+      },
+      gateCfg.llmFilterMode,
+    );
+    gateRejections.push(...llm.rejections);
+    if (llm.rejections.length > 0) {
+      const keepSet = llm.keepIds;
+      for (let i = extracted.length - 1; i >= 0; i--) {
+        if (!keepSet.has(extracted[i].record_id)) extracted.splice(i, 1);
+      }
+    }
+    if (gateRejections.length > 0) {
+      const enforced = gateRejections.filter((r) => r.mode === 'enforce').length;
+      logger.info(
+        `[memory] 写入门:${gateRejections.length} 条留痕(丢弃 ${enforced},告警 ${gateRejections.length - enforced})` +
+          `,剩余 ${extracted.length} 条进入去重`,
+      );
+    }
+  }
+  if (extracted.length === 0) {
+    logger.info('[memory] 写入门后无可提取记忆(全部被丢弃/告警)');
     markExtracted(states, mode, lastScene);
     return { stored: 0, skipped: false, sceneName: lastScene, newRecords: [] };
   }
@@ -383,6 +457,14 @@ export async function runExtraction(
     }));
     const rows = buildReceipts(runId, new Date().toISOString(), items);
     persistReceiptsSafely((rows) => store.recordReceipts(rows), rows, logger);
+    // 写入门留痕落库(治理 W1,T1.6):旁路设施,recordGateRejections 内部吞错不中断
+    if (gateRejections.length > 0) {
+      try {
+        store.recordGateRejections(gateRejections, runId);
+      } catch (err) {
+        logger.warn(`[memory] 写入门留痕落库失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     // §F 追踪捎带:六值决策词表聚合(与凭证同源,runner 侧并入 distill_run 事件)
     byKind = rows.reduce<Record<string, number>>((acc, r) => {
       acc[r.kind] = (acc[r.kind] ?? 0) + 1;
@@ -400,6 +482,8 @@ export async function runExtraction(
     for (const c of m.candidates) relatedIds.add(c.id);
   }
   const byId = new Map(store.getByIds([...relatedIds]).map((r) => [r.id, r]));
+  // 近重复门(T1.4)候选索引:与 matches 同源(matches 与 gate 后的 extracted 同长同序)。
+  const candidatesByRecordId = new Map(matches.map((x) => [x.newMemory.record_id, x.candidates]));
   /**
    * 本批次**全部**新记忆的 record_id。两个用途:
    * ① 作为 `validateConflictPair` 的对手集之一 —— 同批次两条新记忆互相矛盾时,
@@ -431,6 +515,27 @@ export async function runExtraction(
     const ts = m.metadata?.activity_start_time ? Date.parse(String(m.metadata.activity_start_time)) : now;
 
     if (action === 'store') {
+      // 近重复二次拦截(治理 W1,T1.4):**放 LLM 去重之后**、只对判 store 的条目——
+      // LLM 说"无相似旧记录"但词面高度重合时,确定性判据在此兜一道。职责与
+      // l1-dedup 的 LLM 判定刻意分离:这里只做同形拦截,不重新裁决语义。
+      const nearDupMode = normalizeGateMode(cfg.extract.gate?.nearDupMode);
+      if (nearDupMode !== 'off') {
+        const verdict = judgeNearDupGate(
+          m.content,
+          (candidatesByRecordId.get(m.record_id) ?? []).map((c) => c.content),
+        );
+        if (!verdict.pass) {
+          gateRejections.push({
+            recordId: m.record_id,
+            gate: 'nearDup',
+            mode: nearDupMode,
+            priorityRaw: m.priority === undefined || m.priority === null ? '' : String(m.priority),
+            reason: verdict.reason,
+            contentChars: m.content.length,
+          });
+          if (nearDupMode === 'enforce') continue;
+        }
+      }
       added.push(toStoreRecord(m, now, ts, anchorMap));
       continue;
     }
@@ -562,7 +667,7 @@ export async function runExtraction(
           ? decision.merged_content
           : m.content,
       type: decision.merged_type || m.type,
-      priority: Number(decision.merged_priority) || Number(m.priority) || 60,
+      priority: Number(decision.merged_priority) || normalizePriority(m.priority, m.type),
       scene_name: m.scene_name,
       timestamps: Array.from(new Set(mergedTs)).sort((a, b) => a - b),
       createdAt: now,

@@ -53,6 +53,11 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'embedRemoteModel',
   'embedRemoteDimensions',
   'memoryMutate',
+  // 治理升级(live 键=4,与静态 config 键 OR 语义;ADR-0016/0017)
+  'recallScopeFenceEnabled',
+  'recallActivationEnabled',
+  'recallDecayFloorByType',
+  'governanceTierEnabled',
 ] as const;
 
 /** 端点全集(40 个;含 records-delete / 图谱两端点 / receipts / §C 冲突队列读写+丢弃留痕三端点 / ruminate 三端点 / 退场与快照五端点)。 */
@@ -100,6 +105,13 @@ const ENDPOINTS = [
   'dsh-memory/cleanup-retired',
   'dsh-memory/snapshots-list',
   'dsh-memory/snapshot-restore',
+  'dsh-memory/write-gate-stats',
+  'dsh-memory/records-mark-adopted',
+  'dsh-memory/records-export-csv',
+  'dsh-memory/records-verdict-preview',
+  'dsh-memory/records-apply-verdicts',
+  'dsh-memory/conflict-batch-apply',
+  'dsh-memory/conflict-batch-undo',
 ] as const;
 
 describe('effort vocabulary', () => {
@@ -141,9 +153,9 @@ describe('wing catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 43 contracted endpoints, records-delete and graph included', () => {
-    expect(ENDPOINTS.length).toBe(43);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(43);
+  it('exposes exactly the 50 contracted endpoints, records-delete and graph included', () => {
+    expect(ENDPOINTS.length).toBe(50);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(50);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
@@ -180,7 +192,7 @@ describe('endpoint surface', () => {
 
 describe('memory live settings key registry', () => {
   it('registers 19 keys incl. the v0.9.0 reverse-engineered ones', () => {
-    expect(MEMORY_LIVE_SETTINGS_KEYS.length).toBe(19);
+    expect(MEMORY_LIVE_SETTINGS_KEYS.length).toBe(23);
     for (const k of ['embedRemoteBaseURL', 'embedRemoteApiKey', 'embedRemoteModel', 'embedRemoteDimensions', 'memoryMutate']) {
       expect(MEMORY_LIVE_SETTINGS_KEYS).toContain(k);
     }

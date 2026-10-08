@@ -95,6 +95,17 @@ export class SceneStore {
     return safe;
   }
 
+  /** 原样读场景文件(重聚类回滚快照用,治理 W3);不存在/非法名返回 null。 */
+  async readRaw(name: string): Promise<string | null> {
+    const safe = sanitizeFilename(name);
+    if (!safe) return null;
+    try {
+      return await fs.readFile(path.join(this.dir, safe), 'utf8');
+    } catch {
+      return null;
+    }
+  }
+
   /** 场景导航索引(召回注入用)。 */
   async navigation(): Promise<string> {
     const scenes = await this.list();

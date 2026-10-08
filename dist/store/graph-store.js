@@ -23,6 +23,7 @@ import { searchGraphNodes } from '../graph/search.js';
 import { GRAPH_JOB_BACKOFF_BASE_MS, GRAPH_JOB_BATCH, GRAPH_JOB_MAX_ATTEMPTS, GRAPH_PRIORITY_BACKFILL, GRAPH_PROJECTOR_VERSION, } from '../graph/types.js';
 import { normPersistence } from '../types.js';
 import { isZeroVector, vecToBuffer } from './vec-utils.js';
+import { normalizeStoredPriority } from './priority.js';
 const TAG = '[memory][graph]';
 /** 坏 JSON 容忍解析:图谱表列损坏只损失该行派生信息,不抛。 */
 function parseJsonSafe(raw, fallback) {
@@ -42,7 +43,7 @@ function rowToRecord(r) {
         id: String(r.record_id),
         content: String(r.content),
         type: String(r.type ?? ''),
-        priority: Number(r.priority ?? 50),
+        priority: normalizeStoredPriority(r.priority),
         scene_name: String(r.scene_name ?? ''),
         timestamps: String(r.timestamp_str ?? '')
             .split(',')

@@ -45,12 +45,42 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         idleSeconds: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         backgroundMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         candidatePool: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        gate: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            priorityMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            shapeMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            garbledMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            nearDupMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            llmFilterMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            importMinPriority: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            priorityMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            shapeMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            garbledMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            nearDupMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            llmFilterMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            importMinPriority: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         minMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         idleSeconds: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         backgroundMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         candidatePool: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        gate: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            priorityMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            shapeMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            garbledMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            nearDupMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            llmFilterMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            importMinPriority: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            priorityMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            shapeMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            garbledMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            nearDupMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            llmFilterMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            importMinPriority: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     l2: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -79,10 +109,12 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         timeoutDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeAware: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         timeoutDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeAware: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, "plain">;
     recall: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -95,6 +127,21 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeFence: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
+        activation: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            missingTimestampPolicy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            missingTimestampPolicy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+        }>>, "plain">;
+        decayFloorByType: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxResults: import("@deepseek-ai/schemastery").default<number, number, "defined">;
@@ -106,6 +153,34 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeFence: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
+        activation: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            missingTimestampPolicy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            missingTimestampPolicy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+        }>>, "plain">;
+        decayFloorByType: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+    }>>, "plain">;
+    governance: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+        tier: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        }>>, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        tier: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     embedding: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -407,6 +482,10 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallScopeFenceEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallActivationEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallDecayFloorByType: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        governanceTierEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         capture: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -504,6 +583,10 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallScopeFenceEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallActivationEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallDecayFloorByType: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        governanceTierEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, Schemastery.ObjectT<NoInfer<{
     dataDir: import("@deepseek-ai/schemastery").default<string, string, "defined">;
@@ -535,12 +618,42 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         idleSeconds: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         backgroundMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         candidatePool: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        gate: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            priorityMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            shapeMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            garbledMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            nearDupMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            llmFilterMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            importMinPriority: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            priorityMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            shapeMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            garbledMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            nearDupMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            llmFilterMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            importMinPriority: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         minMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         idleSeconds: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         backgroundMessages: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         candidatePool: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        gate: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            priorityMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            shapeMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            garbledMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            nearDupMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            llmFilterMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            importMinPriority: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            priorityMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            shapeMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            garbledMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            nearDupMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            llmFilterMode: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+            importMinPriority: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     l2: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -569,10 +682,12 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         timeoutDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeAware: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxPending: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         timeoutDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeAware: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, "plain">;
     recall: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -585,6 +700,21 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeFence: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
+        activation: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            missingTimestampPolicy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            missingTimestampPolicy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+        }>>, "plain">;
+        decayFloorByType: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>, Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         maxResults: import("@deepseek-ai/schemastery").default<number, number, "defined">;
@@ -596,6 +726,34 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         strategy: import("@deepseek-ai/schemastery").default<"hybrid" | "keyword" | "embedding", "hybrid" | "keyword" | "embedding", "defined">;
         scoreThreshold: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         decayHalfLifeDays: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        scopeFence: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            crossRepoMultiplier: import("@deepseek-ai/schemastery").default<number, number, "defined">;
+        }>>, "plain">;
+        activation: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            missingTimestampPolicy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+            missingTimestampPolicy: import("@deepseek-ai/schemastery").default<string, string, "defined">;
+        }>>, "plain">;
+        decayFloorByType: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+    }>>, "plain">;
+    governance: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+        tier: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        }>>, "plain">;
+    }>>, Schemastery.ObjectT<NoInfer<{
+        tier: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        }>>, Schemastery.ObjectT<NoInfer<{
+            enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        }>>, "plain">;
     }>>, "plain">;
     embedding: import("@deepseek-ai/schemastery").default<Schemastery.ObjectS<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -897,6 +1055,10 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallScopeFenceEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallActivationEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallDecayFloorByType: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        governanceTierEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, NoInfer<Schemastery.ObjectT<NoInfer<{
         enabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         capture: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
@@ -994,6 +1156,10 @@ export declare const Config: import("@deepseek-ai/schemastery").default<Schemast
         embedRemoteDimensions: import("@deepseek-ai/schemastery").default<number, number, "defined">;
         memoryMutate: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
         conflictFreeze: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallScopeFenceEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallActivationEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        recallDecayFloorByType: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
+        governanceTierEnabled: import("@deepseek-ai/schemastery").default<boolean, boolean, "defined">;
     }>>>, "volatile">;
 }>>, "plain">;
 export declare function apply(ctx: Context, config: MemoryConfig): Promise<void>;

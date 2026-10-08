@@ -510,6 +510,20 @@ Features under planning — feedback and priorities welcome in the
 - [ ] **Git branch awareness**: associate memories with the current git branch; recall can filter/boost by branch (orthogonal to the existing memory modes)
 - [ ] **Claude Code / Codex memory import**: one-click migration of existing memory assets (`CLAUDE.md`, Claude Code memory files, Codex `AGENTS.md`, etc.), fed into the layered distillation pipeline
 
+## Memory Governance
+
+dsh-prime-memory ships a governance suite that is **off by default** (toggle hot in the settings panel):
+
+- **Write gate** (`extract.gate.*Mode`, off|warn|enforce): priority/shape/garbled/near-duplicate gates plus optional LLM quality filter; `warn` records without dropping; every drop/warning is receipted and queryable via `dsh-memory/write-gate-stats`.
+- **Repo soft fence** (`recall.scopeFence.enabled`): work-family memories are attributed to their producing repo (basename of cwd); cross-repo recall is **down-weighted, never deleted**; `applicability='cross-project'` is never fenced.
+- **Activation aging** (`recall.activation.enabled`): passive injection counters plus a manual "this helped" mark (resets the decay anchor); boost is clamped ≤1 so score scale never changes.
+- **Graded decay floor** (`recall.decayFloorByType`): per-type/priority floors (instruction 0.9 / low-priority 0.2 / …); off = flat 0.5.
+- **Tier demotion** (`governance.tier.enabled`): `wiki` tier is down-weighted on recall but kept indexed; `memory_search includeWiki` bypasses; rebuilds preserve tier.
+- **CSV batch verdicts**: `dsh-memory/records-export-csv` exports a copy → edit offline → `records-apply-verdicts` applies (**omitting dryRun means dry-run**; a snapshot is taken before execution with per-row optimistic concurrency); conflict-batch rulings are explicitly undoable (`conflict-batch-undo`).
+
+See `docs/adr/0014`–`0019` for the decision records.
+
+
 ## License
 
 [MIT](LICENSE)

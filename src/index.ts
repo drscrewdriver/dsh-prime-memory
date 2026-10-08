@@ -162,8 +162,15 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   initTokenCost(db, config.tokenCost.retentionDays);
   // §F 追踪(trace.enabled=false 时保持未初始化,埋点零副作用)
   if (config.trace?.enabled) initTraceStore(dataDir, { retentionDays: config.trace.retentionDays });
-  // 插件卸载时关闭连接(WAL 落盘),注册一次即可
-  ctx.effect(() => () => db.close());
+  // 插件卸载时关闭连接(WAL 落盘),注册一次即可;
+  // 治理 W2:先刷激活聚合增量(退出钩子兜底,T2.2),再关库。
+  let l1StoreRef: { dispose(): void } | undefined;
+  ctx.effect(() => () => {
+    try {
+      l1StoreRef?.dispose();
+    } catch { /* 停机路径吞错 */ }
+    db.close();
+  });
 
   let dbInit: StoreInitResult = { needsReindex: false };
   if (storageOk) {
@@ -192,6 +199,15 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       config.recall.decayHalfLifeDays,
       // §D 第 3 路:图谱回链。图谱不可用时 searchNodes 自带 no-op,不影响双路。
       (query, limit, family) => db.graphStore.searchNodes(query, limit, family ? [family] : undefined),
+      // 治理开关(治理 W2/T5.3):resolver=静态 config **OR** live 键——
+      // 任一层开即生效;全 false=逐字现状。live 键设置页可热切。
+      {
+        activationEnabled: () =>
+          config.recall.activation?.enabled === true || (live.get().recallActivationEnabled === true),
+        decayFloorByType: () =>
+          config.recall.decayFloorByType === true || (live.get().recallDecayFloorByType === true),
+        missingTimestampPolicy: config.recall.activation?.missingTimestampPolicy,
+      },
     ),
     // L2/L3 分族隔离:各自目录与文件(scenes/chat|work、persona-chat|work.md)
     scenes: {
@@ -218,6 +234,8 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     // 后台记忆后端:初始化完成后填充(worker 隔离,失败则进程内)
     backend: undefined as MemoryBackend | undefined,
   };
+  // 治理 W2:停机时刷激活聚合增量(退出钩子兜底,T2.2)
+  l1StoreRef = stores.l1;
   if (storageOk) {
     try {
       await Promise.all([

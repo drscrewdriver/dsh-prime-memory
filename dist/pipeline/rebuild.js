@@ -24,7 +24,7 @@ import { snapshotBeforeClear } from '../store/l1-snapshot.js';
 import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
-import { describePlan, gateClear, planPreserve, readFactSource, restorePreserved } from './rebuild-preserve.js';
+import { captureGovernanceAttribution, describePlan, gateClear, planPreserve, readFactSource, reapplyGovernanceAttribution, restorePreserved } from './rebuild-preserve.js';
 import { effectiveCfg } from './runner.js';
 export function groupL0Sessions(records) {
     const bySession = new Map();
@@ -88,6 +88,8 @@ export class RebuildController {
     logger;
     live;
     status = idleStatus();
+    /** 治理归属快照(T3.12):捕获于清空前,回填于重建收尾。 */
+    governanceAttr = null;
     chunks = [];
     cancelRequested = false;
     /** 快照时刻(收尾时按它区分重建产物与重建后新对话的记录)。 */
@@ -177,6 +179,10 @@ export class RebuildController {
             const archiveNote = await this.archiveDerived();
             this.status.archiveNote = archiveNote ?? null;
             // ── ⑤ 清检索库 + 重置 checkpoint;归档后重建空目录(records/ 由 appendNew 自动重建)──
+            // 治理归属捕获(治理 W3,T3.12/P1-8):清空前记下 tier/repo/applicability,
+            // 重建完成后按 record_id/内容哈希对账回填——被降级(wiki)的记录不得以
+            // active 态复活。保留集(无来源)本来就整条恢复,不受此影响。
+            this.governanceAttr = captureGovernanceAttribution(this.stores.l1.all());
             if (!this.db.clearL1())
                 throw new Error('L1 检索库清空失败');
             // ── ⑥ 把无来源记忆放回:清空后立刻、且在首块蒸馏之前 ——
@@ -271,6 +277,22 @@ export class RebuildController {
                         this.logger.warn(`[memory] 重建收尾 L3 失败(family=${family}): ${errDetail(err)}`);
                     }
                 }
+            }
+            // 治理归属回填(治理 W3,T3.12):id 命中优先、内容哈希兜底;未命中的
+            // (LLM 重抽措辞变了)如实计数并 warn——它们仍在重建前快照里可人工找回。
+            try {
+                const attr = this.governanceAttr;
+                if (!attr)
+                    throw new Error('治理归属快照缺失(不应发生:捕获于清空前)');
+                const reapplied = reapplyGovernanceAttribution(this.stores.l1, attr);
+                const missed = attr.byId.size + attr.byHash.size - reapplied.byId - reapplied.byHash;
+                if (attr.byId.size + attr.byHash.size > 0) {
+                    this.logger.info(`[memory] 治理归属回填:id 命中 ${reapplied.byId},内容哈希命中 ${reapplied.byHash}` +
+                        (missed > 0 ? `,未命中 ${missed} 条(重抽内容已变,可由重建前快照人工找回)` : ''));
+                }
+            }
+            catch (err) {
+                this.logger.warn(`[memory] 治理归属回填失败(不影响重建产物): ${errDetail(err)}`);
             }
             await this.stores.state.save();
             this.finish(this.cancelRequested ? 'cancelled' : 'done', null);

@@ -5,7 +5,7 @@ import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolu
 import { type SupersedeInfo } from './supersede.js';
 import { type ExportThenPurgeResult, type RestoreResult, type SnapshotRestorePlan, type SnapshotSummary } from './l1-snapshot.js';
 import { type EmbeddingService } from './embedding.js';
-import { type L1MetaLite, type MemoryDb } from './sqlite.js';
+import { type GateRejectionRow, type L1MetaLite, type MemoryDb } from './sqlite.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
 /**
  * 图谱路提供者(§D 第 3 路):按查询返回图谱命中(已按 score 降序)。
@@ -67,7 +67,70 @@ export declare class L1Store {
     /** 时效衰减半衰期(天;0=关)。缺省 30 与 config 默认一致。 */
     decayHalfLifeDays?: number, 
     /** 图谱路提供者(§D 第 3 路);不传则该路不存在,融合退回双路。 */
-    graphLane?: GraphLaneProvider);
+    graphLane?: GraphLaneProvider, 
+    /** 治理开关(治理 W2,T2.5/T2.6):全缺省 = 逐字现状;传 resolver 函数支持热切(live 键)。 */
+    governance?: {
+        activationEnabled?: boolean | (() => boolean);
+        decayFloorByType?: boolean | (() => boolean);
+        missingTimestampPolicy?: string;
+    });
+    /** 治理开关 resolver(治理 W2/T5.3;支持 live 热切)。 */
+    private readonly activationFn;
+    private readonly floorByTypeFn;
+    /** 激活聚合器(懒创建:首次需要时建;null 尚未创建)。 */
+    private activation;
+    /** 分级地板开关(治理 W2,T2.6;false = floorOf≡DECAY_FLOOR 逐字现状)。 */
+    private get decayFloorByType();
+    private get activationReady();
+    /** 缺失时间戳策略(治理 W2;exempt=归一 updatedAt 不沉底,oldest=显式选沉底)。 */
+    private readonly missingTimestampPolicy;
+    /**
+     * 注入计数接线(治理 W2,T2.3):召回注入后对注入 id 计一次。
+     * 纯内存聚合,零 I/O;激活关 = no-op(结构性,不是运行时判断)。
+     */
+    trackInjections(ids: readonly string[]): void;
+    /** 人工采用标记(治理 W2,T2.4/O-2):`records-mark-adopted` 端点入口。重置衰减锚点。 */
+    markAdopted(ids: readonly string[]): number;
+    /** 激活聚合器懒创建(live 键热切,治理 T5.3):首次为真时建。 */
+    private ensureActivation;
+    /** 退出钩子兜底(治理 W2,T2.2):刷掉未落盘的聚合增量后停机。 */
+    dispose(): void;
+    /** 库目录(治理服务落快照用)。 */
+    dataDirOf(): string;
+    /** 执行前可信快照(治理 W3,T3.4/I-14:requireSnapshot 常量 true 的落点)。 */
+    createGovernanceSnapshot(reason: string, now?: Date): Promise<string>;
+    /** 激活直写(治理 W3,verdict mark-adopted 路由;绕过聚合器,立即落盘)。 */
+    bumpActivationDirect(id: string, delta: {
+        injection?: number;
+        adopted?: number;
+        anchorAt?: string;
+    }): void;
+    /** tier CAS 写入口(T3.3)。 */
+    setTier(id: string, tier: 'active' | 'wiki', expectTier?: 'active' | 'wiki'): number;
+    /** repo 归属修补(T3.3)。 */
+    patchRepoKey(id: string, patch: {
+        repoKeyName?: string;
+        repoKeyOwner?: string;
+    }, expectRepoKeyName?: string): number;
+    /** 批次 id 落库(T3.6)。 */
+    setConflictBatchId(pairIds: readonly string[], batchId: string): number;
+    /** 批次撤销(T3.6/ADR-0018;败方恢复走 restore 补向量)。 */
+    undoConflictBatch(batchId: string): Promise<number>;
+    /** L2 重聚类作业(T3.10)。 */
+    /** 重建后治理归属回填(治理 W3,T3.12)。 */
+    restoreGovernanceAttribution(id: string, a: {
+        tier?: 'active' | 'wiki';
+        repoKeyName?: string;
+        repoKeyOwner?: string;
+        applicability?: string;
+    }): number;
+    enqueueSceneRecluster(family: string, sceneNames: readonly string[], batchId: string): string;
+    claimSceneRecluster(): {
+        jobId: string;
+        family: string;
+        sceneNames: string[];
+    } | null;
+    finishSceneRecluster(jobId: string, ok: boolean): void;
     init(): Promise<void>;
     /** 旧版单文件 records.jsonl 一次性导入检索库,成功后改名 .imported。 */
     private importLegacy;
@@ -97,6 +160,21 @@ export declare class L1Store {
      * 测试只需替换这一个方法就能模拟落盘故障,不必伪造整个 store。
      */
     recordReceipts(rows: readonly L1Receipt[]): number;
+    /** 写入门留痕落盘(治理 W1,T1.6;与 recordReceipts 同理由的薄缝,内部吞错不中断)。 */
+    recordGateRejections(rows: readonly GateRejectionRow[], runId: string): number;
+    /** 写入门统计读缝(治理 W1,端点 write-gate-stats 用)。 */
+    gateRejectionStats(limit?: number): {
+        byGate: Array<{
+            gate: string;
+            mode: string;
+            count: number;
+        }>;
+        total: number;
+        recent: Array<GateRejectionRow & {
+            runId: string;
+            decidedAt: string;
+        }>;
+    };
     /**
      * §B 双维回溯的读缝(task_19)。与 `recordReceipts` 同理由:
      * 工具层与 RPC 层只认 L1Store,不直连 `db`——保持"检索库的入口只有一处"
@@ -280,6 +358,12 @@ export declare class L1Store {
      * 时效衰减加权(#29):三路共用的读路径后处理——阈值过滤之后、截断之前
      * (才能轮转名额,而不只是重排已截断的集合)。updated_at 经主表批量点查
      * 回填(FTS 表无该列;候选池 ≤ limit×3 条主键查询,微秒级)。关闭时零开销。
+     *
+     * 治理 W2(T2.5/T2.6):两个扩展位搭同一批取数——
+     * - 分级地板(decayFloorByType=true):floorOf 按 rec.type/priority 分档;
+     * - 激活抬升(activation.enabled):anchorAt=decayAnchorAt??updatedAt(P1-12 缺省
+     *   不按最老),boost=min(0.3, log1p(inj)×0.05+log1p(adp)×0.15)。
+     * 两开关全关时 opts 全缺省 → 与升级前**逐字等价**(I-10)。
      */
     private applyDecay;
     /** 浏览列表(UI 用):无关键词时按更新时间倒序分页,支持 Hall / 可见范围过滤。 */

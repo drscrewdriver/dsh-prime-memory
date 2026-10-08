@@ -344,18 +344,127 @@ export function renderInjectionLines(m) {
   ];
 }
 
+// ── 治理召回集差分（治理升级 Wave 0，T0.5）───────────────────────────────
+// 动机：治理旋钮（围栏/老化/地板/tier）的验收手段（计划 P1-3/C3：当前 bench
+// 对机制 2/3/4 验证能力为零）。两个运行目录（对照臂=旋钮全关、处置臂=旋钮开）
+// 同 rep 配对、同探针集、同受控复现口径，比对 top-K **id 集合**：
+//   Jaccard = |on ∩ off| / |on ∪ off|（整体重合度；全关对照应恒为 1）
+//   精确率   = |on ∩ off| / |on| （处置臂召回里多少是对照也认的）
+//   召回率   = |on ∩ off| / |off|（对照的召回有多少在处置臂存活——围栏"挤出"
+//              同 repo 记忆时会下跌，这正是要量化的治理代价）
+
+/** 单 rep 配对差分累计器（跨 rep 合并前的形状）。 */
+function emptyDiff() {
+  return { reps: 0, probes: 0, skippedEmpty: 0, jaccard: 0, precision: 0, recall: 0, identical: 0, perType: new Map() };
+}
+
+/** 两运行目录的召回集差分（rep-N 一一配对；缺侧 rep 跳过并在结果中计数）。 */
+export function recallSetDiffForRuns(baseDir, treatDir) {
+  const d = emptyDiff();
+  d.missingRepPairs = 0;
+  for (const rep of listReps(baseDir)) {
+    const treatRep = path.join(treatDir, rep);
+    if (!fs.existsSync(path.join(treatRep, 'memory', 'memory.db'))) { d.missingRepPairs++; continue; }
+    const baseDbPath = path.join(baseDir, rep, 'memory', 'memory.db');
+    const treatDbPath = path.join(treatRep, 'memory', 'memory.db');
+    if (!fs.existsSync(baseDbPath)) { d.missingRepPairs++; continue; }
+    const result = readResult(baseDir, rep);
+    if (!result) continue;
+    let baseDb = null;
+    let treatDb = null;
+    try {
+      baseDb = new DatabaseSync(baseDbPath);
+      treatDb = new DatabaseSync(treatDbPath);
+      d.reps++;
+      for (const sc of result.scenarios ?? []) {
+        if (sc.kind === 'workflow') continue;
+        for (const p of sc.probes ?? []) {
+          if (!p.q) continue;
+          const off = new Set(keywordSearch(baseDb, p.q).map((h) => h.id));
+          const on = new Set(keywordSearch(treatDb, p.q).map((h) => h.id));
+          if (off.size === 0 && on.size === 0) { d.skippedEmpty++; continue; } // 两侧都空：无差分信号
+          let inter = 0;
+          for (const id of on) if (off.has(id)) inter++;
+          const union = off.size + on.size - inter;
+          d.probes++;
+          d.jaccard += union > 0 ? inter / union : 1;
+          d.precision += on.size > 0 ? inter / on.size : 1;
+          d.recall += off.size > 0 ? inter / off.size : 1;
+          if (inter === on.size && inter === off.size) d.identical++;
+          const bucket = d.perType.get(p.type) ?? { probes: 0, jaccard: 0 };
+          bucket.probes++;
+          bucket.jaccard += union > 0 ? inter / union : 1;
+          d.perType.set(p.type, bucket);
+        }
+      }
+    } catch (err) {
+      console.error(`[diff] ${baseDir}/${rep} ↔ ${treatDir}/${rep} 差分失败（跳过该 rep）：${err?.message ?? err}`);
+    } finally {
+      try { baseDb?.close(); } catch { /* 忽略 */ }
+      try { treatDb?.close(); } catch { /* 忽略 */ }
+    }
+  }
+  return d;
+}
+
+const avgOf = (sum, n) => (n > 0 ? sum / n : null);
+const pctOrNull = (v) => (v == null ? '-' : `${(v * 100).toFixed(1)}%`);
+
+/** 渲染「召回集差分」markdown 小节（对照臂 off vs 处置臂 on）。 */
+export function renderRecallSetDiff(d, baseLabel = '对照臂(全关)', treatLabel = '处置臂(开)') {
+  const lines = [];
+  if (d.probes === 0) {
+    lines.push(`（无可配对 rep/探针：需要两侧都有 memory/memory.db 且场景含探针${d.missingRepPairs > 0 ? `；${d.missingRepPairs} 对 rep 缺侧跳过` : ''}）`);
+    return lines;
+  }
+  const j = avgOf(d.jaccard, d.probes);
+  const pr = avgOf(d.precision, d.probes);
+  const re = avgOf(d.recall, d.probes);
+  lines.push(`### 召回集差分（${d.reps} 对 rep，${d.probes} 题配对${d.skippedEmpty > 0 ? `，${d.skippedEmpty} 题两侧皆空跳过` : ''}${d.missingRepPairs > 0 ? `，${d.missingRepPairs} 对 rep 缺侧跳过` : ''}）`);
+  lines.push('');
+  lines.push('| 指标 | 值 | 口径 |');
+  lines.push('|---|---|---|');
+  lines.push(`| Jaccard | **${pctOrNull(j)}** | \\|on ∩ off\\| / \\|on ∪ off\\|（${treatLabel} vs ${baseLabel}，top-5 id 集合） |`);
+  lines.push(`| 精确率 | **${pctOrNull(pr)}** | \\|on ∩ off\\| / \\|on\\|（处置臂召回的可信占比） |`);
+  lines.push(`| 召回率 | **${pctOrNull(re)}** | \\|on ∩ off\\| / \\|off\\|（对照召回的存活率——治理挤出直接反映在这里） |`);
+  lines.push(`| 逐题全同 | ${d.identical}/${d.probes} | 两侧 top-5 完全一致的题数 |`);
+  lines.push('');
+  if (d.perType.size > 0) {
+    lines.push('| 题型 | 题数 | Jaccard 均值 |');
+    lines.push('|---|---|---|');
+    for (const [type, b] of [...d.perType.entries()].sort((a, b) => b[1].probes - a[1].probes)) {
+      lines.push(`| ${type} | ${b.probes} | ${pctOrNull(avgOf(b.jaccard, b.probes))} |`);
+    }
+    lines.push('');
+  }
+  lines.push('> 口径边界：受控复现 FTS-only（同 recall@5 小节）；治理权重只作用读召回路径时，');
+  lines.push('> 全关 vs 机械门+graded 等对照组的差分应接近 1/全同——显著偏离即治理改写了召回集。');
+  return lines;
+}
+
 // ── CLI ──
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'))) {
   const floodArgIdx = process.argv.indexOf('--flood');
   const floodLevels = floodArgIdx !== -1
     ? String(process.argv[floodArgIdx + 1] ?? '').split(',').map((x) => Math.max(0, Number(x) || 0)).filter((x) => Number.isFinite(x))
     : null;
-  const dirs = process.argv.slice(2).filter((a) => !a.startsWith('--') && a !== (floodArgIdx !== -1 ? process.argv[floodArgIdx + 1] : undefined));
-  if (dirs.length === 0) {
-    console.error('用法：node bench/harness/retrieval-metrics.mjs <runDir...> [--flood N1,N2,…]');
+  const diffArgIdx = process.argv.indexOf('--diff');
+  const dirs = process.argv.slice(2).filter((a) => !a.startsWith('--') && a !== (floodArgIdx !== -1 ? process.argv[floodArgIdx + 1] : undefined) && a !== (diffArgIdx !== -1 ? process.argv[diffArgIdx + 1] : undefined) && a !== (diffArgIdx !== -1 ? process.argv[diffArgIdx + 2] : undefined));
+  if (diffArgIdx !== -1) {
+    // 治理召回集差分模式：--diff <对照臂runDir> <处置臂runDir>
+    const baseDir = process.argv[diffArgIdx + 1];
+    const treatDir = process.argv[diffArgIdx + 2];
+    if (!baseDir || !treatDir) {
+      console.error('用法：node bench/harness/retrieval-metrics.mjs --diff <对照臂runDir> <处置臂runDir>');
+      process.exit(2);
+    }
+    const d = recallSetDiffForRuns(baseDir, treatDir);
+    console.log(`\n## ${path.basename(baseDir)} ↔ ${path.basename(treatDir)} 召回集差分\n`);
+    console.log(renderRecallSetDiff(d).join('\n'));
+  } else if (dirs.length === 0) {
+    console.error('用法：node bench/harness/retrieval-metrics.mjs <runDir...> [--flood N1,N2,…] [--diff <对照runDir> <处置runDir>]');
     process.exit(2);
-  }
-  if (floodLevels) {
+  } else if (floodLevels) {
     // 规模退化曲线模式：复制库灌水，不动原库
     const levels = [...new Set([0, ...floodLevels])].sort((a, b) => a - b);
     for (const dir of dirs) {

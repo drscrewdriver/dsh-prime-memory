@@ -32,6 +32,24 @@ export interface L1SearchHit {
 export interface L0SearchHit extends L0MessageRecord {
     score: number;
 }
+/** 写入门留痕行(治理 W1,T1.6;与 pipeline/l1-gate.ts 的 GateRejection 结构同形)。 */
+export interface GateRejectionRow {
+    recordId: string;
+    gate: string;
+    mode: string;
+    priorityRaw: string;
+    reason: string;
+    contentChars: number;
+    decidedAt?: string;
+}
+/** 激活计数行(治理 W2,T2.1;l1_activation 轻表投影)。 */
+export interface ActivationCounts {
+    injectionCount: number;
+    adoptedCount: number;
+    lastActivatedAt: string;
+    decayAnchorAt: string;
+    activationEpoch: string;
+}
 export declare class MemoryDb {
     private db;
     private degraded;
@@ -237,6 +255,82 @@ export declare class MemoryDb {
      */
     recordReceipts(rows: readonly L1Receipt[], opts?: ReceiptRetentionOptions): number;
     /**
+     * 落 `gate_rejected` 留痕(旁路设施,写失败绝不中断抽取——与凭证同款论证)。
+     * 有界性:超 {@link GATE_REJECTIONS_MAX_ROWS} 裁最老(按 decided_at)。
+     */
+    recordGateRejections(rows: readonly GateRejectionRow[], runId: string): number;
+    /** 写入门统计(端点 write-gate-stats 用):按门×模式聚合计数 + 最近留痕。 */
+    gateRejectionStats(limit?: number): {
+        byGate: Array<{
+            gate: string;
+            mode: string;
+            count: number;
+        }>;
+        total: number;
+        recent: Array<GateRejectionRow & {
+            runId: string;
+            decidedAt: string;
+        }>;
+    };
+    /**
+     * 原子列自增(T2.1/P0-3):单条 SQL 完成计数与锚点更新——**不碰** updated_time、
+     * 不碰 metadata_json、不碰 FTS;无读改写,多实例并发无丢增(P1-10/O-6 WAL)。
+     * `anchorAt` 传 ISO 串则重置衰减锚点(人工采用,T2.4);传空串保持原值。
+     * activation_epoch 只在首插时落(存量"早于 epoch 且计数 0"豁免的判定基准)。
+     */
+    bumpActivation(id: string, delta: {
+        injection?: number;
+        adopted?: number;
+        anchorAt?: string;
+        lastActivatedAt?: string;
+    }): void;
+    /** 激活计数行(治理 W2;缺行 = 无激活数据 → boost 0,零漂移)。 */
+    getActivationByIds(ids: string[]): Map<string, ActivationCounts>;
+    /**
+     * tier 写入口(T3.3/CAS):`WHERE record_id=? AND tier=?` 乐观并发——
+     * 多实例下"我以为它是 active"的盲写会被行级拒绝(返回 0)。
+     * **tier 与 validTo 正交(O-7/Issue 5)**:本方法绝不触碰 valid_to/退场标记;
+     * archived 档不存在——退场一律走 retire()/records-restore()。
+     * @returns 受影响行数(0 = 记录不存在或 CAS 不符)。
+     */
+    setTier(id: string, tier: 'active' | 'wiki', expectTier?: 'active' | 'wiki'): number;
+    /** repo 归属修补(T3.3;人工消歧/CSV move-scope 用)。CAS 同 setTier。 */
+    patchRepoKey(id: string, patch: {
+        repoKeyName?: string;
+        repoKeyOwner?: string;
+    }, expectRepoKeyName?: string): number;
+    /**
+     * 重建后治理归属回填(治理 W3,T3.12/P1-8):只补**非默认**字段(SET 动态拼装),
+     * 语义是恢复不是覆盖——已有 wiki 的记录不会被降回 active。
+     */
+    restoreGovernanceAttribution(id: string, a: {
+        tier?: 'active' | 'wiki';
+        repoKeyName?: string;
+        repoKeyOwner?: string;
+        applicability?: string;
+    }): number;
+    /** 给一批已裁决对补 batch_id(T3.6;不进快照哈希)。 */
+    setConflictBatchId(pairIds: readonly string[], batchId: string): number;
+    /**
+     * 批量裁决撤销(T3.6/ADR-0018):**留痕式回滚**——
+     * ① 只对 `resolution='batch'` 的行生效(终局动词不可撤销);
+     * ② 清 resolved_at/resolution(**写回 UNRESOLVED 哨兵值,不 DELETE 行**——
+     *    行与 batch_id 留在库里,"这批曾被裁决过"审计可见);
+     * ③ 恢复败方回召回面(un-retire,复用 restore 语义的清标记)。
+     * @returns 撤销的行数。
+     */
+    undoConflictBatch(batchId: string, restoreLoser: (loserId: string) => Promise<void> | void): Promise<number>;
+    /** 入队一个重聚类作业(demote-to-wiki 挂钩)。 */
+    enqueueSceneRecluster(family: string, sceneNames: readonly string[], batchId: string): string;
+    /** 取一个待处理作业(ruminate 空闲消费;按创建序)。 */
+    claimSceneRecluster(): {
+        jobId: string;
+        family: string;
+        sceneNames: string[];
+    } | null;
+    /** 打标作业完成/失败(失败保留行供诊断,不重试自动重跑——由下一次 demote 再入队)。 */
+    finishSceneRecluster(jobId: string, ok: boolean): void;
+    /**
      * §C 矛盾冻结(task_22):落盘待裁决冲突对。
      *
      * `INSERT OR IGNORE`——幂等来自 **pair_id 主键**而非调用方自觉:
@@ -284,6 +378,11 @@ export declare class MemoryDb {
          * ② 否则钉子户将无法被 `resolveConflictPair` 找到,而人工裁决是它们**唯一**的出口。
          */
         excludeDeferExhausted?: boolean;
+        /** 治理 W4(T4.2):scope 过滤。默认缺省 = 查询逐字不变(I-10)。 */
+        scopeFilter?: {
+            enabled: boolean;
+            workspaceId?: string;
+        };
     }): ConflictPair[];
     /**
      * §C Phase 3(task_3.3):把未裁决对**按 `claim_key` 归并**后返回。
@@ -292,6 +391,11 @@ export declare class MemoryDb {
      * 只把 {@link listConflictPending} 的结果按轴归并(空键那组恒排最后)。
      * 归并逻辑在 `conflicts.ts` 的纯函数里(可单测、无 I/O),这里只负责取行。
      */
+    /** 测试播种:直插一行未裁决冻结对(governance-service.test 用)。 */
+    upsertConflictPairForTest(pairId: string, winnerId: string, loserId: string, createdAt: string): void;
+    /** **反向验证专用变异实现**(T4.4):scope 过滤漏掉 `OR workspace_id='global'` 分支
+     * ——证明该分支是存量可见性的生命线(删它必须变红)。仅供测试调用。 */
+    listConflictPendingMutatedForTest(workspaceId: string): unknown[];
     listConflictGroupedByClaim(opts?: {
         limit?: number;
     }): ConflictClaimGroup[];

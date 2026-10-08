@@ -355,6 +355,20 @@ dsh 호스트는 플러그인 로그를 콘솔로 출력합니다. 플러그인�
 
 핵심 기억 능력（계층적 증류 파이프라인, 프롬프트 설계, 이중 기록 저장소）은 [TencentCloud/TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)의 **MemoryCore**를 참고했습니다.
 
+## 메모리 거버넌스
+
+dsh-prime-memory는 **기본 비활성** 거버넌스 메커니즘을 제공합니다(설정 패널에서 실시간 전환):
+
+- **쓰기 게이트**(`extract.gate.*Mode`, off|warn|enforce): priority/형태/깨진 문자/근중복 게이트와 선택적 LLM 품질 필터. `warn`은 기록만 하고 폐기하지 않음. 모든 폐기/경고는 영수증으로 남고 `dsh-memory/write-gate-stats`에서 조회 가능.
+- **repo 소프트 펜스**(`recall.scopeFence.enabled`): work 계열 메모리를 생성 repo(cwd의 basename)에 귀속. 교차 repo 호출 시 **가중치만 낮추고 삭제하지 않음**. `applicability='cross-project'`는 절대 펜스되지 않음.
+- **활성 노화**(`recall.activation.enabled`): 주입의 수동 카운터와 수동 "도움이 됐다" 표시(감쇠 앵커 리셋). 부스트는 clamp ≤1으로 점수 척도를 변경하지 않음.
+- **등급 감쇠 바닥**(`recall.decayFloorByType`): 유형/우선순위별 바닥(instruction 0.9 / 저우선순위 0.2 등). 끄면 평탄 0.5.
+- **tier 강등**(`governance.tier.enabled`): `wiki` tier는 검색면에서 가중치만 낮추고 인덱스 유지. `memory_search includeWiki`로 우회 가능. 재구축 시에도 tier 유지.
+- **CSV 일괄 판정**: `dsh-memory/records-export-csv`로 사본 내보내기 → 오프라인 판정 → `records-apply-verdicts`로 적용(**dryRun 생략 = 드라이런**, 실행 전 스냅샷, 행 단위 낙관적 동시성). 충돌 일괄 판정은 `conflict-batch-undo`로 명시적 취소 가능.
+
+결정 기록은 `docs/adr/0014`–`0019` 참조.
+
+
 ## License
 
 [MIT](LICENSE)

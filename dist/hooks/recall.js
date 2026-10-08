@@ -4,7 +4,9 @@ import { trace } from '../store/trace.js';
 import { RecallDedupeStore } from '../store/recall-dedupe.js';
 import { OccupancyStore } from '../store/occupancy.js';
 import { expirePendingInjections, registerPendingInjection, setInjectionMarker, } from './recall-ack.js';
-import { scopeFilterOf } from '../workspace.js';
+import { scopeFilterOf, workspaceIdOf } from '../workspace.js';
+import { resolveRepoScope } from '../repo-scope.js';
+import { applyGovernanceWeights } from '../store/governance.js';
 import { applyRecallBudget, raceRecallTimeout, RECALL_EMBED_CAP_MS } from '../util/recall-budget.js';
 import { clearProfileShare, emptyOccupancyLedger, estimateInjectedMessageTokens, estimateStableSectionTokens, recordProfileShare, recordRecallInjection, resetForCompaction, } from '../util/context-occupancy.js';
 import { errDetail } from '../util/filelog.js';
@@ -218,7 +220,8 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
     // 上下文压缩/清空 → 已注入内容从模型上下文丢失,重置该会话的去重压制
     // (resume/startup 不重置:历史仍在,已注入的记忆模型还持有)。
     // 占用账本同步全量归零(宁低勿高;轮级粒度近似)。
-    ctx.on('agent/session-start', (payload) => {
+    // 0.1.7-rc.2 起并入 agent/created(serial:监听器需 async)。
+    ctx.on('agent/created', async (payload) => {
         if (payload.source === 'compact' || payload.source === 'clear') {
             dedupe.reset(payload.agent.id);
             const led = ledgerFor(payload.agent.id);
@@ -355,6 +358,22 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                         logger.info(`[memory] 域软门禁(source=${gate.source}) ${formatWeights(gate.weights)} agent=${payload.agent.id}`);
                     }
                 }
+                // ── 治理权重(治理 W1,T1.10b):repo 软围栏,纯函数重排(score 不改写,I-1)。
+                // 挂在域软门禁**之后**(spec §二组合语义:既有调用点不动);默认关,
+                // 关闭时不进本分支,召回路径逐字现状(I-10);读不到归属的记录乘 1(fail-open)。
+                const liveS = live.get();
+                const scopeFenceOn = cfg.recall.scopeFence?.enabled === true || liveS.recallScopeFenceEnabled === true;
+                const tierOn = cfg.governance?.tier?.enabled === true || liveS.governanceTierEnabled === true;
+                if (scopeFenceOn || tierOn) {
+                    const currentRepoKey = resolveRepoScope(workspaceIdOf({ agent: payload.agent })).repoKey;
+                    const recordsById = new Map(stores.l1.getByIds(scoped.map((h) => h.id)).map((r) => [r.id, r]));
+                    scoped = applyGovernanceWeights(scoped, recordsById, {
+                        enabled: scopeFenceOn,
+                        currentRepoKey,
+                        crossRepoMultiplier: cfg.recall.scopeFence?.crossRepoMultiplier ?? 0.2,
+                        tierEnabled: tierOn,
+                    });
+                }
                 // 召回去重:同会话已注入过的记录不再重复注入(模型上下文已持有,省 token)。
                 // 纯过滤——剩几条注几条,全量压制(0 条新鲜命中)是正确状态而非未命中。
                 // §E:压缩后增强轮跳过压制(压缩把已注入内容逐出了模型上下文)。
@@ -413,7 +432,11 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
                 // `user/message` 进入会话日志(message.id 稳定保留)——capture 侧观察到
                 // 该 id 才真正 dedupe.mark(recall-ack 两段式)。这里只登记 pending,
                 // 未确认不标记:被覆盖/取消的注入不该压制这些记忆(下轮可重注)。
-                registerPendingInjection(payload.agent.id, injection.id, fresh.slice(0, lines.length).map((h) => h.id));
+                const injectedIds = fresh.slice(0, lines.length).map((h) => h.id);
+                registerPendingInjection(payload.agent.id, injection.id, injectedIds);
+                // 激活计数(治理 W2,T2.3/P1-9):注入即被动信号。有损下界(ADR-0017):
+                // 纯内存聚合 + 节流 flush,零 I/O 零阻塞;激活关 = no-op。
+                stores.l1.trackInjections(injectedIds);
                 // §F 追踪:注入轮
                 trace({
                     kind: 'recall_turn', ts: Date.now(), sessionId: sessionKey, queryChars, querySha, queryText,
@@ -568,7 +591,7 @@ export function registerRecall(ctx, cfg, stores, logger, live, modes, dataDir) {
         for (const agent of agents.list())
             registerForAgent(agent);
     }
-    ctx.on('agent/created', (payload) => {
+    ctx.on('agent/created', async (payload) => {
         registerForAgent(payload.agent);
     });
     ctx.effect(() => () => {

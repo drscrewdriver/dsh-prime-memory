@@ -1,0 +1,94 @@
+# A 组·flat 对照臂（治理升级 Wave 0，T0.4）：在 arm-on 语义之上**显式 pin 治理
+# 旋钮到全关档**。它是"旋钮全开"处置臂的对照基线——原 patch-arm-on.yml **逐字
+# 未动**（原臂 = 95.2% 基线的定义，G0 门禁项），本文件才是治理实验的对照臂。
+#
+# 用法（runner 侧 --patch 传入，或直接替换 arm-on 的 patch 文件路径）：
+#   node bench/harness/run.mjs ... （照常）；对照实验时以本文件作为 A 组 patch。
+# 模型钉死不在这里——settings.yaml 用户层会热替换默认模型，改由 runner 侧
+# DSH_BENCH_PROVIDER / DSH_BENCH_MODEL 环境变量直接进 agentOptions（见 src/index.js）。
+# dataDir 未设置时直接启动失败（防误写日常记忆库）。
+- id: dsh-memory
+  config:
+    dataDir: !!js (() => { const v = process.env.DSH_BENCH_DATA_DIR; if (!v) throw new Error('A 组运行必须设置 DSH_BENCH_DATA_DIR'); return v; })()
+    # bench 控制服务（蒸馏用量记账 getDistillUsage——「记忆开销」效率三角指标）
+    benchControl: true
+    extract:
+      minMessages: 1
+      idleSeconds: 30
+      # ── 治理 pin（对照臂=全关；处置臂把对应键拧开做差分）──
+      # 写入门（W1 交付）：off = 门直通不丢弃
+      gate:
+        priorityMode: 'off'
+        shapeMode: 'off'
+        garbledMode: 'off'
+        nearDupMode: 'off'
+        llmFilterMode: 'off'
+    # 蒸馏模型：读 DSH_BENCH_DISTILL_PROVIDER/MODEL（run.mjs 从 --distill-* 参数或
+    # bench.env 注入，缺省回落 official/flash）——默认模型回落会命中 settings.yaml
+    # 的 deepseek-vision（bench profile 无此 adapter），故必须显式指定。
+    llm:
+      provider: !!js (() => process.env.DSH_BENCH_DISTILL_PROVIDER || 'deepseek-official')()
+      model: !!js (() => process.env.DSH_BENCH_DISTILL_MODEL || 'deepseek-v4-flash')()
+      reasoningEffort: !!js (() => process.env.DSH_BENCH_DISTILL_REASONING_EFFORT || 'off')()
+    recall:
+      # flat 档显式 pin：衰减半衰期钉住现状默认（原臂未 pin 是 C3 记录的已知缺陷，
+      # 对照臂先钉住，处置臂必须用同一值才可比）
+      decayHalfLifeDays: 30
+      # 分级地板（W2 交付）：false = floorOf ≡ 0.5 逐字现状
+      decayFloorByType: false
+      activation:
+        # 激活老化（W2 交付）：false = applyDecay 权重逐字现状
+        enabled: false
+      scopeFence:
+        # repo 软围栏（W1 交付）：false = 不减权不围栏
+        enabled: false
+    governance:
+      tier:
+        # tier 检索降权（W3 交付）：false = 全视为 active，判据不变
+        enabled: false
+
+# ---- 基准无工具面（两组共用，防 Agent 用 shell/文件工具翻记忆库作弊或被真实数据污染）----
+# 只关面向模型的工具行；`tools` 运行时服务本身保留（dsh-prime-memory 硬依赖）。
+- id: tool-bash
+  disabled: true
+- id: tool-pwsh
+  disabled: true
+- id: tool-jobs
+  disabled: true
+- id: tool-fs
+  disabled: true
+- id: tool-fs-search
+  disabled: true
+- id: tool-skill
+  disabled: true
+- id: tool-subagent
+  disabled: true
+- id: tool-subagent-fork
+  disabled: true
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent-report
+  disabled: true
+- id: tool-workflow
+  disabled: true
+- id: tool-todo
+  disabled: true
+- id: tool-goal
+  disabled: true
+- id: tool-ralph
+  disabled: true
+- id: tool-str-replace-editor
+  disabled: true
+- id: tool-web
+  disabled: true
+
+# 基准 persona：纯对话作答，禁工具，不知道就直说（答案变短也让关键词判分可靠）。
+- id: system-prompt
+  config:
+    persona: >-
+      You are a participant in a memory benchmark. Answer the user directly
+      from the conversation context and your own memory only. Never use tools;
+      never explore the file system. Keep answers short (1-3 sentences).
+      If you don't know, say so plainly — never invent details.

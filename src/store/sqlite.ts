@@ -57,6 +57,10 @@ import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipt
 import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
 import { DEFER_MAX, groupConflictPairsByClaim, normalizeClaimKey, normalizeConflictType } from './conflicts.js';
 import { isRetired, readSupersedeMarker, stripSupersedeMarker, withSupersedeMarker, type SupersedeInfo } from './supersede.js';
+import { normalizeStoredPriority, PRIORITY_DEFAULT_STORE } from './priority.js';
+import { normTier } from '../types.js';
+import { normApplicability } from '../repo-scope.js';
+import { ensureGovernanceColumns, GATE_REJECTIONS_MAX_ROWS } from './migrations/governance.js';
 
 /** L1 检索命中(含 BM25/余弦归一分数)。 */
 export interface L1SearchHit {
@@ -100,6 +104,26 @@ function chunkIds(ids: string[]): string[][] {
   const out: string[][] = [];
   for (let i = 0; i < ids.length; i += IN_CHUNK) out.push(ids.slice(i, i + IN_CHUNK));
   return out;
+}
+
+/** 写入门留痕行(治理 W1,T1.6;与 pipeline/l1-gate.ts 的 GateRejection 结构同形)。 */
+export interface GateRejectionRow {
+  recordId: string;
+  gate: string;
+  mode: string;
+  priorityRaw: string;
+  reason: string;
+  contentChars: number;
+  decidedAt?: string;
+}
+
+/** 激活计数行(治理 W2,T2.1;l1_activation 轻表投影)。 */
+export interface ActivationCounts {
+  injectionCount: number;
+  adoptedCount: number;
+  lastActivatedAt: string;
+  decayAnchorAt: string;
+  activationEpoch: string;
 }
 
 export class MemoryDb {
@@ -365,6 +389,18 @@ export class MemoryDb {
       this.db.exec("ALTER TABLE l1_records ADD COLUMN workspace_id TEXT NOT NULL DEFAULT ''");
       this.logger?.info(`${TAG} l1_records 补 scope/workspace_id 列(存量数据默认归 global)`);
     }
+    // ── 治理列(治理升级 W1,T1.8):tier/repo_key/applicability ──
+    // l1_records 治理列在本节就地补(此处 l1_records 已建);涉及 conflict_pending/
+    // l1_activation/留痕表的完整迁移统一延迟到 conflict_pending 建表之后调用
+    // ensureGovernanceColumns(见下方 §C 段尾)——ALTER 不存在的表会让整个迁移
+    // 事务化失败并静默降级(no-op),列就永远补不上。
+    if (!this.hasColumn('l1_records', 'tier')) {
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN tier TEXT NOT NULL DEFAULT 'active'");
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN repo_key_name TEXT NOT NULL DEFAULT ''");
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN repo_key_owner TEXT NOT NULL DEFAULT ''");
+      this.db.exec("ALTER TABLE l1_records ADD COLUMN applicability TEXT NOT NULL DEFAULT ''");
+      this.logger?.info?.(`${TAG} l1_records 补治理列(DEFAULT 即标注,存量零回填)`);
+    }
     const backfilled = this.db
       .prepare("UPDATE l1_records SET family = 'work' WHERE type LIKE 'work\\_%' ESCAPE '\\' AND family != 'work'")
       .run().changes;
@@ -473,13 +509,18 @@ export class MemoryDb {
     if (!conflictCols.has('claim_key')) {
       this.db.exec(`ALTER TABLE conflict_pending ADD COLUMN claim_key TEXT NOT NULL DEFAULT ''`);
     }
+    // ── 治理完整迁移(治理 W1-W4,T1.8/T4.1):门留痕表/l1_activation/重聚类作业/
+    // conflict_pending 的 batch_id+scope 列。必须晚于 conflict_pending 建表(否则
+    // ALTER 不存在的表 → 迁移整体 no-op 降级,列永远补不上)。幂等 + 失败 no-op。
+    ensureGovernanceColumns(this.db, this.logger);
 
     this.stmtUpsertL1 = this.db.prepare(`
       INSERT INTO l1_records (
         record_id, content, type, priority, scene_name, session_id, version,
         timestamp_str, timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family,
-        valid_from, valid_to, persistence, scope, workspace_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        valid_from, valid_to, persistence, scope, workspace_id,
+        tier, repo_key_name, repo_key_owner, applicability
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         content=excluded.content,
         type=excluded.type,
@@ -496,12 +537,17 @@ export class MemoryDb {
         valid_to=excluded.valid_to,
         persistence=excluded.persistence,
         scope=excluded.scope,
-        workspace_id=excluded.workspace_id
+        workspace_id=excluded.workspace_id,
+        tier=excluded.tier,
+        repo_key_name=excluded.repo_key_name,
+        repo_key_owner=excluded.repo_key_owner,
+        applicability=excluded.applicability
     `);
     this.stmtGetL1 = this.db.prepare(`
       SELECT record_id, content, type, priority, scene_name, version, timestamp_str,
              timestamp_start, timestamp_end, created_time, updated_time, metadata_json, family,
-             valid_from, valid_to, persistence, scope, workspace_id
+             valid_from, valid_to, persistence, scope, workspace_id,
+             tier, repo_key_name, repo_key_owner, applicability
       FROM l1_records WHERE record_id = ?
     `);
     this.stmtL1Exists = this.db.prepare('SELECT 1 FROM l1_records WHERE record_id = ?');
@@ -804,7 +850,7 @@ export class MemoryDb {
           String(r.content ?? ''),
           String(r.record_id ?? ''),
           String(r.type ?? ''),
-          Number(r.priority ?? 50),
+          normalizeStoredPriority(r.priority),
           String(r.scene_name ?? ''),
           String(r.session_id ?? 'default'),
           Number(r.version ?? 0),
@@ -968,7 +1014,7 @@ export class MemoryDb {
     // 无法绑定(node:sqlite 拒绝绑定),曾致旧版导入逐条全挂、每次启动无限重试。
     // 主表与 FTS 两条语句共用同源归一化值;type 归一化后 familyForType 也不再收到 undefined。
     const type = record.type ?? '';
-    const priority = record.priority ?? 50;
+    const priority = record.priority ?? PRIORITY_DEFAULT_STORE;
     const sceneName = record.scene_name ?? '';
     const family = record.family ?? familyForType(type);
     // §E 写入侧兜底归一,并维持一条**不变量**:`scope='global'` 的记录 `workspace_id` 恒为空串。
@@ -985,6 +1031,12 @@ export class MemoryDb {
     // （pipeline / memory_add / 外部导入），逐个记得归一迟早漏一个。
     const scope = normScope(record.scope);
     const workspaceId = scope === 'workspace' ? (normalizeWorkspacePath(record.workspaceId) ?? '') : '';
+    // 治理列写入侧归一(治理 W1):tier 非法落 active(I-23 同向)、repo/applicability
+    // 缺省 ''(不围栏)。归一收在存储层与 scope 同理由——调用方不止一个,逐个归一必漏。
+    const tier = normTier(record.tier);
+    const repoKeyName = String(record.repoKeyName ?? '');
+    const repoKeyOwner = String(record.repoKeyOwner ?? '');
+    const applicability = normApplicability(record.applicability);
     // 防御性 FTS 删除的前置点查(主键索引,微秒级):record_id 在 FTS 表是 UNINDEXED,
     // 按 id DELETE 是 O(N) 全表扫描——导入/重建/重嵌等"全新增"路径曾为每条记录白付一次
     // 全扫(批量写整体 O(N²))。只有主表已有该行(覆盖/合并)才可能有旧 FTS 行需要删。
@@ -1015,6 +1067,10 @@ export class MemoryDb {
       normPersistence(record.persistence) ?? '',
       scope,
       workspaceId,
+      tier,
+      repoKeyName,
+      repoKeyOwner,
+      applicability,
     );
     // vec0 不支持 ON CONFLICT → 先删后插;零向量跳过(cosine 未定义)。
     // 已退场则**只删不插**(见上方 retiredNow 的说明)。
@@ -1164,7 +1220,7 @@ export class MemoryDb {
         .get() as { n: number | bigint };
       const rows = this.db
         .prepare(
-          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id
+          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id, tier, repo_key_name, repo_key_owner, applicability
            FROM l1_records WHERE COALESCE(valid_to, '') <> '' ORDER BY updated_time DESC LIMIT ? OFFSET ?`,
         )
         .all(opts.limit, opts.offset) as unknown as L1MetaRow[];
@@ -1189,10 +1245,16 @@ export class MemoryDb {
       // §E:同款按形状探测——未迁移的旧库(补列前)不应因缺列让"按 id 取记录"整条路径失败。
       const scopeCols =
         table === 'l1_records' && this.hasColumn('l1_records', 'scope') ? ', scope, workspace_id' : '';
+      // 治理列(治理 W1):同款形状探测,缺列(迁移降级)时读侧 fail-open 归一。
+      const governanceCols =
+        table === 'l1_records' && this.hasColumn('l1_records', 'tier')
+          ? ', tier, repo_key_name, repo_key_owner, applicability'
+          : '';
       const metaCols =
         'record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family' +
         temporal +
-        scopeCols;
+        scopeCols +
+        governanceCols;
       stmt =
         action === 'delete'
           ? this.db.prepare(`DELETE FROM ${table} WHERE record_id IN (${ph})`)
@@ -1299,7 +1361,7 @@ export class MemoryDb {
     if (this.degraded) return [];
     const rows = this.db
       .prepare(
-        'SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id FROM l1_records',
+        'SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id, tier, repo_key_name, repo_key_owner, applicability FROM l1_records',
       )
       .all() as unknown as L1MetaRow[];
     return rows.map(rowToRecord);
@@ -1348,6 +1410,324 @@ export class MemoryDb {
       );
     }
     return n;
+  }
+
+  // ── 写入门留痕(治理 W1,T1.6)───────────────────────────────────────────
+
+  /**
+   * 落 `gate_rejected` 留痕(旁路设施,写失败绝不中断抽取——与凭证同款论证)。
+   * 有界性:超 {@link GATE_REJECTIONS_MAX_ROWS} 裁最老(按 decided_at)。
+   */
+  recordGateRejections(rows: readonly GateRejectionRow[], runId: string): number {
+    if (this.degraded || rows.length === 0) return 0;
+    try {
+      const stmt = this.db.prepare(
+        `INSERT INTO l1_gate_rejections (record_id, run_id, gate, mode, priority_raw, reason, content_chars, decided_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      const now = new Date().toISOString();
+      let n = 0;
+      for (const r of rows) {
+        n += Number(stmt.run(r.recordId, runId, r.gate, r.mode, r.priorityRaw, r.reason, r.contentChars, r.decidedAt ?? now).changes);
+      }
+      if (n > 0) {
+        this.db
+          .prepare(
+            `DELETE FROM l1_gate_rejections WHERE rowid NOT IN (
+               SELECT rowid FROM l1_gate_rejections ORDER BY decided_at DESC, rowid DESC LIMIT ${GATE_REJECTIONS_MAX_ROWS}
+             )`,
+          )
+          .run();
+      }
+      return n;
+    } catch (err) {
+      this.logger?.warn(`${TAG} 写入门留痕失败(非致命): ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
+  }
+
+  /** 写入门统计(端点 write-gate-stats 用):按门×模式聚合计数 + 最近留痕。 */
+  gateRejectionStats(limit = 20): {
+    byGate: Array<{ gate: string; mode: string; count: number }>;
+    total: number;
+    recent: Array<GateRejectionRow & { runId: string; decidedAt: string }>;
+  } {
+    if (this.degraded) return { byGate: [], total: 0, recent: [] };
+    try {
+      const byGate = this.db
+        .prepare('SELECT gate, mode, COUNT(*) AS count FROM l1_gate_rejections GROUP BY gate, mode ORDER BY count DESC')
+        .all() as unknown as Array<{ gate: string; mode: string; count: number }>;
+      const totalRow = this.db.prepare('SELECT COUNT(*) AS n FROM l1_gate_rejections').get() as { n: number | bigint };
+      const recent = (
+        this.db
+          .prepare(
+            'SELECT record_id, run_id, gate, mode, priority_raw, reason, content_chars, decided_at FROM l1_gate_rejections ORDER BY decided_at DESC, rowid DESC LIMIT ?',
+          )
+          .all(Math.min(Math.max(1, limit), 200)) as unknown as Array<Record<string, unknown>>
+      ).map((r) => ({
+        recordId: String(r.record_id ?? ''),
+        runId: String(r.run_id ?? ''),
+        gate: String(r.gate ?? ''),
+        mode: String(r.mode ?? ''),
+        priorityRaw: String(r.priority_raw ?? ''),
+        reason: String(r.reason ?? ''),
+        contentChars: Number(r.content_chars ?? 0),
+        decidedAt: String(r.decided_at ?? ''),
+      }));
+      return { byGate, total: Number(totalRow?.n ?? 0), recent };
+    } catch (err) {
+      this.logger?.warn(`${TAG} 写入门统计失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
+      return { byGate: [], total: 0, recent: [] };
+    }
+  }
+
+  // ── 激活轻表(治理 W2,T2.1)──────────────────────────────────────────────
+
+  /**
+   * 原子列自增(T2.1/P0-3):单条 SQL 完成计数与锚点更新——**不碰** updated_time、
+   * 不碰 metadata_json、不碰 FTS;无读改写,多实例并发无丢增(P1-10/O-6 WAL)。
+   * `anchorAt` 传 ISO 串则重置衰减锚点(人工采用,T2.4);传空串保持原值。
+   * activation_epoch 只在首插时落(存量"早于 epoch 且计数 0"豁免的判定基准)。
+   */
+  bumpActivation(
+    id: string,
+    delta: { injection?: number; adopted?: number; anchorAt?: string; lastActivatedAt?: string },
+  ): void {
+    if (this.degraded || !id) return;
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO l1_activation (record_id, injection_count, adopted_count, last_activated_at, decay_anchor_at, activation_epoch)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(record_id) DO UPDATE SET
+             injection_count = injection_count + excluded.injection_count,
+             adopted_count = adopted_count + excluded.adopted_count,
+             last_activated_at = CASE WHEN excluded.last_activated_at != '' THEN excluded.last_activated_at ELSE l1_activation.last_activated_at END,
+             decay_anchor_at = CASE WHEN excluded.decay_anchor_at != '' THEN excluded.decay_anchor_at ELSE l1_activation.decay_anchor_at END`,
+        )
+        .run(
+          id,
+          Math.max(0, Math.floor(delta.injection ?? 0)),
+          Math.max(0, Math.floor(delta.adopted ?? 0)),
+          delta.lastActivatedAt ?? '',
+          delta.anchorAt ?? '',
+          new Date().toISOString(),
+        );
+    } catch (err) {
+      this.logger?.warn(`${TAG} 激活计数写入失败(旁路观测,非致命)id=${id}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** 激活计数行(治理 W2;缺行 = 无激活数据 → boost 0,零漂移)。 */
+  getActivationByIds(ids: string[]): Map<string, ActivationCounts> {
+    const out = new Map<string, ActivationCounts>();
+    if (this.degraded || ids.length === 0) return out;
+    try {
+      for (const chunk of chunkIds(ids)) {
+        const ph = Array.from({ length: chunk.length }, () => '?').join(',');
+        const rows = this.db
+          .prepare(`SELECT record_id, injection_count, adopted_count, last_activated_at, decay_anchor_at, activation_epoch FROM l1_activation WHERE record_id IN (${ph})`)
+          .all(...chunk) as unknown as Array<Record<string, unknown>>;
+        for (const r of rows) {
+          out.set(String(r.record_id), {
+            injectionCount: Number(r.injection_count ?? 0),
+            adoptedCount: Number(r.adopted_count ?? 0),
+            lastActivatedAt: String(r.last_activated_at ?? ''),
+            decayAnchorAt: String(r.decay_anchor_at ?? ''),
+            activationEpoch: String(r.activation_epoch ?? ''),
+          });
+        }
+      }
+    } catch (err) {
+      this.logger?.warn(`${TAG} 激活计数读取失败(按无激活处理): ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return out;
+  }
+
+  // ── 治理写入口(治理 W3,T3.3/T3.9)──────────────────────────────────────
+
+  /**
+   * tier 写入口(T3.3/CAS):`WHERE record_id=? AND tier=?` 乐观并发——
+   * 多实例下"我以为它是 active"的盲写会被行级拒绝(返回 0)。
+   * **tier 与 validTo 正交(O-7/Issue 5)**:本方法绝不触碰 valid_to/退场标记;
+   * archived 档不存在——退场一律走 retire()/records-restore()。
+   * @returns 受影响行数(0 = 记录不存在或 CAS 不符)。
+   */
+  setTier(id: string, tier: 'active' | 'wiki', expectTier?: 'active' | 'wiki'): number {
+    if (this.degraded || !id) return 0;
+    try {
+      const t = normTier(tier);
+      const sql =
+        expectTier !== undefined
+          ? 'UPDATE l1_records SET tier = ? WHERE record_id = ? AND tier = ?'
+          : 'UPDATE l1_records SET tier = ? WHERE record_id = ?';
+      return Number(
+        (expectTier !== undefined ? this.db.prepare(sql).run(t, id, normTier(expectTier)) : this.db.prepare(sql).run(t, id))
+          .changes,
+      );
+    } catch (err) {
+      this.logger?.warn(`${TAG} setTier 失败 id=${id}: ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
+  }
+
+  /** repo 归属修补(T3.3;人工消歧/CSV move-scope 用)。CAS 同 setTier。 */
+  patchRepoKey(
+    id: string,
+    patch: { repoKeyName?: string; repoKeyOwner?: string },
+    expectRepoKeyName?: string,
+  ): number {
+    if (this.degraded || !id) return 0;
+    try {
+      const sets: string[] = [];
+      const args: (string | number)[] = [];
+      if (patch.repoKeyName !== undefined) {
+        sets.push('repo_key_name = ?');
+        args.push(String(patch.repoKeyName));
+      }
+      if (patch.repoKeyOwner !== undefined) {
+        sets.push('repo_key_owner = ?');
+        args.push(String(patch.repoKeyOwner));
+      }
+      if (sets.length === 0) return 0;
+      let sql = `UPDATE l1_records SET ${sets.join(', ')} WHERE record_id = ?`;
+      args.push(id);
+      if (expectRepoKeyName !== undefined) {
+        sql += ' AND repo_key_name = ?';
+        args.push(String(expectRepoKeyName));
+      }
+      return Number(this.db.prepare(sql).run(...args).changes);
+    } catch (err) {
+      this.logger?.warn(`${TAG} patchRepoKey 失败 id=${id}: ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
+  }
+
+  /**
+   * 重建后治理归属回填(治理 W3,T3.12/P1-8):只补**非默认**字段(SET 动态拼装),
+   * 语义是恢复不是覆盖——已有 wiki 的记录不会被降回 active。
+   */
+  restoreGovernanceAttribution(
+    id: string,
+    a: { tier?: 'active' | 'wiki'; repoKeyName?: string; repoKeyOwner?: string; applicability?: string },
+  ): number {
+    if (this.degraded || !id) return 0;
+    try {
+      const sets: string[] = [];
+      const args: (string | number)[] = [];
+      if (a.tier !== undefined) { sets.push('tier = ?'); args.push(normTier(a.tier)); }
+      if (a.repoKeyName !== undefined) { sets.push('repo_key_name = ?'); args.push(String(a.repoKeyName)); }
+      if (a.repoKeyOwner !== undefined) { sets.push('repo_key_owner = ?'); args.push(String(a.repoKeyOwner)); }
+      if (a.applicability !== undefined) { sets.push('applicability = ?'); args.push(normApplicability(a.applicability)); }
+      if (sets.length === 0) return 0;
+      args.push(id);
+      return Number(this.db.prepare(`UPDATE l1_records SET ${sets.join(', ')} WHERE record_id = ?`).run(...args).changes);
+    } catch (err) {
+      this.logger?.warn(`${TAG} 治理归属回填失败 id=${id}: ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
+  }
+
+  // ── 批量裁决批次(治理 W3,T3.6)────────────────────────────────────────
+
+  /** 给一批已裁决对补 batch_id(T3.6;不进快照哈希)。 */
+  setConflictBatchId(pairIds: readonly string[], batchId: string): number {
+    if (this.degraded || pairIds.length === 0 || !batchId) return 0;
+    try {
+      const stmt = this.db.prepare("UPDATE conflict_pending SET batch_id = ? WHERE pair_id = ? AND resolved_at != ''");
+      let n = 0;
+      for (const id of pairIds) n += Number(stmt.run(batchId, id).changes);
+      return n;
+    } catch (err) {
+      this.logger?.warn(`${TAG} batch_id 落库失败: ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
+  }
+
+  /**
+   * 批量裁决撤销(T3.6/ADR-0018):**留痕式回滚**——
+   * ① 只对 `resolution='batch'` 的行生效(终局动词不可撤销);
+   * ② 清 resolved_at/resolution(**写回 UNRESOLVED 哨兵值,不 DELETE 行**——
+   *    行与 batch_id 留在库里,"这批曾被裁决过"审计可见);
+   * ③ 恢复败方回召回面(un-retire,复用 restore 语义的清标记)。
+   * @returns 撤销的行数。
+   */
+  async undoConflictBatch(batchId: string, restoreLoser: (loserId: string) => Promise<void> | void): Promise<number> {
+    if (this.degraded || !batchId) return 0;
+    try {
+      const rows = this.db
+        .prepare("SELECT pair_id, loser_id FROM conflict_pending WHERE batch_id = ? AND resolution = 'batch' AND resolved_at != ''")
+        .all(batchId) as unknown as Array<{ pair_id: string; loser_id: string }>;
+      let n = 0;
+      for (const r of rows) {
+        const cleared = Number(
+          this.db
+            .prepare("UPDATE conflict_pending SET resolved_at = '', resolution = '' WHERE pair_id = ? AND resolution = 'batch'")
+            .run(r.pair_id).changes,
+        );
+        if (cleared > 0) {
+          n += cleared;
+          try {
+            await restoreLoser(String(r.loser_id));
+          } catch (err) {
+            this.logger?.warn(`${TAG} 撤销批次恢复败方失败 pair=${r.pair_id}: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      }
+      return n;
+    } catch (err) {
+      this.logger?.warn(`${TAG} 批次撤销失败: ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
+  }
+
+  // ── L2 重聚类作业队列(治理 W3,T3.10)──────────────────────────────────
+
+  /** 入队一个重聚类作业(demote-to-wiki 挂钩)。 */
+  enqueueSceneRecluster(family: string, sceneNames: readonly string[], batchId: string): string {
+    const jobId = `recl_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+    if (this.degraded) return jobId;
+    try {
+      this.db
+        .prepare(
+          "INSERT INTO scene_recluster_jobs (job_id, family, scene_names, batch_id, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)",
+        )
+        .run(jobId, family, sceneNames.join('\u001F'), batchId, new Date().toISOString());
+    } catch (err) {
+      this.logger?.warn(`${TAG} 重聚类入队失败(降级为不重聚类): ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return jobId;
+  }
+
+  /** 取一个待处理作业(ruminate 空闲消费;按创建序)。 */
+  claimSceneRecluster(): { jobId: string; family: string; sceneNames: string[] } | null {
+    if (this.degraded) return null;
+    try {
+      const row = this.db
+        .prepare("SELECT job_id, family, scene_names FROM scene_recluster_jobs WHERE status = 'pending' ORDER BY created_at LIMIT 1")
+        .get() as unknown as Record<string, unknown> | undefined;
+      if (!row) return null;
+      return {
+        jobId: String(row.job_id),
+        family: String(row.family ?? 'chat'),
+        sceneNames: String(row.scene_names ?? '').split('\u001F').filter((s) => s.length > 0),
+      };
+    } catch (err) {
+      this.logger?.warn(`${TAG} 重聚类取作业失败: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /** 打标作业完成/失败(失败保留行供诊断,不重试自动重跑——由下一次 demote 再入队)。 */
+  finishSceneRecluster(jobId: string, ok: boolean): void {
+    if (this.degraded || !jobId) return;
+    try {
+      this.db
+        .prepare("UPDATE scene_recluster_jobs SET status = ?, finished_at = ? WHERE job_id = ?")
+        .run(ok ? 'done' : 'failed', new Date().toISOString(), jobId);
+    } catch (err) {
+      this.logger?.warn(`${TAG} 重聚类打标失败: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   /**
@@ -1436,6 +1816,8 @@ export class MemoryDb {
      * ② 否则钉子户将无法被 `resolveConflictPair` 找到,而人工裁决是它们**唯一**的出口。
      */
     excludeDeferExhausted?: boolean;
+    /** 治理 W4(T4.2):scope 过滤。默认缺省 = 查询逐字不变(I-10)。 */
+    scopeFilter?: { enabled: boolean; workspaceId?: string };
   } = {}): ConflictPair[] {
     if (this.degraded) return [];
     const limit = Number.isFinite(opts.limit) && (opts.limit ?? 0) > 0 ? Math.floor(opts.limit as number) : 500;
@@ -1451,6 +1833,14 @@ export class MemoryDb {
     }
     if (opts.excludeDeferExhausted) {
       where += ` AND defer_count < ${DEFER_MAX}`;
+    }
+    // 治理 W4(T4.2/P1-13):队列接 scope。**关闭时本分支结构性不存在**(SQL 逐字
+    // 不变,I-10)。开启时**逐字复用既有 `?=''` 哨兵 OR 形状**——存量行
+    // workspace_id='global',漏掉 `OR workspace_id = 'global'` 分支会让全部存量
+    // 冻结对从面板消失 → maxPending 计数变小 → 安全阀误判队列空。
+    if (opts.scopeFilter?.enabled === true && this.hasColumn('conflict_pending', 'workspace_id')) {
+      where += ` AND (workspace_id = ? OR workspace_id = 'global')`;
+      params.push(opts.scopeFilter.workspaceId ?? '');
     }
     const rows = this.db
       .prepare(
@@ -1470,6 +1860,25 @@ export class MemoryDb {
    * 只把 {@link listConflictPending} 的结果按轴归并(空键那组恒排最后)。
    * 归并逻辑在 `conflicts.ts` 的纯函数里(可单测、无 I/O),这里只负责取行。
    */
+  /** 测试播种:直插一行未裁决冻结对(governance-service.test 用)。 */
+  upsertConflictPairForTest(pairId: string, winnerId: string, loserId: string, createdAt: string): void {
+    this.db
+      .prepare(
+        "INSERT OR IGNORE INTO conflict_pending (pair_id, run_id, winner_id, loser_id, created_at, resolved_at, resolution) VALUES (?, 'test', ?, ?, ?, '', '')",
+      )
+      .run(pairId, winnerId, loserId, createdAt);
+  }
+
+  /** **反向验证专用变异实现**(T4.4):scope 过滤漏掉 `OR workspace_id='global'` 分支
+   * ——证明该分支是存量可见性的生命线(删它必须变红)。仅供测试调用。 */
+  listConflictPendingMutatedForTest(workspaceId: string): unknown[] {
+    return this.db
+      .prepare(
+        "SELECT pair_id FROM conflict_pending WHERE resolved_at = '' AND workspace_id = ?",
+      )
+      .all(workspaceId);
+  }
+
   listConflictGroupedByClaim(opts: { limit?: number } = {}): ConflictClaimGroup[] {
     return groupConflictPairsByClaim(this.listConflictPending(opts));
   }
@@ -1717,7 +2126,7 @@ export class MemoryDb {
       const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params) as { n: number };
       const rows = this.db
         .prepare(
-          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id FROM l1_records${whereSql} ORDER BY updated_time DESC LIMIT ? OFFSET ?`,
+          `SELECT record_id, content, type, priority, scene_name, version, timestamp_str, created_time, updated_time, metadata_json, family, valid_from, valid_to, persistence, scope, workspace_id, tier, repo_key_name, repo_key_owner, applicability FROM l1_records${whereSql} ORDER BY updated_time DESC LIMIT ? OFFSET ?`,
         )
         .all(...params, opts.limit, opts.offset) as unknown as L1MetaRow[];
       return { items: rows.map(rowToRecord), total: totalRow?.n ?? 0 };
@@ -2512,6 +2921,11 @@ interface L1MetaRow {
   valid_from?: string;
   valid_to?: string;
   persistence?: string;
+  /** 治理列(治理 W1;旧库/迁移降级时为 undefined → 读侧 fail-open 归一)。 */
+  tier?: string;
+  repo_key_name?: string;
+  repo_key_owner?: string;
+  applicability?: string;
 }
 
 /**
@@ -2562,6 +2976,12 @@ function rowToRecord(row: L1MetaRow): MemoryRecord {
     validFrom: row.valid_from ? Date.parse(row.valid_from) || undefined : undefined,
     validTo: row.valid_to ? Date.parse(row.valid_to) || undefined : undefined,
     persistence: normPersistence(row.persistence),
+    // 治理列回读(I-23 fail-open):tier 缺→active、repo/applicability 缺→''(不围栏)
+    // ——读不到治理归属等价于"正常记忆",绝不让记忆凭空消失。
+    tier: normTier(row.tier),
+    repoKeyName: row.repo_key_name ?? '',
+    repoKeyOwner: row.repo_key_owner ?? '',
+    applicability: normApplicability(row.applicability),
   };
 }
 

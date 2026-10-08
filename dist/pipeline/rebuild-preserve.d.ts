@@ -147,3 +147,36 @@ export declare function restorePreserved(l1: {
 }, plan: PreservePlan): Promise<PreserveRestoreResult>;
 /** 面向日志/状态栏的一行摘要。 */
 export declare function describePlan(plan: PreservePlan): string;
+/** 单条治理归属快照(仅非默认值才入表,零形状开销)。 */
+export interface GovernanceAttributionEntry {
+    tier?: 'active' | 'wiki';
+    repoKeyName?: string;
+    repoKeyOwner?: string;
+    applicability?: string;
+}
+export interface GovernanceAttribution {
+    /** 按 record_id 对账(checkpoint 续跑/恢复路径的 id 稳定)。 */
+    byId: Map<string, GovernanceAttributionEntry>;
+    /** 按内容 sha1 对账(重derive 内容逐字相同时才命中)。 */
+    byHash: Map<string, GovernanceAttributionEntry>;
+}
+/**
+ * 清空**前**捕获全部治理归属(重建主流程在 gate 之后、clearL1 之前调用)。
+ * 双键:record_id(稳定路径)+ 内容 sha1(重derive 内容逐字一致时才命中——
+ * 全新 LLM 重抽措辞不同即不命中,这是机制的能力边界,如实记录在重建日志)。
+ */
+export declare function captureGovernanceAttribution(records: readonly MemoryRecord[]): GovernanceAttribution;
+/** 恢复执行的最小存储面(结构化,测试可注入;L1Store.all() 即满足)。 */
+export interface GovernanceAttributionStore {
+    all(): MemoryRecord[];
+    restoreGovernanceAttribution(id: string, a: GovernanceAttributionEntry): number;
+}
+/**
+ * 清空/重derive **后**回填治理归属(T3.12):id 命中优先,哈希兜底;
+ * 只补非默认值,已显式不同(如重建后人为改动)以**先到为准**——回填是恢复
+ * 不是覆盖,已有 wiki 的记录不会被降回 active。
+ */
+export declare function reapplyGovernanceAttribution(store: GovernanceAttributionStore, attr: GovernanceAttribution): {
+    byId: number;
+    byHash: number;
+};

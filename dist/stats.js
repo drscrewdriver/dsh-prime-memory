@@ -89,6 +89,13 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/cleanup-retired',
     'dsh-memory/snapshots-list',
     'dsh-memory/snapshot-restore',
+    'dsh-memory/write-gate-stats',
+    'dsh-memory/records-mark-adopted',
+    'dsh-memory/records-export-csv',
+    'dsh-memory/records-verdict-preview',
+    'dsh-memory/records-apply-verdicts',
+    'dsh-memory/conflict-batch-apply',
+    'dsh-memory/conflict-batch-undo',
 ];
 /** HTTP 路由前缀(客户端 fetch `/dsh-memory/rpc/<短方法名>`)。 */
 const RPC_ROUTE_PREFIX = '/dsh-memory/rpc';
@@ -153,6 +160,7 @@ function readJsonBody(req) {
         req.on('error', reject);
     });
 }
+import { applyVerdicts, exportRecordsCsv, previewVerdicts } from './governance-service.js';
 /**
  * 组装端点 deps。抽成函数是为了让"哪个控制器落入哪个字段"成为可测接缝:
  * 反刍端点读 deps.ruminate,若此处漏注入,端点会静默恒返 {supported:false}(面板整块不渲染)。
@@ -576,6 +584,10 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     embedRemoteBaseURL: '', embedRemoteApiKey: '', embedRemoteModel: '', embedRemoteDimensions: 0,
                     memoryMutate: false,
                     conflictFreeze: live?.get()?.conflictFreeze === true,
+                    recallScopeFenceEnabled: false,
+                    recallActivationEnabled: false,
+                    recallDecayFloorByType: false,
+                    governanceTierEnabled: false,
                 }),
                 // 静态部署上限(cordis.patch.yml):运行时开关与它取 AND
                 ceilings: { capture: cfg.capture.enabled, distill: cfg.extract.enabled, recall: cfg.recall.enabled },
@@ -961,7 +973,10 @@ export async function handleEndpoint(endpoint, payload, deps) {
             if (explicit.length > 0) {
                 // 显式 id 也要**复核**是否真的处于已退场态:防止调用方用一个 id 列表
                 // 把活动记忆绕过软删直接物理抹掉(那等于给了一条硬删后门)。
-                targets = explicit.filter((id) => stores.l1.getByIds([id]).some((r) => r.validTo !== undefined));
+                // 治理 W3(T3.9/P1-7):复核判据**同时检查 tier**——tier=wiki 是降权保留
+                // (不闭合 validTo),绝不能被"清理退场"物理删掉(数据丢失经"清理"这个
+                // 被认为安全的动作发生,是最坏形态)。
+                targets = explicit.filter((id) => stores.l1.getByIds([id]).some((r) => r.validTo !== undefined && r.tier !== 'wiki'));
             }
             else {
                 targets = [];
@@ -1092,6 +1107,148 @@ export async function handleEndpoint(endpoint, payload, deps) {
                             `再调 dsh-memory/records-restore(或本次改用 unretire:true)。`,
                     }
                     : {}),
+            };
+            return resp;
+        }
+        // ── 写入门统计(治理 W1,T1.6;留痕表未装配/降级时返空不报错,P2-5) ──
+        case 'dsh-memory/write-gate-stats': {
+            const p = (payload ?? {});
+            const limit = Math.min(Math.max(Math.floor(Number(p.limit)) || 20, 1), 200);
+            let stats;
+            try {
+                stats = stores.l1.gateRejectionStats(limit);
+            }
+            catch {
+                stats = { byGate: [], total: 0, recent: [] };
+            }
+            const resp = {
+                byGate: stats.byGate,
+                total: stats.total,
+                recent: stats.recent,
+                supported: true,
+            };
+            return resp;
+        }
+        // ── 人工采用标记(治理 W2,T2.4/O-2;"这条有用"→ adoptedCount+重置衰减锚点) ──
+        case 'dsh-memory/records-mark-adopted': {
+            const p = (payload ?? {});
+            const ids = Array.isArray(p.ids)
+                ? p.ids.filter((x) => typeof x === 'string' && x.length > 0).slice(0, 100)
+                : [];
+            const applied = stores.l1.markAdopted(ids);
+            const resp = applied === 0
+                ? { applied: 0, notice: '激活反馈未开启(recall.activation.enabled):采用标记需要该功能先启用' }
+                : { applied };
+            return resp;
+        }
+        // ── 治理 CSV/裁决(治理 W3,T3.1/T3.2;破坏性动作纪律见 governance-service) ──
+        case 'dsh-memory/records-export-csv': {
+            const p = (payload ?? {});
+            const { csv, total } = exportRecordsCsv(stores.l1, {
+                limit: typeof p.limit === 'number' ? p.limit : undefined,
+                retired: p.retired === true,
+            });
+            const resp = {
+                csv,
+                total,
+                columns: ['id', 'type', 'priority', 'scene_name', 'tier', 'repo_key_name', 'repo_key_owner', 'applicability', 'family', 'updated_at', 'content'],
+            };
+            return resp;
+        }
+        case 'dsh-memory/records-verdict-preview': {
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+            const p = (payload ?? {});
+            const rows = Array.isArray(p.rows) ? p.rows : [];
+            const resp = await previewVerdicts({ store: stores.l1, createSnapshot: (r) => stores.l1.createGovernanceSnapshot(r), memoryMutate: true }, rows);
+            return resp;
+        }
+        case 'dsh-memory/records-apply-verdicts': {
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+            const p = (payload ?? {});
+            const rows = Array.isArray(p.rows) ? p.rows : [];
+            const resp = await applyVerdicts({ store: stores.l1, createSnapshot: (r) => stores.l1.createGovernanceSnapshot(r), memoryMutate: true }, rows, { dryRun: p.dryRun === undefined ? undefined : p.dryRun === true, confirmHighImpact: p.confirmHighImpact === true });
+            deps.logger.info(`[memory] 裁决应用:dryRun=${resp.dryRun} applied=${resp.applied}/${resp.requested} truncated=${resp.truncated}`);
+            return resp;
+        }
+        case 'dsh-memory/conflict-batch-apply': {
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+            const p = (payload ?? {});
+            const batchId = typeof p.batchId === 'string' && p.batchId.trim() ? p.batchId.trim() : `batch_${Date.now()}`;
+            const all = Array.isArray(p.rows) ? p.rows : [];
+            const truncated = Math.max(0, all.length - 200);
+            const rows = all.slice(0, 200);
+            const dryRun = p.dryRun !== false;
+            const out = { requested: all.length, applied: 0, truncated, skippedStale: 0, skippedInvalid: 0, notFound: 0, dryRun, rows: [] };
+            const pending = new Map(stores.l1.listConflictPending({ limit: 2000 }).map((x) => [x.pairId, x]));
+            for (const row of rows) {
+                const pairId = typeof row.pairId === 'string' ? row.pairId : '';
+                const outcome = row.outcome === 'winner' || row.outcome === 'loser' || row.outcome === 'both' ? row.outcome : null;
+                const line = { pairId, status: 'noop' };
+                if (!outcome) {
+                    line.status = 'skippedInvalid';
+                    line.notice = 'outcome 必须是 winner/loser/both';
+                    out.skippedInvalid++;
+                    out.rows.push(line);
+                    continue;
+                }
+                const pair = pending.get(pairId);
+                if (!pair || pair.resolvedAt !== '') {
+                    line.status = 'skippedStale';
+                    line.notice = '对不存在或已了结(乐观并发:请重新导出)';
+                    out.skippedStale++;
+                    out.rows.push(line);
+                    continue;
+                }
+                if (typeof row.createdAtSnapshot === 'string' && row.createdAtSnapshot !== '' && row.createdAtSnapshot !== pair.createdAt) {
+                    line.status = 'skippedStale';
+                    line.notice = `created_at 快照过期(回传 ${row.createdAtSnapshot} ≠ 库内 ${pair.createdAt})`;
+                    out.skippedStale++;
+                    out.rows.push(line);
+                    continue;
+                }
+                if (dryRun) {
+                    line.status = 'applied';
+                    line.notice = 'dryRun 预演:未写库';
+                    out.applied++;
+                    out.rows.push(line);
+                    continue;
+                }
+                // ① 先打标(resolution='batch' + batch_id)② 再执行终局语义(retire 败方)
+                const n = stores.l1.resolveConflictPending(pairId, 'batch', new Date().toISOString());
+                if (n === 0) {
+                    line.status = 'skippedStale';
+                    line.notice = '打标 0 行(已被并发裁决)';
+                    out.skippedStale++;
+                    out.rows.push(line);
+                    continue;
+                }
+                if (outcome !== 'both') {
+                    const loser = outcome === 'winner' ? pair.loserId : pair.winnerId;
+                    stores.l1.retire([loser], { at: new Date().toISOString(), reason: 'conflict', verdict: outcome, pairId });
+                }
+                stores.l1.setConflictBatchId([pairId], batchId);
+                line.status = 'applied';
+                out.applied++;
+                out.rows.push(line);
+            }
+            return out;
+        }
+        case 'dsh-memory/conflict-batch-undo': {
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放:请在记忆库面板开启高权限模式');
+            const p = (payload ?? {});
+            const batchId = typeof p.batchId === 'string' ? p.batchId.trim() : '';
+            if (!batchId)
+                throw new Error('batchId 缺失');
+            const undone = await stores.l1.undoConflictBatch(batchId);
+            const resp = {
+                undone,
+                notice: undone > 0
+                    ? `已撤销 ${undone} 对的 batch 裁决(清 resolved_at/resolution,行与 batch_id 保留可审计,ADR-0018);败方已放回召回面`
+                    : '没有可撤销的行:batchId 不存在,或该批不含 resolution=batch 的对(终局动词不可撤销)',
             };
             return resp;
         }

@@ -204,3 +204,61 @@ export function describePlan(plan) {
     return (`保留 ${plan.preserved.length} 条无来源记忆${parts.length ? `(${parts.join(' / ')})` : ''};` +
         `可重蒸馏 ${plan.rederivable} 条;事实源 ${plan.factCount} 条(其中无来源但已退场 ${plan.retiredNoSource} 条,不恢复)`);
 }
+function attributionOf(r) {
+    const tier = r.tier === 'wiki' ? 'wiki' : undefined;
+    const repoKeyName = r.repoKeyName || undefined;
+    const repoKeyOwner = r.repoKeyOwner || undefined;
+    const applicability = r.applicability || undefined;
+    if (!tier && !repoKeyName && !repoKeyOwner && !applicability)
+        return null;
+    return { ...(tier ? { tier } : {}), ...(repoKeyName ? { repoKeyName } : {}), ...(repoKeyOwner ? { repoKeyOwner } : {}), ...(applicability ? { applicability } : {}) };
+}
+/**
+ * 清空**前**捕获全部治理归属(重建主流程在 gate 之后、clearL1 之前调用)。
+ * 双键:record_id(稳定路径)+ 内容 sha1(重derive 内容逐字一致时才命中——
+ * 全新 LLM 重抽措辞不同即不命中,这是机制的能力边界,如实记录在重建日志)。
+ */
+export function captureGovernanceAttribution(records) {
+    const byId = new Map();
+    const byHash = new Map();
+    for (const r of records) {
+        if (!r || typeof r.id !== 'string' || !r.id)
+            continue;
+        const a = attributionOf(r);
+        if (!a)
+            continue;
+        byId.set(r.id, a);
+        if (typeof r.content === 'string' && r.content)
+            byHash.set(await_sha1(r.content), a);
+    }
+    return { byId, byHash };
+}
+/** 占位:内容 sha1(与 l1-snapshot 的 hashRecords 同算法,单条形)。 */
+import { createHash } from 'node:crypto';
+function await_sha1(content) {
+    return createHash('sha1').update(content, 'utf8').digest('hex');
+}
+/**
+ * 清空/重derive **后**回填治理归属(T3.12):id 命中优先,哈希兜底;
+ * 只补非默认值,已显式不同(如重建后人为改动)以**先到为准**——回填是恢复
+ * 不是覆盖,已有 wiki 的记录不会被降回 active。
+ */
+export function reapplyGovernanceAttribution(store, attr) {
+    let byId = 0;
+    let byHash = 0;
+    for (const r of store.all()) {
+        if (!r || typeof r.id !== 'string')
+            continue;
+        const a = attr.byId.get(r.id) ?? attr.byHash.get(await_sha1(String(r.content ?? '')));
+        if (!a)
+            continue;
+        const n = store.restoreGovernanceAttribution(r.id, a);
+        if (n > 0) {
+            if (attr.byId.has(r.id))
+                byId++;
+            else
+                byHash++;
+        }
+    }
+    return { byId, byHash };
+}

@@ -80,6 +80,10 @@ const ALWAYS_ON = {
     embedRemoteDimensions: 0,
     memoryMutate: false,
     conflictFreeze: false,
+    recallScopeFenceEnabled: false,
+    recallActivationEnabled: false,
+    recallDecayFloorByType: false,
+    governanceTierEnabled: false,
 };
 /** 自带自定义设置页(settings.section 顶层「记忆」分节,client 半挂载):
  *  关掉宿主按 volatile 字段自动生成的表单页,避免同一个插件出现两份设置入口。
@@ -204,5 +208,9 @@ function resolveSettings(value) {
         memoryMutate: v.memoryMutate === true,
         // §C 人工冲突裁决:严格 === true(默认关,冻结消耗注意力)
         conflictFreeze: v.conflictFreeze === true,
+        recallScopeFenceEnabled: v.recallScopeFenceEnabled === true,
+        recallActivationEnabled: v.recallActivationEnabled === true,
+        recallDecayFloorByType: v.recallDecayFloorByType === true,
+        governanceTierEnabled: v.governanceTierEnabled === true,
     };
 }

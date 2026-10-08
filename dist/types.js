@@ -46,6 +46,10 @@ export function normExtractedFamily(raw) {
 export function resolveRecordFamily(forced, extracted, type) {
     return forced ?? normExtractedFamily(extracted) ?? familyForType(type);
 }
+/** tier 归一:缺失/非法一律 `active`(I-23 读回 fail-open——读不到治理归属 ≈ 正常记忆,绝不让记忆凭空消失)。 */
+export function normTier(raw) {
+    return typeof raw === 'string' && raw.toLowerCase() === 'wiki' ? 'wiki' : 'active';
+}
 /** 作用域归一:非法/缺省一律归 `global`(ADR-0008 条 4:不抛错、不阻断启动)。 */
 export function normScope(raw) {
     return typeof raw === 'string' && raw.toLowerCase() === 'workspace' ? 'workspace' : 'global';

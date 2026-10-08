@@ -158,6 +158,21 @@ describe('init / apply / view 语义', () => {
     }
   });
 
+  it('apply:任意事件都判脏——rev 变了,非 tool/result 事件也重建(v0.18.4)', async () => {
+    const { def, store } = await captured();
+    const before = def.init();
+    await store.upsert({ title: '跨会话规则', kind: 'rule', pinned: true, priority: 90 });
+    // 用户消息 / turn 边界等任意事件到达即刷新,不再依赖下一条 tool/result
+    for (const event of [
+      { type: 'user/message', data: {} },
+      { type: 'turn/start', data: { turn: 2 } },
+    ]) {
+      const next = def.apply(before, event);
+      expect(Object.is(next, before)).toBe(false);
+      expect(next).toMatchObject({ rev: 1, count: 1, openCount: 1 });
+    }
+  });
+
   it('apply:tool/result 时 rev 变了才重建快照(task_33)', async () => {
     const { def, store } = await captured();
     const before = def.init();
@@ -174,11 +189,15 @@ describe('init / apply / view 语义', () => {
     expect(closed.slots[0]?.status).toBe('done');
   });
 
-  it('apply:已失败(settled error)的 tool/result 不重建', async () => {
+  it('apply:错误事件不再抑制重建——rev 是唯一判据(v0.18.4 语义变更)', async () => {
     const { def, store } = await captured();
     const before = def.init();
     await store.upsert({ title: 'A' });
-    expect(Object.is(def.apply(before, TOOL_RESULT_ERROR), before)).toBe(true);
+    // 旧行为:错误 tool/result 返回同引用。新行为:store 已真实变更(rev 1),
+    // 无论到达的事件成败,重建都读当前真实快照——事件只是触发器,不是数据源。
+    const next = def.apply(before, TOOL_RESULT_ERROR);
+    expect(Object.is(next, before)).toBe(false);
+    expect(next).toMatchObject({ rev: 1, count: 1 });
   });
 
   it('view 引用稳定(I1)且不含 body(F9)', async () => {
