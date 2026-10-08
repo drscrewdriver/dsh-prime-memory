@@ -314,7 +314,7 @@ export function registerRecall(
 
   // §E 压缩感知(memorax-absorb):宿主 `compaction/end`(无 error)→ 该会话下一轮
   // 做一次"定向增强召回"——跳过去重压制、画像立即重注入、占用账本归零;消费即清。
-  // 会话级回退路径保留(下方 session-start source='compact' 全量重置),两者幂等。
+  // 会话级回退路径保留(下方 agent/created source='compact' 全量重置),两者幂等。
   // 宿主无压缩计数器(compactionId 为 per-transaction UUID),故不做 generation 对账。
   const postCompaction = new PostCompactionTracker();
   ctx.on('session/event', (session, event) => {
