@@ -246,13 +246,20 @@ export function registerSlotsProjection(ctx: Context, store: SlotStore, l1?: L1L
     const registry = (injected as unknown as { sessionProjections?: ProjectionRegistryLike })
       .sessionProjections;
     if (registry === undefined || typeof registry.register !== 'function') return;
-    registry.register({
+    // 双代平面（TL beta.29 同款判别式）：0.1.0-rc.8 的 registry 是唯一的平面契约
+    // （def.schema.parse(def.view(state))），0.1.1+ 消费 wire:{viewSchema,view}。
+    // wire 形状镜像成平面键挂上，两代 registry 各取所需；一个缺 schema 的注册
+    // 单元会毒化旧 registry 的全部冷会话历史加载。
+    const definition = {
       key: MEMORY_SLOTS_KEY,
       stateSchema,
       init: () => buildState(store, l1),
-      apply: (state, event) => applySlotsEvent(state, event, store, l1),
+      apply: (state: SlotsProjectionState, event: { type: string; data: unknown }) => applySlotsEvent(state, event, store, l1),
       wire: { viewSchema, view },
+      schema: viewSchema,
+      view,
       stateVersion: 0,
-    });
+    } as unknown as Parameters<ProjectionRegistryLike['register']>[0];
+    registry.register(definition);
   });
 }

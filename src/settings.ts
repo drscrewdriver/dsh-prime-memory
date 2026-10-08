@@ -22,7 +22,7 @@ import type { Context } from '@deepseek-ai/cordis';
 // 纯类型导入:拉入 `loader/volatile-update` 事件声明(module augmentation)。
 import type {} from '@deepseek-ai/cordis-plugin-loader';
 import type { MemoryConfig } from './config.js';
-import { EFFORT_CHOICES } from './config.js';
+import { EFFORT_CHOICES, liveSettingsSchema } from './config.js';
 import type { MemoryLogger } from './types.js';
 
 // EffortChoice/DistillBudgets/DistillChainEntry/MemoryLiveSettings 来自契约单一事实源
@@ -170,23 +170,132 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
     );
   });
 
-  // 写面:settings 服务(宿主服务,可能晚于本插件就绪)——用 inject 惰性握手,
-  // 服务替换时 cordis 会重跑回调换上新实例,无需手工判活。
+  // ── 读写面三代腰(纯特性检测,playbook §5:勿按版本号分支)──────────────
+  // 代 1(0.1.7+):settings 服务有 SettingsForms.update(ns,patch) —— 读走 Config
+  //   live volatile 引用(read()),写走 forms.update(整节提交)。
+  // 代 2(0.1.2/0.1.5):settings.register 返回 SettingsScope(get/watch/update)
+  //   —— 读写全走 scope(写活读死:0.1.2/0.1.5 的 scope.get() 快照可能恒默认,
+  //   磁盘才是真值,调用方以持久化成功为准)。
+  // 代 2'(register 缺失):installSection 只回 hooks —— 读走 setSource 注入的
+  //   thunk,写显式拒绝。
+  // 代 3(0.1.0/0.1.1):settings 服务整体缺席 → 恒开降级,internal/service 上线
+  //   重试。参考件:compat/0.1.5 registerLiveSettings 的 tryAttach 全套。
   let forms: SettingsFormsLike | undefined;
   ctx.inject(['settings'], (sctx) => {
     forms = sctx.get('settings') as SettingsFormsLike | undefined;
   });
 
+  interface SettingsScopeLike {
+    get(): unknown;
+    watch(callback: (next: MemoryLiveSettings) => void): () => void;
+    update(patch: Partial<MemoryLiveSettings>): Promise<void>;
+  }
+  let inner: LiveSettingsHandle = {
+    supported: false,
+    get: () => ({ ...ALWAYS_ON, distillChain: [] }),
+    update: () => Promise.reject(new Error('settings 服务不可用,记忆开关无法写入')),
+  };
+
+  const wireScope = (scope: SettingsScopeLike): LiveSettingsHandle => {
+    return {
+      supported: true,
+      get: () => resolveSettings(scope.get()),
+      update: async (patch) => {
+        await scope.update(patch);
+      },
+    };
+  };
+
+  const tryAttachOld = (): boolean => {
+    const settings = ctx.get('settings') as
+      | (SettingsFormsLike & {
+          register?: (ns: string, schema: unknown, options?: object) => SettingsScopeLike;
+          installSection?: (
+            owner: Context,
+            ns: string,
+            schema: unknown,
+            entry: MemoryLiveSettings,
+            hooks: { setSource(current: () => MemoryLiveSettings): void; onChange(): void },
+          ) => void;
+        })
+      | undefined;
+    if (!settings || typeof (forms as SettingsFormsLike | undefined)?.update === 'function') return true; // 代 1 生效,老臂不必挂
+    if (typeof settings.register === 'function') {
+      try {
+        const scope = settings.register(MEMORY_ENTRY_ID, liveSettingsSchema(), { applies: 'live' });
+        inner = wireScope(scope);
+        logger.info('[memory] 记忆模式开关就绪(settings.register,命名空间 dsh-memory)');
+        return true;
+      } catch (err) {
+        logger.warn(`[memory] 记忆模式开关注册失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
+        return true;
+      }
+    }
+    if (typeof settings.installSection === 'function') {
+      try {
+        let source: () => MemoryLiveSettings = () => ({ ...ALWAYS_ON, distillChain: [] });
+        let notify: (() => void) | undefined;
+        const bridge: SettingsScopeLike = {
+          get: () => resolveSettings(source()),
+          watch: (callback) => {
+            notify = () => void callback(bridge.get() as MemoryLiveSettings);
+            return () => {
+              notify = undefined;
+            };
+          },
+          update: () => Promise.reject(new Error('installSection 桥接模式不支持运行时写入')),
+        };
+        settings.installSection(ctx, MEMORY_ENTRY_ID, liveSettingsSchema(), { ...ALWAYS_ON, distillChain: [] }, {
+          setSource: (current) => {
+            source = current;
+          },
+          onChange: () => notify?.(),
+        });
+        inner = wireScope(bridge);
+        logger.info('[memory] 记忆模式开关就绪(settings.installSection 桥接,运行时写入不可用)');
+        return true;
+      } catch (err) {
+        logger.warn(`[memory] 记忆模式开关 installSection 桥接失败(保持全开): ${err instanceof Error ? err.message : String(err)}`);
+        return true;
+      }
+    }
+    logger.warn('[memory] settings 服务无可用的 register/installSection API,记忆模式开关降级为恒开');
+    return true;
+  };
+
+  if (!tryAttachOld()) {
+    logger.warn('[memory] settings 服务未就绪,记忆模式开关暂不可用(保持全开,等待服务上线)');
+  }
+  // 服务迁移自愈(代 2/2' 臂):下线 → 降级;换实例/上线 → 立即重试挂接(幂等)。
+  ctx.on('internal/service', (name: string) => {
+    if (name !== 'settings') return;
+    inner = {
+      supported: false,
+      get: () => ({ ...ALWAYS_ON, distillChain: [] }),
+      update: () => Promise.reject(new Error('settings 服务不可用,记忆开关无法写入')),
+    };
+    tryAttachOld();
+  });
+
+  const modernWrite = (): boolean => {
+    const f = forms as SettingsFormsLike | undefined;
+    return !!(f && typeof f.update === 'function');
+  };
+
   return {
     supported: true,
-    get: read,
+    get: () => (modernWrite() ? read() : inner.get()),
     update: async (patch) => {
-      if (!forms) throw new Error('settings 服务不可用,记忆开关无法写入');
-      // patch 合并语义与旧 scope.update 一致:只改传入键。合并在插件侧完成后
-      // **整节提交**——宿主的表单 update 按 volatile 节整体写入 profile patch,
-      // 部分对象会覆盖掉未提交字段。写失败(update 抛错)对调用方可观测。
-      const next: MemoryLiveSettings = { ...read(), ...patch };
-      await forms.update(MEMORY_ENTRY_ID, { live: next });
+      if (modernWrite()) {
+        if (!forms) throw new Error('settings 服务不可用,记忆开关无法写入');
+        // patch 合并语义与旧 scope.update 一致:只改传入键。合并在插件侧完成后
+        // **整节提交**——宿主的表单 update 按 volatile 节整体写入 profile patch,
+        // 部分对象会覆盖掉未提交字段。写失败(update 抛错)对调用方可观测。
+        const next: MemoryLiveSettings = { ...read(), ...patch };
+        await forms.update(MEMORY_ENTRY_ID, { live: next });
+        return;
+      }
+      await inner.update(patch);
     },
   };
 }
