@@ -201,8 +201,11 @@ describe('task_28 §E FTS 重建回灌必须带上可见范围（一次索引重
   it('缺 scope 列的 FTS 被重建后，workspace 归属仍然生效', async () => {
     if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-scope-migrate-'));
     const file = join(dir, 'fts-rebuild.db');
-    const WS = 'e:\\proj\\iso';
-    const OTHER = 'e:\\proj\\other';
+    // 平台无关（同 scope-isolation.test.ts）：库里的归属原值必须与查询侧 `path.resolve`
+    // 归一后的结果一致，否则 Linux 上 `e:\proj\iso` 会被拼上 cwd 而失配。
+    const IS_WIN = process.platform === 'win32';
+    const WS = IS_WIN ? 'e:\\proj\\iso' : '/proj/iso';
+    const OTHER = IS_WIN ? 'e:\\proj\\other' : '/proj/other';
 
     // 1) 正常建库（新 schema），写入一条 workspace 归属的 work 记录
     const db1 = new MemoryDb(file, 0);
