@@ -225,9 +225,10 @@ export function effectiveCfg(cfg: MemoryConfig, live?: LiveSettingsHandle): Memo
     ? { validity: { ...(cfg.validity ?? {}), tieringEnabled: cfg.validity?.tieringEnabled === true || s.validityTiering === true } }
     : null;
   // 知识图谱投影(issue #16):live.graphEnabled 与部署 cfg.graph.enabled 取或。
-  // 部署可以硬开（强制投影），面板只能追加开；两边都假时形状与改前逐字一致。
+  // 这里**直接复用 graphFeatureOn**，而不是再手写一遍“部署开关 或 面板开关”：
+  // 判据一旦有两份，将来改一处漏一处就会出现“面板显示开、覆盖算出来却是关”类的分叉。
   const grOverride = s?.graphEnabled !== undefined
-    ? { graph: { ...(cfg.graph ?? { enabled: false }), enabled: cfg.graph?.enabled === true || s.graphEnabled === true } }
+    ? { graph: { ...(cfg.graph ?? { enabled: false }), enabled: graphFeatureOn(cfg, live) } }
     : null;
   // md 投射/后缀收敛的单次动作护栏运行时覆盖(0 = 跟随部署 cfg.memExport.maxRecords)。
   // 只覆盖条数护栏，不动 enabled/root——开关与根路径仍属部署配置。
