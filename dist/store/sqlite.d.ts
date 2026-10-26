@@ -623,6 +623,23 @@ export declare class MemoryDb {
      * 使"无锚点"与"锚点为空"在类型层就是两件事。
      */
     private toL0Record;
+    /**
+     * 有 L0 正文的会话 id，按**首条消息时间升序**（流式重建的会话游标）。
+     *
+     * 为什么不是直接 `listL0All()`：那个接口全量拉正文（3 万条约 88MB）且整个重建期
+     * 常驻。按会话走 `idx_l0_session_id` 点查，峰值降到单会话量级。
+     * 排序与 `groupL0Sessions` 的“会话按首条时间升序”同一口径（情境链按时间衔接）。
+     */
+    l0SessionIds(): string[];
+    /** 某会话的全部 L0 正文（时间升序；走 idx_l0_session_id，只占单会话内存）。 */
+    l0MessagesBySession(sessionId: string): L0MessageRecord[];
+    /**
+     * 仅取 L0 消息 id 集（post-watermark 判据用）。
+     *
+     * 刻意**不读 `message_text`**：判据只需要 id，而正文才是内存大头。
+     * 2.5 万条 id 约 1.5MB，比全量快照小一个数量级。
+     */
+    l0MessageIds(): Set<string>;
     /** L0 全量列举(重建快照用;按时间升序,事务一致性避开 JSONL 追加竞态)。 */
     listL0All(): L0MessageRecord[];
     /** 重建成本预估(一次全表聚合:会话数 / 消息数 / 字符量)。 */

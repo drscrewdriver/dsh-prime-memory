@@ -2405,6 +2405,63 @@ export class MemoryDb {
             rec.step = r.step;
         return rec;
     }
+    /**
+     * 有 L0 正文的会话 id，按**首条消息时间升序**（流式重建的会话游标）。
+     *
+     * 为什么不是直接 `listL0All()`：那个接口全量拉正文（3 万条约 88MB）且整个重建期
+     * 常驻。按会话走 `idx_l0_session_id` 点查，峰值降到单会话量级。
+     * 排序与 `groupL0Sessions` 的“会话按首条时间升序”同一口径（情境链按时间衔接）。
+     */
+    l0SessionIds() {
+        if (this.degraded)
+            return [];
+        try {
+            const rows = this.db
+                .prepare('SELECT session_id FROM l0_conversations GROUP BY session_id ORDER BY MIN(timestamp) ASC')
+                .all();
+            return rows.map((r) => r.session_id).filter((s) => typeof s === 'string' && s !== '');
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L0 会话列表失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+    }
+    /** 某会话的全部 L0 正文（时间升序；走 idx_l0_session_id，只占单会话内存）。 */
+    l0MessagesBySession(sessionId) {
+        if (this.degraded || !sessionId)
+            return [];
+        try {
+            const rows = this.db
+                .prepare('SELECT record_id, session_id, role, message_text, recorded_at, timestamp, turn, step FROM l0_conversations WHERE session_id = ? ORDER BY timestamp ASC')
+                .all(sessionId);
+            return rows.map((r) => this.toL0Record(r));
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L0 会话读取失败(session=${sessionId}): ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
+    }
+    /**
+     * 仅取 L0 消息 id 集（post-watermark 判据用）。
+     *
+     * 刻意**不读 `message_text`**：判据只需要 id，而正文才是内存大头。
+     * 2.5 万条 id 约 1.5MB，比全量快照小一个数量级。
+     */
+    l0MessageIds() {
+        const out = new Set();
+        if (this.degraded)
+            return out;
+        try {
+            for (const r of this.db.prepare('SELECT record_id FROM l0_conversations').iterate()) {
+                if (typeof r.record_id === 'string' && r.record_id !== '')
+                    out.add(r.record_id);
+            }
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} L0 id 集读取失败(按空处理): ${err instanceof Error ? err.message : String(err)}`);
+        }
+        return out;
+    }
     /** L0 全量列举(重建快照用;按时间升序,事务一致性避开 JSONL 追加竞态)。 */
     listL0All() {
         if (this.degraded)

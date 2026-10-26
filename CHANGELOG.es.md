@@ -16,6 +16,21 @@ y los números de versión obedecen al [versionado semántico](https://semver.or
 > **Convención de capturas de interfaz**: las entradas que traen cambios de interfaz conservan capturas reales
 > en `assets/changelog/<número de versión>/<número de dos dígitos>-<resumen>.png` y las citan en el texto con una ruta relativa: en el registro de cambios se ve directamente cómo luce la interfaz de la nueva versión.
 
+## [0.26.11] — 2026-10-27
+
+> Cierra cuatro issues externas: #12 (los slugs Room de dos niveles se descartaban en silencio), #13 (la tabla de rutas por defecto codificaba las rutas locales del autor), #14 (la reconstrucción usaba la tabla L0 retirada como fuente de hechos), #16 (la proyección del grafo solo se podía activar por YAML). El detalle de 0.26.2–0.26.10 está en el CHANGELOG chino: este archivo va rezagado a propósito.
+
+### Corregido
+- `memory_room_review` acepta slugs Room de dos niveles (`major/minor`) tanto en el análisis de candidatos como en `confirmReview`; el prompt de anotación solo enseñaba al modelo el nivel único.
+- La reconstrucción ya no pierde memorias capturadas tras retirar L0: los registros cuyos mensajes de origen están fuera del snapshot actual se conservan con el nuevo motivo `post-watermark` (prueba de conjuntos, no un umbral temporal: este último bloquearía la reconstrucción para siempre).
+
+### Añadido
+- La proyección del grafo de conocimiento se puede activar desde el panel de resumen (`live.graphEnabled`, en OR con `graph.enabled`), con una confirmación de coste basada en los registros pendientes antes de la primera activación.
+
+### Cambiado
+- El valor por defecto de `workspaceSource.routes` pasa a `[]`; quien dependa de los antiguos valores debe escribir sus propias reglas `{path, anyOf}`.
+- La reconstrucción incorpora dos barreras: parada dura si L0 no tiene mensajes y el almacén no está vacío, y confirmación `force` si más de la mitad de los registros son posteriores a la marca de agua de la fuente de hechos.
+
 ## [0.24.1] — 2026-10-14
 
 ### Añadido

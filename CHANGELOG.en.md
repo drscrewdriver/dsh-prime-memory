@@ -7,6 +7,21 @@
 
 This file covers the **0.12.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 
+## [0.26.11] — 2026-10-27
+
+> Closes four external issues: #12 (two-level Room slugs silently dropped), #13 (the default route table hard-coded the author's local paths), #14 (rebuild used the retired L0 table as its fact source), #16 (graph projection only switchable via YAML). Detailed notes for 0.26.2–0.26.10 live in the Chinese CHANGELOG — this file lags behind by design.
+
+### Fixed
+- `memory_room_review` accepts two-level Room slugs (`major/minor`) in both candidate parsing and `confirmReview`; the annotation prompt was also teaching the model single-level only.
+- Rebuild no longer loses memories captured after L0 was retired: records whose source messages are outside the current snapshot are preserved under the new `post-watermark` reason (set-based test, not a time threshold — the latter would lock rebuild forever).
+
+### Added
+- Knowledge-graph projection is switchable from the overview panel (`live.graphEnabled`, OR-ed with `graph.enabled`), with a cost confirmation derived from the pending-record count before the first enable.
+
+### Changed
+- Default `workspaceSource.routes` is now `[]`; users relying on the old defaults must write their own `{path, anyOf}` rules.
+- Rebuild gained two gates: a hard stop when L0 has no messages but the store is non-empty, and a `force` confirmation when more than half of the records postdate the fact-source watermark.
+
 ## [0.26.1] — 2026-10-15
 
 ### Added

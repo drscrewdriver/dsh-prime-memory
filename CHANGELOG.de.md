@@ -16,6 +16,21 @@ die Versionsnummern folgen der [semantischen Versionierung](https://semver.org/)
 > **Konvention für UI-Screenshots**: Einträge mit Oberflächenänderungen archivieren echte Screenshots unter
 > `assets/changelog/<Versionsnummer>/<zweistellige Nummer>-<Kurzbeschreibung>.png` und verweisen im Eintrag per relativer Pfadangabe darauf — im Changelog sieht man direkt, wie die neue Version aussieht.
 
+## [0.26.11] — 2026-10-27
+
+> Schließt vier externe Issues: #12 (zweistufige Room-Slugs wurden still verworfen), #13 (die Standard-Routentabelle enthielt die lokalen Pfade des Autors fest verdrahtet), #14 (Rebuild nutzte die stillgelegte L0-Tabelle als Faktenquelle), #16 (Graph-Projektion nur per YAML schaltbar). Details zu 0.26.2–0.26.10 stehen im chinesischen CHANGELOG — diese Datei hinkt bewusst hinterher.
+
+### Behoben
+- `memory_room_review` akzeptiert zweistufige Room-Slugs (`major/minor`) sowohl beim Parsen der Kandidaten als auch in `confirmReview`; der Annotations-Prompt brachte dem Modell zuvor nur einstufige Slugs bei.
+- Rebuild verliert keine Erinnerungen mehr, die nach dem Stilllegen von L0 erfasst wurden: Datensätze, deren Quellnachrichten nicht im aktuellen Snapshot liegen, bleiben mit dem neuen Grund `post-watermark` erhalten (mengenbasierte Prüfung statt Zeitsschwelle — letztere würde Rebuild dauerhaft blockieren).
+
+### Neu
+- Die Wissensgraph-Projektion ist im Übersichts-Panel umschaltbar (`live.graphEnabled`, ODER-verknüpft mit `graph.enabled`); vor dem ersten Aktivieren erscheint eine Kostenbestätigung auf Basis der noch nicht projizierten Datensätze.
+
+### Geändert
+- Der Standardwert von `workspaceSource.routes` ist jetzt `[]`; wer sich auf die alten Standardwerte verlässt, muss eigene `{path, anyOf}`-Regeln schreiben.
+- Rebuild hat zwei Sperren: harter Abbruch, wenn L0 keine Nachrichten enthält, der Store aber nicht leer ist; `force`-Bestätigung, wenn mehr als die Hälfte der Datensätze neuer als das Faktenquellen-Wasserzeichen ist.
+
 ## [0.24.1] — 2026-10-14
 
 ### Neu

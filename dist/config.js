@@ -195,6 +195,16 @@ export const memorySchema = Schema.object({
         // 单源扫描上限（防极端大包在事件循环里阻塞 RPC；scan 是手动触发，仍留护栏）。
         scanMaxRecords: Schema.number().min(0).max(20_000).default(5000),
     }),
+    // 重建事实源(issue #14-B)：默认 local（行为与改前一致）；drsc 需显式选，
+    // 且 collector 缺席时**报错中止**（不清库）——不静默回退本地，避免“以为用了新源其实还是旧表”。
+    rebuild: Schema.object({
+        /**
+         * 'local' = 本地 l0_conversations；'drsc' = reference-session-collector 投影。
+         *
+         * drsc 路径恒带 `redact=1`（collector 的 session 缺省是原文臂，而 capture 是写前脱敏）。
+         */
+        factSource: Schema.union(['local', 'drsc']).default('local'),
+    }),
     // 轨2 技能结晶：默认关 + allowPromote 关（先只计数不晋升）。
     skills: Schema.object({
         enabled: Schema.boolean().default(false),

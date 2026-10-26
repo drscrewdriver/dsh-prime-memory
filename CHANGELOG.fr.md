@@ -16,6 +16,21 @@ et les numéros de version respectent la [gestion sémantique de version](https:
 > **Convention des captures d'écran d'interface** : les entrées apportant des changements d'interface conservent une capture réelle
 > dans `assets/changelog/<numéro de version>/<numéro à deux chiffres>-<résumé>.png` et y font référence par un chemin relatif : on voit directement dans le journal à quoi ressemble l'interface de la nouvelle version.
 
+## [0.26.11] — 2026-10-27
+
+> Ferme quatre issues externes : #12 (les slugs Room à deux niveaux étaient silencieusement ignorés), #13 (la table de routage par défaut codait en dur les chemins locaux de l'auteur), #14 (la reconstruction utilisait la table L0 retirée comme source de faits), #16 (projection du graphe uniquement réglable via YAML). Le détail de 0.26.2–0.26.10 se trouve dans le CHANGELOG chinois — ce fichier est en retard par choix.
+
+### Corrigé
+- `memory_room_review` accepte les slugs Room à deux niveaux (`major/minor`) lors de l'analyse des candidats comme dans `confirmReview` ; le prompt d'annotation n'apprenait au modèle que le niveau unique.
+- La reconstruction ne perd plus les souvenirs captés après le retrait de L0 : les enregistrements dont les messages sources sont hors du snapshot courant sont conservés sous le nouveau motif `post-watermark` (test ensembliste, pas un seuil temporel — ce dernier bloquerait la reconstruction définitivement).
+
+### Ajouté
+- La projection du graphe de connaissances se règle depuis le panneau d'aperçu (`live.graphEnabled`, en OU avec `graph.enabled`), avec une confirmation de coût basée sur le nombre d'enregistrements non encore projetés avant la première activation.
+
+### Modifié
+- La valeur par défaut de `workspaceSource.routes` devient `[]` ; ceux qui dépendent des anciennes valeurs doivent écrire leurs propres règles `{path, anyOf}`.
+- La reconstruction a deux verrous : arrêt net si L0 est vide alors que le store ne l'est pas, et confirmation `force` si plus de la moitié des enregistrements sont postérieurs au filigrane de la source de faits.
+
 ## [0.24.1] — 2026-10-14
 
 ### Ajouté

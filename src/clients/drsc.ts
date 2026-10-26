@@ -8,6 +8,10 @@
  * - 工具面 conversation_search → `op=search&redact=1`(命中基于原文 fts,
  *   返回 snippet 取脱敏锚定文本)。
  *
+ * 加上 issue #14-B 的**重建事实源**：`op=sessions` 枚举 + `op=session`（**不带 tail**）
+ * 逐会话拉全量——对全量重建来说“尾窗”不够用，而 collector 侧不带 tail 即 `ORDER BY seq ASC`
+ * 无 LIMIT。此路径同样恒带 `redact=1`。
+ *
  * 硬依赖纪律(对齐 T7.3 裁定):collector 缺席/超时/非 2xx/ok=false 一律抛
  * {@link DrscClientError}——**绝不回退本地 l0**(表已退役,无退路);调用方
  * 分口径处理:蒸馏背景窗空窗降级(runner),工具面显式报错(tools)。
@@ -68,6 +72,17 @@ export interface DrscSearchHit {
   turn: number;
 }
 
+/** `op=sessions` 的一个会话摘要行（分页枚举用；wire 蛇形直取）。 */
+export interface DrscSessionSummary {
+  session_id: string;
+  title: string;
+  cwd: string;
+  event_count: number;
+  turn_count: number;
+  /** 末条消息时间（ms）—— collector 按它降序排，客户端用时注意反转。 */
+  last_time_ms: number;
+}
+
 /** kind → L0 角色词表(memory 只收 user/assistant 两类,其余(tool/* 等)不映射)。 */
 export function drscRoleOf(kind: string): 'user' | 'assistant' | undefined {
   if (kind === 'user/message') return 'user';
@@ -100,6 +115,32 @@ export function drscRowToConversationMessage(
   return msg;
 }
 
+/** 包络收窄:响应必须是 {ok:true, ...} 形状。 */
+interface DrscEnvelope {
+  ok: boolean;
+  error?: unknown;
+}
+
+/**
+ * `op=session` 包络 → 行数组。
+ *
+ * `session:null` = collector 没有这个会话 —— 新会话首轮的常态，**不是错误**
+ * （“没有内容”与“没拿到”必须分开：前者空窗降级，后者抛 DrscClientError）。
+ */
+function parseSessionRows(body: Record<string, unknown>): DrscSessionRow[] {
+  if (body['session'] === null || body['session'] === undefined) return [];
+  const rows = Array.isArray(body['rows']) ? (body['rows'] as Record<string, unknown>[]) : [];
+  return rows.map((r) => ({
+    seq: Number(r['seq'] ?? 0),
+    turn: Number(r['turn'] ?? 0),
+    step: Number(r['step'] ?? 0),
+    kind: String(r['kind'] ?? ''),
+    role: String(r['role'] ?? ''),
+    time: Number(r['time'] ?? 0),
+    text: String(r['text'] ?? ''),
+  }));
+}
+
 export interface DrscClientOptions {
   /** 显式基址(缺省走 trustedHosts → 127.0.0.1:8080,见 resolveDrscBaseUrl)。 */
   baseUrl?: string;
@@ -109,12 +150,6 @@ export interface DrscClientOptions {
   fetchImpl?: typeof fetch;
   /** 单请求超时 ms;缺省 {@link DRSC_DEFAULT_TIMEOUT_MS}。 */
   timeoutMs?: number;
-}
-
-/** 包络收窄:响应必须是 {ok:true, ...} 形状。 */
-interface DrscEnvelope {
-  ok: boolean;
-  error?: unknown;
 }
 
 export class DrscClient {
@@ -176,17 +211,45 @@ export class DrscClient {
     const body = await this.getJson(
       `?op=session&session=${encodeURIComponent(sessionId)}&tail=${Math.max(0, Math.floor(tail))}&redact=1`,
     );
-    if (body['session'] === null || body['session'] === undefined) return [];
+    return parseSessionRows(body);
+  }
+
+  /**
+   * **整会话**正文（issue #14-B 重建事实源）：`op=session&session=<id>&redact=1`，
+   * **不带 `tail`** —— collector 侧 `tail` 未给时走 `ORDER BY s.seq ASC` 无 LIMIT，即全量。
+   *
+   * `redact=1` 是**硬要求**，不是可选项：collector 的 `session` 缺省是原文臂，
+   * 而 memory 捕获侧是写前单点脱敏；重建若走原文臂，产出的 L1 会比正常蒸馏「更脏」，
+   * 而且会经 md 投射落盘。
+   */
+  async sessionAll(sessionId: string): Promise<DrscSessionRow[]> {
+    const body = await this.getJson(`?op=session&session=${encodeURIComponent(sessionId)}&redact=1`);
+    return parseSessionRows(body);
+  }
+
+  /**
+   * 会话枚举：`op=sessions&offset&limit`（collector 侧 limit 钳到 1..500）。
+   *
+   * 重建的事实源没有“全量导出”单口（也不应该有：一个响应装不下几万条正文），
+   * 所以走「枚举会话 → 逐会话拉全量」的 N+1 组合。采集端分页是 0-SQL 的内存切片，
+   * 代价仅在于请求数。
+   */
+  async listSessions(offset: number, limit: number): Promise<{ total: number; rows: DrscSessionSummary[] }> {
+    const from = Math.max(0, Math.floor(offset));
+    const size = Math.max(1, Math.min(500, Math.floor(limit)));
+    const body = await this.getJson(`?op=sessions&offset=${from}&limit=${size}`);
     const rows = Array.isArray(body['rows']) ? (body['rows'] as Record<string, unknown>[]) : [];
-    return rows.map((r) => ({
-      seq: Number(r['seq'] ?? 0),
-      turn: Number(r['turn'] ?? 0),
-      step: Number(r['step'] ?? 0),
-      kind: String(r['kind'] ?? ''),
-      role: String(r['role'] ?? ''),
-      time: Number(r['time'] ?? 0),
-      text: String(r['text'] ?? ''),
-    }));
+    return {
+      total: Number(body['total'] ?? rows.length),
+      rows: rows.map((r) => ({
+        session_id: String(r['session_id'] ?? ''),
+        title: String(r['title'] ?? ''),
+        cwd: String(r['cwd'] ?? ''),
+        event_count: Number(r['event_count'] ?? 0),
+        turn_count: Number(r['turn_count'] ?? 0),
+        last_time_ms: Number(r['last_time_ms'] ?? 0),
+      })),
+    };
   }
 
   /** 原史检索:`op=search&q=<query>&limit=N&redact=1` → 脱敏 snippet 命中。 */

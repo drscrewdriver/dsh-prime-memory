@@ -28,12 +28,23 @@ import type { SceneStore } from '../store/scenes.js';
 import type { StateStore } from '../store/state.js';
 import type { MemoryDb } from '../store/sqlite.js';
 import type { LiveSettingsHandle } from '../settings.js';
-import type { ConversationMessage, L0MessageRecord, MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
+import type { MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
 import { describePlan, gateClear, planPreserve, readFactSource, restorePreserved } from './rebuild-preserve.js';
 import { effectiveCfg, type MemoryRunner } from './runner.js';
+import {
+  DrscFactSource,
+  LocalL0FactSource,
+  type FactSourceProvider,
+  type RebuildChunk,
+} from './fact-source.js';
+import type { DrscClient } from '../clients/drsc.js';
+
+// 事实源与分块语义已在 fact-source.ts（issue #14-B）；这里只做转出，保持旧引用面不变。
+export type { FactCoverage, FactEstimate, FactMessage, FactSourceProvider, RebuildChunk } from './fact-source.js';
+export { DrscFactSource, groupL0Sessions, LocalL0FactSource } from './fact-source.js';
 
 /** 重建所需的存储子集(l0 不需要——快照直接走 db)。 */
 export interface RebuildStores {
@@ -41,6 +52,11 @@ export interface RebuildStores {
   scenes: Record<MemoryFamily, SceneStore>;
   persona: Record<MemoryFamily, PersonaStore>;
   state: StateStore;
+  /**
+   * DRSC 客户端（issue #14-B）：仅当 `rebuild.factSource === 'drsc'` 时用到。
+   * 缺席时选 drsc 会**显式中止**，不静默回退本地表。
+   */
+  drsc?: DrscClient;
 }
 
 // RebuildPhase/RebuildStatus 来自契约单一事实源;rebuild-* 端点与 client 重建面板
@@ -48,31 +64,7 @@ export interface RebuildStores {
 import type { RebuildPhase, RebuildStatus } from '../contract.js';
 export type { RebuildPhase, RebuildStatus } from '../contract.js';
 
-export interface RebuildChunk {
-  sessionId: string;
-  messages: ConversationMessage[];
-}
-
-export function groupL0Sessions(records: L0MessageRecord[]): RebuildChunk[] {
-  const bySession = new Map<string, ConversationMessage[]>();
-  for (const r of records) {
-    if (!r || typeof r.id !== 'string' || typeof r.content !== 'string') continue;
-    if (r.role !== 'user' && r.role !== 'assistant') continue;
-    if (!r.content.trim()) continue;
-    const key = r.sessionId || 'default';
-    const arr = bySession.get(key) ?? [];
-    arr.push({ id: r.id, role: r.role, content: r.content, timestamp: r.timestamp ?? 0 });
-    bySession.set(key, arr);
-  }
-  const chunks: RebuildChunk[] = [];
-  for (const [sessionId, messages] of bySession) {
-    messages.sort((a, b) => a.timestamp - b.timestamp);
-    chunks.push({ sessionId, messages });
-  }
-  // 会话按首条消息时间升序:情境链按时间顺序衔接(与原始发生顺序一致)
-  chunks.sort((a, b) => a.messages[0].timestamp - b.messages[0].timestamp);
-  return chunks;
-}
+// `RebuildChunk` 与 `groupL0Sessions` 已迁到 pipeline/fact-source.ts（上面已转出）。
 
 /** 抽取调用数下界估算(与 l1.ts 的 perChunk 同式;会话数与字符预算取大)。 */
 export function estimateCalls(sessions: number, messages: number, chars: number, maxInputChars: number): number {
@@ -121,7 +113,11 @@ function stamp(now = new Date()): string {
 
 export class RebuildController {
   private status: RebuildStatus = idleStatus();
-  private chunks: RebuildChunk[] = [];
+  /**
+   * 会话级事实源迭代器（issue #14-B）：不再把全量 L0 正文驻留内存。
+   * null = 尚未进入蒸馏 / 已收尾。
+   */
+  private chunkIter: AsyncIterator<RebuildChunk> | null = null;
   private cancelRequested = false;
   /** 快照时刻(收尾时按它区分重建产物与重建后新对话的记录)。 */
   private rebuildStartMs = 0;
@@ -136,25 +132,52 @@ export class RebuildController {
     private readonly live: LiveSettingsHandle,
   ) {}
 
-  /** 状态快照(idle 时附带实时 L0 预估与事实源水位,供确认弹窗讲清"会发生什么")。 */
+  /** 状态快照(idle 时附带实时预估与事实源水位,供确认弹窗讲清"会发生什么")。 */
   getStatus(): RebuildStatus {
     if (this.status.phase === 'idle') {
-      const est = this.db.l0RebuildEstimate();
-      const wm = this.db.rebuildWatermark();
-      return {
-        ...this.status,
-        sessionCount: est.sessions,
-        messageCount: est.messages,
-        estCalls: estimateCalls(est.sessions, est.messages, est.chars, effectiveCfg(this.cfg, this.live).llm.maxInputChars),
-        factWatermark: wm.l0Iso,
-      };
+      try {
+        const provider = this.provider();
+        const est = provider.estimate();
+        const cov = provider.coverage();
+        return {
+          ...this.status,
+          sessionCount: est.sessions,
+          messageCount: est.messages,
+          estCalls: estimateCalls(est.sessions, est.messages, est.chars, effectiveCfg(this.cfg, this.live).llm.maxInputChars),
+          factWatermark: cov.untilIso,
+        };
+      } catch {
+        // 事实源未就绪（如选了 drsc 但 collector 未装配）：面板不能因此整块挂，
+        // 只把水位置空；真正的错误留给 start() 显式报。
+        return { ...this.status, factWatermark: null };
+      }
     }
     return { ...this.status };
   }
 
-  /** 内存中尚未处理的会话快照块数(收尾后应为 0——快照即弃,诊断/冒烟用)。 */
+  /** 尚未处理的会话块数（流式下为估算 `total - done`；未运行时为 0，诊断/冒烟用）。 */
   get chunkCount(): number {
-    return this.chunks.length;
+    return this.status.running ? Math.max(0, this.status.total - this.status.done) : 0;
+  }
+
+  /**
+   * 按 `cfg.rebuild.factSource` 选事实源（issue #14-B）。
+   *
+   * 选 drsc 但客户端未装配时**显式抛错**，不静默回退本地表 —— “以为用了新源其实还是旧表”
+   * 会让用户拿重建结果去判断 DRSC 数据是否完整，那是最坏的误判。
+   */
+  private provider(): FactSourceProvider {
+    if (this.cfg.rebuild?.factSource === 'drsc') {
+      const drsc = this.stores.drsc;
+      if (!drsc) {
+        throw new Error(
+          '重建事实源配置为 drsc，但 collector 客户端未装配 —— 已中止且**未动任何数据**。'
+          + '请先启用 reference-session-collector，或把 rebuild.factSource 改回 local。',
+        );
+      }
+      return new DrscFactSource(drsc, this.logger);
+    }
+    return new LocalL0FactSource(this.db, this.logger);
   }
 
   /**
@@ -166,9 +189,13 @@ export class RebuildController {
    */
   start(force = false): RebuildStatus {
     if (this.status.running) throw new Error('重建已在进行中');
-    const est = this.db.l0RebuildEstimate();
+    // drsc 但客户端未装配 → provider() 在这里显式抛（未动任何数据）
+    const provider = this.provider();
+    const est = provider.estimate();
     const wm = this.db.rebuildWatermark();
-    if (est.messages === 0) {
+    // 同步门只对“能同步报数”的事实源成立（本地 L0）。DRSC 要发请求才知道会话数，
+    // known=false 时必须跳过 —— 否则会把“未知”当成“空”直接拒掉。
+    if (est.known && est.messages === 0) {
       if (wm.l1Total > 0) {
         throw new Error(
           `本地 L0 一条消息都没有,而检索库有 ${wm.l1Total} 条记忆 ——`
@@ -180,7 +207,7 @@ export class RebuildController {
     }
     // 水位落差**只做提示**:L0 停写后这个比例会单调上升，硬拒等于永久锁死重建。
     // 真正的“不丢”由 planPreserve 的集合判据结构性保证，这里只负责让用户看清楚。
-    if (!force && wm.l1Total > 0) {
+    if (est.known && !force && wm.l1Total > 0) {
       const ratio = wm.l1After / wm.l1Total;
       if (ratio > STALE_RATIO_THRESHOLD) {
         const pct = Math.round(ratio * 100);
@@ -193,7 +220,7 @@ export class RebuildController {
       }
     }
     this.cancelRequested = false;
-    this.chunks = [];
+    this.chunkIter = null;
     this.status = {
       ...idleStatus(),
       running: true,
@@ -202,7 +229,7 @@ export class RebuildController {
       messageCount: est.messages,
       estCalls: estimateCalls(est.sessions, est.messages, est.chars, effectiveCfg(this.cfg, this.live).llm.maxInputChars),
       startedAt: Date.now(),
-      factWatermark: wm.l0Iso,
+      factWatermark: provider.coverage().untilIso,
     };
     this.runner.enqueueRebuildTask(() => this.prepare());
     this.logger.info(
@@ -224,19 +251,21 @@ export class RebuildController {
 
   private async prepare(): Promise<void> {
     try {
-      // 快照:从检索库读全量 L0(事务一致;重建期间新捕获的消息走正常轮次,天然不重不漏)
+      // 事实源（issue #14-B）：默认本地 L0；drsc 需显式配置且必须有客户端。
+      const provider = this.provider();
+      // 快照时刻:重建期间新捕获的消息走正常轮次,天然不重不漏
       this.rebuildStartMs = Date.now();
-      const snapshot = this.db.listL0All();
-      this.chunks = groupL0Sessions(snapshot);
-      if (this.chunks.length === 0) {
-        this.finish('failed', 'L0 快照为空');
+      const est = await provider.prepare();
+      if (est.sessions === 0) {
+        this.finish('failed', `事实源(${provider.kind})为空，无可重建内容`);
         return;
       }
-      this.status.total = this.chunks.length;
+      this.status.total = est.sessions;
+      if (est.messages > 0) this.status.messageCount = est.messages;
       // 本次事实源的**消息 id 集**：判"来源是否还在快照里"的唯一依据。
       // 不取时间:时间差对停写的 L0 会永久走扩（详见 rebuild-preserve 的 post-watermark）。
-      const snapshotIds = new Set<string>();
-      for (const m of snapshot) if (typeof m?.id === 'string' && m.id) snapshotIds.add(m.id);
+      // 注意这里**不读正文**：2.5 万条 id 约 1.5MB，而全量正文是 88MB。
+      const snapshotIds = await provider.snapshotIds();
 
       const dataDir = resolveDataDir(this.cfg);
 
@@ -290,35 +319,63 @@ export class RebuildController {
 
       this.status.phase = 'distilling';
       this.logger.info(
-        `[memory] 重建准备完成(归档:${archiveNote ?? '无旧产物'},保留:${this.status.preserveNote},${this.chunks.length} 个会话块)`,
+        `[memory] 重建准备完成(归档:${archiveNote ?? '无旧产物'},保留:${this.status.preserveNote},${est.sessions} 个会话块,事实源=${provider.kind})`,
       );
-      this.scheduleChunk(0);
+      this.chunkIter = provider.chunks()[Symbol.asyncIterator]();
+      this.scheduleNext();
     } catch (err) {
       this.finish('failed', `准备阶段失败: ${errDetail(err)}`);
     }
   }
 
-  /** 分块链:一次只挂一个重建块,跑完再挂下一块——正常轮次可随时插队。 */
-  private scheduleChunk(i: number): void {
-    if (this.cancelRequested || i >= this.chunks.length) {
+  /**
+   * 分块链:一次只挂一个重建块,跑完再挂下一块——正常轮次可随时插队。
+   *
+   * 流式版（issue #14-B）：从事实源迭代器拉下一个会话，不再按下标从内存数组取。
+   * 内存峰值从"全量正文"降到"单会话"。
+   */
+  private scheduleNext(): void {
+    if (this.cancelRequested) {
       this.runner.enqueueRebuildTask(() => this.finalize());
       return;
     }
-    const chunk = this.chunks[i];
+    const iter = this.chunkIter;
+    if (!iter) {
+      this.runner.enqueueRebuildTask(() => this.finalize());
+      return;
+    }
     this.runner.enqueueRebuildTask(async () => {
       // 入队后开跑前可能已收到取消(等待插队的正常轮次期间),直接跳到收尾
       if (this.cancelRequested) {
         this.runner.enqueueRebuildTask(() => this.finalize());
         return;
       }
+      let next: IteratorResult<RebuildChunk>;
+      try {
+        next = await iter.next();
+      } catch (err) {
+        // 事实源中途失败**不能**当“跑完了”：那会把“只重建了一部分”报成成功，
+        // 而用户会拿这个结论去判断数据是否重新生成。
+        this.logger.error(
+          `[memory] 重建事实源中断(已完成 ${this.status.done}/${this.status.total} 个会话): ${errDetail(err)}`,
+        );
+        this.finish('failed', `事实源读取中断: ${errDetail(err)}`);
+        return;
+      }
+      if (next.done === true) {
+        this.chunkIter = null;
+        this.runner.enqueueRebuildTask(() => this.finalize());
+        return;
+      }
+      const chunk = next.value;
       try {
         const n = await this.runner.runRebuildTurn(chunk.sessionId, chunk.messages);
         this.status.recordsBuilt += n;
       } catch (err) {
         this.logger.warn(`[memory] 重建块失败(session=${chunk.sessionId},跳过继续): ${errDetail(err)}`);
       }
-      this.status.done = i + 1;
-      this.scheduleChunk(i + 1);
+      this.status.done += 1;
+      this.scheduleNext();
     });
   }
 
@@ -395,9 +452,13 @@ export class RebuildController {
     this.status.phase = phase;
     this.status.error = error;
     this.status.finishedAt = Date.now();
-    // 快照即弃:全量 L0 消息(可能几十 MB)在重建结束/取消/失败后必须释放,
-    // 不能滞留到下一次 start() 覆盖(宿主长跑内存只增不减)
-    this.chunks = [];
+    // 事实源释放:迭代器持有单会话内存，收尾必须断开（不能滞留到下一次 start 覆盖）。
+    // 若它实现了 `return`（异步生成器），顺手关掉，避免上游资源悬着。
+    const iter = this.chunkIter as (AsyncIterator<RebuildChunk> & { return?: () => Promise<unknown> }) | null;
+    this.chunkIter = null;
+    if (iter !== null && typeof iter.return === 'function') {
+      void iter.return().catch(() => {});
+    }
     const cost = this.status.finishedAt - (this.status.startedAt ?? this.status.finishedAt);
     this.logger.info(
       `[memory] 重建结束(${phase}):${this.status.done}/${this.status.total} 会话,产出 ${this.status.recordsBuilt} 条记录,耗时 ${Math.round(cost / 1000)}s` +

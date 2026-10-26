@@ -129,6 +129,8 @@ async function harness(opts: {
   autoStart?: boolean;
   /** 事实源里蒸馏记忆的 `source_message_ids` 取值（默认与 L0 的 record_id `m1` 对齐）。 */
   sourceId?: string;
+  /** 覆盖 `cfg.rebuild`（测事实源选择，如 `{ factSource: 'drsc' }`）。 */
+  rebuild?: { factSource: 'local' | 'drsc' };
 } = {}): Promise<Harness> {
   const dataDir = await mkdtemp(join(tmpdir(), 'dsh-rebuild-wire-'));
   const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
@@ -178,7 +180,11 @@ async function harness(opts: {
     state: { reset: () => {}, save: async () => {} },
   } as unknown as RebuildStores;
 
-  const ctl = new RebuildController({} as never, cfg(dataDir), stores, db, runner as never, noopLogger, liveHandle());
+  const cfgBase = cfg(dataDir);
+  if (opts.rebuild !== undefined) {
+    (cfgBase as { rebuild?: { factSource: 'local' | 'drsc' } }).rebuild = opts.rebuild;
+  }
+  const ctl = new RebuildController({} as never, cfgBase, stores, db, runner as never, noopLogger, liveHandle());
   // prepare → scheduleChunk → finalize 是一条入队链,逐层 await 到稳定
   const drain = async (): Promise<void> => {
     for (let i = 0; i < 20 && i < pending.length + 1; i++) {
@@ -341,6 +347,20 @@ describe('issue #14:重建启动的两道门', () => {
       expect(st.rederivableCount).toBe(0);
       expect(st.preserveCount).toBe(1);
       expect(st.preserveNote).toContain('来源不在本次快照');
+    } finally {
+      h.db.close();
+      await rm(h.dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('选 drsc 但 collector 未装配 → 显式拒绝且不碰数据（不静默回退本地表）', async () => {
+    const h = await harness({ autoStart: false, rebuild: { factSource: 'drsc' }, dbRecords: [l1Rec('d_1', '旧记忆')] });
+    try {
+      expect(() => h.ctl.start()).toThrow(/collector 客户端未装配/);
+      expect(h.db.getAllL1().map((r) => r.id)).toEqual(['d_1']);
+      expect(h.ctl.getStatus().phase).toBe('idle');
+      // 面板不应因此整块炸：getStatus 已把不可用的事实源吞成“水位未知”
+      expect(h.ctl.getStatus().factWatermark).toBeNull();
     } finally {
       h.db.close();
       await rm(h.dataDir, { recursive: true, force: true });

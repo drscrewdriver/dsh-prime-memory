@@ -117,6 +117,15 @@ export interface MemoryConfig {
         /** 单源扫描记录上限(0 = 不限;仍受总护栏)。 */
         scanMaxRecords: number;
     };
+    /**
+     * 重建事实源（issue #14-B）。
+     *
+     * - `local`（默认）：本地 `l0_conversations` —— 已停写的冻结存量；
+     * - `drsc`（实验性）：`dsh-reference-session-collector` 的投影，枚举会话后逐会话拉全量。
+     */
+    rebuild: {
+        factSource: 'local' | 'drsc';
+    };
     /** 轨2 技能结晶(程序性记忆)。**默认关**：allowPromote 也默认关（上线先只计数不晋升，
      *  distinct-session 达阈后才开）；injectionTier 不用 union，消费侧归一。 */
     skills: {

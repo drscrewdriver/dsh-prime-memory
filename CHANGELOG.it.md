@@ -16,6 +16,21 @@ e i numeri di versione rispettano il [versionamento semantico](https://semver.or
 > **Convenzione degli screenshot dell'interfaccia**: le voci che apportano cambiamenti alla UI conservano una registrazione reale
 > in `assets/changelog/<numero di versione>/<numero a due cifre>-<breve descrizione>.png` e la richiamano nel testo con un percorso relativo: nel changelog si vede direttamente come appare la UI della nuova versione.
 
+## [0.26.11] — 2026-10-27
+
+> Chiude quattro issue esterne: #12 (gli slug Room a due livelli venivano scartati in silenzio), #13 (la tabella di routing predefinita conteneva i percorsi locali dell'autore), #14 (la ricostruzione usava la tabella L0 dismessa come fonte dei fatti), #16 (proiezione del grafo attivabile solo via YAML). I dettagli di 0.26.2–0.26.10 sono nel CHANGELOG cinese: questo file è volutamente in ritardo.
+
+### Corretto
+- `memory_room_review` accetta slug Room a due livelli (`major/minor`) sia nell'analisi dei candidati sia in `confirmReview`; il prompt di annotazione insegnava al modello solo il livello singolo.
+- La ricostruzione non perde più le memorie acquisite dopo la dismissione di L0: i record i cui messaggi di origine sono fuori dallo snapshot corrente vengono conservati con il nuovo motivo `post-watermark` (criterio insiemistico, non una soglia temporale: quest'ultima bloccherebbe la ricostruzione per sempre).
+
+### Aggiunto
+- La proiezione del grafo di conoscenza è attivabile dal pannello di panoramica (`live.graphEnabled`, in OR con `graph.enabled`), con una conferma dei costi basata sui record non ancora proiettati prima della prima attivazione.
+
+### Cambiato
+- Il valore predefinito di `workspaceSource.routes` è ora `[]`; chi dipende dai vecchi valori deve scrivere le proprie regole `{path, anyOf}`.
+- La ricostruzione ha due barriere: stop netto se L0 non ha messaggi ma lo store non è vuoto, e conferma `force` se oltre metà dei record è successiva al watermark della fonte dei fatti.
+
 ## [0.24.1] — 2026-10-14
 
 ### Aggiunto
