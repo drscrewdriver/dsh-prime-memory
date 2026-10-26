@@ -13,11 +13,16 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { graphFeatureOn } from '../src/graph/gate.js';
 import { MemoryDb } from '../src/store/sqlite.js';
+import { MemoryRunner, type MemoryStores } from '../src/pipeline/runner.js';
+import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../src/config.js';
 import type { LiveSettingsHandle } from '../src/settings.js';
 import type { MemoryRecord } from '../src/types.js';
+import type { MemoryLogger } from '../src/types.js';
 
 const T = 1_700_000_000_000;
+
+const logger: MemoryLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
 
 /** 只带 graph 开关的最小 cfg（其余字段本测不读）。 */
 const cfg = (graphEnabled: boolean): MemoryConfig => ({ graph: { enabled: graphEnabled } }) as MemoryConfig;
@@ -82,6 +87,74 @@ describe('graphFeatureOn —— 部署与面板取或（唯一判据）', () => 
     expect(graphFeatureOn(cfg(false), live('throw'))).toBe(false);
     // 部署开 + live 炸：部署侧的强制开不能被 live 故障抬下来
     expect(graphFeatureOn(cfg(true), live('throw'))).toBe(true);
+  });
+});
+
+describe('关闭期写入 → 重开后能补（issue #16 的“永久陈旧”修复）', () => {
+  it('抹凭证后 countMissing 回升，queueMissing 能再拉起来', async () => {
+    await withDb(async (db) => {
+      db.upsertL1(rec('r1', '内容'));
+
+      // 先投一次并完成 → 产生“已投影”凭证
+      expect(db.graphStore.queueMissing(10)).toBe(1);
+      const claim = db.graphStore.claimNext();
+      expect(claim).not.toBeNull();
+      db.graphStore.complete(
+        claim!.job.id,
+        {
+          nodes: [{ ref: 'a', name: '实体A', type: 'tool', sourceRecordIds: ['r1'], state: '' }],
+          edges: [],
+        },
+        { now: new Date().toISOString() },
+      );
+      // 凭证已写 → 不再算待投
+      expect(db.graphStore.countMissing()).toBe(0);
+
+      // 关闭期写入：只抹凭证、不入队（否则就是“投了永不泵”的陈旧队列）
+      db.graphStore.invalidateProjected(['r1']);
+      expect(db.graphStore.countMissing()).toBe(1);
+
+      // 重开后由 queueMissing 统一补 —— 这正是“不抹就永不补”的反证
+      expect(db.graphStore.queueMissing(10)).toBe(1);
+    });
+  });
+});
+
+describe('热开启：无需重启（loader/volatile-update 监听）', () => {
+  it('关闭态不补；面板拨开后事件一到就补一批', async () => {
+    await withDb(async (db) => {
+      db.upsertL1(rec('r1', '内容'));
+      const liveState = { enabled: true, distill: false, graphEnabled: false };
+      const handlers: Array<(paths: readonly (readonly string[])[]) => void> = [];
+      const ctx = {
+        effect: () => () => {},
+        on: (name: string, cb: (paths: readonly (readonly string[])[]) => void) => {
+          if (name === 'loader/volatile-update') handlers.push(cb);
+          return () => {};
+        },
+      } as unknown as Context;
+      const stores = {
+        l1: {} as never,
+        scenes: {} as never,
+        persona: {} as never,
+        state: {} as never,
+        graph: db.graphStore,
+      } as unknown as MemoryStores;
+      const cfg = { graph: { enabled: false }, dataDir: '' } as unknown as MemoryConfig;
+      // live.distill=false：只验证“入队”，不拉泵（泵会真的调 LLM）
+      const runner = new MemoryRunner(ctx, cfg, stores, logger, { get: () => liveState } as never);
+      runner.startGraphBackfillTimer();
+      expect(handlers.length).toBe(1);
+
+      // 关闭态：事件到了也不入队
+      for (const h of handlers) h([['live']]);
+      expect(db.graphStore.listJobs(10)).toHaveLength(0);
+
+      // 面板拨开（live.graphEnabled）→ 事件一到立刻补一批，无需重启
+      liveState.graphEnabled = true;
+      for (const h of handlers) h([['live']]);
+      expect(db.graphStore.listJobs(10).length).toBe(1);
+    });
   });
 });
 
