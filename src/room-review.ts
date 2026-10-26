@@ -22,7 +22,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from './config.js';
-import { isTag } from './metadata-validators.js';
+import { isRoomSlug } from './metadata-validators.js';
 import { callLLM, parseJsonLogged } from './llm.js';
 import type { MemoryLogger, MemoryRecord } from './types.js';
 
@@ -70,7 +70,7 @@ export interface RoomCandidate {
   rooms: string[];
 }
 
-/** 解析标注器输出的逐条候选(容错:id 配对失败丢弃;isTag 校验;目录内优先,≤3)。 */
+/** 解析标注器输出的逐条候选(容错:id 配对失败丢弃;isRoomSlug 校验(两级制);目录内优先,≤3)。 */
 export function parseRoomCandidateItems(
   parsed: ReadonlyArray<{ id: string; rooms: readonly string[] }>,
   ids: ReadonlyArray<string>,
@@ -84,7 +84,9 @@ export function parseRoomCandidateItems(
     const cleaned: string[] = [];
     for (const r of item.rooms) {
       const slug = typeof r === 'string' ? r.trim().toLowerCase() : '';
-      if (!slug || !isTag(slug)) continue;
+      // 两级制(`major` 或 `major/minor`)：与 rooms-registry 同一判据。用 isTag 会把
+      // `mpu/qos` 这类合法子类静默丢掉——注册表收得下、写回却挂不上(issue #12)。
+      if (!slug || !isRoomSlug(slug)) continue;
       if (!cleaned.includes(slug)) cleaned.push(slug);
     }
     // 目录内优先排前,其余兜底;截断到 3
@@ -107,7 +109,8 @@ export function roomCandidateSystemPrompt(roomCatalog: ReadonlyArray<{ room: str
     '你是记忆库的 Room 归类器。给你一条记忆与现有 Room 词表(带计数),' +
     '为这条记忆选出它最可能归属的 1-3 个 Room slug。规则:\n' +
     '1. **优先从现有 Room 词表里选**(保持分类收敛,避免碎片化);\n' +
-    '2. 词表确实没有合适主题时,才提议最多 2 个新 slug(小写字母/数字/连字符);\n' +
+    '2. 词表确实没有合适主题时,才提议最多 2 个新 slug(小写字母/数字/连字符;' +
+    '两级制写成 `大类/子类` 形式,如 `mpu/qos`,全串至多一个斜杠);\n' +
     '3. 完全无法判断时返回空数组(宁缺毋滥,不硬猜)。\n' +
     `现有 Room 词表:\n${catalog}\n\n` +
     '输出 JSON 对象:{"rooms":["slug1","slug2"]}。只输出 JSON,不要多余文字。'
@@ -397,7 +400,9 @@ export function confirmReview(
   for (const r of rooms) {
     if (typeof r !== 'string') continue;
     const slug = r.trim().toLowerCase();
-    if (!slug || !isTag(slug) || cleaned.includes(slug)) continue;
+    // 同 parseRoomCandidateItems：走两级制判据，否则 `mpu/qos` 会被判非法、
+    // confirm 返回 null 且错误文案误导成"id 不存在"(issue #12)。
+    if (!slug || !isRoomSlug(slug) || cleaned.includes(slug)) continue;
     cleaned.push(slug);
   }
   if (cleaned.length === 0) return null;

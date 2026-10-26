@@ -65,7 +65,15 @@ export async function relinkWorkspaces(deps: {
   const report: RelinkReport = {
     dryRun, scanned: 0, matched: 0, unchanged: 0, toWrite: 0, written: 0, remaining: 0, byWorkspace: {},
   };
-  if (routes.length === 0) return report;
+  // 空路由表 = **未配置**（issue #13 把默认值改成 `[]`）。这里必须显式拒绕：
+  // 旧行为是返回全零报告，面板显示“扫 0 / 剩 0” —— 看起来像“已经做完了”，
+  // 真正的原因（一条路由都没配）反而看不见。
+  if (routes.length === 0) {
+    throw new Error(
+      '未配置任何内容路由规则（workspaceSource.routes 为空）：'
+      + '先在配置里写下至少一条 {path, anyOf}，再执行归属回填',
+    );
+  }
 
   let offset = 0;
   let batch: Array<{ id: string; workspaceId: string }> = [];
