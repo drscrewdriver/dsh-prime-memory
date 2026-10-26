@@ -131,6 +131,8 @@ async function harness(opts: {
   sourceId?: string;
   /** 覆盖 `cfg.rebuild`（测事实源选择，如 `{ factSource: 'drsc' }`）。 */
   rebuild?: { factSource: 'local' | 'drsc' };
+  /** 注入 DRSC 客户端（测 drsc 事实源的失败路径）。 */
+  drsc?: unknown;
 } = {}): Promise<Harness> {
   const dataDir = await mkdtemp(join(tmpdir(), 'dsh-rebuild-wire-'));
   const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
@@ -179,6 +181,7 @@ async function harness(opts: {
     persona: { chat: { init: async () => {} }, work: { init: async () => {} } },
     state: { reset: () => {}, save: async () => {} },
   } as unknown as RebuildStores;
+  if (opts.drsc !== undefined) (stores as { drsc?: unknown }).drsc = opts.drsc;
 
   const cfgBase = cfg(dataDir);
   if (opts.rebuild !== undefined) {
@@ -361,6 +364,37 @@ describe('issue #14:重建启动的两道门', () => {
       expect(h.ctl.getStatus().phase).toBe('idle');
       // 面板不应因此整块炸：getStatus 已把不可用的事实源吞成“水位未知”
       expect(h.ctl.getStatus().factWatermark).toBeNull();
+    } finally {
+      h.db.close();
+      await rm(h.dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('选 drsc 且 collector 不可达 → 在**清库前**中止，检索库原样', async () => {
+    // 关键次序：provider.prepare() 要枚举会话（发请求），它跑在 clearL1 **之前**；
+    // 所以 collector 不可达时是“零代价中止”，不是“清完库才发现拉不到”。
+    const boom = {
+      listSessions: async () => {
+        throw new Error('collector 不可达(boom)');
+      },
+      sessionAll: async () => [],
+    };
+    const h = await harness({
+      autoStart: false,
+      rebuild: { factSource: 'drsc' },
+      drsc: boom,
+      dbRecords: [l1Rec('imp_1', '外部导入', '__manual__'), l1Rec('d_1', '旧记忆')],
+    });
+    try {
+      h.ctl.start(); // known=false 跳过同步门，真判定落在 prepare
+      await h.drain();
+      const st = h.ctl.getStatus();
+      expect(st.phase).toBe('failed');
+      expect(st.error).toMatch(/准备阶段失败|collector 不可达/);
+      // 清空没发生
+      expect(h.db.getAllL1().map((r) => r.id).sort()).toEqual(['d_1', 'imp_1']);
+      // 也没建快照、没归档（中止发生在破坏性动作之前）
+      expect((await readdir(h.dataDir)).some((n) => n === 'snapshots')).toBe(false);
     } finally {
       h.db.close();
       await rm(h.dataDir, { recursive: true, force: true });
