@@ -141,11 +141,13 @@ describe('workspace 内容路由 re-link', () => {
     db.close();
   });
 
-  it('空路由表（功能关）→ 零扫描零写入', async () => {
+  it('空路由表（未配置）→ 显式拒绝，不伪装成“已做完”', async () => {
     const { db, store } = await setup();
-    const report = await relinkWorkspaces({ l1: faceOf(store), routes: [], dryRun: false });
-    expect(report.scanned).toBe(0);
-    expect(report.written).toBe(0);
+    // issue #13 把默认值改成 []，空表从此是**常态**。旧行为返回全零报告，
+    // 面板显示“扫 0 / 剩 0”看起来像完成，实际是一条路由都没配——必须报错。
+    await expect(relinkWorkspaces({ l1: faceOf(store), routes: [], dryRun: false }))
+      .rejects.toThrow(/未配置任何内容路由规则/);
+    // 抛错发生在任何写入之前：归属列仍未被碰过。
     expect(wsOf(store, 'r_dsh')).toBeFalsy();
     db.close();
   });

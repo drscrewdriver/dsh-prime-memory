@@ -1340,8 +1340,11 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         return v;
       }
       if (kind === 'records') {
-        const tag = String(p.tag ?? '').trim();
+        // 与 list-records 同口径(见下方 tagSel):Room slug 是自生长的两级制形状,
+        // 非法形状在这里就拒,不做“静默返回空 CSV”。
+        const tag = typeof p.tag === 'string' ? p.tag.trim().slice(0, 64) : '';
         if (!tag) throw new Error('kind=records 需要 tag(目标 Room slug)');
+        if (!isRoomSlug(tag)) throw new Error('tag 非法(两级制:major 或 major/minor,各段小写字母数字连字符)');
         const header = 'id,type,scene_name,updated_at,tags,content';
         const lines: string[] = [header];
         let n = 0;

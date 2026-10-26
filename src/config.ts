@@ -682,7 +682,7 @@ export const memorySchema: ConfigSchema = Schema.object({
    *
    * ⚠️ **默认路由表为空**（issue #13）。此前默认值写死了作者本机的 `E:\test\rewrite-agently`
    * 与 `E:\test\agent-no-dsh`：装好即生效，凡正文含 `dsh`/`cordis`/`prime-memory` 等词的记忆
-   * 都被写上古人的路径。别人的机器没这个盘，于是
+   * 都被写上了别人机器上的路径。别人的机器没这个盘，于是
    *  - `targetFor` 的护栏判定目录不存在 → 投射落点静默退回单根（日志一条 warn 而已）；
    *  - 更严重的是 `scope: workspace` 时这些记录在**真实工作区**里按 workspace 过滤不可见，
    *    表现为"记忆莫名其妙丢了"，而根源是默认值指向别人的机器。

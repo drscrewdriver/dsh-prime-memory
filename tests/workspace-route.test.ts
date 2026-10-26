@@ -14,14 +14,32 @@ import { memorySchema } from '../src/config.js';
 import { resolve } from 'node:path';
 
 /**
- * 路由表**取自真配置默认值**，不在此手抄一份。
+ * 两份东西分开测，别混：
  *
- * 上一版这里写死了与 `config.ts` 同形的三条字面量，结果默认路由表改了这里不会红——
- * “断言与抄本一致、抄本不与事实一致”，等于把刚发生的双 `.agents` 缺陷留在看不见的位置。
+ * - `ROUTES` 是**本文件自带的显式 fixture**，只用来测 `routeWorkspace` 的匹配语义
+ *   （序即优先级 / noneOf 二次保险 / NFKC 归一）——这些语义与默认值长什么样无关；
+ * - 默认值本身（可移植性契约：不得含宿主绝对路径、默认为空表）由
+ *   `tests/workspace-route-config.test.ts` 专测。
+ *
+ * 上一版直接拿 `memorySchema` 默认值当 fixture，于是 issue #13 把默认表清空后
+ * 5 条**语义**用例跟着一起红——语义用例不该随默认值变动，这就是分开的理由。
  */
 const DEFAULTS = (memorySchema as unknown as (v: unknown) => Record<string, unknown>)({});
 const SRC = DEFAULTS.workspaceSource as { enabled: boolean; routes: WorkspaceRoute[] };
-const ROUTES: WorkspaceRoute[] = SRC.routes;
+
+/** 语义 fixture（**不是默认值**）：dsh 侧在前，故双项目并存时 dsh 胜出。 */
+const ROUTES: WorkspaceRoute[] = [
+  {
+    path: 'D:\\ws\\rewrite-agently',
+    anyOf: ['dsh', 'mine-dsh-plugins', 'cordis', 'prime-memory', 'brief-sidebar', 'host farm', 'inferglow-dsh'],
+    noneOf: [],
+  },
+  {
+    path: 'D:\\ws\\agent-no-dsh',
+    anyOf: ['hanako', 'hanaagent', 'openhanako', 'inferglow', 'pi-agent'],
+    noneOf: ['dsh'],
+  },
+];
 
 describe('routeWorkspace', () => {
   it('谈到 dsh 生态 → 归 rewrite-agently（workspace 根，不含 .agents）', () => {
@@ -49,7 +67,10 @@ describe('routeWorkspace', () => {
     // 旧默认值写成 `E:\test\rewrite-agently\.agents`，而 `targetFor` 会再拼一层
     // `.agents/memory` → 落点变成 `.agents\.agents\memory\`。护栏只查根存在与否，
     // 救不了这种形状（`.agents` 确实存在），等于在仓里挂一棵孤儿树。
-    for (const route of ROUTES) {
+    //
+    // 当前默认表是空数组（issue #13），循环体是**防回归守卫**：
+    // 默认值若重新加回路由，仍受这个不变式约束。
+    for (const route of SRC.routes) {
       const root = resolve(route.path, ...WORKSPACE_SUBDIR);
       expect(/[/\\]\.agents[/\\]\.agents([/\\]|$)/i.test(root), root).toBe(false);
       expect(route.path.toLowerCase().endsWith('\\.agents'), route.path).toBe(false);
