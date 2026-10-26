@@ -19,6 +19,8 @@ export function RebuildPanel(props: { rpc: RpcFn }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rbError, setRbError] = useState<string | null>(null);
+  /** 错误是否属于“需二次确认”类（水位落差超阈值）—— 只有这类才给 force 入口。 */
+  const [canForce, setCanForce] = useState(false);
 
   const refresh = useCallback(() => {
     rpc('dsh-memory/rebuild-status', {})
@@ -47,22 +49,34 @@ export function RebuildPanel(props: { rpc: RpcFn }) {
   const rb = rbRaw as RebuildStatus;
   ensureThemeStyle();
 
-  const start = () => {
+  /**
+   * 启动重建。
+   *
+   * `force` 只在用户看过“水位落差”警告后手动触发：L0 已停写，晚于水位的记录
+   * 会被**原样保留**而不是重蒸，这一步必须让人知情而不是默默降级。
+   */
+  const start = (force = false) => {
     setBusy(true);
     setRbError(null);
-    rpc('dsh-memory/rebuild-start', {})
+    setCanForce(false);
+    rpc('dsh-memory/rebuild-start', force ? { force: true } : {})
       .then((r) => {
         setBusy(false);
         if (r && r.ok) {
           setConfirmOpen(false);
           setRb(r.value);
         } else {
-          setRbError(r && r.error ? r.error.message : '启动失败');
+          const msg = r && r.error ? r.error.message : '启动失败';
+          setRbError(msg);
+          // 文案契约：可 force 的拒绝一定带“带 force 重试”字样（见 rebuild.start）。
+          setCanForce(/force/.test(msg));
         }
       })
       .catch((e: unknown) => {
         setBusy(false);
-        setRbError(String((e && (e as Error).message) || e));
+        const msg = String((e && (e as Error).message) || e);
+        setRbError(msg);
+        setCanForce(/force/.test(msg));
       });
   };
   const cancel = () => {
@@ -139,8 +153,22 @@ export function RebuildPanel(props: { rpc: RpcFn }) {
           {lastNote}
         </div>
       ) : null}
+      {rb.rederivableCount !== null || rb.preserveCount !== null ? (
+        <div className="dsh-mem-rb-muted" style={{ marginTop: 6 }}>
+          {'本次计划：可重造 ' + (rb.rederivableCount ?? 0) + ' 条 · 原样保留 ' + (rb.preserveCount ?? 0) + ' 条（无来源或来源不在本次快照）'}
+        </div>
+      ) : null}
       {rbError ? (
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--dsh-mem-danger)' }}>{rbError}</div>
+        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--dsh-mem-danger)' }}>
+          {rbError}
+          {canForce ? (
+            <div style={{ marginTop: 6 }}>
+              <NButton disabled={busy} onClick={() => { start(true); }}>
+                {busy ? '启动中…' : '我已了解，仍要继续（不重蒸水位后的记录）'}
+              </NButton>
+            </div>
+          ) : null}
+        </div>
       ) : null}
       {confirmOpen ? (
         <NModal
@@ -158,7 +186,7 @@ export function RebuildPanel(props: { rpc: RpcFn }) {
             >
               取消
             </NButton>,
-            <NButton key="confirm" variant="primary" disabled={busy} onClick={start}>
+            <NButton key="confirm" variant="primary" disabled={busy} onClick={() => { start(); }}>
               {busy ? '启动中…' : '开始重建'}
             </NButton>,
           ]}
@@ -167,6 +195,13 @@ export function RebuildPanel(props: { rpc: RpcFn }) {
             将以 L0 原始对话为事实源重新蒸馏：
             <b>{rb.sessionCount + ' 个会话 · ' + rb.messageCount + ' 条消息'}</b>
             {'，预计 ≥' + rb.estCalls + ' 次蒸馏调用。'}
+          </div>
+          {/* 水位行：这个按钮会不会“倒退”全靠它说清楚。L0 停写后不再前移， */}
+          {/* 停写之后的记忆会在重建后被原样保留，而不是重新蒸馏。 */}
+          <div style={{ marginTop: 8 }}>
+            {'事实源覆盖到：'}
+            <b>{rb.factWatermark ? fmtTime(rb.factWatermark) : '无（本地 L0 没有任何正文）'}</b>
+            {rb.factWatermark ? '；晚于此时刻的记忆会被原样保留、不重新蒸馏（不会丢）。' : '。'}
           </div>
           <div style={{ marginTop: 8 }}>
             现有 L1 记忆 / L2 场景 / L3 画像会整体归档（*.bak.时间戳，可手工找回），随后清空重建；重建期间可正常对话，新对话的蒸馏优先进行；中途可取消，已重建部分保留。

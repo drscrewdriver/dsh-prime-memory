@@ -37508,6 +37508,17 @@ var __create = Object.create;
 		  return "关闭";
 		}
 		
+		// client/src/copy.ts
+		var GRAPH_FEATURE_LABEL = "知识图谱";
+		var GRAPH_TOOL_LABEL = "图谱读工具";
+		var GRAPH_BUDGET_LABEL = "图谱投影预算";
+		function graphEnableHint() {
+		  return `在设置页「概览 → ${GRAPH_FEATURE_LABEL}」打开开关后，存量记忆会逐批投影成实体与关系。`;
+		}
+		function graphSwitchDesc(on) {
+		  return on ? "已开启：L1 记忆会投影成实体与关系，存量在启动/开启后逐批补齐（可与「图谱读工具」独立开关）" : "默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时";
+		}
+		
 		// client/src/tabs/ArchiveSection.tsx
 		var import_react7 = require("react");
 		var import_jsx_runtime7 = require("react/jsx-runtime");
@@ -37788,7 +37799,9 @@ var __create = Object.create;
 		  ["dedup", "去重"],
 		  ["l2", "L2 场景"],
 		  ["l3", "L3 画像"],
-		  ["graph", "图谱投影"]
+		  // 这不是“投影开关”，是投影这一步的**输出预算**（issue #16：旧标签就叫“图谱投影”，
+		  // 与概览页那个功能开关撞名，用户点了以为开了投影，实际只是改了 token 预算）。
+		  ["graph", GRAPH_BUDGET_LABEL]
 		];
 		var SCOPE_KEYS = {
 		  l1: ["extract", "dedup"],
@@ -39314,6 +39327,7 @@ var __create = Object.create;
 		  const [confirmOpen, setConfirmOpen] = (0, import_react14.useState)(false);
 		  const [busy, setBusy] = (0, import_react14.useState)(false);
 		  const [rbError, setRbError] = (0, import_react14.useState)(null);
+		  const [canForce, setCanForce] = (0, import_react14.useState)(false);
 		  const refresh = (0, import_react14.useCallback)(() => {
 		    rpc("dsh-memory/rebuild-status", {}).then((r) => {
 		      if (r && r.ok) setRb(r.value);
@@ -39334,20 +39348,25 @@ var __create = Object.create;
 		  if (!rbRaw || rbRaw.supported === false) return null;
 		  const rb = rbRaw;
 		  ensureThemeStyle();
-		  const start = () => {
+		  const start = (force = false) => {
 		    setBusy(true);
 		    setRbError(null);
-		    rpc("dsh-memory/rebuild-start", {}).then((r) => {
+		    setCanForce(false);
+		    rpc("dsh-memory/rebuild-start", force ? { force: true } : {}).then((r) => {
 		      setBusy(false);
 		      if (r && r.ok) {
 		        setConfirmOpen(false);
 		        setRb(r.value);
 		      } else {
-		        setRbError(r && r.error ? r.error.message : "启动失败");
+		        const msg = r && r.error ? r.error.message : "启动失败";
+		        setRbError(msg);
+		        setCanForce(/force/.test(msg));
 		      }
 		    }).catch((e) => {
 		      setBusy(false);
-		      setRbError(String(e && e.message || e));
+		      const msg = String(e && e.message || e);
+		      setRbError(msg);
+		      setCanForce(/force/.test(msg));
 		    });
 		  };
 		  const cancel = () => {
@@ -39391,7 +39410,13 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: "产出 " + rb.recordsBuilt + " 条" })
 		    ] }) : null,
 		    lastNote ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: lastNote }) : null,
-		    rbError ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 8, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: rbError }) : null,
+		    rb.rederivableCount !== null || rb.preserveCount !== null ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 6 }, children: "本次计划：可重造 " + (rb.rederivableCount ?? 0) + " 条 · 原样保留 " + (rb.preserveCount ?? 0) + " 条（无来源或来源不在本次快照）" }) : null,
+		    rbError ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: { marginTop: 8, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: [
+		      rbError,
+		      canForce ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { disabled: busy, onClick: () => {
+		        start(true);
+		      }, children: busy ? "启动中…" : "我已了解，仍要继续（不重蒸水位后的记录）" }) }) : null
+		    ] }) : null,
 		    confirmOpen ? /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
 		      NModal,
 		      {
@@ -39411,13 +39436,20 @@ var __create = Object.create;
 		            },
 		            "cancel"
 		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { variant: "primary", disabled: busy, onClick: start, children: busy ? "启动中…" : "开始重建" }, "confirm")
+		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { variant: "primary", disabled: busy, onClick: () => {
+		            start();
+		          }, children: busy ? "启动中…" : "开始重建" }, "confirm")
 		        ],
 		        children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { children: [
 		            "将以 L0 原始对话为事实源重新蒸馏：",
 		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("b", { children: rb.sessionCount + " 个会话 · " + rb.messageCount + " 条消息" }),
 		            "，预计 ≥" + rb.estCalls + " 次蒸馏调用。"
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: { marginTop: 8 }, children: [
+		            "事实源覆盖到：",
+		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("b", { children: rb.factWatermark ? fmtTime(rb.factWatermark) : "无（本地 L0 没有任何正文）" }),
+		            rb.factWatermark ? "；晚于此时刻的记忆会被原样保留、不重新蒸馏（不会丢）。" : "。"
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 8 }, children: "现有 L1 记忆 / L2 场景 / L3 画像会整体归档（*.bak.时间戳，可手工找回），随后清空重建；重建期间可正常对话，新对话的蒸馏优先进行；中途可取消，已重建部分保留。" })
 		        ]
@@ -39929,6 +39961,7 @@ var __create = Object.create;
 		  const [stats, setStats] = (0, import_react17.useState)(null);
 		  const [settingsData, setSettingsData] = (0, import_react17.useState)(null);
 		  const [error, setError] = (0, import_react17.useState)(null);
+		  const [graphConfirm, setGraphConfirm] = (0, import_react17.useState)(null);
 		  const load = (0, import_react17.useCallback)(() => {
 		    rpc("dsh-memory/stats", {}).then((r) => {
 		      if (r && r.ok) setStats(r.value);
@@ -39964,6 +39997,14 @@ var __create = Object.create;
 		    }).catch((e) => {
 		      setSettingsData(prev);
 		      setError("开关写入失败：" + String(e && e.message || e));
+		    });
+		  };
+		  const requestGraphOn = () => {
+		    rpc("dsh-memory/graph-preview", {}).then((r) => {
+		      const missing = r && r.ok ? r.value.stats?.missing ?? 0 : 0;
+		      setGraphConfirm({ missing });
+		    }).catch(() => {
+		      setGraphConfirm({ missing: 0 });
 		    });
 		  };
 		  const setNum = (key, value) => {
@@ -40021,6 +40062,7 @@ var __create = Object.create;
 		  const toolMutate = settingsData && settingsData.settings ? settingsData.settings.toolMutate !== false : true;
 		  const toolSkills = settingsData && settingsData.settings ? settingsData.settings.toolSkills !== false : true;
 		  const skillsEnabled = settingsData && settingsData.settings ? settingsData.settings.skillsEnabled === true : false;
+		  const graphEnabled = settingsData && settingsData.settings ? settingsData.settings.graphEnabled === true : false;
 		  const keywordEnabled = settingsData && settingsData.settings ? settingsData.settings.keywordEnabled === true : false;
 		  const redistillEnabled = settingsData && settingsData.settings ? settingsData.settings.redistillEnabled === true : false;
 		  const mdSyncEnabled = settingsData && settingsData.settings ? settingsData.settings.mdSyncEnabled === true : false;
@@ -40100,6 +40142,23 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: S.panelLabel, children: GRAPH_FEATURE_LABEL }),
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+		        SwitchRow,
+		        {
+		          label: `${GRAPH_FEATURE_LABEL}投影`,
+		          desc: graphSwitchDesc(graphEnabled),
+		          checked: graphEnabled,
+		          disabled: !master,
+		          onChange: (v) => {
+		            if (v) {
+		              requestGraphOn();
+		            } else {
+		              toggle("graphEnabled", false);
+		            }
+		          }
+		        }
+		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: S.panelLabel, children: "工具封印" }),
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
 		        SwitchRow,
@@ -40115,7 +40174,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
 		        SwitchRow,
 		        {
-		          label: "图谱工具",
+		          label: GRAPH_TOOL_LABEL,
 		          desc: toolGraph ? "已注册：memory_search_graph / memory_expand_graph_node" : "已封印：图谱读工具从模型工具列表移除",
 		          checked: toolGraph,
 		          onChange: (v) => {
@@ -40271,7 +40330,53 @@ var __create = Object.create;
 		      })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(ArchiveSection, { rpc }),
-		    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { style: S.hint, children: "浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。" })
+		    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("p", { style: S.hint, children: "浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。" }),
+		    graphConfirm ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
+		      NModal,
+		      {
+		        open: true,
+		        onClose: () => {
+		          setGraphConfirm(null);
+		        },
+		        title: `开启${GRAPH_FEATURE_LABEL}投影？`,
+		        footer: [
+		          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+		            NButton,
+		            {
+		              onClick: () => {
+		                setGraphConfirm(null);
+		              },
+		              children: "取消"
+		            },
+		            "cancel"
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+		            NButton,
+		            {
+		              variant: "primary",
+		              onClick: () => {
+		                setGraphConfirm(null);
+		                toggle("graphEnabled", true);
+		              },
+		              children: "开启"
+		            },
+		            "confirm"
+		          )
+		        ],
+		        children: [
+		          graphConfirm.missing > 0 ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { children: [
+		            "待投影记忆 ",
+		            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("b", { children: graphConfirm.missing }),
+		            " 条，按每批 8 条约 ",
+		            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("b", { children: Math.ceil(graphConfirm.missing / 8) }),
+		            " 个作业；每个作业一次 LLM 抽取（单批约 2 分钟），预计总计 ",
+		            /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("b", { children: Math.max(1, Math.round(Math.ceil(graphConfirm.missing / 8) * 2 / 60)) }),
+		            " 小时量级。"
+		          ] }) : /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { children: "当前没有待投影的记忆，开启后新蒸馏的记忆会陆续进图。" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: { marginTop: 8 }, children: "投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。" })
+		        ]
+		      }
+		    ) : null
 		  ] });
 		}
 		
@@ -42711,7 +42816,11 @@ var __create = Object.create;
 		      " ",
 		      /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(NButton, { onClick: loadBoard, children: "重试" })
 		    ] }) : null,
-		    stats && stats.nodes === 0 && !error ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("p", { style: S.intro, children: "图谱还没有内容。它在设置里是独立开关(概览 → 图谱投影),开启后存量记忆会逐批投影成实体与关系。" }) : null,
+		    stats && stats.nodes === 0 && !error ? /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("p", { style: S.intro, children: [
+		      "图谱还没有内容。",
+		      graphEnableHint(),
+		      `（注意：这里指的是「${GRAPH_FEATURE_LABEL}」开关，不是「${GRAPH_TOOL_LABEL}」——后者只管模型能不能读图）`
+		    ] }) : null,
 		    board && board.seeds.length > 1 && view === "full" ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { style: { ...S.flexRow, marginBottom: 8, flexWrap: "wrap", gap: 6 }, children: board.seeds.map((s) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
 		      "button",
 		      {

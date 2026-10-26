@@ -54,8 +54,19 @@ export interface FactSourceRead {
 export type PreserveReason = 
 /** 事实源里没有 `source_message_ids` —— 不是从 L0 蒸馏来的。 */
 'no-source'
-/** 内容为空白 —— 重蒸馏不会产出空记忆,保留它也无从重造。 */
+/** 内容为空白 —— 重蒸馏不会产出空记忆，保留它也无从重造。 */
  | 'empty-content'
+/**
+ * 来源消息**不在本次 L0 快照内**。
+ *
+ * 与 `no-source` 的区别：这条记录**有**来源 id，但那些 id 指向的消息不在本次
+ * 重建的事实源里——结构上重蒸不出来，故必须保留。
+ *
+ * 典型成因是 L0 写停（T8.4 后 l0 正文三表退役）：停写之后新增的 L1 记录
+ * 全部落这一类。判据用**集合包含**而不是时间差——L1 的 `created_time` 会随
+ * 每次蒸馏前移，任何时间阈值终将被跳过，用它做门槛会把重建**永久锁死**。
+ */
+ | 'post-watermark'
 /**
  * 检索库里有、事实源里**完全没有**这一行 —— 来源无从证明。
  *
@@ -87,6 +98,14 @@ export interface PreservePlan {
 /** 判定单条记录是否可由 L0 重蒸馏出来(事实源侧判据)。 */
 export declare function isRederivable(record: MemoryRecord): boolean;
 /**
+ * 来源是否**全部**落在本次快照内。
+ *
+ * `every` 而不是 `some`：只要有一张原料缺失，重蒸馏就只会产出一个缺角的新记录，
+ * 不如原样保留。无来源时返回 `false`——但那一类由 `no-source` 先行接住，
+ * 不应依赖本函数的返回值。
+ */
+export declare function sourcesCoveredBySnapshot(record: MemoryRecord, snapshotIds: ReadonlySet<string>): boolean;
+/**
  * 读取事实源目录(`<dataDir>/records/*.jsonl`)。
  *
  * 只读 `*.jsonl` 顶层文件:`archiveDerived()` 把旧目录整体改名为
@@ -103,7 +122,17 @@ export declare function readFactSource(recordsDir: string): Promise<FactSourceRe
  * `liveDbRecords` 由调用方从**检索库**取(它没有 `source_message_ids` 列,
  * 只用来回答"这条还在不在"),恢复时以检索库副本为准 —— 那是当前检索态。
  */
-export declare function planPreserve(factRecords: readonly MemoryRecord[], liveDbRecords: readonly MemoryRecord[]): PreservePlan;
+export interface PreserveOptions {
+    /**
+     * 本次重建事实源（L0 快照）的**消息 id 集**。
+     *
+     * 不给 = 保持旧口径（只看"有无来源"）。给了才能判 `post-watermark`，
+     * 而**给了才是安全的**：L0 已写停的库只看"有无来源"会把停写后的记录
+     * 当成可重蒸，清库后真的丢。
+     */
+    readonly snapshotIds?: ReadonlySet<string>;
+}
+export declare function planPreserve(factRecords: readonly MemoryRecord[], liveDbRecords: readonly MemoryRecord[], opts?: PreserveOptions): PreservePlan;
 /** 清空闸门的判定码。 */
 export type ClearGateCode = 
 /** 放行。 */

@@ -60,6 +60,9 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'memportEnabled',
   // 0.26.0:回填并行度运行时覆盖（概览页滑块；0 = 跟随部署 cfg.backfill.concurrency）
   'backfillConcurrency',
+  // 0.26.11（issue #16）:知识图谱**投影**开关；与部署 cfg.graph.enabled 取或。
+  // 与 toolGraph（图谱**读**工具封印）是两件事，别混。
+  'graphEnabled',
 ] as const;
 
 /** 端点全集(40 个;含 records-delete / 图谱两端点 / receipts / §C 冲突队列读写+丢弃留痕三端点 / ruminate 三端点 / 退场与快照五端点)。 */
@@ -209,8 +212,8 @@ describe('endpoint surface', () => {
 });
 
 describe('memory live settings key registry', () => {
-  it('registers 24 keys incl. the v0.9.0 reverse-engineered ones', () => {
-    expect(MEMORY_LIVE_SETTINGS_KEYS.length).toBe(24);
+  it('registers 25 keys incl. the v0.9.0 reverse-engineered ones', () => {
+    expect(MEMORY_LIVE_SETTINGS_KEYS.length).toBe(25);
     for (const k of ['embedRemoteBaseURL', 'embedRemoteApiKey', 'embedRemoteModel', 'embedRemoteDimensions', 'memoryMutate']) {
       expect(MEMORY_LIVE_SETTINGS_KEYS).toContain(k);
     }

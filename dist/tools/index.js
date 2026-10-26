@@ -14,6 +14,7 @@
 import { createHash } from 'node:crypto';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { DOWNGRADE_TARGET, familyOf, isKnownType, typeEnumSep } from '../memory-types.js';
+import { graphFeatureOn } from '../graph/gate.js';
 import { drscRoleOf } from '../clients/drsc.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView, buildReceipts, newRunId } from '../store/receipts.js';
 import { persistReceiptsSafely } from '../store/receipts.js';
@@ -1049,7 +1050,7 @@ graphWrite) {
         },
     })));
     // ── 图谱工具(读;受与 memory_search 同款的档位/注入拒读门 + 族过滤) ──
-    const GRAPH_OFF_NOTICE = '图谱功能未启用:部署配置 graph.enabled 未开启,当前没有可用的知识图谱。';
+    const GRAPH_OFF_NOTICE = '知识图谱未启用：请在概览页开启「知识图谱」（或部署配置 graph.enabled），当前没有任何可用的知识图谱。';
     // memory_search_graph: 图谱节点检索(紧凑节点卡)
     reg('graph', () => ctx.tools.register(defineTool({
         name: 'memory_search_graph',
@@ -1203,7 +1204,7 @@ graphWrite) {
         },
         execute: async (args) => {
             const graph = stores.graph;
-            if (!graph || !cfg.graph?.enabled)
+            if (!graph || !graphFeatureOn(cfg, live))
                 return { queued: 0, job_ids: [], skipped_ids: [], notice: GRAPH_OFF_NOTICE };
             if (!graphWrite)
                 return { queued: 0, job_ids: [], skipped_ids: [], notice: '图谱写面未接线(runner 未装配),无法入队。' };
@@ -1273,7 +1274,7 @@ graphWrite) {
             if (!live.get().memoryMutate)
                 return { notice: MUTATE_OFF_NOTICE };
             const graph = stores.graph;
-            if (!graph || !cfg.graph?.enabled)
+            if (!graph || !graphFeatureOn(cfg, live))
                 return { notice: GRAPH_OFF_NOTICE };
             if (!graphWrite)
                 return { notice: '图谱写面未接线(runner 未装配),无法迁移。' };

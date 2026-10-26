@@ -81,6 +81,16 @@ export function estimateCalls(sessions: number, messages: number, chars: number,
   return Math.max(sessions, Math.ceil((chars + 64 * messages) / perChunk));
 }
 
+/**
+ * 水位落差**提示**阀值：检索库里晚于 L0 水位的占比超过此值，就要求二次确认。
+ *
+ * 为什么叫“提示阀值”而不是“拒绝阀值”：L0 写停后这个比例只会单调上升，
+ * 拿它做硬门槛等于把重建**永久锁死**（issue #14 原提案的致命缺陷）。
+ * 所以它只负责“提醒你正在做什么”，放行靠 `force`；真正的**不丢**由
+ * `planPreserve` 的集合判据（`post-watermark`）结构性保证。
+ */
+export const STALE_RATIO_THRESHOLD = 0.5;
+
 function idleStatus(): RebuildStatus {
   return {
     running: false,
@@ -97,6 +107,9 @@ function idleStatus(): RebuildStatus {
     error: null,
     archiveNote: null,
     preserveNote: null,
+    rederivableCount: null,
+    preserveCount: null,
+    factWatermark: null,
   };
 }
 
@@ -123,15 +136,17 @@ export class RebuildController {
     private readonly live: LiveSettingsHandle,
   ) {}
 
-  /** 状态快照(idle 时附带实时 L0 预估,供确认弹窗显示成本)。 */
+  /** 状态快照(idle 时附带实时 L0 预估与事实源水位,供确认弹窗讲清"会发生什么")。 */
   getStatus(): RebuildStatus {
     if (this.status.phase === 'idle') {
       const est = this.db.l0RebuildEstimate();
+      const wm = this.db.rebuildWatermark();
       return {
         ...this.status,
         sessionCount: est.sessions,
         messageCount: est.messages,
         estCalls: estimateCalls(est.sessions, est.messages, est.chars, effectiveCfg(this.cfg, this.live).llm.maxInputChars),
+        factWatermark: wm.l0Iso,
       };
     }
     return { ...this.status };
@@ -142,11 +157,41 @@ export class RebuildController {
     return this.chunks.length;
   }
 
-  /** 启动重建(校验后入队准备任务;真正的清库/归档在管线队列里串行执行,避开并发竞态)。 */
-  start(): RebuildStatus {
+  /**
+   * 启动重建(校验后入队准备任务;真正的清库/归档在管线队列里串行执行,避开并发竞态)。
+   *
+   * `force` 只用于跨过**提示门槛**（水位落差超过 `STALE_RATIO_THRESHOLD` 时的二次确认），
+   * 不能跨过唯一那条硬拒：「L0 一条消息都没有、检索库却有记录」—— 那种形状下重建
+   * 只会清空、一条也重造不出来，属于纯亏。
+   */
+  start(force = false): RebuildStatus {
     if (this.status.running) throw new Error('重建已在进行中');
     const est = this.db.l0RebuildEstimate();
-    if (est.messages === 0) throw new Error('L0 无任何消息,无需重建');
+    const wm = this.db.rebuildWatermark();
+    if (est.messages === 0) {
+      if (wm.l1Total > 0) {
+        throw new Error(
+          `本地 L0 一条消息都没有,而检索库有 ${wm.l1Total} 条记忆 ——`
+          + 'L0 正文自 T8.4 起已停写,用它重建只会清空检索库、一条也重造不出来。'
+          + '已中止重建且**未动任何数据**。若确实需要以其他事实源重建,请先把该事实源接上后重试。',
+        );
+      }
+      throw new Error('L0 无任何消息,无需重建');
+    }
+    // 水位落差**只做提示**:L0 停写后这个比例会单调上升，硬拒等于永久锁死重建。
+    // 真正的“不丢”由 planPreserve 的集合判据结构性保证，这里只负责让用户看清楚。
+    if (!force && wm.l1Total > 0) {
+      const ratio = wm.l1After / wm.l1Total;
+      if (ratio > STALE_RATIO_THRESHOLD) {
+        const pct = Math.round(ratio * 100);
+        throw new Error(
+          `检索库有 ${wm.l1Total} 条记忆，其中 ${wm.l1After} 条(${pct}%)晚于本地 L0 水位`
+          + `${wm.l0Iso ? ` ${wm.l0Iso}` : '(L0 为空)'} —— 这些记忆的原材料已不在本次快照里，`
+          + '重建会把它们**原样保留但不再重蒸馏**(不会丢，只是不重造)。'
+          + '确认要继续请带 force 重试。',
+        );
+      }
+    }
     this.cancelRequested = false;
     this.chunks = [];
     this.status = {
@@ -157,9 +202,14 @@ export class RebuildController {
       messageCount: est.messages,
       estCalls: estimateCalls(est.sessions, est.messages, est.chars, effectiveCfg(this.cfg, this.live).llm.maxInputChars),
       startedAt: Date.now(),
+      factWatermark: wm.l0Iso,
     };
     this.runner.enqueueRebuildTask(() => this.prepare());
-    this.logger.info(`[memory] 重建开始:${est.sessions} 个会话 / ${est.messages} 条 L0 消息(预计 ≥${this.status.estCalls} 次抽取调用)`);
+    this.logger.info(
+      `[memory] 重建开始:${est.sessions} 个会话 / ${est.messages} 条 L0 消息`
+      + `(预计 ≥${this.status.estCalls} 次抽取调用;事实源水位 ${wm.l0Iso ?? '空'};`
+      + `检索库 ${wm.l1Total} 条,其中晚于水位 ${wm.l1After} 条)`,
+    );
     return { ...this.status };
   }
 
@@ -176,18 +226,25 @@ export class RebuildController {
     try {
       // 快照:从检索库读全量 L0(事务一致;重建期间新捕获的消息走正常轮次,天然不重不漏)
       this.rebuildStartMs = Date.now();
-      this.chunks = groupL0Sessions(this.db.listL0All());
+      const snapshot = this.db.listL0All();
+      this.chunks = groupL0Sessions(snapshot);
       if (this.chunks.length === 0) {
         this.finish('failed', 'L0 快照为空');
         return;
       }
       this.status.total = this.chunks.length;
+      // 本次事实源的**消息 id 集**：判"来源是否还在快照里"的唯一依据。
+      // 不取时间:时间差对停写的 L0 会永久走扩（详见 rebuild-preserve 的 post-watermark）。
+      const snapshotIds = new Set<string>();
+      for (const m of snapshot) if (typeof m?.id === 'string' && m.id) snapshotIds.add(m.id);
 
       const dataDir = resolveDataDir(this.cfg);
 
       // ── ① 读事实源 + 判定保留集(必须在 archiveDerived 之前:归档会把 records/ 搬走)──
       const factRead = await readFactSource(path.join(dataDir, 'records'));
-      const plan = planPreserve(factRead.records, this.stores.l1.all());
+      const plan = planPreserve(factRead.records, this.stores.l1.all(), { snapshotIds });
+      this.status.rederivableCount = plan.rederivable;
+      this.status.preserveCount = plan.preserved.length;
 
       // ── ② 过闸门:判不出该保留什么时**拒绝清空**(见 rebuild-preserve.ts 文件头)──
       const gate = gateClear(factRead, plan);

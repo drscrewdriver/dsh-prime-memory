@@ -441,7 +441,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   modes.setModeChangeHandler((sessionId, oldMode, newMode) => runner.onModeChange(sessionId, oldMode, newMode));
   // 闲置兜底:静默达标会话的未蒸馏切片自动落袋(idleSeconds=0 关闭)
   runner.startIdleTimer();
-  // 图谱周期补投影(cfg.graph.enabled 门控;30 分钟一次低速收敛)
+  // 图谱周期补投影（开关在 tick 内判：部署 graph.enabled 或面板 live.graphEnabled；30 分钟一次低速收敛）
   runner.startGraphBackfillTimer();
   // 时效标注存量回填(expiry-tiering task_6.3:tieringEnabled 门控,低频、让位蒸馏)
   runner.startValidityBackfillTimer();

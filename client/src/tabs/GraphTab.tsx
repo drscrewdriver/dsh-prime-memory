@@ -24,6 +24,7 @@ import { NButton } from '../ui/primitives.js';
 import { MarkdownBody } from '../ui/MarkdownBody.js';
 import { fmtTime, tagClass, typeLabel } from '../format.js';
 import { EGO_HOPS_MAX, canGrow, clipName, egoSubgraph, groupNeighbors, type RawNeighbor } from './graph-ego-subgraph.js';
+import { GRAPH_FEATURE_LABEL, GRAPH_TOOL_LABEL, graphEnableHint } from '../copy.js';
 import { GraphCanvas } from './GraphCanvas.js';
 import type { GraphFull } from './graph-canvas-data.js';
 
@@ -244,7 +245,8 @@ export function GraphTab(props: { rpc: RpcFn }) {
       {/* 空态:图域为零(未启用或未投影)——与"构建中"分开说,前者要去开开关 */}
       {stats && stats.nodes === 0 && !error ? (
         <p style={S.intro}>
-          图谱还没有内容。它在设置里是独立开关(概览 → 图谱投影),开启后存量记忆会逐批投影成实体与关系。
+          图谱还没有内容。{graphEnableHint()}
+          {`（注意：这里指的是「${GRAPH_FEATURE_LABEL}」开关，不是「${GRAPH_TOOL_LABEL}」——后者只管模型能不能读图）`}
         </p>
       ) : null}
 

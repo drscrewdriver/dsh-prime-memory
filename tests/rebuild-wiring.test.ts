@@ -98,9 +98,15 @@ function l1Rec(id: string, content: string, scene = '日常'): MemoryRecord {
   };
 }
 
-/** 事实源副本:导入记忆没有 `source_message_ids`,蒸馏记忆有。 */
-function factLine(r: MemoryRecord, sourced: boolean): string {
-  return JSON.stringify(sourced ? { ...r, source_message_ids: ['msg-1'] } : r);
+/**
+ * 事实源副本:导入记忆没有 `source_message_ids`,蒸馏记忆有。
+ *
+ * `sourceId` 必须与 L0 快照里的 record_id 对齐（默认都是 `m1`）—— 否则就被
+ * post-watermark 判据正确归为“来源不在快照”（issue #14 后这是语义差异，
+ * 不再是夹具细节）。
+ */
+function factLine(r: MemoryRecord, sourced: boolean, sourceId = 'm1'): string {
+  return JSON.stringify(sourced ? { ...r, source_message_ids: [sourceId] } : r);
 }
 
 interface Harness {
@@ -110,17 +116,30 @@ interface Harness {
   /** 每块蒸馏开跑前采样一次检索库(证明"清空发生在蒸馏之前")。 */
   readonly dbAtChunk: () => string[];
   readonly dataDir: string;
+  /** 把已入队的 prepare → scheduleChunk → finalize 链推到稳定。 */
+  readonly drain: () => Promise<void>;
 }
 
-async function harness(opts: { factSource?: 'ok' | 'missing'; dbRecords?: MemoryRecord[] } = {}): Promise<Harness> {
+async function harness(opts: {
+  factSource?: 'ok' | 'missing';
+  dbRecords?: MemoryRecord[];
+  /** 不写 L0（模拟“L0 已清退/从未捕获”的库）。 */
+  noL0?: boolean;
+  /** false = 不自动 start，由用例自己调（测启动前置门专用）。 */
+  autoStart?: boolean;
+  /** 事实源里蒸馏记忆的 `source_message_ids` 取值（默认与 L0 的 record_id `m1` 对齐）。 */
+  sourceId?: string;
+} = {}): Promise<Harness> {
   const dataDir = await mkdtemp(join(tmpdir(), 'dsh-rebuild-wire-'));
   const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
   db.init();
 
   // L0:一条消息就够 —— 它是重建的"燃料",与保留集无关(清 L1 不动 L0)
-  db.upsertL0Batch([
-    { sessionId: 's1', recordedAt: new Date(T).toISOString(), id: 'm1', role: 'user', content: '原始对话内容', timestamp: T },
-  ]);
+  if (!opts.noL0) {
+    db.upsertL0Batch([
+      { sessionId: 's1', recordedAt: new Date(T).toISOString(), id: 'm1', role: 'user', content: '原始对话内容', timestamp: T },
+    ]);
+  }
 
   const l1 = new L1Store(dataDir, db, undefined, 'keyword', noopLogger, 30);
   await l1.init();
@@ -132,7 +151,7 @@ async function harness(opts: { factSource?: 'ok' | 'missing'; dbRecords?: Memory
     await mkdir(recordsDir, { recursive: true });
     await writeFile(
       join(recordsDir, '2026-09-17.jsonl'),
-      (opts.dbRecords ?? []).map((r) => factLine(r, r.id.startsWith('d'))).join('\n') + '\n',
+      (opts.dbRecords ?? []).map((r) => factLine(r, r.id.startsWith('d'), opts.sourceId ?? 'm1')).join('\n') + '\n',
       'utf-8',
     );
   }
@@ -160,15 +179,20 @@ async function harness(opts: { factSource?: 'ok' | 'missing'; dbRecords?: Memory
   } as unknown as RebuildStores;
 
   const ctl = new RebuildController({} as never, cfg(dataDir), stores, db, runner as never, noopLogger, liveHandle());
-  ctl.start();
   // prepare → scheduleChunk → finalize 是一条入队链,逐层 await 到稳定
-  for (let i = 0; i < 20 && i < pending.length + 1; i++) {
-    const batch = pending.splice(0);
-    if (batch.length === 0) break;
-    await Promise.all(batch);
+  const drain = async (): Promise<void> => {
+    for (let i = 0; i < 20 && i < pending.length + 1; i++) {
+      const batch = pending.splice(0);
+      if (batch.length === 0) break;
+      await Promise.all(batch);
+    }
+  };
+  if (opts.autoStart !== false) {
+    ctl.start();
+    await drain();
   }
 
-  return { db, l1, ctl, dataDir, dbAtChunk: () => seenAtChunk };
+  return { db, l1, ctl, dataDir, dbAtChunk: () => seenAtChunk, drain };
 }
 
 describe('接线:保留式重建的固定顺序', () => {
@@ -269,6 +293,54 @@ describe('接线:闸门拒绝时一条数据都不动', () => {
       // 也没建快照、没归档(中止发生在破坏性动作之前)
       expect((await readdir(h.dataDir)).some((n) => n === 'snapshots')).toBe(false);
       expect((await readdir(h.dataDir)).every((n) => !n.startsWith('records.bak.'))).toBe(true);
+    } finally {
+      h.db.close();
+      await rm(h.dataDir, { recursive: true, force: true });
+    }
+  });
+});
+
+/**
+ * issue #14:启动前的两道门。
+ *
+ * 一道**硬拒**（L0 没正文而检索库有记录 = 只会清空），一道**提示**（水位落差）。
+ * 两者性质必须分开：前者 force 也不能跨，后者只能靠 force 放行 —— 否则
+ * L0 停写后的库会要么永久锁死、要么静默吃亏。
+ */
+describe('issue #14:重建启动的两道门', () => {
+  it('L0 无正文 + 检索库有记录 → 硬拒（force 也不豁免），一条不清', async () => {
+    const h = await harness({ noL0: true, autoStart: false, dbRecords: [l1Rec('d_1', '由 L0 蒸馏的记忆')] });
+    try {
+      expect(() => h.ctl.start()).toThrow(/一条消息都没有/);
+      // force 也不能跨：那种形状下重建只会清空、一条也重造不出来
+      expect(() => h.ctl.start(true)).toThrow(/一条消息都没有/);
+      expect(h.db.getAllL1().map((r) => r.id)).toEqual(['d_1']);
+      expect(h.ctl.getStatus().phase).toBe('idle');
+    } finally {
+      h.db.close();
+      await rm(h.dataDir, { recursive: true, force: true });
+    }
+  });
+
+  it('水位落差超阀值 → 未 force 拒绝；force 放行且那批记录被原样保留', async () => {
+    // 记录的 created_time 晚于 L0 最后一条（模拟 L0 停写后新增）：
+    // 它们“有来源”，但来源消息不在 L0 快照里。
+    const later = { ...l1Rec('d_1', '停写后新增的记忆'), createdAt: T + 86_400_000, updatedAt: T + 86_400_000 };
+    // sourceId 刻意取一个不在 L0 快照里的值：这就是“停写后新增”的真实形状。
+    const h = await harness({ autoStart: false, sourceId: 'msg-stale', dbRecords: [later] });
+    try {
+      expect(() => h.ctl.start()).toThrow(/晚于本地 L0 水位/);
+      expect(h.db.getAllL1().map((r) => r.id)).toEqual(['d_1']);
+
+      h.ctl.start(true);
+      await h.drain();
+
+      // 不丢：该记录被判 post-watermark 原样保留；可重蒸 0 条
+      expect(h.db.getAllL1().map((r) => r.id)).toEqual(['d_1']);
+      const st = h.ctl.getStatus();
+      expect(st.rederivableCount).toBe(0);
+      expect(st.preserveCount).toBe(1);
+      expect(st.preserveNote).toContain('来源不在本次快照');
     } finally {
       h.db.close();
       await rm(h.dataDir, { recursive: true, force: true });

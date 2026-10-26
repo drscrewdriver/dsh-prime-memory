@@ -193,7 +193,7 @@ export interface MemoryConfig {
      */
     workspaceSource: {
         enabled: boolean;
-        /** 路由表：按数组序取首个命中——dsh 侧在前，故双项目并存时归 dsh（用户口径）。 */
+        /** 路由表：按数组序取首个命中；**默认为空**，需按自己的项目自行配置（issue #13）。 */
         routes: WorkspaceRoute[];
         /** 存量 re-link 的单次护栏。 */
         maxRecords: number;

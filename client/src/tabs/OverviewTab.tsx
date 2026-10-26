@@ -6,6 +6,8 @@ import { modeLabel } from '../pill/modes.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
 import { SwitchRow } from '../ui/controls.js';
+import { NButton, NModal } from '../ui/primitives.js';
+import { GRAPH_FEATURE_LABEL, GRAPH_TOOL_LABEL, graphSwitchDesc } from '../copy.js';
 import { ArchiveSection } from './ArchiveSection.js';
 import { DistillSettings } from './DistillSettings.js';
 import { EmbeddingSection } from './EmbeddingSection.js';
@@ -14,13 +16,15 @@ import { RuminatePanel } from './RuminatePanel.js';
 import { BackfillSection } from './BackfillSection.js';
 
 /** 可通过开关切换的 settings 键。 */
-type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate' | 'conflictFreeze' | 'skillsEnabled' | 'keywordEnabled' | 'redistillEnabled' | 'mdSyncEnabled' | 'memportEnabled' | 'toolRoom' | 'toolGraph' | 'toolRuminate' | 'toolConflict' | 'toolMutate' | 'toolSkills';
+type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate' | 'conflictFreeze' | 'skillsEnabled' | 'graphEnabled' | 'keywordEnabled' | 'redistillEnabled' | 'mdSyncEnabled' | 'memportEnabled' | 'toolRoom' | 'toolGraph' | 'toolRuminate' | 'toolConflict' | 'toolMutate' | 'toolSkills';
 
 export function OverviewTab(props: { rpc: RpcFn }) {
   const rpc = props.rpc;
   const [stats, setStats] = useState<MemoryStats | null>(null);
   const [settingsData, setSettingsData] = useState<SettingsGetResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** 首次开启图谱投影前的成本确认（issue #16）：null = 未触发。 */
+  const [graphConfirm, setGraphConfirm] = useState<{ missing: number } | null>(null);
 
   // 计数 5s 轮询；settings 跟随同一次 load 刷新（开关写入后有真实值收敛）
   const load = useCallback(() => {
@@ -69,6 +73,24 @@ export function OverviewTab(props: { rpc: RpcFn }) {
       .catch((e: unknown) => {
         setSettingsData(prev);
         setError('开关写入失败：' + String((e && (e as Error).message) || e));
+      });
+  };
+
+  /**
+   * 开启投影前先问一次“大概多贵”。
+   *
+   * 投影是**逐批走 LLM** 的（每批 8 条记录、单批约 2 分钟），首次开启可能是几十条
+   * 到几千条——不给预估就直接热开，用户会看到一连串模型调用且不知道怎么停。
+   */
+  const requestGraphOn = () => {
+    rpc('dsh-memory/graph-preview', {})
+      .then((r) => {
+        const missing = r && r.ok ? ((r.value as { stats?: { missing?: number } }).stats?.missing ?? 0) : 0;
+        setGraphConfirm({ missing });
+      })
+      .catch(() => {
+        // 取不到计数不阻断开启：宁可少一次预估，不可把功能卡在“查不到数”上
+        setGraphConfirm({ missing: 0 });
       });
   };
 
@@ -135,6 +157,8 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   const toolMutate = settingsData && settingsData.settings ? settingsData.settings.toolMutate !== false : true;
   const toolSkills = settingsData && settingsData.settings ? settingsData.settings.toolSkills !== false : true;
   const skillsEnabled = settingsData && settingsData.settings ? settingsData.settings.skillsEnabled === true : false;
+  // 知识图谱投影（写面）。注意与 toolGraph（读工具封印）不是一件事，issue #16。
+  const graphEnabled = settingsData && settingsData.settings ? settingsData.settings.graphEnabled === true : false;
   // 存量回填/进阶功能启用开关（与下方 BackfillSection 的按钮同区）。
   const keywordEnabled = settingsData && settingsData.settings ? settingsData.settings.keywordEnabled === true : false;
   const redistillEnabled = settingsData && settingsData.settings ? settingsData.settings.redistillEnabled === true : false;
@@ -210,6 +234,26 @@ export function OverviewTab(props: { rpc: RpcFn }) {
               toggle('skillsEnabled', v);
             }}
           />
+          {/*
+           * 分组：知识图谱（issue #16）——这是**写入面**开关（生成图谱）。
+           * 与下方「图谱读工具」（能否向模型注册读图工具）是两个独立的面；
+           * 旧版只有后者，而“图谱投影”四个字落在蒸馏预算输入框旁边（那是预算分层标签）。
+           */}
+          <div style={S.panelLabel}>{GRAPH_FEATURE_LABEL}</div>
+          <SwitchRow
+            label={`${GRAPH_FEATURE_LABEL}投影`}
+            desc={graphSwitchDesc(graphEnabled)}
+            checked={graphEnabled}
+            disabled={!master}
+            onChange={(v) => {
+              if (v) {
+                // 开启前先看预估：投影逐批走 LLM，不给数字就热开等于黑盒花钱
+                requestGraphOn();
+              } else {
+                toggle('graphEnabled', false);
+              }
+            }}
+          />
           {/* 分组：工具封印（v0.21.0）——false = 该组工具不注册,从模型工具列表消失;
               核心读(memory_search / read_scene / receipts / conversation_search)与槽位三件不受控 */}
           <div style={S.panelLabel}>工具封印</div>
@@ -220,7 +264,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             onChange={(v) => { toggle('toolRoom', v); }}
           />
           <SwitchRow
-            label="图谱工具"
+            label={GRAPH_TOOL_LABEL}
             desc={toolGraph ? '已注册：memory_search_graph / memory_expand_graph_node' : '已封印：图谱读工具从模型工具列表移除'}
             checked={toolGraph}
             onChange={(v) => { toggle('toolGraph', v); }}
@@ -357,6 +401,53 @@ export function OverviewTab(props: { rpc: RpcFn }) {
           「重建记忆」「反刍整理」是同一类运维动作，放两个页里人找不到。 */}
       <ArchiveSection rpc={rpc} />
       <p style={S.hint}>浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。</p>
+      {/* 首次开启投影的成本确认（issue #16）：先给数，再让人决定。 */}
+      {graphConfirm ? (
+        <NModal
+          open={true}
+          onClose={() => {
+            setGraphConfirm(null);
+          }}
+          title={`开启${GRAPH_FEATURE_LABEL}投影？`}
+          footer={[
+            <NButton
+              key="cancel"
+              onClick={() => {
+                setGraphConfirm(null);
+              }}
+            >
+              取消
+            </NButton>,
+            <NButton
+              key="confirm"
+              variant="primary"
+              onClick={() => {
+                setGraphConfirm(null);
+                toggle('graphEnabled', true);
+              }}
+            >
+              开启
+            </NButton>,
+          ]}
+        >
+          {graphConfirm.missing > 0 ? (
+            <div>
+              {'待投影记忆 '}
+              <b>{graphConfirm.missing}</b>
+              {' 条，按每批 8 条约 '}
+              <b>{Math.ceil(graphConfirm.missing / 8)}</b>
+              {' 个作业；每个作业一次 LLM 抽取（单批约 2 分钟），预计总计 '}
+              <b>{Math.max(1, Math.round((Math.ceil(graphConfirm.missing / 8) * 2) / 60))}</b>
+              {' 小时量级。'}
+            </div>
+          ) : (
+            <div>{'当前没有待投影的记忆，开启后新蒸馏的记忆会陆续进图。'}</div>
+          )}
+          <div style={{ marginTop: 8 }}>
+            {'投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。'}
+          </div>
+        </NModal>
+      ) : null}
     </div>
   );
 }

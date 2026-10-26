@@ -1569,6 +1569,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           memoryMutate: false,
           conflictFreeze: live?.get()?.conflictFreeze === true,
           skillsEnabled: live?.get()?.skillsEnabled === true,
+          graphEnabled: live?.get()?.graphEnabled === true,
           keywordEnabled: live?.get()?.keywordEnabled === true,
           redistillEnabled: live?.get()?.redistillEnabled === true,
           mdSyncEnabled: live?.get()?.mdSyncEnabled === true,
@@ -1620,7 +1621,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const patch = (payload ?? {}) as Record<string, unknown>;
       const clean: Record<string, boolean | string | number | DistillChainEntry[] | { extract: number; dedup: number; l2: number; l3: number; graph: number } | { l1: DistillChainEntry[]; l2: DistillChainEntry[]; l3: DistillChainEntry[] }> = {};
       // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
-      for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills'] as const) {
+      for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
       }
       // md 投射护栏运行时覆盖：数字才收，钳 0~10000（与 live schema 同上限）；0 = 跟随部署默认。
@@ -2345,7 +2346,9 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const s = live?.get();
       if (s && (!s.enabled || !s.distill)) throw new Error('蒸馏开关已关闭,请先开启蒸馏再重建');
       if (!cfg.extract.enabled) throw new Error('部署配置已停用蒸馏(extract.enabled=false),无法重建');
-      const result = rebuild.start();
+      // force 只跨“水位落差”的二次确认；“L0 无正文而检索库非空”仍由 start() 硬拒。
+      const p = (payload ?? {}) as { force?: unknown };
+      const result = rebuild.start(p.force === true);
       deps.logger.info('[memory] 收到重建指令(设置页按钮)');
       return result;
     }

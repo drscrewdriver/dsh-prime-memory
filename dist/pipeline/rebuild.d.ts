@@ -24,6 +24,15 @@ export interface RebuildChunk {
 export declare function groupL0Sessions(records: L0MessageRecord[]): RebuildChunk[];
 /** 抽取调用数下界估算(与 l1.ts 的 perChunk 同式;会话数与字符预算取大)。 */
 export declare function estimateCalls(sessions: number, messages: number, chars: number, maxInputChars: number): number;
+/**
+ * 水位落差**提示**阀值：检索库里晚于 L0 水位的占比超过此值，就要求二次确认。
+ *
+ * 为什么叫“提示阀值”而不是“拒绝阀值”：L0 写停后这个比例只会单调上升，
+ * 拿它做硬门槛等于把重建**永久锁死**（issue #14 原提案的致命缺陷）。
+ * 所以它只负责“提醒你正在做什么”，放行靠 `force`；真正的**不丢**由
+ * `planPreserve` 的集合判据（`post-watermark`）结构性保证。
+ */
+export declare const STALE_RATIO_THRESHOLD = 0.5;
 export declare class RebuildController {
     private readonly ctx;
     private readonly cfg;
@@ -38,12 +47,18 @@ export declare class RebuildController {
     /** 快照时刻(收尾时按它区分重建产物与重建后新对话的记录)。 */
     private rebuildStartMs;
     constructor(ctx: Context, cfg: MemoryConfig, stores: RebuildStores, db: MemoryDb, runner: Pick<MemoryRunner, 'enqueueRebuildTask' | 'runRebuildTurn' | 'states'>, logger: MemoryLogger, live: LiveSettingsHandle);
-    /** 状态快照(idle 时附带实时 L0 预估,供确认弹窗显示成本)。 */
+    /** 状态快照(idle 时附带实时 L0 预估与事实源水位,供确认弹窗讲清"会发生什么")。 */
     getStatus(): RebuildStatus;
     /** 内存中尚未处理的会话快照块数(收尾后应为 0——快照即弃,诊断/冒烟用)。 */
     get chunkCount(): number;
-    /** 启动重建(校验后入队准备任务;真正的清库/归档在管线队列里串行执行,避开并发竞态)。 */
-    start(): RebuildStatus;
+    /**
+     * 启动重建(校验后入队准备任务;真正的清库/归档在管线队列里串行执行,避开并发竞态)。
+     *
+     * `force` 只用于跨过**提示门槛**（水位落差超过 `STALE_RATIO_THRESHOLD` 时的二次确认），
+     * 不能跨过唯一那条硬拒：「L0 一条消息都没有、检索库却有记录」—— 那种形状下重建
+     * 只会清空、一条也重造不出来，属于纯亏。
+     */
+    start(force?: boolean): RebuildStatus;
     /** 请求取消:当前块完成后停止,已重建部分保留并照常收尾 L2/L3。 */
     requestCancel(): RebuildStatus;
     private prepare;

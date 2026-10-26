@@ -60,8 +60,19 @@ export interface FactSourceRead {
 export type PreserveReason =
   /** 事实源里没有 `source_message_ids` —— 不是从 L0 蒸馏来的。 */
   | 'no-source'
-  /** 内容为空白 —— 重蒸馏不会产出空记忆,保留它也无从重造。 */
+  /** 内容为空白 —— 重蒸馏不会产出空记忆，保留它也无从重造。 */
   | 'empty-content'
+  /**
+   * 来源消息**不在本次 L0 快照内**。
+   *
+   * 与 `no-source` 的区别：这条记录**有**来源 id，但那些 id 指向的消息不在本次
+   * 重建的事实源里——结构上重蒸不出来，故必须保留。
+   *
+   * 典型成因是 L0 写停（T8.4 后 l0 正文三表退役）：停写之后新增的 L1 记录
+   * 全部落这一类。判据用**集合包含**而不是时间差——L1 的 `created_time` 会随
+   * 每次蒸馏前移，任何时间阈值终将被跳过，用它做门槛会把重建**永久锁死**。
+   */
+  | 'post-watermark'
   /**
    * 检索库里有、事实源里**完全没有**这一行 —— 来源无从证明。
    *
@@ -97,6 +108,22 @@ export interface PreservePlan {
 export function isRederivable(record: MemoryRecord): boolean {
   const src = record.source_message_ids;
   return Array.isArray(src) && src.length > 0;
+}
+
+/**
+ * 来源是否**全部**落在本次快照内。
+ *
+ * `every` 而不是 `some`：只要有一张原料缺失，重蒸馏就只会产出一个缺角的新记录，
+ * 不如原样保留。无来源时返回 `false`——但那一类由 `no-source` 先行接住，
+ * 不应依赖本函数的返回值。
+ */
+export function sourcesCoveredBySnapshot(
+  record: MemoryRecord,
+  snapshotIds: ReadonlySet<string>,
+): boolean {
+  const src = record.source_message_ids;
+  if (!Array.isArray(src) || src.length === 0) return false;
+  return src.every((id) => snapshotIds.has(id));
 }
 
 /**
@@ -151,9 +178,21 @@ export async function readFactSource(recordsDir: string): Promise<FactSourceRead
  * `liveDbRecords` 由调用方从**检索库**取(它没有 `source_message_ids` 列,
  * 只用来回答"这条还在不在"),恢复时以检索库副本为准 —— 那是当前检索态。
  */
+export interface PreserveOptions {
+  /**
+   * 本次重建事实源（L0 快照）的**消息 id 集**。
+   *
+   * 不给 = 保持旧口径（只看"有无来源"）。给了才能判 `post-watermark`，
+   * 而**给了才是安全的**：L0 已写停的库只看"有无来源"会把停写后的记录
+   * 当成可重蒸，清库后真的丢。
+   */
+  readonly snapshotIds?: ReadonlySet<string>;
+}
+
 export function planPreserve(
   factRecords: readonly MemoryRecord[],
   liveDbRecords: readonly MemoryRecord[],
+  opts: PreserveOptions = {},
 ): PreservePlan {
   const live = new Map<string, MemoryRecord>();
   for (const r of liveDbRecords) if (r && typeof r.id === 'string') live.set(r.id, r);
@@ -167,6 +206,21 @@ export function planPreserve(
     if (typeof f?.id !== 'string' || !f.id) continue;
     seen.add(f.id);
     if (isRederivable(f)) {
+      // 顺序纪律：「外部可重蒸」必须在「post-watermark 保留」**之后**判。
+      // 停写后新增的记录 `source_message_ids` 非空，但指向的消息在本地
+      // `l0_conversations` 已查不到 —— 清库后蒸不出来，等于丢失；
+      // 而按旧口径（只看非空）它们恰好会被归进 `rederivable` 然后被清掉。
+      if (opts.snapshotIds && !sourcesCoveredBySnapshot(f, opts.snapshotIds)) {
+        const current = live.get(f.id);
+        // 已退场的不复活（与 no-source 分支同口径）
+        if (current) {
+          preserved.push({
+            record: current,
+            reason: String(current.content ?? '').trim() ? 'post-watermark' : 'empty-content',
+          });
+        }
+        continue;
+      }
       // 有来源但已退场(合并掉了)的不必计数——重建会按 L0 再造。
       if (live.has(f.id)) rederivable++;
       continue;
@@ -252,8 +306,8 @@ export function gateClear(read: FactSourceRead, plan: PreservePlan): ClearGate {
     code: 'ok',
     note:
       keep > 0
-        ? `保留 ${keep} 条无 L0 来源的记忆(导入/手工写入),重建只重造 ${plan.rederivable} 条有来源的记忆`
-        : `无无来源记忆需要保留,重建重造 ${plan.rederivable} 条有来源的记忆`,
+        ? `保留 ${keep} 条不可重蒸的记忆(导入/手工写入/来源不在本次快照),重建只重造 ${plan.rederivable} 条有来源的记忆`
+        : `无不可重蒸记忆需要保留,重建重造 ${plan.rederivable} 条有来源的记忆`,
   };
 }
 
@@ -283,13 +337,21 @@ export async function restorePreserved(
   return { attempted: ids.length, restored: ids.length - missing.length, missing };
 }
 
+/** reason → 中文标签（日志/状态栏直接给人看，不再打印英文枚举）。 */
+const REASON_LABEL: Record<PreserveReason, string> = {
+  'no-source': '无来源',
+  'empty-content': '内容为空',
+  unprovenanced: '来源无从证明',
+  'post-watermark': '来源不在本次快照',
+};
+
 /** 面向日志/状态栏的一行摘要。 */
 export function describePlan(plan: PreservePlan): string {
   const byReason = new Map<PreserveReason, number>();
   for (const p of plan.preserved) byReason.set(p.reason, (byReason.get(p.reason) ?? 0) + 1);
-  const parts = [...byReason].map(([r, n]) => `${r} ${n}`);
+  const parts = [...byReason].map(([r, n]) => `${REASON_LABEL[r] ?? r} ${n}`);
   return (
-    `保留 ${plan.preserved.length} 条无来源记忆${parts.length ? `(${parts.join(' / ')})` : ''};` +
+    `保留 ${plan.preserved.length} 条不可重蒸记忆${parts.length ? `(${parts.join(' / ')})` : ''};` +
     `可重蒸馏 ${plan.rederivable} 条;事实源 ${plan.factCount} 条(其中无来源但已退场 ${plan.retiredNoSource} 条,不恢复)`
   );
 }

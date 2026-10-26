@@ -538,6 +538,17 @@ export function liveSettingsSchema(): VolatileRef<MemoryLiveSettings> {
     conflictFreeze: Schema.boolean().default(false),
     // 轨2 技能结晶总开关(看板可拨):默认 false。开=注册 memory_skill_* 工具 + 注入 active 技能 + skills-* 端点可用。
     skillsEnabled: Schema.boolean().default(false),
+    /**
+     * 知识图谱**投影**开关（issue #16，概览区可拨）。默认 false。
+     *
+     * 与部署 `graph.enabled` **取或**（照 keywordEnabled / validityTiering 先例）：
+     * 部署可强制开，面板只能追加开。
+     *
+     * 为什么它必须在 live：投影是**写侧派生**，关了只是不入队、不丢数据；
+     * 而它的入口以前只住 YAML，用户根本找不到（面板上那个“图谱投影”其实是蒸馏预算的
+     * 分层标签，点它改的是 token 预算）。
+     */
+    graphEnabled: Schema.boolean().default(false),
     // 存量回填/进阶功能的启用开关（概览「存量回填与整形」区可拨）：默认 false，
     // 与部署 cfg.<x>.enabled 取或（经 effectiveCfg）——部署可强制开，live 只能追加开。
     // 存在的理由：这些面都有对应按钮/端点，若开关只住 YAML，用户点了只会报“未开启”却没处翻。

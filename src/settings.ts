@@ -127,6 +127,8 @@ const ALWAYS_ON: MemoryLiveSettings = {
   memoryMutate: false,
   conflictFreeze: false,
   skillsEnabled: false,
+  // 知识图谱投影:默认关(部署 cfg.graph.enabled 仍可强制开;这里只做追加开)
+  graphEnabled: false,
   keywordEnabled: false,
   redistillEnabled: false,
   mdSyncEnabled: false,
@@ -396,6 +398,8 @@ function resolveSettings(value: unknown): MemoryLiveSettings {
     conflictFreeze: v.conflictFreeze === true,
     // 轨2 技能结晶:严格 === true(默认关,新功能默认关)
     skillsEnabled: v.skillsEnabled === true,
+    // 知识图谱投影:严格 === true(默认关);与部署 graph.enabled 取或后生效
+    graphEnabled: v.graphEnabled === true,
     // 存量回填/进阶功能启用开关:严格 === true(默认关)
     keywordEnabled: v.keywordEnabled === true,
     redistillEnabled: v.redistillEnabled === true,

@@ -25,6 +25,7 @@ import {
   planPreserve,
   readFactSource,
   restorePreserved,
+  sourcesCoveredBySnapshot,
   type PreservePlan,
 } from '../src/pipeline/rebuild-preserve.js';
 import { MemoryDb } from '../src/store/sqlite.js';
@@ -381,5 +382,96 @@ describe('摘要文本 —— 必须说清"没恢复什么"', () => {
     const s = describePlan(plan);
     expect(s).toContain('保留 1 条');
     expect(s).toContain('已退场 1 条');
+  });
+});
+
+/**
+ * issue #14:post-watermark。
+ *
+ * 反证的是 issue 原提案的做法：用「L0 与 L1 的时间水位差」做**拒绝**门槛。
+ * L0 已写停、L1 的 `created_time` 每次蒸馏都前移，任何固定阀值终将被跳过 ——
+ * 那会把重建**永久锁死**。这里用的是集合判据：来源 id 是否**全在**本次快照里。
+ */
+describe('issue #14:来源不在本次快照内 → post-watermark 保留(不丢优先)', () => {
+  const sourced = (id: string, ids: string[]): MemoryRecord =>
+    fact(id, `蒸馏记忆 ${id}`, { source_message_ids: ids });
+
+  it('来源全部 ⊆ 快照 → 可重蒸,不进保留集', () => {
+    const plan = planPreserve(
+      [sourced('d1', ['m1', 'm2'])],
+      [dbRec('d1', '蒸馏记忆 d1')],
+      { snapshotIds: new Set(['m1', 'm2', 'm3']) },
+    );
+    expect(plan.rederivable).toBe(1);
+    expect(plan.preserved).toHaveLength(0);
+  });
+
+  it('只要有一张原料不在快照 → 整条保留(不造缺角副本)', () => {
+    const plan = planPreserve(
+      [sourced('d1', ['m1', 'm2'])],
+      [dbRec('d1', '蒸馏记忆 d1')],
+      // m2 不在:它是 L0 停写之后新增的对话
+      { snapshotIds: new Set(['m1']) },
+    );
+    expect(plan.rederivable).toBe(0);
+    expect(plan.preserved.map((p) => [p.record.id, p.reason])).toEqual([['d1', 'post-watermark']]);
+  });
+
+  it('跨 id 域(`drsc:` 前缀) → 保守判不可重蒸', () => {
+    // 事实源存 `l0-*`,而新记录的来源已改成 `drsc:<sid>:<seq>`。两个域无法互相证明，
+    // 此时往“保留”倒——多保留只是多一条待去重，丢掉是不可逆。
+    const plan = planPreserve(
+      [sourced('d2', ['drsc:s1:7'])],
+      [dbRec('d2', '蒸馏记忆 d2')],
+      { snapshotIds: new Set(['m1', 'm2']) },
+    );
+    expect(plan.preserved.map((p) => p.reason)).toEqual(['post-watermark']);
+  });
+
+  it('无来源仍走 no-source(不被新判据吞掉)', () => {
+    const plan = planPreserve(
+      [imported('i1')],
+      [dbRec('i1', '导入记忆 i1', { scene_name: '__manual__' })],
+      { snapshotIds: new Set(['m1']) },
+    );
+    expect(plan.preserved.map((p) => p.reason)).toEqual(['no-source']);
+  });
+
+  it('不给 snapshotIds = 旧口径(有来源即可重蒸)', () => {
+    const plan = planPreserve([sourced('d1', ['m1', 'm2'])], [dbRec('d1', '蒸馏记忆 d1')]);
+    expect(plan.rederivable).toBe(1);
+    expect(plan.preserved).toHaveLength(0);
+  });
+
+  it('已退场的 post-watermark 不复活(与 no-source 分支同口径)', () => {
+    const plan = planPreserve(
+      [sourced('gone', ['m9'])],
+      [], // 检索库已无此行
+      { snapshotIds: new Set(['m1']) },
+    );
+    expect(plan.preserved).toHaveLength(0);
+  });
+
+  it('内容为空的 post-watermark 标 empty-content(理由更精确)', () => {
+    const plan = planPreserve(
+      [fact('d1', '  ', { source_message_ids: ['m9'] })],
+      [dbRec('d1', '  ')],
+      { snapshotIds: new Set(['m1']) },
+    );
+    expect(plan.preserved.map((p) => p.reason)).toEqual(['empty-content']);
+  });
+
+  it('describePlan 输出中文理由标签', () => {
+    const plan = planPreserve(
+      [sourced('d1', ['m9'])],
+      [dbRec('d1', '蒸馏记忆 d1')],
+      { snapshotIds: new Set(['m1']) },
+    );
+    expect(describePlan(plan)).toContain('来源不在本次快照 1');
+  });
+
+  it('sourcesCoveredBySnapshot:无来源返回 false(every 语义)', () => {
+    expect(sourcesCoveredBySnapshot(imported('i1'), new Set(['m1']))).toBe(false);
+    expect(sourcesCoveredBySnapshot(sourced('d1', ['m1']), new Set(['m1']))).toBe(true);
   });
 });

@@ -1119,9 +1119,13 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 return v;
             }
             if (kind === 'records') {
-                const tag = String(p.tag ?? '').trim();
+                // 与 list-records 同口径(见下方 tagSel):Room slug 是自生长的两级制形状,
+                // 非法形状在这里就拒,不做“静默返回空 CSV”。
+                const tag = typeof p.tag === 'string' ? p.tag.trim().slice(0, 64) : '';
                 if (!tag)
                     throw new Error('kind=records 需要 tag(目标 Room slug)');
+                if (!isRoomSlug(tag))
+                    throw new Error('tag 非法(两级制:major 或 major/minor,各段小写字母数字连字符)');
                 const header = 'id,type,scene_name,updated_at,tags,content';
                 const lines = [header];
                 let n = 0;
@@ -1351,6 +1355,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     memoryMutate: false,
                     conflictFreeze: live?.get()?.conflictFreeze === true,
                     skillsEnabled: live?.get()?.skillsEnabled === true,
+                    graphEnabled: live?.get()?.graphEnabled === true,
                     keywordEnabled: live?.get()?.keywordEnabled === true,
                     redistillEnabled: live?.get()?.redistillEnabled === true,
                     mdSyncEnabled: live?.get()?.mdSyncEnabled === true,
@@ -1402,7 +1407,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const patch = (payload ?? {});
             const clean = {};
             // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
-            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills']) {
+            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills']) {
                 if (typeof patch[key] === 'boolean')
                     clean[key] = patch[key];
             }
@@ -2117,7 +2122,9 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 throw new Error('蒸馏开关已关闭,请先开启蒸馏再重建');
             if (!cfg.extract.enabled)
                 throw new Error('部署配置已停用蒸馏(extract.enabled=false),无法重建');
-            const result = rebuild.start();
+            // force 只跨“水位落差”的二次确认；“L0 无正文而检索库非空”仍由 start() 硬拒。
+            const p = (payload ?? {});
+            const result = rebuild.start(p.force === true);
             deps.logger.info('[memory] 收到重建指令(设置页按钮)');
             return result;
         }

@@ -1,5 +1,39 @@
 # 更新日志（Changelog）
 
+## [0.26.11] — 2026-10-27
+
+> 本版闭环三条外部 issue：#12（两级 Room slug 写不进）、#13（默认路由表硬编码作者本机路径）、#14（重建以已写停的 L0 为事实源）、#16（图谱投影只有配置文件开关）。
+
+### 修复
+
+- **`memory_room_review` 写不进两级 Room slug（#12）**：`parseRoomCandidateItems` 与 `confirmReview` 两处仍用单级 `isTag()` —— 注册表收得下的 `mpu/qos` 在候选阶段被静默丢弃、在 confirm 时被判非法并返回 `null`（错误文案又把三种原因混成一条）。两处改 `isRoomSlug()`，形状约束不变（`a/b/c`、`/qos`、`mpu/` 仍拒）。
+- **两级 slug 的另一半：候选标注提示词**只写「小写字母/数字/连字符」，模型被教成只产单级 —— 即使写回修好，两级仍只能靠人工补。已补明「两级制写成 `大类/子类`，全串至多一个斜杠」。
+- **`rooms-export kind=records` 的 `tag` 零校验**：与 `list-records` 的严格口径不一致，非法 slug 会静默返回空 CSV。改为同口径校验。
+- **重建会丢「L0 停写之后」的记忆（#14）**：`planPreserve` 只按「有无 `source_message_ids`」判可重蒸，而 L0 正文自 T8.4 起已停写 —— 停写后新增的 L1 记录**有**来源 id、但那些消息在本地已查不到，清库后蒸不出来，等于事实丢失。新增保留理由 `post-watermark`：用**集合判据**（来源 id 是否全部落在本次 L0 快照内）判定，而非时间差。
+- **`workspace-relink` 空路由表的静默空转（#13 连带）**：`routes.length===0` 时旧行为返回全零报告，面板显示「扫 0 / 剩 0」看起来像「已完成」。改为显式报错「未配置任何内容路由规则」。
+
+### 新增
+
+- **知识图谱投影面板开关（#16）**：`live.graphEnabled`（概览 → 知识图谱 → 知识图谱投影），与部署 `graph.enabled` **取或**。过去的入口只住 YAML，而面板上「图谱投影」四个字其实是**蒸馏预算的分层标签**（点它改的是 token 预算）。
+- **首次开启前的成本确认**：开启时先查待投影条数（新增 `GraphStore.countMissing`，与 `queueMissing` 同一段 WHERE），给出条数/作业数/预计耗时再让人决定。投影是逐批走 LLM 的（每批 8 条、单批约 2 分钟）。
+- **重建面板的三行真相**：确认弹窗新增「事实源覆盖到 X 时间」，运行态新增「可重造 N 条 / 原样保留 M 条」。旧界面只报 L0 体量与预计调用数，看不出「这次重建只覆盖到某时刻」。
+
+### 变更（行为）
+
+- **默认 `workspaceSource.routes` 由两条改为 `[]`（#13）**：旧默认写死了 `E:\test\rewrite-agently` 与 `E:\test\agent-no-dsh` —— 装好即生效，凡正文含 `dsh`/`cordis`/`prime-memory` 等词的记忆都被写上了别人机器上的路径；`scope: workspace` 时这些记录在真实工作区里按 workspace 过滤**不可见**，表现为“记忆莫名其妙丢了”。
+  - `enabled` 仍为 `true`；空表时归属列留空、全部落单根，写路径行为与 `enabled:false` 等价。
+  - **存量用户若依赖旧默认归类**，需在配置里自行写下自己的 `{path, anyOf}` 规则；否则新记录一律落 `<dataDir>/memories`，仓内 `.agents/memory` 成为冻结旧树。
+- **重建的两道门（#14）**：① 硬拒——本地 L0 一条消息都没有而检索库有记录（那种形状下重建只会清空）；② 提示——检索库里晚于 L0 水位的记录占比 > 50% 时要求带 `force` 二次确认（**不是**永久拒绝：L0 停写后这个比例只会上涨，硬拒等于把重建锁死）。
+- **图谱投影的开关判据统一为 `graphFeatureOn(cfg, live)`**：五处（启动补投影 / 周期泵 / enqueue / reproject / maybeQueue）+ 两个写面工具同一判据。以前只改一半就会出现半开态（队列只涨不取 / 运行时开启后存量永不进图）。
+- **两个图谱 timer 改为无条件注册、tick 内判门**：否则运行时开启后存量要等重启才补。另加 `loader/volatile-update` 监听，热开启即时补一批。
+- **关闭期写入会抹「已投影」凭证**：`graph_projected_records` 只按 `record_id + projector_version` 记账、不记内容版本，关闭期改过的记录若不抹凭证，重开后 `queueMissing` 会认为投过了而**永不补**，图谱内容永久陈旧。
+- **三处图谱文案单源化**（`client/src/copy.ts`）：开关＝「知识图谱」、封印行＝「图谱读工具」、预算行＝「图谱投影预算」。旧的「图谱工具」与「图谱投影」撞名是 #16 的根因。
+
+### 测试
+
+- 新增 17 个用例：`post-watermark` 各分支（全部⊆快照/部分缺失/跨 `drsc:` 域/空来源/已退场/空内容/中文摘要）、重建两道门（硬拒含 force 不豁免 / 水位超阈值的拒绝与放行）、`graphFeatureOn` 四象限 + live 抛错、`countMissing` 与 `queueMissing` 同口径、`invalidateProjected` 幂等。
+- 全量：183 文件 / 1822 用例全绿；`tsc` 三配置零错；`eslint` 0 error。
+
 0.26.10: host enumeration addendum for DSH 0.2.1-rc.3 (declaration-only bump; contract plane zero diff).
 
 ## [0.26.9] — 2026-10-23

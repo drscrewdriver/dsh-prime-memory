@@ -631,6 +631,31 @@ export declare class MemoryDb {
         messages: number;
         chars: number;
     };
+    /**
+     * 重建水位探针（issue #14）。
+     *
+     * 回答三个问题：
+     * - 本地 L0 **覆盖到什么时候**（`l0Iso`）：L0 正文已于 T8.4 写停，这个值是
+     *   **常量**，不会随使用前移；
+     * - 检索库现有多少条、其中多少条**晚于**该水位（`l1After`）：**仅用于面板提示**
+     *   “本次重建只覆盖到 X”，**绝不用作拒绝门槛** —— L1 的 `created_time` 每次
+     *   蒸馏都会前移，拿它做阈值会把重建永久锁死；
+     * - `l0SessionCount`：面板口径（多少个会话的正文在快照里）。
+     *
+     * 注意 `l0_conversations` **没有 `created_time` 列**，只有 `recorded_at`(TEXT)
+     * 与 `timestamp`(INTEGER ms)：主用前者（与 L1 同为 ISO 文本可直接比），
+     * 空串回退后者。两列都建了索引，`MAX` 走覆盖索引。
+     *
+     * L0 全空时 `l0Iso` 为 `null`，此时 `l1After` 取 `l1Total`（没有水位而 L1 有记录
+     * = 一条都重蒸不出来），而不是 0 —— 否则面板会把“最危险的情况”显示成“无影响”。
+     */
+    rebuildWatermark(): {
+        l0Iso: string | null;
+        l0Ms: number | null;
+        l0SessionCount: number;
+        l1Total: number;
+        l1After: number;
+    };
     /** 向量表行数(backfill 判据:与元数据行数的差值即缺失向量数;不可用时返回 -1)。 */
     countL1Vec(): number;
     countL0Vec(): number;

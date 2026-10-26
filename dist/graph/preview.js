@@ -101,6 +101,8 @@ export function buildGraphPreview(nodes, edges, opts = {}) {
         pendingJobs: opts.pendingJobs ?? 0,
         jobsTotal: opts.jobsTotal ?? 0,
         ...(opts.deadJobs != null && opts.deadJobs > 0 ? { deadJobs: opts.deadJobs } : {}),
+        // 零漂移：为 0 时不写键（旧消费方拿到的形状与改前逐字一致）。
+        ...(opts.missing != null && opts.missing > 0 ? { missing: opts.missing } : {}),
     };
     const seedLimit = Math.min(Math.max(Math.floor(opts.seedLimit ?? GRAPH_PREVIEW_SEEDS), 1), 20);
     const neighborLimit = Math.min(Math.max(Math.floor(opts.neighborLimit ?? GRAPH_PREVIEW_NEIGHBORS), 1), 40);

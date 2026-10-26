@@ -124,6 +124,16 @@ export interface MemoryLiveSettings {
   /** 轨2 技能结晶总开关（看板可拨）:true = 注册 memory_skill_* 工具、注入 active 技能、skills-* 端点可用。
    *  默认 false（新功能默认关）；与部署 cfg.skills.enabled 取或（任一开则生效）。 */
   skillsEnabled: boolean;
+  /**
+   * 知识图谱**投影**开关（概览区可拨，issue #16）。
+   *
+   * true = 把 L1 记忆投影成 graph_nodes/graph_edges，并在启动/周期补齐存量；
+   * 与部署 `cfg.graph.enabled` **取或**（任一开则生效）。
+   *
+   * 注意与 `toolGraph` 的区别：后者封印的是**读**工具（memory_search_graph 等），
+   * 本键控的是**写**面（生成图谱）。两者同名接近，UI 文案必须分开写。
+   */
+  graphEnabled: boolean;
   /** 关键词回填启用开关（概览区可拨）:true = 放行 dsh-memory/keyword-backfill。与部署 cfg.keyword.enabled 取或。 */
   keywordEnabled: boolean;
   /** 重蒸馏整形启用开关（概览区可拨）:true = 放行 dsh-memory/redistill-backfill。与部署 cfg.redistill.enabled 取或。 */
@@ -203,6 +213,35 @@ export interface RebuildStatus {
    * null 表示尚未进入准备阶段。
    */
   preserveNote: string | null;
+  /**
+   * 本次重建**能够重蒸出来**的条数（来源全部落在 L0 快照内）。
+   *
+   * 与 `preserveCount` 一起构成"点下去会发生什么"的完整交代：
+   * 用户看得到多少条会被重造、多少条会被原样保住。
+   * null = 尚未出计划（未进入准备阶段）。
+   */
+  rederivableCount: number | null;
+  /** 本次重建**必须保留**的条数（无来源 / 来源不在快照 / 来源无从证明）。 */
+  preserveCount: number | null;
+  /**
+   * 事实源**覆盖到的时刻**（ISO；本地 L0 写停后即不再前移）。
+   *
+   * 这是给"这个按钮会不会倒退"提供可判依据的字段：重建只能重造到这个时刻
+   * 之前的正文。null = 本地 L0 一条正文都没有。
+   */
+  factWatermark: string | null;
+}
+
+/**
+ * 重建启动请求。
+ *
+ * `force` 只用于跨过**水位落差的二次确认**（见 `STALE_RATIO_THRESHOLD`）：
+ * L0 写停后“记忆晚于水位”是常态，把它做成硬拒会把重建永久锁死；
+ * 因此这里只要求调用方显式确认一次。
+ */
+export interface RebuildStartRequest {
+  /** true = 已确认“这批记录只保留、不重蒸”。 */
+  force?: boolean;
 }
 
 /** 反刍阶段。 */
@@ -847,6 +886,8 @@ export interface SettingsSetRequest {
   memoryMutate?: boolean;
   /** §C 人工冲突裁决总开关(true = 冻结冲突对,停放到待人工裁决区)。 */
   conflictFreeze?: boolean;
+  /** 知识图谱投影开关(issue #16;与部署 cfg.graph.enabled 取或)。 */
+  graphEnabled?: boolean;
 }
 export interface SettingsSetResponse {
   ok: true;
@@ -1258,6 +1299,13 @@ export interface GraphPreviewResponse {
     jobsTotal: number;
     /** 永久失败作业数(dead),可选(零漂移先例);>0 → UI 拆成"完成/失败/排队"三档显示。 */
     deadJobs?: number;
+    /**
+     * 尚未投影的 L1 记录条数（issue #16），可选：为 0 时不写键。
+     *
+     * 首次开启投影前用它算“大概要花多少”：条数 ÷ 每批 8 条 = job 数，
+     * 每个 job 一次 LLM 抽取。
+     */
+    missing?: number;
   };
   /** mode==='full' 才出现;全图星图轻量块(可见节点×active 边,截断标记 truncated)。
    *  不带此键时响应与旧形状逐字节一致——消费方按需读 `res.full?`。 */
@@ -1860,7 +1908,7 @@ export interface DshMemoryRequestMap {
   'dsh-memory/log-tail': LogTailRequest;
   'dsh-memory/trace-tail': TraceTailRequest;
   'dsh-memory/rebuild-status': Record<string, never>;
-  'dsh-memory/rebuild-start': Record<string, never>;
+  'dsh-memory/rebuild-start': RebuildStartRequest;
   'dsh-memory/rebuild-cancel': Record<string, never>;
   'dsh-memory/ruminate-status': Record<string, never>;
   'dsh-memory/ruminate-start': Record<string, never>;

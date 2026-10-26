@@ -15,13 +15,16 @@ import type { SettingsGetResponse, SettingsSetRequest } from '../../../src/contr
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
 import { NInput } from '../ui/primitives.js';
+import { GRAPH_BUDGET_LABEL } from '../copy.js';
 
 const LAYERS: Array<[string, string]> = [
   ['extract', '抽取'],
   ['dedup', '去重'],
   ['l2', 'L2 场景'],
   ['l3', 'L3 画像'],
-  ['graph', '图谱投影'],
+  // 这不是“投影开关”，是投影这一步的**输出预算**（issue #16：旧标签就叫“图谱投影”，
+  // 与概览页那个功能开关撞名，用户点了以为开了投影，实际只是改了 token 预算）。
+  ['graph', GRAPH_BUDGET_LABEL],
 ];
 
 /** 层范围 → 该面板显示的输出键（l1 同管抽取 + 去重两个调用点）。 */

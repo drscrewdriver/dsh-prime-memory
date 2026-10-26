@@ -610,7 +610,7 @@ export class GraphStore {
     } catch (err) {
       this.logger?.warn(`${TAG} 预览 job 计数失败(计数回零): ${err instanceof Error ? err.message : String(err)}`);
     }
-    const r = buildGraphPreview(nodes, edges, { seedId, pendingJobs, jobsTotal, deadJobs });
+    const r = buildGraphPreview(nodes, edges, { seedId, pendingJobs, jobsTotal, deadJobs, missing: this.countMissing() });
     if (mode === 'full') return { ...r, full: buildFullView(nodes, edges) };
     return r;
   }
@@ -732,6 +732,32 @@ export class GraphStore {
     } catch (err) {
       this.logger?.warn(`${TAG} 强制重投入队失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
       return { queued: 0, jobIds: [] };
+    }
+  }
+
+  /**
+   * 只抹“已投影”凭证，**不排队**（issue #16 关闭期防护）。
+   *
+   * 关闭期写路径不入队，但记录内容已经变了；而 `graph_projected_records` 只按
+   * `record_id + projector_version` 记账、**不记内容版本** —— 不抹掉的话，重开后
+   * `queueMissing` 会认为“这条投过了”而永不补，图谱就永久陈旧（只能靠人工
+   * `memory_reproject`）。
+   *
+   * 不在这里入队：关闭期入队会造成“投了永不泵”的陈旧队列（与 `reprojectGraph`
+   * 关闭时回零同源），重开时由 `queueMissing` 统一补。
+   */
+  invalidateProjected(recordIds: readonly string[]): void {
+    if (!this.db || recordIds.length === 0) return;
+    const ids = [...new Set(recordIds)];
+    try {
+      this.tx(() => {
+        for (const chunk of chunkOf(ids)) {
+          const ph = chunk.map(() => '?').join(',');
+          this.db!.prepare(`DELETE FROM graph_projected_records WHERE record_id IN (${ph})`).run(...chunk);
+        }
+      });
+    } catch (err) {
+      this.logger?.warn(`${TAG} 投影凭证失效失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -1044,6 +1070,29 @@ export class GraphStore {
       return this.queueGraphProjection(rows.map((r) => r.record_id), GRAPH_PRIORITY_BACKFILL);
     } catch (err) {
       this.logger?.warn(`${TAG} 存量补投影扫描失败(本轮跳过): ${err instanceof Error ? err.message : String(err)}`);
+      return 0;
+    }
+  }
+
+  /**
+   * 尚未投影（当前版本）且无在途 mapping 的 L1 条数。
+   *
+   * 面板“首次开启投影大概要花多少”的分母（issue #16）：本方法必须与 `queueMissing`
+   * 用**同一段 WHERE** —— 两处口径一旦分叉，面板报的数字就不是实际会被拉起的量。
+   * 只读聚合，不写库。
+   */
+  countMissing(): number {
+    if (!this.db) return 0;
+    try {
+      const row = this.db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM l1_records r
+           WHERE NOT EXISTS (SELECT 1 FROM graph_projected_records p WHERE p.record_id = r.record_id AND p.projector_version = ?)
+             AND NOT EXISTS (SELECT 1 FROM graph_job_records m WHERE m.record_id = r.record_id)`,
+        )
+        .get(GRAPH_PROJECTOR_VERSION) as { n: number } | undefined;
+      return Number(row?.n ?? 0);
+    } catch {
       return 0;
     }
   }

@@ -164,6 +164,18 @@ export declare class GraphStore {
         jobIds: string[];
     };
     /**
+     * 只抹“已投影”凭证，**不排队**（issue #16 关闭期防护）。
+     *
+     * 关闭期写路径不入队，但记录内容已经变了；而 `graph_projected_records` 只按
+     * `record_id + projector_version` 记账、**不记内容版本** —— 不抹掉的话，重开后
+     * `queueMissing` 会认为“这条投过了”而永不补，图谱就永久陈旧（只能靠人工
+     * `memory_reproject`）。
+     *
+     * 不在这里入队：关闭期入队会造成“投了永不泵”的陈旧队列（与 `reprojectGraph`
+     * 关闭时回零同源），重开时由 `queueMissing` 统一补。
+     */
+    invalidateProjected(recordIds: readonly string[]): void;
+    /**
      * 确定性边提案落库面(graph-write-plane R4 兜底支路):把"工具传入的显式边提案"
      * 当作一次确定性投影输入,经 `applyGraphProjection` **纯函数**校验后在同一事务内
      * 写回——不是裸 UPDATE graph_edges:validSources 硬校验、同 (from,relation) 换目标
@@ -236,6 +248,14 @@ export declare class GraphStore {
      * 返回新建 job 数。
      */
     queueMissing(limit: number): number;
+    /**
+     * 尚未投影（当前版本）且无在途 mapping 的 L1 条数。
+     *
+     * 面板“首次开启投影大概要花多少”的分母（issue #16）：本方法必须与 `queueMissing`
+     * 用**同一段 WHERE** —— 两处口径一旦分叉，面板报的数字就不是实际会被拉起的量。
+     * 只读聚合，不写库。
+     */
+    countMissing(): number;
     /**
      * 删除传播(L1 批量删除后的惰性墓碑):来源在 L1 已全部不存在的 active/disputed
      * 节点与边标 archived(保留行,expand 可见墓碑)。挂在 MemoryDb.deleteL1Batch

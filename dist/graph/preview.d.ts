@@ -46,6 +46,11 @@ export interface PreviewOpts {
     pendingJobs?: number;
     jobsTotal?: number;
     deadJobs?: number;
+    /**
+     * 尚未投影的 L1 条数（issue #16）：面板“首次开启投影大概要花多少”的分母。
+     * 与 `queueMissing` 同一 WHERE，见 `GraphStore.countMissing`。
+     */
+    missing?: number;
 }
 /** S-2:邻接统计——active 边且两端都可见才计度(双向)。 */
 export interface DegreeMaps {

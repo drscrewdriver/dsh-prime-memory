@@ -42,7 +42,9 @@ export function registerBenchControl(
   logger: MemoryLogger,
 ): () => void {
   const surface: BenchControlSurface = {
-    rebuildStart: () => rebuild.start(),
+    // bench 场景自带可控数据集，需要确定性重建：水位落差的“二次确认”
+    // 属于人机交互护栏，不该阻断自动化赛道，故显式 force。
+    rebuildStart: () => rebuild.start(true),
     rebuildStatus: () => rebuild.getStatus(),
     setSessionMode: (sessionId, mode) => modes.set(sessionId, mode),
     getSessionMode: (sessionId) => modes.get(sessionId),

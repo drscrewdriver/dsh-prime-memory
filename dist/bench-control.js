@@ -4,7 +4,9 @@ export const BENCH_CONTROL_SERVICE = 'dsh-memory-bench';
 /** 注册控制服务,返回注销函数(调用方在插件 dispose 时执行)。 */
 export function registerBenchControl(ctx, rebuild, modes, logger) {
     const surface = {
-        rebuildStart: () => rebuild.start(),
+        // bench 场景自带可控数据集，需要确定性重建：水位落差的“二次确认”
+        // 属于人机交互护栏，不该阻断自动化赛道，故显式 force。
+        rebuildStart: () => rebuild.start(true),
         rebuildStatus: () => rebuild.getStatus(),
         setSessionMode: (sessionId, mode) => modes.set(sessionId, mode),
         getSessionMode: (sessionId) => modes.get(sessionId),

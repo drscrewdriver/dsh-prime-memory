@@ -45,6 +45,19 @@ export function isRederivable(record) {
     return Array.isArray(src) && src.length > 0;
 }
 /**
+ * 来源是否**全部**落在本次快照内。
+ *
+ * `every` 而不是 `some`：只要有一张原料缺失，重蒸馏就只会产出一个缺角的新记录，
+ * 不如原样保留。无来源时返回 `false`——但那一类由 `no-source` 先行接住，
+ * 不应依赖本函数的返回值。
+ */
+export function sourcesCoveredBySnapshot(record, snapshotIds) {
+    const src = record.source_message_ids;
+    if (!Array.isArray(src) || src.length === 0)
+        return false;
+    return src.every((id) => snapshotIds.has(id));
+}
+/**
  * 读取事实源目录(`<dataDir>/records/*.jsonl`)。
  *
  * 只读 `*.jsonl` 顶层文件:`archiveDerived()` 把旧目录整体改名为
@@ -89,16 +102,7 @@ export async function readFactSource(recordsDir) {
     }
     return { ok: true, records: [...byId.values()], files: names.length };
 }
-/**
- * 出保留计划。纯函数:输入事实源记录 + 检索库现存记录,输出要保留什么。
- *
- * 两个方向都保守:事实源说"这条没来源"要留,**检索库里查不到出处**也要留
- * (`unprovenanced`)—— 判据缺失时留,而不是丢。
- *
- * `liveDbRecords` 由调用方从**检索库**取(它没有 `source_message_ids` 列,
- * 只用来回答"这条还在不在"),恢复时以检索库副本为准 —— 那是当前检索态。
- */
-export function planPreserve(factRecords, liveDbRecords) {
+export function planPreserve(factRecords, liveDbRecords, opts = {}) {
     const live = new Map();
     for (const r of liveDbRecords)
         if (r && typeof r.id === 'string')
@@ -112,6 +116,21 @@ export function planPreserve(factRecords, liveDbRecords) {
             continue;
         seen.add(f.id);
         if (isRederivable(f)) {
+            // 顺序纪律：「外部可重蒸」必须在「post-watermark 保留」**之后**判。
+            // 停写后新增的记录 `source_message_ids` 非空，但指向的消息在本地
+            // `l0_conversations` 已查不到 —— 清库后蒸不出来，等于丢失；
+            // 而按旧口径（只看非空）它们恰好会被归进 `rederivable` 然后被清掉。
+            if (opts.snapshotIds && !sourcesCoveredBySnapshot(f, opts.snapshotIds)) {
+                const current = live.get(f.id);
+                // 已退场的不复活（与 no-source 分支同口径）
+                if (current) {
+                    preserved.push({
+                        record: current,
+                        reason: String(current.content ?? '').trim() ? 'post-watermark' : 'empty-content',
+                    });
+                }
+                continue;
+            }
             // 有来源但已退场(合并掉了)的不必计数——重建会按 L0 再造。
             if (live.has(f.id))
                 rederivable++;
@@ -175,8 +194,8 @@ export function gateClear(read, plan) {
         allowed: true,
         code: 'ok',
         note: keep > 0
-            ? `保留 ${keep} 条无 L0 来源的记忆(导入/手工写入),重建只重造 ${plan.rederivable} 条有来源的记忆`
-            : `无无来源记忆需要保留,重建重造 ${plan.rederivable} 条有来源的记忆`,
+            ? `保留 ${keep} 条不可重蒸的记忆(导入/手工写入/来源不在本次快照),重建只重造 ${plan.rederivable} 条有来源的记忆`
+            : `无不可重蒸记忆需要保留,重建重造 ${plan.rederivable} 条有来源的记忆`,
     };
 }
 /**
@@ -195,12 +214,19 @@ export async function restorePreserved(l1, plan) {
     const missing = ids.filter((id) => !back.has(id));
     return { attempted: ids.length, restored: ids.length - missing.length, missing };
 }
+/** reason → 中文标签（日志/状态栏直接给人看，不再打印英文枚举）。 */
+const REASON_LABEL = {
+    'no-source': '无来源',
+    'empty-content': '内容为空',
+    unprovenanced: '来源无从证明',
+    'post-watermark': '来源不在本次快照',
+};
 /** 面向日志/状态栏的一行摘要。 */
 export function describePlan(plan) {
     const byReason = new Map();
     for (const p of plan.preserved)
         byReason.set(p.reason, (byReason.get(p.reason) ?? 0) + 1);
-    const parts = [...byReason].map(([r, n]) => `${r} ${n}`);
-    return (`保留 ${plan.preserved.length} 条无来源记忆${parts.length ? `(${parts.join(' / ')})` : ''};` +
+    const parts = [...byReason].map(([r, n]) => `${REASON_LABEL[r] ?? r} ${n}`);
+    return (`保留 ${plan.preserved.length} 条不可重蒸记忆${parts.length ? `(${parts.join(' / ')})` : ''};` +
         `可重蒸馏 ${plan.rederivable} 条;事实源 ${plan.factCount} 条(其中无来源但已退场 ${plan.retiredNoSource} 条,不恢复)`);
 }

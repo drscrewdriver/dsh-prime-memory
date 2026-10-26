@@ -16,6 +16,7 @@ import { type MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
 import type { DrscClient } from '../clients/drsc.js';
 import type { GraphStore } from '../store/graph-store.js';
+import { graphFeatureOn } from '../graph/gate.js';
 import type { L1Store } from '../store/l1.js';
 import type { PersonaStore } from '../store/persona.js';
 import type { SceneStore } from '../store/scenes.js';
@@ -73,6 +74,7 @@ export declare function pickNextTaskIndex(tasks: PipelineTask[]): number;
  *   primaryEffort;非链模式旧键对静态回退条目盖章接管(存量兼容)。
  * - 输出预算/输入预算/通道覆盖/远程嵌入覆盖:非零/非空运行时值直接注入对应子树。
  */
+export { graphFeatureOn };
 export declare function effectiveCfg(cfg: MemoryConfig, live?: LiveSettingsHandle): MemoryConfig;
 export declare class MemoryRunner {
     private readonly ctx;
@@ -192,7 +194,8 @@ export declare class MemoryRunner {
     };
     /**
      * 图谱投影泵入队判定:
-     * - 双门:部署级 cfg.graph.enabled + 运行时 live.enabled/distill,任一为假不入队;
+     * - 双门:`graphFeatureOn`（部署 cfg.graph.enabled **或** 面板 live.graphEnabled）
+     *   + 运行时 live.enabled/distill,任一为假不入队;
      * - 占位:同一时刻至多一个 graph 任务在队列(靠 graphPumpQueued 标志),永不与
      *   live 抢位(pickNextTaskIndex 保证 live > graph);
      * - 退避/attempts 封顶:由 GraphStore.claimNext 的 WHERE 过滤与 fail 转 dead 承接,

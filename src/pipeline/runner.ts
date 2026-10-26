@@ -20,6 +20,7 @@ import { startValidityBackfill } from '../validity-backfill.js';
 import type { DrscClient } from '../clients/drsc.js';
 import { drscRowToConversationMessage } from '../clients/drsc.js';
 import type { GraphStore } from '../store/graph-store.js';
+import { graphFeatureOn } from '../graph/gate.js';
 import type { L1Store } from '../store/l1.js';
 import { trace } from '../store/trace.js';
 import {
@@ -113,6 +114,9 @@ export function pickNextTaskIndex(tasks: PipelineTask[]): number {
  *   primaryEffort;非链模式旧键对静态回退条目盖章接管(存量兼容)。
  * - 输出预算/输入预算/通道覆盖/远程嵌入覆盖:非零/非空运行时值直接注入对应子树。
  */
+// 外部（tools / index）用的同一判据从这里取，避免两处各写一份。
+export { graphFeatureOn };
+
 export function effectiveCfg(cfg: MemoryConfig, live?: LiveSettingsHandle): MemoryConfig {
   const s = live?.get();
   const eff = s?.reasoningEffort ?? '';
@@ -220,6 +224,11 @@ export function effectiveCfg(cfg: MemoryConfig, live?: LiveSettingsHandle): Memo
   const vtOverride = s?.validityTiering !== undefined
     ? { validity: { ...(cfg.validity ?? {}), tieringEnabled: cfg.validity?.tieringEnabled === true || s.validityTiering === true } }
     : null;
+  // 知识图谱投影(issue #16):live.graphEnabled 与部署 cfg.graph.enabled 取或。
+  // 部署可以硬开（强制投影），面板只能追加开；两边都假时形状与改前逐字一致。
+  const grOverride = s?.graphEnabled !== undefined
+    ? { graph: { ...(cfg.graph ?? { enabled: false }), enabled: cfg.graph?.enabled === true || s.graphEnabled === true } }
+    : null;
   // md 投射/后缀收敛的单次动作护栏运行时覆盖(0 = 跟随部署 cfg.memExport.maxRecords)。
   // 只覆盖条数护栏，不动 enabled/root——开关与根路径仍属部署配置。
   const mdx = s?.mdExportMaxRecords ?? 0;
@@ -228,7 +237,7 @@ export function effectiveCfg(cfg: MemoryConfig, live?: LiveSettingsHandle): Memo
   // 不动 maxRecords/timeBudgetMs/callTimeoutMs——那三个仍属部署护栏，要改得改 YAML。
   const bf = s?.backfillConcurrency ?? 0;
   const backfillOverride = bf > 0 ? { backfill: { ...(cfg.backfill ?? {}), concurrency: bf } } : null;
-  if (!override && !budgets && !maxInput && !fallbacksTakeover && !chainEffort && !chainFallbacks && !effortInject && !layerChains && !hasChannel && !embedOverride && !cfOverride && !memExportOverride && !backfillOverride && !kwOverride && !rdOverride && !mdsOverride && !mpOverride && !vtOverride) return cfg;
+  if (!override && !budgets && !maxInput && !fallbacksTakeover && !chainEffort && !chainFallbacks && !effortInject && !layerChains && !hasChannel && !embedOverride && !cfOverride && !memExportOverride && !backfillOverride && !kwOverride && !rdOverride && !mdsOverride && !mpOverride && !vtOverride && !grOverride) return cfg;
   return {
     ...cfg,
     ...(embedOverride ?? {}),
@@ -238,6 +247,7 @@ export function effectiveCfg(cfg: MemoryConfig, live?: LiveSettingsHandle): Memo
     ...(mdsOverride ?? {}),
     ...(mpOverride ?? {}),
     ...(vtOverride ?? {}),
+    ...(grOverride ?? {}),
     ...(memExportOverride ?? {}),
     ...(backfillOverride ?? {}),
     llm: {
@@ -340,19 +350,20 @@ export class MemoryRunner {
     const graphs = this.stores.graph;
     if (graphs) {
       graphs.recoverRunning();
-      if (this.cfg.graph?.enabled) {
-        this.ctx.effect(() => {
-          const timer = setTimeout(() => {
-            if (this.stopped) return;
-            const jobs = graphs.queueMissing(9000);
-            if (jobs > 0) {
-              this.logger.info(`[memory] 图谱存量补投影:${jobs} 个任务入队`);
-              this.maybeQueueGraphTask();
-            }
-          }, STARTUP_RETRY_DELAY_MS);
-          return () => clearTimeout(timer);
-        });
-      }
+      // **无条件**挂启动补跑，开关在 tick 内判：
+      // 若在这里就判门注册，面板热开启后存量要等重启才补（issue #16 的半开态）。
+      this.ctx.effect(() => {
+        const timer = setTimeout(() => {
+          if (this.stopped) return;
+          if (!graphFeatureOn(this.cfg, this.live)) return;
+          const jobs = graphs.queueMissing(9000);
+          if (jobs > 0) {
+            this.logger.info(`[memory] 图谱存量补投影:${jobs} 个任务入队`);
+            this.maybeQueueGraphTask();
+          }
+        }, STARTUP_RETRY_DELAY_MS);
+        return () => clearTimeout(timer);
+      });
     }
   }
 
@@ -560,10 +571,23 @@ export class MemoryRunner {
    */
   startGraphBackfillTimer(): void {
     const graphs = this.stores.graph;
-    if (!graphs || !this.cfg.graph?.enabled) return;
+    // 只依赖 store 存在：**不能**在注册时判 graph 开关 —— timer 只在 init 注册一次，
+    // 那样运行时开启后存量永远补不到（issue #16 的实证半开态）。开关改在 tick 内判。
+    if (!graphs) return;
+    // 热开启即时补一批：否则用户拨开开关要等一个周期（30 分钟）才看到图谱动起来。
+    this.ctx.on('loader/volatile-update', (paths: readonly (readonly string[])[]) => {
+      if (!paths.some((p) => p[0] === 'live')) return;
+      if (!graphFeatureOn(this.cfg, this.live)) return;
+      const jobs = graphs.queueMissing(500);
+      if (jobs > 0) {
+        this.logger.info(`[memory] 图谱热开启补投影:${jobs} 个任务入队`);
+        this.maybeQueueGraphTask();
+      }
+    });
     this.ctx.effect(() => {
       const timer = setInterval(() => {
         if (this.stopped) return;
+        if (!graphFeatureOn(this.cfg, this.live)) return;
         const jobs = graphs.queueMissing(500);
         if (jobs > 0) {
           this.logger.debug?.(`[memory] 图谱周期补投影:${jobs} 个任务入队`);
@@ -612,7 +636,13 @@ export class MemoryRunner {
    * 用户后续开启由启动/周期补投影兜底(与 distill 分支同一口径)。
    */
   enqueueGraphFor(recordIds: readonly string[]): void {
-    if (recordIds.length === 0 || !this.stores.graph || !this.cfg.graph?.enabled) return;
+    if (recordIds.length === 0 || !this.stores.graph) return;
+    if (!graphFeatureOn(this.cfg, this.live)) {
+      // 关闭期写入也要记账：`graph_projected_records` 只按 record_id+version 记账、无内容版本，
+      // 若不抹掉，重开后 queueMissing 会认为“这条已投过”而永不补 → 图谱内容永久陈旧。
+      this.stores.graph.invalidateProjected(recordIds);
+      return;
+    }
     this.stores.graph.queueGraphProjection([...recordIds], GRAPH_PRIORITY_NEW);
     this.maybeQueueGraphTask();
   }
@@ -625,7 +655,8 @@ export class MemoryRunner {
    */
   reprojectGraph(recordIds: readonly string[]): { queued: number; jobIds: string[] } {
     const graphs = this.stores.graph;
-    if (!graphs || !this.cfg.graph?.enabled || recordIds.length === 0) return { queued: 0, jobIds: [] };
+    if (!graphs || recordIds.length === 0) return { queued: 0, jobIds: [] };
+    if (!graphFeatureOn(this.cfg, this.live)) return { queued: 0, jobIds: [] };
     const r = graphs.forceReprojectRecord(recordIds);
     if (r.queued > 0) this.maybeQueueGraphTask();
     return r;
@@ -633,7 +664,8 @@ export class MemoryRunner {
 
   /**
    * 图谱投影泵入队判定:
-   * - 双门:部署级 cfg.graph.enabled + 运行时 live.enabled/distill,任一为假不入队;
+   * - 双门:`graphFeatureOn`（部署 cfg.graph.enabled **或** 面板 live.graphEnabled）
+   *   + 运行时 live.enabled/distill,任一为假不入队;
    * - 占位:同一时刻至多一个 graph 任务在队列(靠 graphPumpQueued 标志),永不与
    *   live 抢位(pickNextTaskIndex 保证 live > graph);
    * - 退避/attempts 封顶:由 GraphStore.claimNext 的 WHERE 过滤与 fail 转 dead 承接,
@@ -642,7 +674,7 @@ export class MemoryRunner {
   private maybeQueueGraphTask(): void {
     const graphs = this.stores.graph;
     if (!graphs || this.stopped || this.graphPumpQueued) return;
-    if (!this.cfg.graph?.enabled) return;
+    if (!graphFeatureOn(this.cfg, this.live)) return;
     const liveNow = this.live.get();
     if (!(liveNow.enabled && liveNow.distill)) return;
     this.graphPumpQueued = true;
@@ -759,7 +791,7 @@ export class MemoryRunner {
       if ((opts?.force || sliceLen >= effective) && !backedOff) {
         newRecords = await this.extractSessionSlice(sessionId, mode, cfg, effective, opts);
         // 新记录入投影队列(优先级恒高于存量补投影)并拉起图谱泵;入队本身廉价,
-        // 部署未开图谱(cfg.graph.enabled)时不入队——用户后续开启由启动补投影兜底。
+        // 开关关时由 enqueueGraphFor 抹投影凭证(避免重开后永久陈旧)，重开由补投影兜底。
         // (写面 R2:分支本体抽成 enqueueGraphFor,与工具三路径同源,不再两处漂移。)
         this.enqueueGraphFor(newRecords.map((r) => r.id));
       } else {

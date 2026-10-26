@@ -75,7 +75,7 @@ export interface RoomCandidate {
     id: string;
     rooms: string[];
 }
-/** 解析标注器输出的逐条候选(容错:id 配对失败丢弃;isTag 校验;目录内优先,≤3)。 */
+/** 解析标注器输出的逐条候选(容错:id 配对失败丢弃;isRoomSlug 校验(两级制);目录内优先,≤3)。 */
 export declare function parseRoomCandidateItems(parsed: ReadonlyArray<{
     id: string;
     rooms: readonly string[];

@@ -2722,6 +2722,52 @@ export class MemoryDb {
     }
   }
 
+  /**
+   * 重建水位探针（issue #14）。
+   *
+   * 回答三个问题：
+   * - 本地 L0 **覆盖到什么时候**（`l0Iso`）：L0 正文已于 T8.4 写停，这个值是
+   *   **常量**，不会随使用前移；
+   * - 检索库现有多少条、其中多少条**晚于**该水位（`l1After`）：**仅用于面板提示**
+   *   “本次重建只覆盖到 X”，**绝不用作拒绝门槛** —— L1 的 `created_time` 每次
+   *   蒸馏都会前移，拿它做阈值会把重建永久锁死；
+   * - `l0SessionCount`：面板口径（多少个会话的正文在快照里）。
+   *
+   * 注意 `l0_conversations` **没有 `created_time` 列**，只有 `recorded_at`(TEXT)
+   * 与 `timestamp`(INTEGER ms)：主用前者（与 L1 同为 ISO 文本可直接比），
+   * 空串回退后者。两列都建了索引，`MAX` 走覆盖索引。
+   *
+   * L0 全空时 `l0Iso` 为 `null`，此时 `l1After` 取 `l1Total`（没有水位而 L1 有记录
+   * = 一条都重蒸不出来），而不是 0 —— 否则面板会把“最危险的情况”显示成“无影响”。
+   */
+  rebuildWatermark(): {
+    l0Iso: string | null;
+    l0Ms: number | null;
+    l0SessionCount: number;
+    l1Total: number;
+    l1After: number;
+  } {
+    const empty = { l0Iso: null, l0Ms: null, l0SessionCount: 0, l1Total: 0, l1After: 0 };
+    if (this.degraded) return empty;
+    try {
+      const l0 = this.db
+        .prepare('SELECT COUNT(DISTINCT session_id) AS s, MAX(recorded_at) AS iso, MAX(timestamp) AS ms FROM l0_conversations')
+        .get() as { s: number | null; iso: string | null; ms: number | null };
+      const ms = typeof l0?.ms === 'number' ? l0.ms : null;
+      const rawIso = typeof l0?.iso === 'string' ? l0.iso.trim() : '';
+      const iso = rawIso !== '' ? rawIso : ms === null ? null : new Date(ms).toISOString();
+      const total = this.db.prepare('SELECT COUNT(*) AS n FROM l1_records').get() as { n: number };
+      const l1Total = total?.n ?? 0;
+      const l1After = iso
+        ? (this.db.prepare('SELECT COUNT(*) AS n FROM l1_records WHERE created_time > ?').get(iso) as { n: number }).n ?? 0
+        : l1Total;
+      return { l0Iso: iso, l0Ms: ms, l0SessionCount: l0?.s ?? 0, l1Total, l1After };
+    } catch (err) {
+      this.logger?.warn(`${TAG} 重建水位探针失败(按空处理): ${err instanceof Error ? err.message : String(err)}`);
+      return empty;
+    }
+  }
+
   /** 向量表行数(backfill 判据:与元数据行数的差值即缺失向量数;不可用时返回 -1)。 */
   countL1Vec(): number {
     if (this.degraded || !this.stmtSearchL1Vec) return -1;
