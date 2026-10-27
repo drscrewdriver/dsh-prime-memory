@@ -9,7 +9,7 @@
  * - 类型契约与包元数据一致(端点数/包名/版本)。
  * 运行:npm run smoke(先 build:smoke 编译本文件,再 node 执行)。
  */
-import { readFile, access } from 'node:fs/promises';
+import { readFile, access, readdir } from 'node:fs/promises';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { fileURLToPath } from 'node:url';
@@ -102,6 +102,30 @@ async function main(): Promise<void> {
   for (const f of pkg.files) {
     check(`files 字段 ${f} 就位`, await exists(path.join(root, f)));
   }
+
+  // ── 反向对账（上面那段只看一个方向，会漏掉另一半）──
+  // 正向是「files → 文件在」；漏的是「文件在 → 却没进 files」。
+  // `files` 是白名单（未列即排除），而 README/CHANGELOG/INSTALL 是按需增补的：
+  // 新加一门语言时很容易只写文件、忘了扩白名单，包里就静默少一份文档。
+  // 实测踩过：补到九语 CHANGELOG，但 files 仍只列四语，de/es/fr/it/ru 不进 tarball。
+  const SHIP_DOC = /^(README|CHANGELOG|INSTALL)(\.[A-Za-z0-9_-]+)?\.md$/i;
+  const ALWAYS_SHIP = /^LICEN[CS]E(\..*)?$/i;
+  const listed = new Set(pkg.files.map((f) => f.replace(/\\/g, '/')));
+  const rootEntries = await readdir(root);
+  const unlisted = rootEntries.filter((n) => SHIP_DOC.test(n) || ALWAYS_SHIP.test(n)).filter((n) => !listed.has(n)).sort();
+  check(
+    '仓库内应随包的文档均已在 files 白名单（反向对账）',
+    unlisted.length === 0,
+    unlisted.length > 0 ? `漏列 ${unlisted.join(', ')}——它们不会进 tarball` : '',
+  );
+  // 显式清单：这类文件不在上面四个前缀内，但仍必须随包（曾因漏列而无法从包内查）。
+  const MUST_SHIP = ['ENGINEERING-NOTES.md'];
+  const missingMustShip = MUST_SHIP.filter((n) => !listed.has(n));
+  check(
+    '必须随包的显式文档项在 files 白名单',
+    missingMustShip.length === 0,
+    missingMustShip.join(', '),
+  );
   check('repository 指向 drscrewdriver 仓库', pkg.repository?.url?.includes('drscrewdriver') === true);
 
   console.log(failures === 0 ? '\n冒烟全部通过' : `\n${failures} 项失败`);
