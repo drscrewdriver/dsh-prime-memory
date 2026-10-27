@@ -49,6 +49,11 @@
     "CHANGELOG.en.md",
     "CHANGELOG.ja.md",
     "CHANGELOG.ko.md",
+    "CHANGELOG.de.md",
+    "CHANGELOG.es.md",
+    "CHANGELOG.fr.md",
+    "CHANGELOG.it.md",
+    "CHANGELOG.ru.md",
     "ENGINEERING-NOTES.md"
   ],
   "scripts": {
