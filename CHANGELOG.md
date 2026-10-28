@@ -1,5 +1,17 @@
 # 更新日志（Changelog）
 
+## [0.26.15] — 2026-10-28
+
+> 真宿主验证（1197 条 L1 / 380 条 `work_method` 的真实库副本）发现 0.26.14 的**写放大**缺陷，本版修掉。单测没抱住它，因为夹具只有几条记录。
+
+### 修复
+
+- **证据整批落盘**：`absorbGroup` 原先逐条 `await appendEvidence()`，而每次调用都是一次全文件重写 → 首轮回灌 379 条证据 = 379 次落盘。新增 `SkillStore.appendEvidenceBatch(rows)`（整批一次 persist），生产者改走该入口。
+- **空跑不写盘**：对已存在候选原先无条件 `update({ steps })`，导致一轮回灌即使 `created=0 / appended=0` 仍把 sidecar 全量重写 240 次（实测 `rev` 从 1262 跳到 1742）。现在先 `sameSteps` 比对，未变则跳过。
+- **晋升时序修正**：`tryPromote` 改到证据**整批落盘之后**逐个判，否则 `sessionCount` 看不到本轮新会话。
+- 新增用例「空跑不写盘」（spy 断言 `update`/`appendEvidenceBatch` 零调用）；全量 **1859 例**/186 文件绿。
+- 功能面与 0.26.14 一致（生产者 + backfill + 诚实化），无配置变更、无默认行为变更。
+
 ## [0.26.14] — 2026-10-28
 
 > 修复 issue #15：「技能结晶」自上线以来**根本没有生产者**——`detectCandidates` 与 `SkillStore.create()` 在全仓**只有测试调用点**，所以 `skills.json` 永远不会被生成，看板恒为 0。用户打开 `skillsEnabled` 开关后拿到的是一个空盒子，而且不报错、不提示，只能翻源码才知道功能没接上。

@@ -99,6 +99,15 @@ export declare class SkillStore {
     /** 某技能的 distinct session 计数（晋升判据的唯一来源，与 LLM 判断解耦）。 */
     sessionCount(skillId: string): number;
     /**
+     * 批量追加证据：**整批一次持久化**，返回实际入库条数。
+     *
+     * 为何需要：`appendEvidence` 每条都 `await persist()`，而 persist 是全文件重写。
+     * 真机量测（1197 条 L1 / 380 条 work_method）下首轮回灌要投 379 条证据，
+     * 逐条写 = 379 次全量落盘（对已长到几百 KB 的 sidecar 是百 MB 级写放大）。
+     * 生产者改走本入口；逐条版保留给单次工具调用。
+     */
+    appendEvidenceBatch(rows: readonly SkillEvidence[]): Promise<number>;
+    /**
      * 晋升：candidate→active，仅当功能开且该技能 distinct-session ≥ minSessions。
      * 返回是否发生晋升。不批量、不依赖 LLM（可解释性结构保证，同 conflictFreeze"不自动裁决"哲学）。
      */

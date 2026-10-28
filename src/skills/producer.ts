@@ -29,7 +29,7 @@
 import type { MemoryConfig } from '../config.js'
 import { ANCHOR_METADATA_KEY } from '../pipeline/anchors.js'
 import type { L1Store } from '../store/l1.js'
-import type { SkillStore } from '../store/skill-store.js'
+import type { SkillEvidence, SkillStore } from '../store/skill-store.js'
 import type { ConversationAnchor, MemoryLogger, MemoryRecord } from '../types.js'
 import { fnv1a, groupKey, type MethodRecord } from './crystallize.js'
 
@@ -178,6 +178,13 @@ function titleOf(g: MethodGroup): string {
   return `技能：${label}`
 }
 
+/** 两个 steps 数组逐字相等（用于跳过无变化的重写）。 */
+function sameSteps(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
 export interface SkillProducerDeps {
   skills: SkillStore
   l1: L1Store
@@ -211,15 +218,22 @@ export function createSkillProducer(deps: SkillProducerDeps): SkillProducer {
   })
 
   /**
-   * 把一组视图落成「一个候选 + 若干证据」，并按需尝试晋升。
+   * 把一组视图落成「一个候选 + 若干证据」。
+   *
+   * 写入节奏（真机量测后调整）：本函数**不逐条落盘**——证据先攒进 `pending`
+   * 由调用方整批一次写，steps 只在真变化时才 `update`。否则一轮空跑也会把
+   * sidecar 全量重写几百次（`rev` 跳涨就是这么被发现的）。
    * 返回 false 表示应当中止外层循环（达 SKILLS_CAP）。
    */
-  const absorbGroup = async (g: MethodGroup, runId: string, cfg: SkillsConfig, s: SkillIngestSummary): Promise<boolean> => {
+  const absorbGroup = async (
+    g: MethodGroup, runId: string, s: SkillIngestSummary,
+    pending: SkillEvidence[], seen: Set<string>, touched: string[], at: string,
+  ): Promise<boolean> => {
     const { steps, recordIds } = dedupe(g.views)
     if (steps.length === 0) return true
 
-    let exists = skills.get(g.id) !== undefined
-    if (!exists) {
+    const existing = skills.get(g.id)
+    if (existing === undefined) {
       try {
         await skills.create({
           id: g.id,
@@ -232,7 +246,6 @@ export function createSkillProducer(deps: SkillProducerDeps): SkillProducer {
           evidenceRecordIds: recordIds,
         })
         s.created += 1
-        exists = true
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (msg.includes('上限')) {
@@ -246,10 +259,11 @@ export function createSkillProducer(deps: SkillProducerDeps): SkillProducer {
           logger?.warn(`[memory] 技能候选创建失败(${g.id}): ${msg}`)
           return true
         }
-        // 并发下另一轮刚建好：当作已存在，继续走证据路径
-        exists = true
+        // 并发下另一轮刚建好：重新取一次，当作已存在继续走证据路径
+        const again = skills.get(g.id)
+        if (again && !sameSteps(again.steps, steps)) await skills.update(g.id, { steps })
       }
-    } else {
+    } else if (!sameSteps(existing.steps, steps)) {
       // 机器侧只重写 steps；body 是人编辑区，传进去就破坏了分列不变量。
       try {
         await skills.update(g.id, { steps })
@@ -259,33 +273,35 @@ export function createSkillProducer(deps: SkillProducerDeps): SkillProducer {
     }
 
     s.candidatesTouched += 1
+    touched.push(g.id)
 
-    // 证据：sessionCount 的唯一来源。三元组去重，重复轮次不重复投。
-    const at = new Date().toISOString()
+    // 证据：sessionCount 的唯一来源。三元组去重（含本批内去重），重复轮次不重复投。
     for (const v of g.views) {
       if (v.sessionId === '') continue
-      if (skills.hasEvidence(g.id, v.sessionId, v.id)) continue
-      try {
-        await skills.appendEvidence({ skillId: g.id, runId, recordId: v.id, sessionId: v.sessionId, at, kind: EVIDENCE_KIND })
-        s.appended += 1
-      } catch (err) {
-        s.errors.push(`投证据失败: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    }
-
-    // 自动晋升：双阈同时满足才动（minEvidence 此前无人消费，这里让它真实生效）。
-    // 人工晋升走 skills-action，只卡 sessionCount——人审是人的判断，不重复机械门。
-    if (cfg.allowPromote && exists) {
-      if (skills.sessionCount(g.id) >= cfg.minSessions && skills.evidenceCount(g.id) >= cfg.minEvidence) {
-        if (await skills.tryPromote(g.id, cfg.minSessions, { allowPromote: true })) s.promoted += 1
-      }
+      const key = `${g.id}\u0000${v.sessionId}\u0000${v.id}`
+      if (seen.has(key) || skills.hasEvidence(g.id, v.sessionId, v.id)) continue
+      seen.add(key)
+      pending.push({ skillId: g.id, runId, recordId: v.id, sessionId: v.sessionId, at, kind: EVIDENCE_KIND })
     }
     return true
   }
 
   const drainGroups = async (groups: readonly MethodGroup[], runId: string, cfg: SkillsConfig, s: SkillIngestSummary): Promise<void> => {
+    const pending: SkillEvidence[] = []
+    const seen = new Set<string>()
+    const touched: string[] = []
+    const at = new Date().toISOString()
     for (const g of groups) {
-      if (!(await absorbGroup(g, runId, cfg, s))) return
+      if (!(await absorbGroup(g, runId, s, pending, seen, touched, at))) return
+    }
+
+    // 整批一次落盘；晋升必须在证据落盘后判，否则 sessionCount 看不到本轮新会话。
+    if (pending.length > 0) s.appended = await skills.appendEvidenceBatch(pending)
+    if (!cfg.allowPromote) return
+    for (const id of touched) {
+      if (skills.sessionCount(id) >= cfg.minSessions && skills.evidenceCount(id) >= cfg.minEvidence) {
+        if (await skills.tryPromote(id, cfg.minSessions, { allowPromote: true })) s.promoted += 1
+      }
     }
   }
 

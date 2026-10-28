@@ -337,6 +337,31 @@ export class SkillStore {
   }
 
   /**
+   * 批量追加证据：**整批一次持久化**，返回实际入库条数。
+   *
+   * 为何需要：`appendEvidence` 每条都 `await persist()`，而 persist 是全文件重写。
+   * 真机量测（1197 条 L1 / 380 条 work_method）下首轮回灌要投 379 条证据，
+   * 逐条写 = 379 次全量落盘（对已长到几百 KB 的 sidecar 是百 MB 级写放大）。
+   * 生产者改走本入口；逐条版保留给单次工具调用。
+   */
+  async appendEvidenceBatch(rows: readonly SkillEvidence[]): Promise<number> {
+    this.ensureLoaded();
+    if (rows.length === 0) return 0;
+    const known = new Set(this.skills.map((s) => s.id));
+    let added = 0;
+    for (const ev of rows) {
+      if (!ev || !known.has(ev.skillId) || !ev.sessionId || !ev.recordId) continue;
+      this.evidence.push(ev);
+      added++;
+    }
+    if (added === 0) return 0;
+    if (this.evidence.length > EVIDENCE_CAP) this.evidence.splice(0, this.evidence.length - EVIDENCE_CAP);
+    this.rev++;
+    await this.persist();
+    return added;
+  }
+
+  /**
    * 晋升：candidate→active，仅当功能开且该技能 distinct-session ≥ minSessions。
    * 返回是否发生晋升。不批量、不依赖 LLM（可解释性结构保证，同 conflictFreeze"不自动裁决"哲学）。
    */

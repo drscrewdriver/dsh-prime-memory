@@ -273,7 +273,6 @@ describe('失败隔离：技能结晶绝不抛穿蒸馏轮次', () => {
 
   it('update 抛错被消化为 errors，证据仍照投且不外抛', async () => {
     const skills = await freshStore();
-    let appended = 0;
     // get() 总返回一个已存在候选 → 强制走「只重写 steps」分支，不碰 create。
     const flaky = {
       get: (id: string) => ({ id, title: '既有候选', status: 'candidate', body: '人工正文', steps: [] }),
@@ -283,10 +282,7 @@ describe('失败隔离：技能结晶绝不抛穿蒸馏轮次', () => {
       hasEvidence: () => false,
       create: async () => { throw new Error('不该被调用'); },
       update: async () => { throw new Error('磁盘忙'); },
-      appendEvidence: async () => {
-        appended += 1;
-        return appended;
-      },
+      appendEvidenceBatch: async (rows: readonly unknown[]) => rows.length,
       tryPromote: async () => false,
     } as unknown as SkillStore;
     const p = createSkillProducer({ skills: flaky, l1: l1Stub([]), cfg: () => cfgOf(), logger: noopLogger });
@@ -295,6 +291,37 @@ describe('失败隔离：技能结晶绝不抛穿蒸馏轮次', () => {
     expect(s.candidatesTouched).toBe(1);
     // 写步骤失败不能连带吞掉证据：否则 distinct-session 永远不增长
     expect(s.appended).toBe(1);
+  });
+
+  it('空跑不写盘：steps 未变且无新证据时不调 update、不整批写', async () => {
+    const skills = await freshStore();
+    const p = createSkillProducer({ skills, l1: l1Stub([]), cfg: () => cfgOf(), logger: noopLogger });
+    const row = rec('r1', '已经固定下来的步骤', { scene_name: 'repo-A' });
+    await p.ingestRound([row], 's1', 'run-1');
+
+    let updateCalls = 0;
+    let batchCalls = 0;
+    // get() 返回与本轮 dedupe 后完全相同的 steps，hasEvidence 全部命中 → 应零写入。
+    const id = skills.list()[0]!.id;
+    const stable = skills.get(id)!;
+    const spy = {
+      get: (x: string) => (x === id ? stable : undefined),
+      list: () => skills.list(),
+      sessionCount: (x: string) => skills.sessionCount(x),
+      evidenceCount: (x: string) => skills.evidenceCount(x),
+      hasEvidence: () => true,
+      create: async () => { throw new Error('不应再建'); },
+      update: async () => { updateCalls += 1; return true; },
+      appendEvidenceBatch: async () => { batchCalls += 1; return 0; },
+      tryPromote: async () => false,
+    } as unknown as SkillStore;
+    const p2 = createSkillProducer({ skills: spy, l1: l1Stub([]), cfg: () => cfgOf(), logger: noopLogger });
+    const s2 = await p2.ingestRound([row], 's1', 'run-2');
+    expect(s2.candidatesTouched).toBe(1);
+    expect(updateCalls).toBe(0);
+    expect(batchCalls).toBe(0);
+    expect(s2.appended).toBe(0);
+    expect(s2.created).toBe(0);
   });
 
   it('status 报告 wired，并带出回灌时间', async () => {
