@@ -1,5 +1,9 @@
 # 更新日志（Changelog）
 
+## [0.26.12] — 2026-10-28
+
+> 0.26.12: host enumeration addendum for DSH 0.2.1-rc.4 (declaration-only bump; contract plane zero diff). `engines.dsh`/`dsh.plugin.json`/README 同串补 `0.2.1-rc.4` 枚举行（19 档）。
+
 ## [0.26.11] — 2026-10-27
 
 > 本版闭环三条外部 issue：#12（两级 Room slug 写不进）、#13（默认路由表硬编码作者本机路径）、#14（重建以已写停的 L0 为事实源）、#16（图谱投影只有配置文件开关）。
