@@ -24,6 +24,7 @@ import type { StateStore } from '../store/state.js';
 import type { ConversationMessage, ExtractMode, MemoryFamily, MemoryLogger } from '../types.js';
 import type { FamilyStates } from './l1.js';
 import type { RouteHealthStore } from '../store/route-health.js';
+import type { SkillProducer } from '../skills/producer.js';
 export interface MemoryStores {
     /**
      * DRSC 客户端(T8.4 读切):蒸馏背景窗的历史供给面(op=session&tail&redact=1)。
@@ -48,6 +49,13 @@ export interface MemoryStores {
     };
     /** R9 路由健康学习（可选）：未传则 runExtraction 不启用自适应块长学习。 */
     routeHealth?: RouteHealthStore;
+    /**
+     * 轨2 技能结晶的生产者（可选）：未装配时蒸馏轮次完全不做结晶，行为与改动前一致。
+     *
+     * 挂在 L2 之后而不是每轮开头：复用既有攒批节奏、不新增 timer，且失败只记日志
+     * （技能结晶不该把蒸馏轮次带崩）。
+     */
+    skills?: SkillProducer;
 }
 /** 管线任务(优先级调度:live > graph > rebuild)。 */
 export interface PipelineTask {

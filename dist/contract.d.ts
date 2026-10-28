@@ -1741,7 +1741,28 @@ export interface SkillView {
     tier: 'full' | 'excerpt' | 'hint';
     pinned: boolean;
     sessionCount: number;
+    /** 证据总条数（与 `sessionCount` 的 distinct 语义不同；面板用它算 minEvidence 进度）。 */
+    evidenceCount: number;
     updatedAt: string;
+}
+/**
+ * 生产者健康态（0.26.14+）——面板区分“空盒子”与“已接线但未达阈”的唯一依据。
+ *
+ * 旧版宿主不返此字段，面板按 `producer === undefined` 回到旧文案（不谎报已接线）。
+ */
+export interface SkillProducerView {
+    /** 本版起恒 true；字段保留是为了让面板能识别旧版（无生产者）现场。 */
+    wired: boolean;
+    /** 记忆池里的 work_method 记录数（为 0 = 蒸馏还没产出可结晶的原料）。 */
+    workMethodCount: number;
+    /** 已结晶的候选数（含 active/archived 之外的 candidate）。 */
+    candidateCount: number;
+    /** 晋升需 distinct session 数（来自 cfg.skills.minSessions）。 */
+    minSessions: number;
+    /** 自动晋升需证据条数（来自 cfg.skills.minEvidence；仅约束自动路径）。 */
+    minEvidence: number;
+    lastRoundAt?: string;
+    backfilledAt?: string;
 }
 export interface SkillsListResponse {
     enabled: boolean;
@@ -1749,6 +1770,30 @@ export interface SkillsListResponse {
     allowPromote: boolean;
     memoryMutate: boolean;
     skills: SkillView[];
+    /** 生产者健康态（0.26.14+；旧宿主缺省）。 */
+    producer?: SkillProducerView;
+}
+/** dsh-memory/skills-detect：手动回灌历史（一次性扫描存量 work_method）。 */
+export interface SkillsDetectRequest {
+    /** 扫描上限（缺省 20000）；大库可调小先试水。 */
+    maxRecords?: number;
+}
+export interface SkillsDetectResponse {
+    ok: boolean;
+    /** 扫过的 L1 记录总数。 */
+    scanned: number;
+    /** 其中可用的 work_method 条数。 */
+    methods: number;
+    created: number;
+    appended: number;
+    promoted: number;
+    /** 因缺 `dsh_source_anchors` 而无法归属会话的记录数（不猜 provenance）。 */
+    skippedNoAnchor: number;
+    pages: number;
+    /** 是否因扫描上限被截断。 */
+    truncated: boolean;
+    notice: string;
+    error?: string;
 }
 export interface SkillsActionRequest {
     id: string;
@@ -1940,6 +1985,7 @@ export interface DshMemoryRequestMap {
     'dsh-memory/memory-sources-retire': MemorySourcesRetireRequest;
     'dsh-memory/memport-scan': MemportScanRequest;
     'dsh-memory/skills-list': Record<string, never>;
+    'dsh-memory/skills-detect': SkillsDetectRequest;
     'dsh-memory/session-recalled': SessionRecalledRequest;
     'dsh-memory/recall-feedback': RecallFeedbackRequest;
     'dsh-memory/workspace-relink': WorkspaceRelinkRequest;
@@ -2007,6 +2053,7 @@ export interface DshMemoryResponseMap {
     'dsh-memory/memory-sources-retire': MemorySourcesRetireResponse;
     'dsh-memory/memport-scan': MemportScanResponse;
     'dsh-memory/skills-list': SkillsListResponse;
+    'dsh-memory/skills-detect': SkillsDetectResponse;
     'dsh-memory/session-recalled': SessionRecalledResponse;
     'dsh-memory/recall-feedback': RecallFeedbackResponse;
     'dsh-memory/workspace-relink': WorkspaceRelinkResponse;

@@ -57,6 +57,7 @@ export declare class SkillStore {
     private evidence;
     private rev;
     private loaded;
+    private fileAbsentAtBoot;
     private degraded;
     private degradedLogged;
     private writeChain;
@@ -75,6 +76,26 @@ export declare class SkillStore {
     update(id: string, patch: Partial<Pick<Skill, 'title' | 'body' | 'steps' | 'injectionTier' | 'pinned'>>): Promise<boolean>;
     /** 追加一条证据（只追加）；返回该技能当前的 distinct-session 数。 */
     appendEvidence(ev: SkillEvidence): Promise<number>;
+    /**
+     * 启动时 `skills.json` 是否不存在（缺文件是合法空表，但供诚实化诊断用）。
+     * 取的是 **boot 快照**，不随本轮写入变化——开关开了但文件一直没生出来，
+     * 就是"无生产者"的历史现场，启动日志据此提 warning。
+     */
+    wasAbsentAtBoot(): boolean;
+    /**
+     * 该技能是否已收录过这条证据三元组 (skill, session, record)。
+     *
+     * 存在的必要：`appendEvidence` 是**纯追加**，而 `evidence` 数组触顶
+     * （`EVIDENCE_CAP`）时会 `splice` 掉最老的行。backfill 与增量轮次对同一证据
+     * 重复投，会把真实历史挤出去——所以投前必过这道门（producer 两条路径同源）。
+     *
+     * 为何是三元组而不是 (skill, record)：backfill 下一条历史记录可经
+     * `metadata.dsh_source_anchors` 映射到**多个**会话，按二元组去重会抹掉
+     * 第 2、3 个会话，而 distinct-session 正是晋升判据。
+     */
+    hasEvidence(skillId: string, sessionId: string, recordId: string): boolean;
+    /** 某技能的证据总条数（`minEvidence` 的度量；与 `sessionCount` 的 distinct 语义不同）。 */
+    evidenceCount(skillId: string): number;
     /** 某技能的 distinct session 计数（晋升判据的唯一来源，与 LLM 判断解耦）。 */
     sessionCount(skillId: string): number;
     /**

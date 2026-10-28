@@ -1,5 +1,27 @@
 # 更新日志（Changelog）
 
+## [0.26.14] — 2026-10-28
+
+> 修复 issue #15：「技能结晶」自上线以来**根本没有生产者**——`detectCandidates` 与 `SkillStore.create()` 在全仓**只有测试调用点**，所以 `skills.json` 永远不会被生成，看板恒为 0。用户打开 `skillsEnabled` 开关后拿到的是一个空盒子，而且不报错、不提示，只能翻源码才知道功能没接上。
+
+### 修复
+
+- **接入生产者（新增 `src/skills/producer.ts`）**，两条路径共用一套分组语义：
+  - **稳态增量**：挂在 `runner.runTurn` 的 L2 攒批块之后，吃本轮新出的 `work_method` 记录 + 本轮 `sessionId`。0 全表扫描、0 LLM、0 token，不新增 timer。
+  - **一次性回灌**（`backfill`）：分页 `allLite` 扫存量→`getByIds` 取正文→从 `metadata.dsh_source_anchors` 复原会话归属，让老库不必再跨 N 个会话才见第一条技能。**缺锚点的记录直接跳过并计数，绝不伪造会话**（那会虚增 distinct-session 骗过晋升门）。
+  - 两条路径共用 `crystallize.ts` 导出的 `groupKey`/`fnv1a`（新增单测直接断言两路算出的候选 id 逐字相同）——否则同一组会结晶出两个候选，幂等崩。
+- **`sessionCount` 只数 `evidence` 行**（不看 `evidenceRecordIds`）——所以上线版只 `create()` 不投证据的话，即使 `allowPromote` 打开也永不晋升。生产者逐记录 `appendEvidence`，去重键是 **(skill, session, record) 三元组**而非二元组：一条历史记录可映射到多个会话，按二元组去重会抹掉第 2、3 个会话。
+- **失败隔离**：技能写库异常全部内化为 `summary.errors` + `logger.warn`，**不得抛穿蒸馏轮次**；`MemoryStores.skills` 为可选字段，未装配时整条路径跳过（既有 186 个测试文件的 store 桩都不带该字段，全绿即零回归证据）。
+- **诚实化（issue 建议 2/3）**：
+  - 面板空态拆三态（旧宿主无 `producer` 字段 / 池里没原料 / 有原料但未达阈），不再用一句「暂无技能」糊过去；未启用文案去掉「重复工作流会固化为技能候选」这句当时做不到的承诺。
+  - `skillsEnabled=true` 但 `skills.json` 从未生成时，启动日志留一条可 grep 的 warning。
+  - 新增 `dsh-memory/skills-detect` RPC（需「高权限模式」，与 `skills-action` 同门）与面板「立即检测历史」按钮；`skills-list` 附 `producer` 健康态。
+- **`minEvidence` 首次真实生效**：此前三处（store / RPC / 检测）都没消费它。现在自动晋升需 distinct-session ≥ `minSessions` **且** 证据条数 ≥ `minEvidence`；人工晋升仍只卡会话数（人审是人的判断）。
+- **不变量保留**：`body`（人编辑区）不被机器侧覆盖，二次检测只重写 `steps`；技能仍不是 memory `type`（不碰 `ADD_TYPES` 与蒸馏 prompt 词表）；不给 `l1_records` 加列。
+- **默认行为不变**：`skills.enabled` 与 `allowPromote` **仍默认关**。本版只保证「开了开关就有生产者」；候选需人工审阅晋升（自动晋升需显式开启）。
+- **已知局限（另立轨 3 issue）**：分组键是精确 `(hall, scene_name)` + 字面去重，语义等价但措辞不同的方法会散到不同组（假阴性）。要修得靠 LLM 判同/命名，会破坏轨 2 的可解释性与 `skx-` 幂等 id 保证，因此独立演进。
+- 测试：新增 `tests/skill-producer.test.ts` 15 例（磁盘真落盘 + 证据非空、幂等、双阈两档、body 不被覆盖、backfill 分页/缺锚点/与增量不重复、失败隔离）；全量 **1858 例**/186 文件绿，三配置 typecheck 与 lint 零新增错。
+
 ## [0.26.13] — 2026-10-28
 
 > 修复 issue #19：单条 L1 priority 越界（如 LLM 回 `-1`）经无夹取写点落库后，`memoryRecall` 投影的 `viewSchema` 严格校验（判非负整数）抛错 → 宿主把整会话包成 `SESSION_QUERY_CORRUPT_SESSION` → **一条脏数据打死整个会话历史**。

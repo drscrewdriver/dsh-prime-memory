@@ -123,6 +123,7 @@ const ENDPOINTS = [
   'dsh-memory/memory-sources-retire',
   'dsh-memory/memport-scan',
   'dsh-memory/skills-list',
+  'dsh-memory/skills-detect',
   'dsh-memory/session-recalled',
   'dsh-memory/recall-feedback',
   'dsh-memory/workspace-relink',
@@ -173,10 +174,10 @@ describe('wing catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 65 contracted endpoints, records-delete and graph included', () => {
-    // 65 = 64 + `graph-cleanup-dead`（清理历史 dead 作业）。上一阶 64 = 63 + `graph-preview`。
-    expect(ENDPOINTS.length).toBe(65);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(65);
+  it('exposes exactly the 66 contracted endpoints, records-delete and graph included', () => {
+    // 66 = 65 + `skills-detect`（技能历史回灌手动入口，issue #15 接生产者）。上一阶 65 = 64 + `graph-cleanup-dead`。
+    expect(ENDPOINTS.length).toBe(66);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(66);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {

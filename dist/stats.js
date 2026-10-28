@@ -139,6 +139,7 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/memory-sources-retire',
     'dsh-memory/memport-scan',
     'dsh-memory/skills-list',
+    'dsh-memory/skills-detect',
     'dsh-memory/session-recalled',
     'dsh-memory/recall-feedback',
     'dsh-memory/workspace-relink',
@@ -247,6 +248,7 @@ export function buildEndpointDeps(base, sources, controller) {
         roomRegistry: sources.roomRegistry,
         memorySources: sources.memorySources,
         skillStore: sources.skillStore,
+        skillProducer: sources.skillProducer,
     };
     return { ...base, ...injected };
 }
@@ -258,7 +260,9 @@ roomRegistry,
 /** 外部来源注册表（轨3 Connect；经 buildEndpointDeps 落入 deps.memorySources）。 */
 memorySources, 
 /** 技能存储（轨2；经 buildEndpointDeps 落入 deps.skillStore）。 */
-skillStore) {
+skillStore, 
+/** 技能结晶生产者（轨2；经 buildEndpointDeps 落入 deps.skillProducer）。 */
+skillProducer) {
     /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
     let holding = false;
     /** 当前 handle 绑定的 connection 实例(internal/service 第二参;用于识别实例替换)。 */
@@ -279,7 +283,7 @@ skillStore) {
                     const value = await handleEndpoint(endpoint, payload, buildEndpointDeps({ ctx, cfg, stores, logger }, 
                     // roomRegistry 必须随 sources 下发——漏带 = 面板侧 room-* 恒"未装配"
                     // (工具面直传不受影响;2026-10-02 beta.9 实测回归)
-                    { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry, memorySources, skillStore }, ruminate));
+                    { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry, memorySources, skillStore, skillProducer }, ruminate));
                     return { ok: true, value };
                 }
                 catch (err) {
@@ -427,7 +431,7 @@ function sanitizeSettings(s) {
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export async function handleEndpoint(endpoint, payload, deps) {
-    const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry, memorySources, skillStore } = deps;
+    const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry, memorySources, skillStore, skillProducer } = deps;
     // 退场/恢复/新增的文件跟随已收口在 `L1Store` 的汇流口（`store/memory-md-sync.ts`），
     // 本分发层不再自己建点火器——那 8 处事件挂钩已被真机证伪（会漏）。
     switch (endpoint) {
@@ -923,9 +927,54 @@ export async function handleEndpoint(endpoint, payload, deps) {
                         tier: s.injectionTier,
                         pinned: s.pinned,
                         sessionCount: skillStore.sessionCount(s.id),
+                        evidenceCount: skillStore.evidenceCount(s.id),
                         updatedAt: s.updatedAt,
                     }))
                     : [],
+            };
+            // 生产者健康态：面板靠它区分“旧版空盒子”与“已接线但未达阈”。
+            // 未装配生产者（测试缝/降级）时不附此字段，面板回到旧文案而不谎报已接线。
+            if (enabled && skillProducer && cfg.skills) {
+                const st = skillProducer.status();
+                const producer = {
+                    wired: st.wired,
+                    workMethodCount: stores.l1.countByType('work_method'),
+                    candidateCount: skillStore?.list().filter((s) => s.status === 'candidate').length ?? 0,
+                    minSessions: cfg.skills.minSessions,
+                    minEvidence: cfg.skills.minEvidence,
+                    ...(st.lastRoundAt === undefined ? {} : { lastRoundAt: st.lastRoundAt }),
+                    ...(st.backfilledAt === undefined ? {} : { backfilledAt: st.backfilledAt }),
+                };
+                v.producer = producer;
+            }
+            return v;
+        }
+        // 手动回灌历史：一次性扫存量 work_method，从锚点复原会话归属。
+        // 写库动作，所以与 skills-action 同走「高权限模式」门。
+        case 'dsh-memory/skills-detect': {
+            if (!(cfg.skills?.enabled === true || live?.get().skillsEnabled === true))
+                throw new Error('技能功能未启用（在概览页开启「技能」开关，或 config skills.enabled）。');
+            if (!skillProducer)
+                throw new Error('技能生产者未装配（本版本不应出现）。');
+            if (!live?.get().memoryMutate)
+                throw new Error('记忆写删未开放：请在记忆库面板开启「高权限模式」后才能回灌技能。');
+            const p = (payload ?? {});
+            const r = await skillProducer.backfill(p.maxRecords !== undefined ? { maxRecords: p.maxRecords } : undefined);
+            const notice = r.truncated
+                ? `已扫 ${r.scanned} 条（达上限截断）：新建 ${r.created} 候选、补投证据 ${r.appended} 条。`
+                : `已扫 ${r.scanned} 条：新建 ${r.created} 候选、补投证据 ${r.appended} 条${r.skippedNoAnchor > 0 ? `（${r.skippedNoAnchor} 条缺会话锚点已跳过）` : ''}。`;
+            const v = {
+                ok: r.errors.length === 0,
+                scanned: r.scanned,
+                methods: r.methods,
+                created: r.created,
+                appended: r.appended,
+                promoted: r.promoted,
+                skippedNoAnchor: r.skippedNoAnchor,
+                pages: r.pages,
+                truncated: r.truncated,
+                notice,
+                ...(r.errors.length === 0 ? {} : { error: r.errors.join(' | ') }),
             };
             return v;
         }

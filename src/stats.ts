@@ -31,6 +31,7 @@ import { mergeRoom, renameRoom } from './room-review.js';
 import type { RoomRegistryStore } from './store/rooms-registry.js';
 import type { MemorySourceStore, SourceKind } from './store/memory-sources.js';
 import type { SkillStore } from './store/skill-store.js';
+import type { SkillProducer } from './skills/producer.js';
 import { scanSources } from './memport/scan.js';
 import type { RecallUsageStore } from './store/recall-usage.js';
 import { projectDistillChain, validateDistillChain, type DistillChainEntry, type LiveSettingsHandle } from './settings.js';
@@ -177,6 +178,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/memory-sources-retire',
   'dsh-memory/memport-scan',
   'dsh-memory/skills-list',
+  'dsh-memory/skills-detect',
   'dsh-memory/session-recalled',
   'dsh-memory/recall-feedback',
   'dsh-memory/workspace-relink',
@@ -346,6 +348,9 @@ import type {
   MemorySourcesRetireResponse,
   MemportScanResponse,
   SkillsListResponse,
+  SkillsDetectRequest,
+  SkillsDetectResponse,
+  SkillProducerView,
   SkillsActionResponse,
 } from './contract.js';
 export type { MemoryStats } from './contract.js';
@@ -371,6 +376,8 @@ interface MemoryRpcSources {
   memorySources?: MemorySourceStore;
   /** 技能存储（轨2；未装配 = skills-* 不可用）。 */
   skillStore?: SkillStore;
+  /** 技能结晶生产者（未装配 = skills-detect 不可用、skills-list 不带 producer 态）。 */
+  skillProducer?: SkillProducer;
 }
 
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
@@ -398,6 +405,7 @@ export function buildEndpointDeps(
     roomRegistry: sources.roomRegistry,
     memorySources: sources.memorySources,
     skillStore: sources.skillStore,
+    skillProducer: sources.skillProducer,
   };
   return { ...base, ...injected };
 }
@@ -434,6 +442,8 @@ export function registerMemoryRpc(
   memorySources?: MemorySourceStore,
   /** 技能存储（轨2；经 buildEndpointDeps 落入 deps.skillStore）。 */
   skillStore?: SkillStore,
+  /** 技能结晶生产者（轨2；经 buildEndpointDeps 落入 deps.skillProducer）。 */
+  skillProducer?: SkillProducer,
 ): void {
   /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
   let holding = false;
@@ -455,7 +465,7 @@ export function registerMemoryRpc(
             { ctx, cfg, stores, logger },
             // roomRegistry 必须随 sources 下发——漏带 = 面板侧 room-* 恒"未装配"
             // (工具面直传不受影响;2026-10-02 beta.9 实测回归)
-            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry, memorySources, skillStore },
+            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry, memorySources, skillStore, skillProducer },
             ruminate,
           ));
           return { ok: true, value };
@@ -635,6 +645,8 @@ export interface EndpointDeps {
   memorySources?: MemorySourceStore;
   /** 技能存储（轨2；未装配 = skills-* 不可用）。 */
   skillStore?: SkillStore;
+  /** 技能结晶生产者（轨2；未装配 = skills-detect 不可用，面板据此区分新旧版）。 */
+  skillProducer?: SkillProducer;
 }
 
 /** RPC 字符串入参上限校验:防 loopback 面畸形超长载荷
@@ -653,7 +665,7 @@ function sanitizeSettings(s: MemoryLiveSettings): MemoryLiveSettings {
 
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export async function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown> {
-  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry, memorySources, skillStore } = deps;
+  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry, memorySources, skillStore, skillProducer } = deps;
   // 退场/恢复/新增的文件跟随已收口在 `L1Store` 的汇流口（`store/memory-md-sync.ts`），
   // 本分发层不再自己建点火器——那 8 处事件挂钩已被真机证伪（会漏）。
   switch (endpoint) {
@@ -1150,9 +1162,52 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
                 tier: s.injectionTier,
                 pinned: s.pinned,
                 sessionCount: skillStore.sessionCount(s.id),
+                evidenceCount: skillStore.evidenceCount(s.id),
                 updatedAt: s.updatedAt,
               }))
             : [],
+      };
+      // 生产者健康态：面板靠它区分“旧版空盒子”与“已接线但未达阈”。
+      // 未装配生产者（测试缝/降级）时不附此字段，面板回到旧文案而不谎报已接线。
+      if (enabled && skillProducer && cfg.skills) {
+        const st = skillProducer.status();
+        const producer: SkillProducerView = {
+          wired: st.wired,
+          workMethodCount: stores.l1.countByType('work_method'),
+          candidateCount: skillStore?.list().filter((s) => s.status === 'candidate').length ?? 0,
+          minSessions: cfg.skills.minSessions,
+          minEvidence: cfg.skills.minEvidence,
+          ...(st.lastRoundAt === undefined ? {} : { lastRoundAt: st.lastRoundAt }),
+          ...(st.backfilledAt === undefined ? {} : { backfilledAt: st.backfilledAt }),
+        };
+        v.producer = producer;
+      }
+      return v;
+    }
+
+    // 手动回灌历史：一次性扫存量 work_method，从锚点复原会话归属。
+    // 写库动作，所以与 skills-action 同走「高权限模式」门。
+    case 'dsh-memory/skills-detect': {
+      if (!(cfg.skills?.enabled === true || live?.get().skillsEnabled === true)) throw new Error('技能功能未启用（在概览页开启「技能」开关，或 config skills.enabled）。');
+      if (!skillProducer) throw new Error('技能生产者未装配（本版本不应出现）。');
+      if (!live?.get().memoryMutate) throw new Error('记忆写删未开放：请在记忆库面板开启「高权限模式」后才能回灌技能。');
+      const p = (payload ?? {}) as SkillsDetectRequest;
+      const r = await skillProducer.backfill(p.maxRecords !== undefined ? { maxRecords: p.maxRecords } : undefined);
+      const notice = r.truncated
+        ? `已扫 ${r.scanned} 条（达上限截断）：新建 ${r.created} 候选、补投证据 ${r.appended} 条。`
+        : `已扫 ${r.scanned} 条：新建 ${r.created} 候选、补投证据 ${r.appended} 条${r.skippedNoAnchor > 0 ? `（${r.skippedNoAnchor} 条缺会话锚点已跳过）` : ''}。`;
+      const v: SkillsDetectResponse = {
+        ok: r.errors.length === 0,
+        scanned: r.scanned,
+        methods: r.methods,
+        created: r.created,
+        appended: r.appended,
+        promoted: r.promoted,
+        skippedNoAnchor: r.skippedNoAnchor,
+        pages: r.pages,
+        truncated: r.truncated,
+        notice,
+        ...(r.errors.length === 0 ? {} : { error: r.errors.join(' | ') }),
       };
       return v;
     }

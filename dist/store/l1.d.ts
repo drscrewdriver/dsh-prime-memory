@@ -112,6 +112,13 @@ export declare class L1Store {
     /** 旧版单文件 records.jsonl 一次性导入检索库,成功后改名 .imported。 */
     private importLegacy;
     get size(): number;
+    /**
+     * 按类型计数（索引级，不拉正文）。
+     *
+     * 当前唯一消费方是技能面板的诚实化判定：要区分“池里没有可结晶的工作方法”
+     * 与“有但未达阈”，两者给用户的处置建议完全不同。
+     */
+    countByType(type: string): number;
     /** 全量读取(调试/迁移用;检索请走 search)。 */
     all(): MemoryRecord[];
     /**

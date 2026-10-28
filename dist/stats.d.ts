@@ -6,6 +6,7 @@ import type { RuminateController } from './pipeline/ruminate.js';
 import type { RoomRegistryStore } from './store/rooms-registry.js';
 import type { MemorySourceStore } from './store/memory-sources.js';
 import type { SkillStore } from './store/skill-store.js';
+import type { SkillProducer } from './skills/producer.js';
 import type { RecallUsageStore } from './store/recall-usage.js';
 import { type LiveSettingsHandle } from './settings.js';
 import type { GraphStore } from './store/graph-store.js';
@@ -89,6 +90,8 @@ interface MemoryRpcSources {
     memorySources?: MemorySourceStore;
     /** 技能存储（轨2；未装配 = skills-* 不可用）。 */
     skillStore?: SkillStore;
+    /** 技能结晶生产者（未装配 = skills-detect 不可用、skills-list 不带 producer 态）。 */
+    skillProducer?: SkillProducer;
 }
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
 export type EndpointDepsInput = Omit<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>;
@@ -118,7 +121,9 @@ roomRegistry?: RoomRegistryStore,
 /** 外部来源注册表（轨3 Connect；经 buildEndpointDeps 落入 deps.memorySources）。 */
 memorySources?: MemorySourceStore, 
 /** 技能存储（轨2；经 buildEndpointDeps 落入 deps.skillStore）。 */
-skillStore?: SkillStore): void;
+skillStore?: SkillStore, 
+/** 技能结晶生产者（轨2；经 buildEndpointDeps 落入 deps.skillProducer）。 */
+skillProducer?: SkillProducer): void;
 export interface EndpointDeps {
     ctx: Context;
     cfg: MemoryConfig;
@@ -157,6 +162,8 @@ export interface EndpointDeps {
     memorySources?: MemorySourceStore;
     /** 技能存储（轨2；未装配 = skills-* 不可用）。 */
     skillStore?: SkillStore;
+    /** 技能结晶生产者（轨2；未装配 = skills-detect 不可用，面板据此区分新旧版）。 */
+    skillProducer?: SkillProducer;
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;

@@ -759,6 +759,23 @@ export class MemoryRunner {
                 }
             }
         }
+        // ── 轨2 技能结晶：把本轮新出的 work_method 喂给生产者 ──
+        // 位置选在 L2 之后：不抢既有层链、`newRecords` 已在手且天然属于本轮 sessionId
+        // （L1 记录本身不存会话，这是 distinct-session 唯一可靠的来源）。
+        // 独立 try：技能写库失败绝不能影响 L1/L2/L3 落库与图谱泵。
+        if (distillOn && this.stores.skills !== undefined && newRecords.length > 0) {
+            try {
+                const s = await this.stores.skills.ingestRound(newRecords, sessionId, `run-${turnStart}`);
+                if (s.errors.length > 0)
+                    this.logger.warn(`[memory] 技能结晶部分失败(session=${sessionId}): ${s.errors.join(' | ')}`);
+                else if (s.candidatesTouched > 0) {
+                    this.logger.debug?.(`[memory] 技能结晶完成(session=${sessionId},触及 ${s.candidatesTouched} 候选/新建 ${s.created}/证据 +${s.appended})`);
+                }
+            }
+            catch (err) {
+                this.logger.warn(`[memory] 技能结晶失败(不影响蒸馏): ${errDetail(err)}`);
+            }
+        }
         if (cfg.l3.enabled && distillOn) {
             for (const family of ['chat', 'work']) {
                 const tL3 = Date.now();

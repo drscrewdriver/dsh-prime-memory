@@ -42,6 +42,7 @@ import { registerObsoleteNotice } from './hooks/obsolete-notice.js';
 import { RoomRegistryStore } from './store/rooms-registry.js';
 import { MemorySourceStore } from './store/memory-sources.js';
 import { SkillStore } from './store/skill-store.js';
+import { createSkillProducer } from './skills/producer.js';
 import { registerSkillRecall } from './hooks/skill-recall.js';
 import { registerSkillTools } from './tools/skills.js';
 import { RecallUsageStore } from './store/recall-usage.js';
@@ -209,6 +210,8 @@ export async function apply(ctx, config) {
     const stores = {
         usage: undefined, // 装配于下方(依赖 dataDir 就绪)
         routeHealth: undefined, // R9 路由健康学习，装配于下方
+        // 轨2 技能结晶生产者（issue #15 的缺失环节）：装配于下方（依赖 skillStore 就绪）。
+        skills: undefined,
         // DRSC 客户端(T8.4 读切):蒸馏背景窗 + conversation_search 工具面的历史供给。
         // 硬依赖无本地回退(l0 表退役);trustedHosts 惰性读取(webStartup 可能晚到)。
         drsc: new DrscClient({ trustedHosts: () => readStartupTrustedHosts(ctx) }),
@@ -425,6 +428,19 @@ export async function apply(ctx, config) {
     // 技能存储（轨2；sidecar 无条件加载，但工具/注入均由 cfg.skills.enabled 默认关自 no-op）
     const skillStore = new SkillStore(dataDir, logger);
     await skillStore.init();
+    // 技能结晶生产者：稳态由 runner 在每轮 L2 之后喂（`stores.skills`），历史存量走
+    // 面板「立即检测历史」/`skills-detect` RPC。cfg 用函数取：面板改阈值下一轮即生效。
+    stores.skills = createSkillProducer({
+        skills: skillStore,
+        l1: stores.l1,
+        cfg: () => effectiveCfg(config, live).skills,
+        logger,
+    });
+    // 诚实化（issue #15 建议 3）：开关已开但 sidecar 从来没被写过，就是“无生产者”的
+    // 历史现场。以前这里静默为 0、界面看不出异常，用户只能猜是自己操作错了。
+    if (skillStore.wasAbsentAtBoot() && (config.skills.enabled || live.get().skillsEnabled)) {
+        logger.warn('[memory] 技能开关已开但 skills.json 尚不存在：将在首轮结晶后生成（存量可在技能页点「立即检测历史」回灌）');
+    }
     const ruminate = storageOk && !db.isDegraded() && ruminateFile
         ? new RuminateController(ctx, config, runner, stores, logger, live, ruminateFile, roomRegistry)
         : undefined;
@@ -514,7 +530,9 @@ export async function apply(ctx, config) {
         runnerView: (sid, mode) => runner.sessionView(sid, mode),
         l0Count: (sid) => stores.l0.countBySession(sid),
         capabilities: () => db.getCapabilities(),
-    }, ruminate, storageOk ? roomRegistry : undefined, storageOk ? memorySources : undefined, skillStore);
+    }, ruminate, storageOk ? roomRegistry : undefined, storageOk ? memorySources : undefined, skillStore, 
+    // 技能生产者：面板「立即检测历史」与 producer 健康态的数据源。
+    stores.skills);
     // bench 控制服务(config.benchControl 门控,默认关):仅基准/调试部署注册,
     // 供同进程的 bench-runner lifecycle 赛道触发 rebuild / 设置会话档位
     // (宿主侧 RPC 无 call(),见 bench-control.ts)

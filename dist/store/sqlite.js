@@ -1274,6 +1274,23 @@ export class MemoryDb {
         }
     }
     /**
+     * 按类型计数（`idx_l1_type` 已建，索引级廉价查询，不拉正文）。
+     *
+     * 用途单一：技能面板要区分“池里根本没有 work_method 原料”与“有但未达阈”，
+     * 这两态的文案与处置动作完全不同，不能都用“暂无技能”糊过去。
+     */
+    countL1ByType(type) {
+        if (this.degraded)
+            return 0;
+        try {
+            const row = this.db.prepare('SELECT COUNT(*) AS n FROM l1_records WHERE type = ?').get(type);
+            return row?.n ?? 0;
+        }
+        catch {
+            return 0;
+        }
+    }
+    /**
      * 按外部导入幂等键查已存在记录 id(轨3-P0 幂等 pre-check)。
      * 空键/降级一律返回 undefined;未迁移旧库(无 ext_key 列)由 catch 兜底 undefined(fail-open)。
      */

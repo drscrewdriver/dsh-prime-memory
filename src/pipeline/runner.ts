@@ -56,6 +56,7 @@ import { runGraphProjection } from './graph.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
 import type { RouteHealthStore } from '../store/route-health.js';
+import type { SkillProducer } from '../skills/producer.js';
 
 export interface MemoryStores {
   /**
@@ -77,6 +78,13 @@ export interface MemoryStores {
   feedback?: { rekey(oldId: string, newId: string): boolean };
   /** R9 路由健康学习（可选）：未传则 runExtraction 不启用自适应块长学习。 */
   routeHealth?: RouteHealthStore;
+  /**
+   * 轨2 技能结晶的生产者（可选）：未装配时蒸馏轮次完全不做结晶，行为与改动前一致。
+   *
+   * 挂在 L2 之后而不是每轮开头：复用既有攒批节奏、不新增 timer，且失败只记日志
+   * （技能结晶不该把蒸馏轮次带崩）。
+   */
+  skills?: SkillProducer;
 }
 
 /** 管线任务(优先级调度:live > graph > rebuild)。 */
@@ -849,6 +857,24 @@ export class MemoryRunner {
             `[memory] L2 跳过(family=${family},本族新增 ${familyRecords.length} 条,累计未整合 ${fstate.newMemoriesSinceL2}/${cfg.l2.minNewMemories})`,
           );
         }
+      }
+    }
+
+    // ── 轨2 技能结晶：把本轮新出的 work_method 喂给生产者 ──
+    // 位置选在 L2 之后：不抢既有层链、`newRecords` 已在手且天然属于本轮 sessionId
+    // （L1 记录本身不存会话，这是 distinct-session 唯一可靠的来源）。
+    // 独立 try：技能写库失败绝不能影响 L1/L2/L3 落库与图谱泵。
+    if (distillOn && this.stores.skills !== undefined && newRecords.length > 0) {
+      try {
+        const s = await this.stores.skills.ingestRound(newRecords, sessionId, `run-${turnStart}`);
+        if (s.errors.length > 0) this.logger.warn(`[memory] 技能结晶部分失败(session=${sessionId}): ${s.errors.join(' | ')}`);
+        else if (s.candidatesTouched > 0) {
+          this.logger.debug?.(
+            `[memory] 技能结晶完成(session=${sessionId},触及 ${s.candidatesTouched} 候选/新建 ${s.created}/证据 +${s.appended})`,
+          );
+        }
+      } catch (err) {
+        this.logger.warn(`[memory] 技能结晶失败(不影响蒸馏): ${errDetail(err)}`);
       }
     }
 

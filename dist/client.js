@@ -37020,10 +37020,19 @@ var __create = Object.create;
 		  return r && r.error && r.error.message ? r.error.message : "RPC 错误";
 		}
 		var TITLES = { candidate: "候选", active: "活跃", archived: "已归档" };
+		function emptyHint(data) {
+		  const p = data.producer;
+		  if (!p) return '暂无技能。技能从重复出现的"工作方法"记忆结晶而来。';
+		  if (p.workMethodCount === 0) {
+		    return "暂无技能：记忆池里还没有「工作方法」类记录。技能是从重复出现的工作方法结晶来的，请先到概览页确认蒸馏在正常产出记忆。";
+		  }
+		  return `暂无技能：池中已有 ${p.workMethodCount} 条「工作方法」，但还没重复到成候选的程度（需跨 ≥${p.minSessions} 个不同会话）。存量可点「立即检测历史」回灌。`;
+		}
 		function SkillsTab(props) {
 		  const rpc = props.rpc;
 		  const [data, setData] = (0, import_react4.useState)(null);
 		  const [error, setError] = (0, import_react4.useState)(null);
+		  const [notice, setNotice] = (0, import_react4.useState)(null);
 		  const [busy, setBusy] = (0, import_react4.useState)(false);
 		  const load = (0, import_react4.useCallback)(() => {
 		    rpc("dsh-memory/skills-list", {}).then((r) => {
@@ -37046,24 +37055,43 @@ var __create = Object.create;
 		      } else setError(errMsg2(r));
 		    }).catch((e) => setError(String(e?.message || e))).finally(() => setBusy(false));
 		  };
+		  const detect = () => {
+		    if (busy) return;
+		    setBusy(true);
+		    setNotice(null);
+		    rpc("dsh-memory/skills-detect", {}).then((r) => {
+		      if (r && r.ok) {
+		        setError(r.value.error ? `部分失败：${r.value.error}` : null);
+		        setNotice(r.value.notice || null);
+		        load();
+		      } else setError(errMsg2(r));
+		    }).catch((e) => setError(String(e?.message || e))).finally(() => setBusy(false));
+		  };
 		  if (data && !data.enabled) {
-		    return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { style: S.intro, children: "技能结晶（程序性记忆）未启用。到「概览」页开启「技能」开关（或部署配置 skills.enabled），重复工作流会固化为技能候选，在此审阅晋升。" });
+		    return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { style: S.intro, children: "技能结晶（程序性记忆）未启用。到「概览」页开启「技能」开关（或部署配置 skills.enabled）：开启后，跨会话重复出现的「工作方法」记忆会累积为技能候选，在此审阅并手动晋升。" });
 		  }
-		  const mutateHint = data && !data.memoryMutate ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.hint, children: "提示：晋升/归档/固定需在面板开启「高权限模式」。" }) : null;
+		  const mutateHint = data && !data.memoryMutate ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.hint, children: "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。" }) : null;
+		  const promotable = data && data.producer ? data.skills.filter((s) => s.status === "candidate" && s.sessionCount >= data.producer.minSessions).length : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: data ? `${data.skills.length} 个技能 · 自动晋升${data.allowPromote ? "开" : "关(人工审阅)"} · 需证据会话达阈` : "加载中…" }),
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: load, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: detect, disabled: busy || !data?.memoryMutate, children: "立即检测历史" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: load, style: { marginLeft: 6 }, children: "刷新" })
 		    ] }),
 		    mutateHint,
+		    notice ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.hint, children: notice }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.error, children: error }) : null,
-		    data && data.skills.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { style: S.intro, children: '暂无技能。技能从重复出现的"工作方法"记忆结晶而来。' }) : null,
+		    data && promotable > 0 && !data.allowPromote ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: S.hint, children: [
+		      promotable,
+		      " 个候选的证据会话数已达阈，但自动晋升关闭——确认无误后可手动「晋升」。"
+		    ] }) : null,
+		    data && data.skills.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { style: S.intro, children: emptyHint(data) }) : null,
 		    (data?.skills || []).map((s) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: S.cardHead, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("strong", { children: s.title }),
 		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "dsh-mem-tag", style: { marginLeft: 6 }, children: TITLES[s.status] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: ` · 档:${s.tier}${s.pinned ? " · 已固定" : ""} · 覆盖 ${s.sessionCount} 会话` }),
+		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: ` · 档:${s.tier}${s.pinned ? " · 已固定" : ""} · 覆盖 ${s.sessionCount} 会话 / 证据 ${s.evidenceCount} 条` }),
 		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.grow })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }, children: [
