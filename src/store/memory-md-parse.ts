@@ -13,6 +13,7 @@
  * 与正文本体是否一致（`hashValid`），不替调用方决定怎么处置——那属于同步侧的裁决。
  */
 import { contentHash } from './memory-md.js';
+import { clampPriority } from '../util/priority.js';
 
 /** 解析出的文件形状（值已按渲染时的类型还原）。 */
 export interface MdParsed {
@@ -96,7 +97,7 @@ export function parseMdFile(text: string): MdParsed | undefined {
   return {
     name: str(fields.get('name')),
     type: str(fields.get('type')),
-    priority: Number.isFinite(prio) ? prio : 60,
+    priority: clampPriority(prio),
     createdAt: str(fields.get('createdAt')),
     updatedAt: str(fields.get('updatedAt')),
     usageScenario: scenario,

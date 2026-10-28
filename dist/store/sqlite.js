@@ -26,6 +26,7 @@ import { normApplicability } from '../repo-scope.js';
 import { normalizeWorkspacePath } from '../workspace.js';
 import { bm25RankToScore, buildFtsQuery, tokenizeForFts } from './search-utils.js';
 import { describeTokenizer, ensureTokenizer, tokenizerStamp } from '../util/tokenizer.js';
+import { clampPriority } from '../util/priority.js';
 const require = createRequire(import.meta.url);
 const TAG = '[memory][sqlite]';
 /**
@@ -992,7 +993,7 @@ export class MemoryDb {
         // 无法绑定(node:sqlite 拒绝绑定),曾致旧版导入逐条全挂、每次启动无限重试。
         // 主表与 FTS 两条语句共用同源归一化值;type 归一化后 familyForType 也不再收到 undefined。
         const type = record.type ?? '';
-        const priority = record.priority ?? 50;
+        const priority = clampPriority(record.priority, 50);
         const sceneName = record.scene_name ?? '';
         const family = record.family ?? familyForType(type);
         // §E 写入侧兜底归一,并维持一条**不变量**:`scope='global'` 的记录 `workspace_id` 恒为空串。

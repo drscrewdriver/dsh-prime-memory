@@ -1,5 +1,17 @@
 # 更新日志（Changelog）
 
+## [0.26.13] — 2026-10-28
+
+> 修复 issue #19：单条 L1 priority 越界（如 LLM 回 `-1`）经无夹取写点落库后，`memoryRecall` 投影的 `viewSchema` 严格校验（判非负整数）抛错 → 宿主把整会话包成 `SESSION_QUERY_CORRUPT_SESSION` → **一条脏数据打死整个会话历史**。
+
+### 修复
+
+- **双防线**：
+  - **写侧夹取（防新增）**：新建 `src/util/priority.ts` 单源 `clampPriority`（非有限→回落缺省、小数 `Math.round`、夹到整数 `[0,100]`），L1 抽取/合并构造（`pipeline/l1.ts` 两处）、upsert 绑定层（`store/sqlite.ts`，保留历史缺省 50）、MD 导入解析（`store/memory-md-parse.ts`）统一走同一夹取。
+  - **读侧兜底（自愈存量）**：投影 `makeView` 遇脏 priority 就地夹取并 `warn`（带 record id + 原值），绝不让单条脏字段打死整会话。因升级必重启宿主、`viewMemo`（进程内 WeakMap）随之清空，脏行读时被夹取 → **存量脏数据无需手动改库、无需迁移**。
+- 保留 `viewSchema` 严格校验（纵深防御仍在，只是喂进去的已是干净值）；合法 0–100 整数读写逐字不变；`slots.ts` 的同名私有 `clampPriority`（floor/50，memorySlots 另一条链）不受影响。
+- 本版叠加在 0.26.12（DSH 0.2.1-rc.4 适配）之上，`latest` 与 `dsh-0.2.1-rc.4` dist-tag 同指本版。
+
 ## [0.26.12] — 2026-10-28
 
 > 0.26.12: host enumeration addendum for DSH 0.2.1-rc.4 (declaration-only bump; contract plane zero diff). `engines.dsh`/`dsh.plugin.json`/README 同串补 `0.2.1-rc.4` 枚举行（19 档）。

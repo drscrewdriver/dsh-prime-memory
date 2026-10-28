@@ -549,7 +549,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   // memoryRecall 投影：本会话“已注入且未被压缩覆盖”的召回集（会话感知，init 取 header.id），
   // 与常驻槽位是两条轴：那个是手动 pin 的硬注入约定，这个是非常驻的相关性浮现结果。
   // 带上反馈面：条目要显示人已经打过的那一笔（rating）。
-  registerRecallProjection(ctx, stores.recalled, stores.l1, recallFeedback);
+  registerRecallProjection(ctx, stores.recalled, stores.l1, recallFeedback, logger);
   // 人打 -1 声明过时后，下一轮向模型一次性播报“这条已退场、别再依据它作答”。
   registerObsoleteNotice(ctx, config, obsoleteNotices, logger);
   void slotRecall;

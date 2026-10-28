@@ -13,6 +13,7 @@
  * 与正文本体是否一致（`hashValid`），不替调用方决定怎么处置——那属于同步侧的裁决。
  */
 import { contentHash } from './memory-md.js';
+import { clampPriority } from '../util/priority.js';
 /** 取 frontmatter 块：首行必须是 `---`，到下一个 `---` 为止。 */
 function splitFrontmatter(text) {
     // BOM 与 CRLF 都要先吃掉：人在记事本里改一行就会引入 \r，而 `\r` 会让 key 匹配不上。
@@ -71,7 +72,7 @@ export function parseMdFile(text) {
     return {
         name: str(fields.get('name')),
         type: str(fields.get('type')),
-        priority: Number.isFinite(prio) ? prio : 60,
+        priority: clampPriority(prio),
         createdAt: str(fields.get('createdAt')),
         updatedAt: str(fields.get('updatedAt')),
         usageScenario: scenario,

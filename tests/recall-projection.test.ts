@@ -380,3 +380,34 @@ describe('正文全文（body）与退场标注（retired）进 view', () => {
     })).toThrow();
   });
 });
+
+describe('memoryRecall 投影：脏 priority 读侧兜底（#19）', () => {
+  it('库内 priority=-1 的记录不再打死整会话：夹到 0、viewSchema 通过、warn 命中；合法值逐字透传', async () => {
+    const l1 = fakeL1({
+      bad: { content: '脏行', priority: -1 },
+      ok: { content: '好行', priority: 88 },
+    });
+    const store = await newStore();
+    const warns: string[] = [];
+    const defs: CapturedDef[] = [];
+    const ctx = {
+      inject: (_deps: string[], callback: (injected: unknown) => void) => {
+        callback({ sessionProjections: { register: (d: CapturedDef) => { defs.push(d); return () => {}; } } });
+      },
+    } as unknown as Context;
+    registerRecallProjection(ctx, store, l1, undefined, { warn: (m: string) => { warns.push(m); } });
+    const def = defs[0];
+    if (!def) throw new Error('未捕获到 projection 定义');
+    store.add('s1', ['bad', 'ok']);
+    const view = def.wire.view(def.init(header('s1')));
+    // 核心：单条脏 priority 不得让整 view 抛错打死会话。
+    expect(() => viewSchema.parse(view)).not.toThrow();
+    const badItem = view.items.find((i) => i.id === 'bad');
+    const okItem = view.items.find((i) => i.id === 'ok');
+    expect(badItem?.priority).toBe(0);
+    expect(okItem?.priority).toBe(88);
+    expect(warns.some((w) => w.includes('bad') && w.includes('-1'))).toBe(true);
+    // 合法行不触发 warn。
+    expect(warns.some((w) => w.includes('ok'))).toBe(false);
+  });
+});

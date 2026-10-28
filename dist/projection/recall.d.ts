@@ -116,5 +116,7 @@ export interface RecallFeedbackFace {
  * apply 是 O(1) 判脏（store.revision() 与反馈序号比对），任意已提交事件都会带进来看一眼。
  * @param feedback - 相关度反馈只读面；缺席时 view 不带 rating（旧行为）。
  */
-export declare function registerRecallProjection(ctx: Context, store: SessionRecalledStore, l1?: RecallL1Face, feedback?: RecallFeedbackFace): void;
+export declare function registerRecallProjection(ctx: Context, store: SessionRecalledStore, l1?: RecallL1Face, feedback?: RecallFeedbackFace, log?: {
+    warn(message: string): void;
+}): void;
 export {};

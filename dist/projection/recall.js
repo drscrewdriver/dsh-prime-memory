@@ -1,5 +1,6 @@
 import { isRetired } from '../store/supersede.js';
 import { stateOfRecord } from '../store/validity.js';
+import { clampPriority, isDirtyPriority } from '../util/priority.js';
 export const MEMORY_RECALL_KEY = 'memoryRecall';
 /** view 最多透出条数（最近在上；超出部分只计入 count，防 wire 体量失控）。 */
 export const RECALL_VIEW_CAP = 20;
@@ -141,7 +142,7 @@ function sameIds(a, b) {
 }
 /** view 引用稳定：同一 state 恒返回同一对象（registry 按 Object.is 判发布）。 */
 const viewMemo = new WeakMap();
-function makeView(state, l1, feedback) {
+function makeView(state, l1, feedback, log) {
     const memoized = viewMemo.get(state);
     if (memoized !== undefined)
         return memoized;
@@ -163,11 +164,16 @@ function makeView(state, l1, feedback) {
         // 未退场行才会真判过时两档（退场行由 retired 键表达，validity 不再叠加）。
         const vState = isRetired(r) ? undefined : stateOfRecord(r, Date.now());
         const showValidity = vState === 'expired' || vState === 'expired_suspect';
+        // #19 读侧兜底：脏 priority（负/超界/非整数/非有限）就地夹取，绝不让 viewSchema
+        // 因单条脏字段抛错打死整会话；命中时 warn 留痕（静默夹取会掩盖上游 LLM 异常）。
+        const rawPriority = r.priority;
+        if (isDirtyPriority(rawPriority))
+            log?.warn(`[memory][recall] 脏 priority 回落 record=${r.id} raw=${String(rawPriority)}`);
         items.push({
             id: r.id,
             type: r.type,
             title: r.name || firstLine(r.content),
-            priority: r.priority,
+            priority: clampPriority(rawPriority),
             body: clampBody(r.content),
             ...(scenario !== undefined && scenario.length > 0 ? { scenario } : {}),
             ...(typeof rating === 'number' ? { rating } : {}),
@@ -196,7 +202,7 @@ function sessionIdOf(header) {
  * apply 是 O(1) 判脏（store.revision() 与反馈序号比对），任意已提交事件都会带进来看一眼。
  * @param feedback - 相关度反馈只读面；缺席时 view 不带 rating（旧行为）。
  */
-export function registerRecallProjection(ctx, store, l1, feedback) {
+export function registerRecallProjection(ctx, store, l1, feedback, log) {
     ctx.inject(['sessionProjections'], (injected) => {
         const registry = injected.sessionProjections;
         if (registry === undefined || typeof registry.register !== 'function')
@@ -208,9 +214,9 @@ export function registerRecallProjection(ctx, store, l1, feedback) {
             stateSchema,
             init: (header) => buildState(sessionIdOf(header), store, fbRev()),
             apply: (state) => buildState(state.sessionId, store, fbRev(), state),
-            wire: { viewSchema, view: (state) => makeView(state, l1, feedback) },
+            wire: { viewSchema, view: (state) => makeView(state, l1, feedback, log) },
             schema: viewSchema,
-            view: (state) => makeView(state, l1, feedback),
+            view: (state) => makeView(state, l1, feedback, log),
             stateVersion: 0,
         };
         registry.register(definition);

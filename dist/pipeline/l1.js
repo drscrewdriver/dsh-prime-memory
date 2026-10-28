@@ -14,6 +14,7 @@ import { buildConflictPair, conflictRejectId, DEFER_MAX, normalizeClaimKey, norm
 import { formatExtractionPrompt, getExtractMemoriesSystemPrompt } from '../prompts/l1-extraction.js';
 import { normTags, normUsageScenario, readCognitiveHall, readWing } from '../metadata-validators.js';
 import { acceptTitle } from '../util/md-name.js';
+import { clampPriority } from '../util/priority.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
 import { stampValidity, validToSourceOf } from '../store/validity.js';
@@ -196,7 +197,7 @@ export function toStoreRecord(m, now, ts, anchorMap) {
         id: m.record_id,
         content: m.content,
         type: m.type,
-        priority: Number(m.priority) || 60,
+        priority: clampPriority(m.priority),
         scene_name: m.scene_name,
         timestamps: [Number.isNaN(ts) ? now : ts],
         createdAt: now,
@@ -714,7 +715,7 @@ routeHealth) {
             id: m.record_id,
             content: mergedContent,
             type: decision.merged_type || m.type,
-            priority: Number(decision.merged_priority) || Number(m.priority) || 60,
+            priority: clampPriority(decision.merged_priority ?? m.priority),
             scene_name: m.scene_name,
             timestamps: Array.from(new Set(mergedTs)).sort((a, b) => a - b),
             createdAt: now,
