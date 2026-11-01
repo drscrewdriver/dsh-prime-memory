@@ -1,6 +1,6 @@
 # npm Trusted Publishing（OIDC）：push v* tag 自动发布，无需 token / 2FA。
 # 前提（npmjs.com → dsh-prime-memory → Settings → Trusted Publisher）：
-#   Repository: JunNanLYS/dsh-prime-memory，Workflow filename: publish.yml，
+#   Repository: drscrewdriver/dsh-prime-memory，Workflow filename: publish.yml，
 #   Allowed actions: npm publish（未配置前此工作流会在 publish 步骤鉴权失败）。
 # 发版流程：改 package.json 版本 → 提交推送 → git tag vX.Y.Z && git push origin vX.Y.Z。
 # npm 发布成功后自动创建 GitHub Release（正文取 CHANGELOG 对应版本小节，已存在则跳过）。
@@ -37,7 +37,18 @@ jobs:
             echo "tag ${GITHUB_REF_NAME} 与 package.json 版本 v$PKG_VERSION 不一致" >&2
             exit 1
           fi
-      - run: npm publish
+      - name: Resolve dist-tag
+        run: |
+          pkg="$(node -p 'require("./package.json").version')"
+          case "$pkg" in
+            *-*) dist_tag="$(node -p "require('./package.json').version.split('-')[1].split('.')[0]")" ;;
+            *)   dist_tag="latest" ;;
+          esac
+          echo "dist_tag=$dist_tag" >> "$GITHUB_ENV"
+      # 显式 --tag：`publishConfig.tag` 仍是 beta（本仓纪律=发布显式指定通道），
+      # 裸 `npm publish` 会把稳定修复只推到 beta，latest 与宿主线标签都不动 ——
+      # 那等于装了个没人读到的版本。与 dsh-memory-palace 的解析式保持同族写法。
+      - run: npm publish --tag "$dist_tag"
       # Release 正文 = CHANGELOG 的 [X.Y.Z] 小节（标题行剥除），标题 = 首个内容条目
       # 的加粗短语（跳过 ### 小节标题；无加粗则取整行，超 60 字符截断加省略号）；
       # 模式匹配含右中括号，0.7.1 不会误配 0.7.10 等更长版本号。
