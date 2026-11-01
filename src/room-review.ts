@@ -31,14 +31,19 @@ export const ROOM_REVIEW_KEY = 'roomReview';
 export type RoomReviewState = 'pending' | 'confirmed' | 'skipped';
 
 /**
- * `listRooms()` 结果里的 slug→计数索引（单点定义，供四个消费方共用）。
+ * `listRooms()` 结果的 slug→计数索引（单点取数口径，名字沿用计划里的
+ * `mergeRoomCatalog`：它要收的就是「注册表条目 × 自生长条目的合并词表」这一步的
+ * 取数语义，返回值本身是查表用的 Map，不产出合并后的目录）。
  *
- * 为何需要它（issue #27）：同一句「注册表条目的真实计数」在本仓写了四处，其中三处
- * 已经是对的形态（`stats.ts` 的 rooms-get / rooms-export、`tools` 的 room-admin list），
- * 只有候选词表这一处把算好的计数**写死成 0**。计数一旦有本地定义就有分叉位，
- * 所以取数口径收到这里，各调用点只剩「查不到时给多少」这一个本地决策。
+ * 为何需要它（issue #27）：同一句「注册表条目的真实计数」在本仓写过四处，其中三处
+ * 已接这里（本文件的候选词表、`stats.ts` 的 rooms-export、`tools` 的 room-admin
+ * list），只有候选词表那一处历史上把算好的计数**写死成 0**。计数一旦有本地定义就有
+ * 分叉位，所以取数口径收到这里，各调用点只剩「查不到时给多少」这一个本地决策。
+ *
+ * 第四处 `stats.ts` 的 rooms-get 有意不接：它除计数外还要把注册表的
+ * `source`/`label` 覆盖回已存在条目，不属同一个形状（见那处的注释）。
  */
-export function roomCountsBySlug(rooms: readonly RoomCount[]): Map<string, number> {
+export function mergeRoomCatalog(rooms: readonly RoomCount[]): Map<string, number> {
   return new Map(rooms.map((r) => [r.room, r.count]));
 }
 
@@ -231,7 +236,7 @@ export async function annotateOrphanCandidates(
   // 后果是方向性的:词表里只有未注册项显示真数,归类器收到的唯一规模证据恰好与
   // 「优先挂靠现有词表」这条规则反向——按推荐用法先 pre-register 的词表反而全变空壳。
   // `?? 0` 保留原语义:只有「注册了但库里确实零绑定」的新 Room 才显示 0。
-  const grownCounts = roomCountsBySlug(grown);
+  const grownCounts = mergeRoomCatalog(grown);
   const merged = [
     ...regActive.map((e) => ({ room: e.slug, count: grownCounts.get(e.slug) ?? 0, label: e.label, description: e.description })),
     ...grown.filter((r) => !regSet.has(r.room)).map((r) => ({ room: r.room, count: r.count })),

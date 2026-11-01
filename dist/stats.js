@@ -19,7 +19,7 @@ import { typeCatalogEntries } from './memory-types.js';
 import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
-import { mergeRoom, renameRoom, roomCountsBySlug } from './room-review.js';
+import { mergeRoom, renameRoom, mergeRoomCatalog } from './room-review.js';
 import { scanSources } from './memport/scan.js';
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
@@ -805,6 +805,9 @@ export async function handleEndpoint(endpoint, payload, deps) {
             // 端点层合并注册表(Agent A 设计):注册表 active 条目 count=0 补齐并带
             // source/label(source 用条目真实来源——收编 grown ≠ 预注册,⭐角标靠它区分);
             // 自生长条目标 source='grown'。不动 listRooms() 的缓存语义。
+            // 本处不接 `mergeRoomCatalog()`（计划点名的第四处）：缺失条目这里固定写 0
+            // 且不做 `?? 实数` 回查，同时还要把注册表 source/label 覆盖回已存在条目（下方
+            // else 支）——取数以外的富形状，进共用助手需拆第二个返回面，不划算。
             const merged = rooms.map((r) => ({ ...r, source: 'grown' }));
             const registry = roomRegistry?.listActive() ?? [];
             for (const e of registry) {
@@ -1149,7 +1152,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
             };
             if (kind === 'rooms') {
                 const registry = roomRegistry?.list() ?? [];
-                const counts = roomCountsBySlug(stores.l1.listRooms());
+                const counts = mergeRoomCatalog(stores.l1.listRooms());
                 const lines = ['slug,count,source,label,description,status,aliases'];
                 let n = 0;
                 const seen = new Set();

@@ -22,7 +22,7 @@ import {
   parseRoomCandidateItems,
   pendingReviewCount,
   roomCandidateSystemPrompt,
-  roomCountsBySlug,
+  mergeRoomCatalog,
   skipReview,
   ROOM_CANDIDATES_KEY,
   ROOM_REVIEW_KEY,
@@ -212,8 +212,8 @@ describe('annotateOrphanCandidates(候选预标记)', () => {
     expect(captured.find((r) => r.room === 'fresh-room')?.count).toBe(0);
   });
 
-  it('roomCountsBySlug 是单点取数口径（重复 slug 以末次写入为准）', () => {
-    const m = roomCountsBySlug([
+  it('mergeRoomCatalog 是单点取数口径（重复 slug 以末次写入为准）', () => {
+    const m = mergeRoomCatalog([
       { room: 'a', count: 3 },
       { room: 'b', count: 1 },
     ]);
