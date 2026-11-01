@@ -1786,7 +1786,7 @@ export function registerMemoryTools(
                   loser_id: { type: 'string' },
                   loser_content: { type: 'string', description: '同上' },
                   created_at: { type: 'string' },
-                  // 以下 10 项与 conflict-service.listConflictPairs 视图逐一对齐(task 三轴/R1/Phase3):
+                  // 以下 12 项与 conflict-service.listConflictPairs 视图逐一对齐(task 三轴/R1/Phase3):
                   // execute 直接返回该视图,additionalProperties:false 下少声明任何一个,
                   // 宿主无损校验即拒("not a declared property"),整工具读不出——schema 必须跟视图同步。
                   winner_valid_from_ms: { oneOf: [{ type: 'number' }, { type: 'null' }] },
@@ -1799,6 +1799,12 @@ export function registerMemoryTools(
                   defer_count: { type: 'number', description: '复看次数(defer 上限 3)' },
                   conflict_type: { type: 'string', description: '冲突类型(默认 hard)' },
                   claim_key: { type: 'string', description: '同主题多对冲突的归并键(空串=未分组)' },
+                  // issue #23:Phase 3 arm-2/arm-3 给视图加了两笔成熟度旁注
+                  // (conflict-service.ts 的 maturityOf),声明面没跟着走 → `additionalProperties: false`
+                  // 下宿主无损校验逐条拒结,整工具读不出。`computeMaturity` 恒返三档、
+                  // 无 undefined 无第四值,故用 enum 而不是 free string。
+                  winner_maturity: { type: 'string', enum: ['low', 'mid', 'high'], description: '胜方成熟度(读时派生,不参与自动裁决)' },
+                  loser_maturity: { type: 'string', enum: ['low', 'mid', 'high'], description: '同上,败方' },
                 },
                 additionalProperties: false,
               },

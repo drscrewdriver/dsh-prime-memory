@@ -723,6 +723,11 @@ usage) {
             contextDisposers.push(agent.ctx.systemPrompt.context({
                 name: 'memory:profile',
                 order: 510,
+                // issue #24:正文由蒸馏产出(L3 画像),库里可能存着宿主自己发的字面
+                // `{{TYPE_id}}` 脱敏 token。宿主对 interpolate 缺省按 true 处理,遇到不合
+                // `/^[a-z][a-z0-9_]*$/` 的变量组即在 prompt 组装期抛错、整轮报废——而本
+                // 文本从来不含宿主变量,插值只有风险没有收益,故显式关闭按原文注入。
+                interpolate: false,
                 text: () => {
                     const final = composeStableText(agent.id);
                     const ledger = ledgerFor(agent.id);

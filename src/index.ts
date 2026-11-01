@@ -60,6 +60,7 @@ import { ObsoleteNoticeStore } from './store/obsolete-notices.js';
 import { registerSlotsProjection } from './projection/slots.js';
 import { registerRecallProjection } from './projection/recall.js';
 import { DrscClient } from './clients/drsc.js';
+import { readWebServerOrigin } from './clients/web-server-origin.js';
 import type { MemoryLogger } from './types.js';
 import { errDetail, withFileLog } from './util/filelog.js';
 import { buildRouteChain, resolveModelRoute, invalidateEffortCache } from './llm.js';
@@ -93,6 +94,9 @@ function readStartupTrustedHosts(ctx: Context): readonly string[] | undefined {
   }
   return undefined;
 }
+
+// issue #20:DrscClient 的第三档兜底。取数逻辑已抽到 clients/web-server-origin.ts
+// (两条取数路径 + 三个抛错入口,需要被单测钉住而不是靠人肉真机核对),此处只接线。
 
 /**
  * 硬依赖:蒸馏要用 llm,工具注册要用 tools,召回注入要用 systemPrompt。
@@ -238,8 +242,11 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     // 轨2 技能结晶生产者（issue #15 的缺失环节）：装配于下方（依赖 skillStore 就绪）。
     skills: undefined as SkillProducer | undefined,
     // DRSC 客户端(T8.4 读切):蒸馏背景窗 + conversation_search 工具面的历史供给。
-    // 硬依赖无本地回退(l0 表退役);trustedHosts 惰性读取(webStartup 可能晚到)。
-    drsc: new DrscClient({ trustedHosts: () => readStartupTrustedHosts(ctx) }),
+    // 硬依赖无本地回退(l0 表退役);trustedHosts 与宿主 origin 均惰性读取(两者可能晚于本插件就绪)。
+    drsc: new DrscClient({
+      trustedHosts: () => readStartupTrustedHosts(ctx),
+      origin: () => readWebServerOrigin(ctx),
+    }),
     l0: new L0Store(db),
     l1: new L1Store(
       dataDir,

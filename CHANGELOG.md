@@ -1,5 +1,21 @@
 # 更新日志（Changelog）
 
+## [0.26.17] — 2026-11-02
+
+> **三条声明面修复：`memory:profile` 显式关插值(issue #24)、`memory_conflicts` 补两笔成熟度声明(issue #23)、DRSC 基址不再写死 8080(issue #20)**，并把「改视图忘改 schema」从注释纪律改成 CI 闸。无配置变更、无默认行为变更、`engines.dsh` 不动。
+
+### 修复
+
+- **`memory:profile` 关插值(#24)**：宿主对 systemPrompt 贡献项的 `interpolate` **缺省按 true 处理**，而画像正文由蒸馏产出、库里可能存着宿主自己发的字面 `{{TYPE_id}}` 脱敏 token——不合 `/^[a-z][a-z0-9_]*$/` 即在 prompt 组装期抛错、**整轮报废**。该正文从来不含宿主变量，插值只有风险没有收益，故注册时显式 `interpolate: false` 按原文注入。全 `src` 实测 `systemPrompt.context/section` 只有这一处注册点。
+- **`memory_conflicts` 补声明(#23)**：Phase 3 arm-2/arm-3 给视图加的两笔成熟度旁注(`maturityOf`)没同步到输出 schema，而该 schema 是 `additionalProperties: false`——宿主无损校验对每条返回逐字段拒结，工具自 0.26.11 起**任何调用都读不出**（`memory_resolve_conflict` 的描述还在把人往它指，公示的「先看后裁决」工作流事实上断链）。补 `winner_maturity`/`loser_maturity` 两键（用 `enum ['low','mid','high']` 钉死 `computeMaturity` 的三档值域）。该文件自己就写着「schema 必须跟视图同步」——纪律在注释里，闸在运行期，两者此前没有任何机械约束连着。
+- **DRSC 基址取宿主真实监听口(#20)**：`trustedHosts` 为空时回退写死 `http://127.0.0.1:8080`，而 DSH Desktop App 走随机端口 → `conversation_search` 与蒸馏背景窗在**默认配置下必坏**（0.26.x 的 L0 正文已停写、历史面完全依赖 DRSC，这条链是 load-bearing 的，不是可选增强）。现在第三档兜底取宿主监听 origin，取数逻辑抽到 `src/clients/web-server-origin.ts`（两条取数路径 + 三个抛错入口，需被单测钉住，而不是靠人肉真机核对）。**优先级与降级面钉死四件事**：① origin 只替换那句 8080，不抢 `trustedHosts` 位——现状 `explicit` 是死分支（插件没有该设置项），唯一真实旋钮是宿主 trustedHosts，放上去会把靠 `--trusted-host` 已能工作的用户改到另一个 authority，那是回归；② **优先 `getOrigin()`、再退 `port`**——两条宿主线不同形，已逐线实测取证，别拿一条线当事实：0.2.0-rc.2 源码仓的 webServer **没有** getOrigin（只有 `get port()`/`get host()`），而 0.2.1-rc.5 装机宿主（app.asar 类体）**已有** `getOrigin()`，返回 `${protocol}//${bindUrlHost(host)}:${listenedPort}`，protocol 认 TLS、bind host 走 URL 形式转换，这两个细节插件自己算不出；③ Host 头只在存在非空 trustedHosts 条目时回显（与旧版逐字同口径）——collector 信任门精确匹配 authority，拿条目原串去配带真实端口的 URL 只会把「端口不对」换成「Host 不被信任」；collector 把路由注册在宿主 webServer 上（同监听口），所以宿主 origin 就是正确基址；④ `getOrigin()` 在未 listen / 绑定地址带 zone id 时**主动抛错**（宿主类体原话：`origin read before the listener bound a port`），退 `port` 时又必须 `typeof port === 'number' && port > 0`（`listenedPort` 未 listen 读到 undefined，naive 拼接会产出 `http://127.0.0.1:undefined` 这种能发出但永远错的 URL）——取不到/抛错一律返回 undefined = **逐字节等价旧行为**。`inject` 未动（`webServer` 已在声明里），故老线零变更、`engines.dsh` 不动。
+
+### 纪律
+
+- 新增 `tests/tool-output-view-sync.test.ts`：对读工具**真实执行一次**，把返回对象的键路径拿去对照它自己声明的 `output.schema`，多一个键即红（`additionalProperties: false` 下这正是宿主的拒绝判据）。同文件另扫每个 `systemPrompt.context({`/`section({` 入参块必须显式含 `interpolate`。两条守卫均已做**红绿验证**：临时撤掉 #23/#24 的修复 → 分别报出 `$.items[0].winner_maturity` 与 `src/hooks/recall.ts:892`。
+- 覆盖面边界（文件头已如实标注）：只守「未声明的多余键」这一种（即 #23 的形状），不校验值类型/枚举，不含会改库的写侧工具。
+- 全量 **1880 例**/188 文件绿（基线 1863 例/186 文件；本版新增 	ests/tool-output-view-sync.test.ts 10 例与 	ests/web-server-origin.test.ts 7 例）。
+
 ## [0.26.15] — 2026-10-28
 
 > 真宿主验证（1197 条 L1 / 380 条 `work_method` 的真实库副本）发现 0.26.14 的**写放大**缺陷，本版修掉。单测没抱住它，因为夹具只有几条记录。

@@ -9,16 +9,32 @@ export class DrscClientError extends Error {
         this.name = 'DrscClientError';
     }
 }
+/** 供 Host 回显的条目:须与 {@link resolveDrscBaseUrl} 的选取口径逐字一致。 */
+export function firstDrscTrustedHost(trustedHosts) {
+    return trustedHosts?.find((entry) => entry.trim() !== '')?.trim();
+}
 /**
- * 基址解析:显式配置 > 首个 trustedHosts 条目(补 http:// 前缀)>
- * `http://127.0.0.1:8080`(宿主默认口;trustedHosts 缺席的老线 collector 门本就放行)。
+ * 基址解析:显式配置 > 首个 trustedHosts 条目(补 http:// 前缀)> 宿主实际监听
+ * origin(issue #20 新增的兜底)> `http://127.0.0.1:8080`(宿主默认口;trustedHosts
+ * 缺席的老线 collector 门本就放行)。
+ *
+ * origin 刻意排在 trustedHosts **之下**:它只替换那句写死的 8080。放上去会把
+ * 已经能工作的配置(靠 `--trusted-host` 指过地址)改到另一个 authority 上,那是回归。
  */
-export function resolveDrscBaseUrl(explicit, trustedHosts) {
+export function resolveDrscBaseUrl(explicit, trustedHosts, fallbackOrigin) {
+    return resolveDrscBaseUrlDetail(explicit, trustedHosts, fallbackOrigin).url;
+}
+/** {@link resolveDrscBaseUrl} 的带来源形态,供客户端决定 Host 回显。 */
+export function resolveDrscBaseUrlDetail(explicit, trustedHosts, fallbackOrigin) {
     const trimmed = explicit?.trim() ?? '';
-    const pick = trimmed !== '' ? trimmed : trustedHosts?.find((entry) => entry.trim() !== '')?.trim();
-    if (pick === undefined || pick === '')
-        return 'http://127.0.0.1:8080';
-    return /^https?:\/\//u.test(pick) ? pick : `http://${pick}`;
+    const pick = trimmed !== '' ? trimmed : firstDrscTrustedHost(trustedHosts);
+    if (pick !== undefined && pick !== '') {
+        return { url: /^https?:\/\//u.test(pick) ? pick : `http://${pick}`, fromConfigured: true };
+    }
+    const origin = fallbackOrigin?.trim() ?? '';
+    if (origin !== '')
+        return { url: origin, fromConfigured: false };
+    return { url: 'http://127.0.0.1:8080', fromConfigured: false };
 }
 /** kind → L0 角色词表(memory 只收 user/assistant 两类,其余(tool/* 等)不映射)。 */
 export function drscRoleOf(kind) {
@@ -80,12 +96,28 @@ export class DrscClient {
         this.fetchImpl = options.fetchImpl ?? fetch;
         this.timeoutMs = options.timeoutMs ?? DRSC_DEFAULT_TIMEOUT_MS;
     }
-    /** 每次请求现算基址与 Host 回显(trustedHosts 惰性;无缓存陈旧面)。 */
+    /** 每次请求现算基址与 Host 回显(trustedHosts/origin 惰性;无缓存陈旧面)。 */
     base() {
         const trusted = this.options.trustedHosts?.() ?? [];
-        const base = resolveDrscBaseUrl(this.options.baseUrl, trusted).replace(/\/+$/u, '');
-        const first = trusted.find((entry) => entry.trim() !== '')?.trim();
-        return { url: `${base}${DRSC_API_PATH}`, ...(first !== undefined ? { hostHeader: first } : {}) };
+        const origin = this.safeOrigin();
+        const resolved = resolveDrscBaseUrlDetail(this.options.baseUrl, trusted, origin);
+        const base = resolved.url.replace(/\/+$/u, '');
+        // Host 头只在**存在非空 trustedHosts 条目**时回显(与旧版逐字同口径)。基址来自
+        // origin 兜底时本来就没有条目可回显,而 collector 信任门精确匹配 authority,
+        // 拿条目原串去配一个带真实端口的 URL 只会失配(#20 的报错面)。
+        const echo = resolved.fromConfigured ? firstDrscTrustedHost(trusted) : undefined;
+        return { url: `${base}${DRSC_API_PATH}`, ...(echo !== undefined ? { hostHeader: echo } : {}) };
+    }
+    /** origin 探针失败(服务未就绪/属性读抛)不得影响请求:视作取不到,落老行为。 */
+    safeOrigin() {
+        if (this.options.origin === undefined)
+            return undefined;
+        try {
+            return this.options.origin();
+        }
+        catch {
+            return undefined;
+        }
     }
     /** 一个 GET 的 JSON 包络(非 2xx / ok!==true / 超时 / 断网一律抛 DrscClientError)。 */
     async getJson(query) {

@@ -17,10 +17,13 @@
  * 分口径处理:蒸馏背景窗空窗降级(runner),工具面显式报错(tools)。
  *
  * 同源 Host 解析(steward drs-source 的 resolveDrsBaseUrl 同款):
- * 显式 baseUrl > 首个 trustedHosts 条目(补 http://)> `http://127.0.0.1:8080`
- * (宿主缺省口)。Host 头回显首个 trustedHosts 条目:collector 信任门是精确
- * 匹配,条目省略端口而 URL 带端口会失配。trustedHosts 惰性读取(webStartup
- * 可能晚于本插件就绪),每次请求现算,无缓存陈旧面。
+ * 显式 baseUrl > 首个 trustedHosts 条目(补 http://)> 宿主实际监听 origin
+ * (issue #20:Desktop App 走随机端口,写死 8080 永远对不上)> `http://127.0.0.1:8080`
+ * (宿主缺省口)。Host 头**只回显被选作基址的那个 trustedHosts 条目**:collector
+ * 信任门是精确匹配,条目省略端口而 URL 带端口会失配——所以基址来自 origin 兜底时
+ * 索性不回显(等价于旧版 trustedHosts 为空时的形状),而不是拿另一个 authority 去撞门。
+ * trustedHosts / origin 均惰性读取(webStartup、webServer 可能晚于本插件就绪),
+ * 每次请求现算,无缓存陈旧面。
  */
 import type { ConversationMessage } from '../types.js';
 /** collector API 路径(与其 DRS_API_PATH 字面一致;不跨包 import)。 */
@@ -33,11 +36,25 @@ export declare class DrscClientError extends Error {
         cause?: unknown;
     });
 }
+/** 基址与其来源。 */
+export interface ResolvedDrscBase {
+    url: string;
+    /** 基址是否取自显式配置或 trustedHosts 条目(即解析序的前两档)。 */
+    fromConfigured: boolean;
+}
+/** 供 Host 回显的条目:须与 {@link resolveDrscBaseUrl} 的选取口径逐字一致。 */
+export declare function firstDrscTrustedHost(trustedHosts?: readonly string[]): string | undefined;
 /**
- * 基址解析:显式配置 > 首个 trustedHosts 条目(补 http:// 前缀)>
- * `http://127.0.0.1:8080`(宿主默认口;trustedHosts 缺席的老线 collector 门本就放行)。
+ * 基址解析:显式配置 > 首个 trustedHosts 条目(补 http:// 前缀)> 宿主实际监听
+ * origin(issue #20 新增的兜底)> `http://127.0.0.1:8080`(宿主默认口;trustedHosts
+ * 缺席的老线 collector 门本就放行)。
+ *
+ * origin 刻意排在 trustedHosts **之下**:它只替换那句写死的 8080。放上去会把
+ * 已经能工作的配置(靠 `--trusted-host` 指过地址)改到另一个 authority 上,那是回归。
  */
-export declare function resolveDrscBaseUrl(explicit: string | undefined, trustedHosts?: readonly string[]): string;
+export declare function resolveDrscBaseUrl(explicit: string | undefined, trustedHosts?: readonly string[], fallbackOrigin?: string): string;
+/** {@link resolveDrscBaseUrl} 的带来源形态,供客户端决定 Host 回显。 */
+export declare function resolveDrscBaseUrlDetail(explicit: string | undefined, trustedHosts?: readonly string[], fallbackOrigin?: string): ResolvedDrscBase;
 /** `op=session` 的一个 segment 行(redact=1 时 text 为脱敏正文;wire 蛇形直取)。 */
 export interface DrscSessionRow {
     seq: number;
@@ -79,10 +96,15 @@ export declare function drscRoleOf(kind: string): 'user' | 'assistant' | undefin
  */
 export declare function drscRowToConversationMessage(row: DrscSessionRow, sessionId: string): ConversationMessage | undefined;
 export interface DrscClientOptions {
-    /** 显式基址(缺省走 trustedHosts → 127.0.0.1:8080,见 resolveDrscBaseUrl)。 */
+    /** 显式基址(缺省走 trustedHosts → 宿主 origin → 127.0.0.1:8080,见 resolveDrscBaseUrl)。 */
     baseUrl?: string;
     /** trustedHosts 惰性读取(webStartup 服务可能晚于装配;每次请求现取)。 */
     trustedHosts?: () => readonly string[] | undefined;
+    /**
+     * 宿主实际监听 origin 惰性读取(issue #20)。webServer 服务可能晚就绪/换实例/
+     * 下线,故与 trustedHosts 同款每次现取;取不到即返回 undefined → 落回 8080 老行为。
+     */
+    origin?: () => string | undefined;
     /** 注入面(单测);缺省全局 fetch。 */
     fetchImpl?: typeof fetch;
     /** 单请求超时 ms;缺省 {@link DRSC_DEFAULT_TIMEOUT_MS}。 */
@@ -93,8 +115,10 @@ export declare class DrscClient {
     private readonly fetchImpl;
     private readonly timeoutMs;
     constructor(options?: DrscClientOptions);
-    /** 每次请求现算基址与 Host 回显(trustedHosts 惰性;无缓存陈旧面)。 */
+    /** 每次请求现算基址与 Host 回显(trustedHosts/origin 惰性;无缓存陈旧面)。 */
     private base;
+    /** origin 探针失败(服务未就绪/属性读抛)不得影响请求:视作取不到,落老行为。 */
+    private safeOrigin;
     /** 一个 GET 的 JSON 包络(非 2xx / ok!==true / 超时 / 断网一律抛 DrscClientError)。 */
     private getJson;
     /**
