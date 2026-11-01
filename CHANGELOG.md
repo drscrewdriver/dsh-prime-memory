@@ -1,5 +1,10 @@
 # 更新日志（Changelog）
 
+## [0.26.20] — 2026-11-02
+
+- **内部命名与计划对齐**：共用取数助手按其计划原名 `mergeRoomCatalog()` 落地（0.26.18/0.26.19 线上产物里叫 `roomCountsBySlug()`，功能与形状不变，纯内部导出名，无外部消费方）。同时重写该函数的文档注释：原先「四处同形中三处已正确」的表述不准确，现按实证写明 rooms-export / room-admin list / 候选词表三处已接，而 rooms-get 端点除计数外还要把注册表 `source`/`label` 覆盖回已存在条目，属不同形状，有意不接（该处就地留了说明注释）。
+- **真机启动自证（新）**：在隔离的一次性 profile `t44probe`（`--from-default-profile web` 新建，不触碰任何现有 profile）上安装 `dsh-prime-memory@0.26.19` 与 `dsh-reference-session-collector`，以 `dsh --profile t44probe` 启动宿主：正常起立于 `http://127.0.0.1:3080/`，token 换 cookie 后根路径 200，装载全程无 compat 报错、无拒载（该线 `engines.dsh` 0.2.0-rc.2 在声明内）。**注意边界**：本自证只覆盖「装载与启动不异常」，#20 的随机端口探针分支仍未在此验证 —— web 线宿主端口是固定默认 3080，随机监听口只存在于桌面端宿主，该分支仍待桌面端装机冒烟。
+
 ## [0.26.19] — 2026-11-02
 
 - **#20 加固（属性测试 + 形状一致）**：新增 `resolveDrscBaseUrl` 优先级的确定性属性测试（固定种子 mulberry32，400 + 300 组随机组合），钉住四条不变式：显式值恒为终值、有非空 trustedHosts 条目时 origin 不得抢位、origin 只替换那句 8080、前两档之外的来源一律不回显 Host 头。**该测试首遍即抓出一处真实形状不一致**：显式值/条目分支会给裸 authority 补 `http://` 前缀，而新增的 origin 分支原样透传不补——若调用方递的是 `127.0.0.1:<port>` 这类 authority（而非宿主 `getOrigin()` 返回的全 URL），就会拼出无 scheme 的基址。已抽单一 `withScheme()` 让三档共用同一规范化。
