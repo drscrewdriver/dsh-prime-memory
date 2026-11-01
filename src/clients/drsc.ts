@@ -69,6 +69,11 @@ export function resolveDrscBaseUrl(
   return resolveDrscBaseUrlDetail(explicit, trustedHosts, fallbackOrigin).url;
 }
 
+/** 条目→URL 的单一规范化：无 scheme 时补 `http://`。三档来源共用，不开两种形状。 */
+function withScheme(authority: string): string {
+  return /^https?:\/\//u.test(authority) ? authority : `http://${authority}`;
+}
+
 /** {@link resolveDrscBaseUrl} 的带来源形态,供客户端决定 Host 回显。 */
 export function resolveDrscBaseUrlDetail(
   explicit: string | undefined,
@@ -78,10 +83,12 @@ export function resolveDrscBaseUrlDetail(
   const trimmed = explicit?.trim() ?? '';
   const pick = trimmed !== '' ? trimmed : firstDrscTrustedHost(trustedHosts);
   if (pick !== undefined && pick !== '') {
-    return { url: /^https?:\/\//u.test(pick) ? pick : `http://${pick}`, fromConfigured: true };
+    return { url: withScheme(pick), fromConfigured: true };
   }
   const origin = fallbackOrigin?.trim() ?? '';
-  if (origin !== '') return { url: origin, fromConfigured: false };
+  // origin 也走同一规范化:宿主 getOrigin() 返的是全 URL(此处原样透传),但若调用方
+  // 递的是 `127.0.0.1:<port>` 这种 authority,不补 scheme 会让拼出的请求 URL 直接不行。
+  if (origin !== '') return { url: withScheme(origin), fromConfigured: false };
   return { url: 'http://127.0.0.1:8080', fromConfigured: false };
 }
 

@@ -58,6 +58,15 @@ describe('resolveDrscBaseUrl(steward 探针同款解析序)', () => {
     expect(resolveDrscBaseUrl(undefined, [], '   ')).toBe('http://127.0.0.1:8080');
   });
 
+  // 属性测试把三档的 scheme 规范化拉同形后，这里钉住具体形状：宿主 getOrigin() 返全 URL
+  // 原样透传，而递 authority（如只拿到 host:port）要补 http://，不能产出无 scheme 的基址。
+  it('origin 档与上两档同经 scheme 规范化', () => {
+    expect(resolveDrscBaseUrl(undefined, [], 'http://127.0.0.1:51337')).toBe('http://127.0.0.1:51337');
+    expect(resolveDrscBaseUrl(undefined, [], 'https://127.0.0.1:3080')).toBe('https://127.0.0.1:3080');
+    expect(resolveDrscBaseUrl(undefined, [], '127.0.0.1:51337')).toBe('http://127.0.0.1:51337');
+    expect(resolveDrscBaseUrl('  ', ['localhost'], '127.0.0.1:51337')).toBe('http://localhost');
+  });
+
   it('来源标记只对前两档置真(决定要不要回显 Host 头)', () => {
     expect(resolveDrscBaseUrlDetail(undefined, ['host-a'], 'http://127.0.0.1:1')).toEqual({ url: 'http://host-a', fromConfigured: true });
     expect(resolveDrscBaseUrlDetail('http://x:9', [], undefined)).toEqual({ url: 'http://x:9', fromConfigured: true });
@@ -65,6 +74,85 @@ describe('resolveDrscBaseUrl(steward 探针同款解析序)', () => {
     expect(resolveDrscBaseUrlDetail(undefined, [], undefined)).toEqual({ url: 'http://127.0.0.1:8080', fromConfigured: false });
     expect(firstDrscTrustedHost(['  ', 'host-b'])).toBe('host-b');
     expect(firstDrscTrustedHost([])).toBeUndefined();
+  });
+});
+
+/**
+ * N-2：解析序的**属性测试**（逐条断言只钉住作者当时想到的几个点值，属性测试钉的是
+ * 关系——后续改动只要把 origin 抬到 trustedHosts 之上、或把非空条目的基址换成 origin，
+ * 就会在任何随机组合上挂，而不是恰好躲过那几个样本）。
+ *
+ * 固定种子的确定性伪随机（不用 Math.random）：失败可原样复现，不需第二个随机种子。
+ */
+describe('resolveDrscBaseUrl 优先级不变式(属性测试)', () => {
+  /** mulberry32:32bit 确定性 PRNG，零依赖。 */
+  const rng = (seed: number) => {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  const hostForms = ['host-a', 'host-b:8080', 'localhost', '127.0.0.1:51337', 'svc.example'];
+  const origins = ['http://127.0.0.1:51337', 'http://127.0.0.1:53084', 'https://127.0.0.1:3080'];
+  const blanks = ['', '   '];
+
+  const pick = <T>(r: () => number, xs: readonly T[]): T => xs[Math.floor(r() * xs.length)] as T;
+  /** 生成一组入参：显式值、trustedHosts（可空/可全空白）、origin（可缺）各态均覆到。 */
+  function sample(r: () => number): { explicit?: string; hosts?: string[]; origin?: string } {
+    const n = Math.floor(r() * 4); // 0..3 个条目
+    const hosts = Array.from({ length: n }, () => (r() < 0.2 ? pick(r, blanks) : pick(r, hostForms)));
+    return {
+      explicit: r() < 0.35 ? pick(r, hostForms) : r() < 0.2 ? pick(r, blanks) : undefined,
+      origin: r() < 0.65 ? pick(r, origins) : undefined,
+      ...(hosts.length > 0 ? { hosts } : {}),
+    };
+  }
+
+  it('任一档命中即不得被来路更低的档跨位抢走', () => {
+    const r = rng(0x51_20_26_11);
+    for (let i = 0; i < 400; i++) {
+      const { explicit, hosts = [], origin } = sample(r);
+      const got = resolveDrscBaseUrl(explicit, hosts, origin);
+      const firstHost = hosts.find((e) => e.trim() !== '')?.trim();
+      const desc = `explicit=${String(explicit)} hosts=${JSON.stringify(hosts)} origin=${String(origin)}`;
+
+      if (explicit !== undefined && explicit.trim() !== '') {
+        // 不变式①：显式配置永远是终值（同经 scheme 规范化，与条目一档同形）
+        expect(got, desc).toBe(/^https?:\/\//u.test(explicit.trim()) ? explicit.trim() : `http://${explicit.trim()}`);
+      } else if (firstHost !== undefined) {
+        // 不变式②（#20 的命门）：有非空条目时绝不因 origin 可用而改基址
+        expect(got, desc).toBe(/^https?:\/\//u.test(firstHost) ? firstHost : `http://${firstHost}`);
+      } else if (origin !== undefined && origin.trim() !== '') {
+        // 不变式③：origin 只替换那句 8080，且与上两档走同一规范化
+        expect(got, desc).toBe(/^https?:\/\//u.test(origin.trim()) ? origin.trim() : `http://${origin.trim()}`);
+      } else {
+        expect(got, desc).toBe('http://127.0.0.1:8080');
+      }
+
+      // 不变式④：前两档之外的来源一律不回显 Host 头(与旧版同口径)
+      const detail = resolveDrscBaseUrlDetail(explicit, hosts, origin);
+      expect(detail.fromConfigured, desc).toBe(
+        (explicit !== undefined && explicit.trim() !== '') || firstHost !== undefined,
+      );
+    }
+  });
+
+  it('origin 无论怎么变都不影响「有显式/有条目」时的结果(旧行为不可回归)', () => {
+    const r = rng(0x99_11_22_33);
+    for (let i = 0; i < 300; i++) {
+      const { explicit, hosts = [] } = sample(r);
+      const firstHost = hosts.find((e) => e.trim() !== '')?.trim();
+      if (explicit === undefined || explicit.trim() === '') {
+        if (firstHost === undefined) continue; // 此形态本就靠 origin 兜底
+      }
+      const withOrigin = resolveDrscBaseUrl(explicit, hosts, 'http://127.0.0.1:60000');
+      const withoutOrigin = resolveDrscBaseUrl(explicit, hosts, undefined);
+      expect(withOrigin, `hosts=${JSON.stringify(hosts)} explicit=${String(explicit)}`).toBe(withoutOrigin);
+    }
   });
 });
 
