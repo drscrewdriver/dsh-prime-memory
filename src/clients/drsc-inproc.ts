@@ -22,6 +22,20 @@
 /** collector 包入口（裸名，由 profile 顶层 node_modules 解析）。 */
 const COLLECTOR_PACKAGE = 'dsh-reference-session-collector';
 
+/**
+ * 门面形（collector >=0.2.5）：`drsReadFacade()` 返回绑它自己活 QueryContext 的
+ * 只读对象。这是首选路径——消费方只认一个稳定符号，也不另开一份库。
+ */
+interface DrsFacadeLike {
+  listSessions: (offset?: number, limit?: number) => Record<string, unknown>;
+  sessionDetail: (sessionId: string, opts?: Record<string, unknown>) => Record<string, unknown>;
+  search: (query: string, opts?: Record<string, unknown>) => Record<string, unknown>;
+}
+
+interface CollectorModuleWithFacade extends CollectorReadModule {
+  drsReadFacade?: () => DrsFacadeLike | undefined;
+}
+
 /** 只用到读面，形状按 collector 的 d.ts 手工声明，不引它的类型（避免跨包类型依赖）。 */
 export interface CollectorReadModule {
   resolveIndexDir: (explicit?: string, env?: NodeJS.ProcessEnv) => string;
@@ -47,38 +61,70 @@ const defaultLoader: CollectorLoader = async () =>
   (await import(/* @vite-ignore */ COLLECTOR_PACKAGE)) as unknown as CollectorReadModule;
 
 let modulePromise: Promise<CollectorReadModule> | undefined;
-let queryContext: unknown;
 /**
- * 只读句柄（`openProjectionStore` 的返回值）。常驻 summaries 是内存 Map，
- * 每请求重开等于重扫全表，故只开一次；undefined 是合法的未开哨兵
- * （句柄真为 undefined 时 createQueryContext 会在首读即报错，不会静默重开）。
+ * 兼容路径（旧 collector）的只读句柄（`openProjectionStore` 的返回值）。常驻 summaries
+ * 是内存 Map，每请求重开等于重扫全表，故只开一次；undefined 是合法的未开哨兵。
  */
 let storeHandle: unknown;
 
-/** 清掉缓存（单测用；也供 collector 换装后强制重开）。 */
+/** 清掉缓存（单测用；也供 collector 换装后强制重取）。 */
 export function resetCollectorReadState(): void {
   modulePromise = undefined;
-  queryContext = undefined;
   storeHandle = undefined;
 }
 
-/** 载入并缓存 collector 模块；失败不缓存 rejection，否则一次抖动会永久打死后续所有读。 */
+/** 把门面对象适配成本模块统一的「模块形」，以便与兼容路径共用同一套参数映射。
+ * 前三个成员在门面路径上永不会被调用：moduleOf 命中门面后直接返回，不走进兼容分支。
+ */
+function fromFacade(facade: DrsFacadeLike): CollectorReadModule {
+  const unused = (): never => {
+    throw new Error('门面路径不应自开投影库');
+  };
+  return {
+    resolveIndexDir: unused,
+    openProjectionStore: unused,
+    createQueryContext: unused,
+    listSessions: (ctx, offset, limit) => facade.listSessions(offset, limit),
+    sessionDetail: (ctx, sessionId, opts) => facade.sessionDetail(sessionId, opts),
+    search: (ctx, query, opts) => facade.search(query, opts),
+  };
+}
+
+/** 取一个可用的「模块形」：优先 collector 门面（>=0.2.5），否则回退自开只读库。 */
 async function moduleOf(load: CollectorLoader): Promise<CollectorReadModule> {
-  const pending = (modulePromise ??= load().catch((err: unknown) => {
+  const pending = (modulePromise ??= (async (): Promise<CollectorReadModule> => {
+    const mod = (await load()) as CollectorModuleWithFacade;
+    if (typeof mod.drsReadFacade === 'function') {
+      const facade = mod.drsReadFacade();
+      // 对端是新版本但库未就绪（collector 的重活推迟在 setImmediate 臂）：本轮**不**回退
+      // 自开库，而是抛可重试错——否则会把自开库结果永久缓存，把“优先用门面”变成
+      // 只在首轮赌运气。抛错走既有降级链（背景窗当轮空窗、工具面显式报错），
+      // 且不缓存 rejection，下一次读会重取门面。
+      if (facade === undefined) {
+        throw new Error('collector 投影库尚未就绪（稍后自动重试）');
+      }
+      return fromFacade(facade);
+    }
+    return legacyStoreModule(mod);
+  })().catch((err: unknown) => {
     if (modulePromise === pending) modulePromise = undefined;
     throw err;
   }));
   return pending;
 }
 
-async function contextFor(load: CollectorLoader): Promise<unknown> {
-  if (queryContext !== undefined) return queryContext;
-  const mod = await moduleOf(load);
+/** 旧 collector（无 drsReadFacade）的兼容路径：自己开一份只读库。 */
+async function legacyStoreModule(mod: CollectorReadModule): Promise<CollectorReadModule> {
   if (storeHandle === undefined) {
     storeHandle = mod.openProjectionStore(mod.resolveIndexDir());
   }
-  queryContext = mod.createQueryContext(storeHandle);
-  return queryContext;
+  const ctx = mod.createQueryContext(storeHandle);
+  return {
+    ...mod,
+    listSessions: (_c, offset, limit) => mod.listSessions(ctx, offset, limit),
+    sessionDetail: (_c, sessionId, opts) => mod.sessionDetail(ctx, sessionId, opts),
+    search: (_c, query, opts) => mod.search(ctx, query, opts),
+  };
 }
 
 /** 把 HTTP 查询串拆成参数表（与 collector 路由同源解析口径：它也只读 searchParams）。 */
@@ -97,7 +143,6 @@ export async function callCollectorRead(
   query: string,
   load: CollectorLoader = defaultLoader,
 ): Promise<Record<string, unknown>> {
-  const ctx = await contextFor(load);
   const mod = await moduleOf(load);
   const p = paramsOf(query);
   const op = p.get('op') ?? '';
@@ -108,7 +153,7 @@ export async function callCollectorRead(
     const limit = positiveInt(p.get('limit'));
     return {
       ok: true,
-      ...mod.search(ctx, p.get('q') ?? '', {
+      ...mod.search(READ_SURFACE, p.get('q') ?? '', {
         // 非法/缺省时整个键缺席，而不是传 `limit: undefined` —— `'limit' in opts`
         // 与 `opts.limit === undefined` 不是一回事，对端可能按前者走钳位分支。
         ...(limit === undefined ? {} : { limit }),
@@ -123,7 +168,7 @@ export async function callCollectorRead(
       return { ok: true, session: null, rows: [] };
     }
     const tail = positiveInt(p.get('tail'));
-    const detail = mod.sessionDetail(ctx, sessionId, {
+    const detail = mod.sessionDetail(READ_SURFACE, sessionId, {
       // collector 侧：tail 为正整数才切尾窗，键缺席即全量（#14-B 的整会话臂依赖这点）。
       ...(tail === undefined ? {} : { tail }),
       redact,
@@ -135,7 +180,7 @@ export async function callCollectorRead(
     // 这两个是位置参数，undefined 与“没传”在 JS 里同义，无需上面对象字面量那套处置。
     const offset = positiveInt(p.get('offset')) ?? 0;
     const limit = positiveInt(p.get('limit'));
-    return { ok: true, ...mod.listSessions(ctx, offset, limit) };
+    return { ok: true, ...mod.listSessions(READ_SURFACE, offset, limit) };
   }
 
   throw new Error(`collector 未知 op: ${op === '' ? '(missing)' : op}`);
@@ -147,3 +192,6 @@ function positiveInt(raw: string | null): number | undefined {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
 }
+
+/** 统一形后的模块不再需要真 QueryContext，这个占位只用来占位。 */
+const READ_SURFACE: unknown = 'inproc-read-surface';

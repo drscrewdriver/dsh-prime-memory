@@ -22,37 +22,67 @@
 const COLLECTOR_PACKAGE = 'dsh-reference-session-collector';
 const defaultLoader = async () => (await import(/* @vite-ignore */ COLLECTOR_PACKAGE));
 let modulePromise;
-let queryContext;
 /**
- * 只读句柄（`openProjectionStore` 的返回值）。常驻 summaries 是内存 Map，
- * 每请求重开等于重扫全表，故只开一次；undefined 是合法的未开哨兵
- * （句柄真为 undefined 时 createQueryContext 会在首读即报错，不会静默重开）。
+ * 兼容路径（旧 collector）的只读句柄（`openProjectionStore` 的返回值）。常驻 summaries
+ * 是内存 Map，每请求重开等于重扫全表，故只开一次；undefined 是合法的未开哨兵。
  */
 let storeHandle;
-/** 清掉缓存（单测用；也供 collector 换装后强制重开）。 */
+/** 清掉缓存（单测用；也供 collector 换装后强制重取）。 */
 export function resetCollectorReadState() {
     modulePromise = undefined;
-    queryContext = undefined;
     storeHandle = undefined;
 }
-/** 载入并缓存 collector 模块；失败不缓存 rejection，否则一次抖动会永久打死后续所有读。 */
+/** 把门面对象适配成本模块统一的「模块形」，以便与兼容路径共用同一套参数映射。
+ * 前三个成员在门面路径上永不会被调用：moduleOf 命中门面后直接返回，不走进兼容分支。
+ */
+function fromFacade(facade) {
+    const unused = () => {
+        throw new Error('门面路径不应自开投影库');
+    };
+    return {
+        resolveIndexDir: unused,
+        openProjectionStore: unused,
+        createQueryContext: unused,
+        listSessions: (ctx, offset, limit) => facade.listSessions(offset, limit),
+        sessionDetail: (ctx, sessionId, opts) => facade.sessionDetail(sessionId, opts),
+        search: (ctx, query, opts) => facade.search(query, opts),
+    };
+}
+/** 取一个可用的「模块形」：优先 collector 门面（>=0.2.5），否则回退自开只读库。 */
 async function moduleOf(load) {
-    const pending = (modulePromise ??= load().catch((err) => {
+    const pending = (modulePromise ??= (async () => {
+        const mod = (await load());
+        if (typeof mod.drsReadFacade === 'function') {
+            const facade = mod.drsReadFacade();
+            // 对端是新版本但库未就绪（collector 的重活推迟在 setImmediate 臂）：本轮**不**回退
+            // 自开库，而是抛可重试错——否则会把自开库结果永久缓存，把“优先用门面”变成
+            // 只在首轮赌运气。抛错走既有降级链（背景窗当轮空窗、工具面显式报错），
+            // 且不缓存 rejection，下一次读会重取门面。
+            if (facade === undefined) {
+                throw new Error('collector 投影库尚未就绪（稍后自动重试）');
+            }
+            return fromFacade(facade);
+        }
+        return legacyStoreModule(mod);
+    })().catch((err) => {
         if (modulePromise === pending)
             modulePromise = undefined;
         throw err;
     }));
     return pending;
 }
-async function contextFor(load) {
-    if (queryContext !== undefined)
-        return queryContext;
-    const mod = await moduleOf(load);
+/** 旧 collector（无 drsReadFacade）的兼容路径：自己开一份只读库。 */
+async function legacyStoreModule(mod) {
     if (storeHandle === undefined) {
         storeHandle = mod.openProjectionStore(mod.resolveIndexDir());
     }
-    queryContext = mod.createQueryContext(storeHandle);
-    return queryContext;
+    const ctx = mod.createQueryContext(storeHandle);
+    return {
+        ...mod,
+        listSessions: (_c, offset, limit) => mod.listSessions(ctx, offset, limit),
+        sessionDetail: (_c, sessionId, opts) => mod.sessionDetail(ctx, sessionId, opts),
+        search: (_c, query, opts) => mod.search(ctx, query, opts),
+    };
 }
 /** 把 HTTP 查询串拆成参数表（与 collector 路由同源解析口径：它也只读 searchParams）。 */
 function paramsOf(query) {
@@ -66,7 +96,6 @@ function paramsOf(query) {
  * 把传输从 fetch 换成函数调用，不顺手改任何语义。
  */
 export async function callCollectorRead(query, load = defaultLoader) {
-    const ctx = await contextFor(load);
     const mod = await moduleOf(load);
     const p = paramsOf(query);
     const op = p.get('op') ?? '';
@@ -76,7 +105,7 @@ export async function callCollectorRead(query, load = defaultLoader) {
         const limit = positiveInt(p.get('limit'));
         return {
             ok: true,
-            ...mod.search(ctx, p.get('q') ?? '', {
+            ...mod.search(READ_SURFACE, p.get('q') ?? '', {
                 // 非法/缺省时整个键缺席，而不是传 `limit: undefined` —— `'limit' in opts`
                 // 与 `opts.limit === undefined` 不是一回事，对端可能按前者走钳位分支。
                 ...(limit === undefined ? {} : { limit }),
@@ -90,7 +119,7 @@ export async function callCollectorRead(query, load = defaultLoader) {
             return { ok: true, session: null, rows: [] };
         }
         const tail = positiveInt(p.get('tail'));
-        const detail = mod.sessionDetail(ctx, sessionId, {
+        const detail = mod.sessionDetail(READ_SURFACE, sessionId, {
             // collector 侧：tail 为正整数才切尾窗，键缺席即全量（#14-B 的整会话臂依赖这点）。
             ...(tail === undefined ? {} : { tail }),
             redact,
@@ -101,7 +130,7 @@ export async function callCollectorRead(query, load = defaultLoader) {
         // 这两个是位置参数，undefined 与“没传”在 JS 里同义，无需上面对象字面量那套处置。
         const offset = positiveInt(p.get('offset')) ?? 0;
         const limit = positiveInt(p.get('limit'));
-        return { ok: true, ...mod.listSessions(ctx, offset, limit) };
+        return { ok: true, ...mod.listSessions(READ_SURFACE, offset, limit) };
     }
     throw new Error(`collector 未知 op: ${op === '' ? '(missing)' : op}`);
 }
@@ -112,3 +141,5 @@ function positiveInt(raw) {
     const n = Number(raw);
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
 }
+/** 统一形后的模块不再需要真 QueryContext，这个占位只用来占位。 */
+const READ_SURFACE = 'inproc-read-surface';

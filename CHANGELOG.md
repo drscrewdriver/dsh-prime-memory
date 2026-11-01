@@ -1,5 +1,13 @@
 # 更新日志（Changelog）
 
+## [0.26.23] — 2026-11-02
+
+- **方案 B：DRSC 读面改走 collector 的正式门面（`drsReadFacade`）**。`0.26.21` 的进程内直调虽然绕开了宿主鉴权，但代价是**耦合 collector 的五个内部导出名**（`openProjectionStore`/`createQueryContext`/`search`/`sessionDetail`/`listSessions`），并且**自己另开一份投影库**——多占一份常驻 `summaries` 内存与一个读事务。现在 collector `0.2.5` 导出 `drsReadFacade()`，返回绑它**自己活 QueryContext** 的只读对象；本仓优先用这个门面，只认一个稳定符号，也不再开第二份库。
+- **三条路径的优先级与降级**（`src/clients/drsc-inproc.ts`）：① collector ≥0.2.5 且库已就绪 → 走门面；② collector 是新版本但库还在 `setImmediate` 初始化 → **本轮抛可重试错、且不缓存**，让下一次读重取门面。这一点是本轮自查出的真设计缺陷：若此时回退自开库，会把自开库结果**永久缓存**，把「优先用门面」变成只在首轮赌运气。降级走既有链路（背景窗当轮空窗、工具面显式报错），语义与旧 HTTP 遇 `503 initializing` 一致；③ collector 是旧版（无该导出）→ 回退自开只读库（保留 `0.26.21` 行为）。
+- **参数映射不分叉**：门面对象被适配成与兼容路径同一个「模块形」，所以 `op`/`q`/`tail`/`limit`/`redact` 的解析口径、非法值整键缺席、`session` 缺 id 返回空行等语义只有一份实现，两条路径共用。
+- **依赖下限抬到 `>=0.2.5 <0.3.0`**（`package.json` dependencies；`dsh.plugin.json` 的 `pluginDependencies` 只列包名不带区间，无需改）。低于该版仍可用，只是走兼容路径。
+- **测试**：`tests/drsc-inproc.test.ts` 新增 3 例——门面可用时绝不调用 `openProjectionStore`；未就绪时报错且不缓存、对端就绪后下一次读拿到门面；旧版 collector 仍回退自开库。全量 **1904 例 / 190 文件**，typecheck/lint/build/build:smoke/smoke 全 0。
+
 ## [0.26.22] — 2026-11-02
 
 - **#27 真机通过**：用户在 desktop 上 `register(work/dsh-host)` → `list` 显示「**现有 59 条**」，与注册前自生长清单里的 `work/dsh-host(59)` 逐位一致；`?? 0` 分支也未被误伤（有绑定即显示真数）。

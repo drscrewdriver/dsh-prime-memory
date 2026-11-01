@@ -38,7 +38,7 @@ export interface CollectorReadModule {
 }
 /** 注入面（单测）；缺省按裸名动态 import。 */
 export type CollectorLoader = () => Promise<CollectorReadModule>;
-/** 清掉缓存（单测用；也供 collector 换装后强制重开）。 */
+/** 清掉缓存（单测用；也供 collector 换装后强制重取）。 */
 export declare function resetCollectorReadState(): void;
 /**
  * 执行一次读，返回与 HTTP 包络同形的对象（`ok:true` + 各 op 的字段）。

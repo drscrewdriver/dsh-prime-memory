@@ -134,3 +134,85 @@ describe('callCollectorRead 生命周期', () => {
     expect(body.ok).toBe(true);
   });
 });
+
+// 方案 B：collector >=0.2.5 提供 `drsReadFacade()`，绑它自己的活 QueryContext。
+// 首选这条路：不另开一份库、不拿五个内部导出名。旧版才回退自开库。
+describe('callCollectorRead 优先走 collector 读门面（>=0.2.5）', () => {
+  // 本 describe 内多个用例共用模块级缓存，逐个用例必须清回去（尤其「未就绪→不缓存」那条）。
+  beforeEach(() => {
+    resetCollectorReadState();
+  });
+
+  /** 门面形假模块：只给三个读方法 + 一个计数用的 openProjectionStore。 */
+  function facadeModule(facadeReady: boolean) {
+    const calls: Array<{ fn: string; args: unknown[] }> = [];
+    const mod = {
+      ...fakeModule().mod,
+      openProjectionStore: vi.fn((dir: string) => {
+        calls.push({ fn: 'openProjectionStore', args: [dir] });
+        return { tag: 'store' };
+      }),
+      drsReadFacade: vi.fn(() =>
+        facadeReady
+          ? {
+              listSessions: (offset?: number, limit?: number) => {
+                calls.push({ fn: 'listSessions', args: [offset, limit] });
+                return { total: 42, rows: [{ session_id: 'f1' }] };
+              },
+              sessionDetail: (id: string, opts?: Record<string, unknown>) => {
+                calls.push({ fn: 'sessionDetail', args: [id, opts] });
+                return { session: { session_id: id }, rows: [{ seq: 7 }] };
+              },
+              search: (q: string, opts?: Record<string, unknown>) => {
+                calls.push({ fn: 'search', args: [q, opts] });
+                return { query: q, match: q, hits: [{ seq: 9 }] };
+              },
+            }
+          : undefined,
+      ),
+    } as unknown as CollectorReadModule & { drsReadFacade: ReturnType<typeof vi.fn> };
+    return { mod, calls };
+  }
+
+  it('门面可用时不开自己的库，三个读都落在门面上', async () => {
+    const { mod, calls } = facadeModule(true);
+    const load = (async () => mod) as unknown as () => Promise<CollectorReadModule>;
+
+    const s = await callCollectorRead('?op=search&q=abc&limit=3&redact=1', load);
+    const d = await callCollectorRead('?op=session&session=s1&tail=2&redact=1', load);
+    const l = await callCollectorRead('?op=sessions&offset=5&limit=10', load);
+
+    expect(s.hits).toHaveLength(1);
+    expect(d.rows).toEqual([{ seq: 7 }]);
+    expect(l.total).toBe(42);
+    expect(calls.map((c) => c.fn)).toEqual(['search', 'sessionDetail', 'listSessions']);
+    // 关键：门面路径绝不另开一份投影库。
+    expect(calls.filter((c) => c.fn === 'openProjectionStore')).toHaveLength(0);
+    expect(mod.openProjectionStore).not.toHaveBeenCalled();
+  });
+
+  it('对端是新版本但库未就绪：本轮报错且不缓存，不会退化成永久自开库', async () => {
+    const { mod, calls } = facadeModule(false);
+    const load = (async () => mod) as unknown as () => Promise<CollectorReadModule>;
+
+    await expect(callCollectorRead('?op=sessions&offset=0&limit=1', load)).rejects.toThrow(/尚未就绪/u);
+    expect(calls.filter((c) => c.fn === 'openProjectionStore')).toHaveLength(0);
+
+    // 对端初始化完成后，下一次读必须拿到门面（而不是缓存住的自开库）。
+    mod.drsReadFacade.mockImplementation(() => ({
+      listSessions: () => ({ total: 7, rows: [] }),
+      sessionDetail: () => ({ session: undefined, rows: [] }),
+      search: () => ({ query: '', match: '', hits: [] }),
+    }));
+    const body = await callCollectorRead('?op=sessions&offset=0&limit=1', load);
+    expect(body.total).toBe(7);
+    expect(calls.filter((c) => c.fn === 'openProjectionStore')).toHaveLength(0);
+  });
+
+  it('旧版 collector（无 drsReadFacade）仍回退自开只读库', async () => {
+    const { mod, calls } = fakeModule();
+    await callCollectorRead('?op=sessions&offset=0&limit=1', loaderOf(mod));
+    expect(calls.filter((c) => c.fn === 'openProjectionStore')).toHaveLength(1);
+    expect(calls.filter((c) => c.fn === 'createQueryContext')).toHaveLength(1);
+  });
+});
