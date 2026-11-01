@@ -25,6 +25,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 const PROFILE = path.join(os.homedir(), '.dsh', 'profiles', 'desktop');
 const INSTALLED = path.join(PROFILE, 'node_modules', 'dsh-prime-memory');
@@ -128,27 +129,48 @@ if (ports.length === 0) {
   (ports.includes(8080) ? fail : pass)('8080 未被本宿主占用');
 }
 
-// ── C. collector 路由归属判定 ───────────────────────────────────
-console.log('\n[C] collector 路由（定论 #20 是否只差端口）');
-const probe = async (port) => {
-  const url = `http://127.0.0.1:${port}${COLLECTOR_PATH}?op=sessions&limit=1`;
+// ── C. 进程内读路端到端（#20 追加修复的真判据）─────────────────
+// 注意：这里**不再探 HTTP**。桌面宿主的 pre-dispatch 鉴权对无 cookie 请求永远回
+// 401，而我们已故意改走进程内直调——拿 401 当失败是旧判据残留（它只证明闸还在，
+// 不说明功能坏）。真判据是：用装机件 + 真 collector 模块读一次，拿到非空结果。
+console.log('\n[C] 进程内读路端到端（装机件驱动真索引库）');
+const COLLECTOR_ENTRY = path.join(
+  PROFILE, 'node_modules', 'dsh-reference-session-collector', 'lib', 'index.js',
+);
+if (!fs.existsSync(COLLECTOR_ENTRY)) {
+  fail('未装 collector，进程内读路无从验证', COLLECTOR_ENTRY);
+} else {
   try {
-    const res = await fetch(url, { headers: { accept: 'application/json' } });
-    const body = (await res.text()).slice(0, 120);
-    return { status: res.status, body };
+    const adapter = await import(pathToFileURL(path.join(INSTALLED, 'dist/clients/drsc-inproc.js')).href);
+    const { DrscClient } = await import(pathToFileURL(path.join(INSTALLED, 'dist/clients/drsc.js')).href);
+    const real = await import(pathToFileURL(COLLECTOR_ENTRY).href);
+    adapter.resetCollectorReadState();
+    const client = new DrscClient({ read: (q) => adapter.callCollectorRead(q, async () => real) });
+
+    const hits = await client.search('\u7aef\u53e3', 3);
+    (hits.length > 0 ? pass : fail)(`search \u2192 ${hits.length} \u547d\u4e2d`,
+      hits[0] ? `snippet ${JSON.stringify(String(hits[0].snippet).slice(0, 40))}` : '\uff08\u7a7a\uff09');
+
+    const listed = await client.listSessions(0, 5);
+    (listed.total > 0 && listed.rows.length > 0 ? pass : fail)(
+      `listSessions \u2192 total=${listed.total} rows=${listed.rows.length}`,
+    );
+
+    // 挑「真挂到记录」的会话而不是列表首项：最新会话常无 user/assistant 段，
+    // 用它会得到 0 行——那是弱断言（空也算 PASS）。
+    const richest = [...listed.rows].sort((a, b) => (b.event_count ?? 0) - (a.event_count ?? 0))[0];
+    if (richest?.session_id) {
+      const tail = await client.sessionTail(richest.session_id, 4);
+      (tail.length > 0 ? pass : fail)(
+        `sessionTail \u2192 ${tail.length} \u884c`,
+        tail[0] ? `role=${tail[0].role || '(empty)'} kind=${tail[0].kind}` : '\uff08\u7a7a\uff09',
+      );
+    }
+    pass('\u5168\u7a0b\u672a\u53d1\u4e00\u4e2a HTTP \u8bf7\u6c42\uff08\u4e0d\u518d\u4f9d\u8d56\u5bbf\u4e3b\u76d1\u542c\u53e3\u4e0e\u9274\u6743\uff09');
   } catch (e) {
-    return { status: null, body: String(e && e.cause?.code || e.message).slice(0, 80) };
+    fail('\u8fdb\u7a0b\u5185\u8bfb\u8def\u5f02\u5e38', String(e && e.message).slice(0, 160));
   }
-};
-for (const port of ports) {
-  const { status, body } = await probe(port);
-  const line = `port ${port} -> ${status ?? 'ERR'} ${body}`;
-  if (status === 200) pass('路由对无凭据请求放行', line);
-  else if (status === 401)
-    fail('宿主 pre-dispatch 鉴权闸在拦（无 cookie → 401）', line + ' ⇒ 需追加读路改法（进程内直调 collector）');
-  else if (status === 403) fail('collector 自身 trustedHosts 门在拦', line);
-  else info('探测结果', line);
 }
 
-console.log(`\n${failures === 0 ? 'RESULT: 全部通过' : `RESULT: ${failures} 项未通过`}`);
+console.log(`\n${failures === 0 ? 'RESULT: \u5168\u90e8\u901a\u8fc7' : `RESULT: ${failures} \u9879\u672a\u901a\u8fc7`}`);
 process.exit(failures === 0 ? 0 : 1);
