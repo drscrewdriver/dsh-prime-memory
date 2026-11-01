@@ -1,5 +1,21 @@
 # 更新日志（Changelog）
 
+## [0.26.18] — 2026-11-02
+
+> **Room 词表真计数修复(issue #27)：注册条目不再显示「现有 0 条」。本版会改变 LLM 归类分布，独立成版以给回滚位与观察窗。**
+
+### 修复
+
+- **注册条目的计数从 `listRooms()` 回查**：候选预标记(`annotateOrphanCandidates`)合并词表时，注册表条目被写死 `count: 0`，而未注册的自生长项带真计数。归类器被要求「优先从现有 Room 词表里选」，而计数是它唯一能看到的规模证据——证据方向与规则**恰好相反**：按推荐用法先 pre-register 一张词表，这张词表里每一项就立即变成空壳，历史上自生长出来的碎片 slug 反而看着像主仓。净效果正是 annotate 本来要防的那件事：词表碎片化。`?? 0` 保留原语义——只有「注册了但库里确实零绑定」的新 Room 才显示 0（那正是这个 0 本来想表达的意思）。
+- **取数口径单点化**：同一句「注册表条目的真实计数」本仓写了四处，其中三处已是对的形态（`stats.ts` rooms-export、`tools` room-admin list、以及候选词表本该有的形态），只有候选词表这处写死成 0——有本地定义就有分叉位。抽 `roomCountsBySlug()` 供 annotate / room-admin list / rooms-export 三处共用，顺手消除 room-admin list 里对每个注册条目的线性 `find`（上限 200 条注册表 × N 个 Room）。`stats.ts:1044` 的 rooms-get 条目形态带 `source`、排序 grown 优先且计数本就没丢，与词表不同形，故未强并以免改到面板输出形状。
+- **补 count 路径测试两例**：`tests/room-review.test.ts` 原先两个 annotate 用例都注入自己的 annotator 且忽略 catalog、`io()` 默认不带 registry，**count 路径零覆盖**——这是写死 0 能活过 5 个版本的直接原因。新增「注册条目回查真计数」（修复前必红，实测报 `expected +0 to be 1`，与报告人自述的红绿结果逐字一致）与「注册零绑定仍为 0」（锁住不误伤原语义），另加 `roomCountsBySlug` 口径一例。
+
+### 行为边界（说清它不只是个计数）
+
+- 本修复会改变发给归类器的 prompt 内容，因而**可能改变归类分布**：大 Room 拿到更强信号后可能更抑新 slug 生长（冷启动无处归）。这是修复目的而非纯 bug，故独立成版；若观察到新 Room 实在挂不上，revert 本版单个 commit 即可，不牵连 0.26.17 的三条声明面修复。
+- **未一并做**（另立案，原因记在计划产物里）：把注册表的 `label`/`description` 渲染进 prompt、调 `.slice(0, 40)` 窗口。annotate 是逐条一次 LLM 调用且无 prompt 前缀缓存（同一张词表作为 system 被重复发 40 次），把窗口抬到 120 并塞 label+description 会让每轮仅词表就吃掉 14-24 万 input token，需先有归类分布的可观测指标。
+- 全量 **1883 例**/188 文件绿（本版在 0.26.17 的 1880 例之上加 3 例）。
+
 ## [0.26.17] — 2026-11-02
 
 > **三条声明面修复：`memory:profile` 显式关插值(issue #24)、`memory_conflicts` 补两笔成熟度声明(issue #23)、DRSC 基址不再写死 8080(issue #20)**，并把「改视图忘改 schema」从注释纪律改成 CI 闸。无配置变更、无默认行为变更、`engines.dsh` 不动。

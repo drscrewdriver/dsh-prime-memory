@@ -4,7 +4,9 @@
  * 钉死:①候选解析(目录内优先/去重/截断 3/非法丢弃/id 过滤);②候选标注系统
  * prompt 含现有词表与计数;③annotate 选活跃孤儿、跳过 skipped、写 pending;
  * ④next 队列(pending 且有候选,更新时间升序)与 confirm/skip 语义;
- * ⑤confirm 后 invalidateRooms 被调用(计数口径)。
+ * ⑤confirm 后 invalidateRooms 被调用(计数口径);
+ * ⑥annotate 合并词表里**注册条目的计数取自 listRooms()**(issue #27——原先写死 0,
+ *   使归类器收到的规模证据与「优先挂靠现有词表」规则反向)。
  */
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -20,6 +22,7 @@ import {
   parseRoomCandidateItems,
   pendingReviewCount,
   roomCandidateSystemPrompt,
+  roomCountsBySlug,
   skipReview,
   ROOM_CANDIDATES_KEY,
   ROOM_REVIEW_KEY,
@@ -167,6 +170,55 @@ describe('annotateOrphanCandidates(候选预标记)', () => {
       annotator: async () => [],
     });
     expect(r).toEqual({ selected: 0, candidates: 0, written: 0 });
+  });
+
+  // issue #27：以下两例钉的是**合并词表的计数来源**。上方两个用例都注入自己的
+  // annotator 且忽略 catalog，而 io() 默认不带 registry——所以 count 路径此前零覆盖，
+  // 写死 0 能活过 5 个版本正是这个原因。
+  it('注册表条目从 listRooms() 回查真计数，而不是恒为 0', async () => {
+    const { l1, db } = await mkL1();
+    // r_tagged 挂在 dsh-model 上提供真计数；r_orphan 是待标注的孤儿
+    seedRecord(db, 'r_tagged', { metadata: { tags: ['dsh-model'] } } as Partial<MemoryRecord>);
+    seedRecord(db, 'r_orphan');
+    let captured: ReadonlyArray<{ room: string; count: number }> = [];
+    await annotateOrphanCandidates({} as never, cfg, {
+      l1,
+      logger,
+      registry: { listActive: () => [{ slug: 'dsh-model', label: 'DSH 模型接入' }] },
+    }, 40, {
+      annotator: async (_rec, cat) => {
+        captured = cat;
+        return ['dsh-model'];
+      },
+    });
+    // 修复前这里是 0
+    expect(captured.find((r) => r.room === 'dsh-model')?.count).toBe(1);
+  });
+
+  it('注册了但确实零绑定的 Room 仍显示 0（保留原语义）', async () => {
+    const { l1, db } = await mkL1();
+    seedRecord(db, 'r1');
+    let captured: ReadonlyArray<{ room: string; count: number }> = [];
+    await annotateOrphanCandidates({} as never, cfg, {
+      l1,
+      logger,
+      registry: { listActive: () => [{ slug: 'fresh-room' }] },
+    }, 40, {
+      annotator: async (_rec, cat) => {
+        captured = cat;
+        return [];
+      },
+    });
+    expect(captured.find((r) => r.room === 'fresh-room')?.count).toBe(0);
+  });
+
+  it('roomCountsBySlug 是单点取数口径（重复 slug 以末次写入为准）', () => {
+    const m = roomCountsBySlug([
+      { room: 'a', count: 3 },
+      { room: 'b', count: 1 },
+    ]);
+    expect(m.get('a')).toBe(3);
+    expect(m.get('nope') ?? 0).toBe(0);
   });
 });
 

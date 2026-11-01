@@ -43,6 +43,7 @@ import {
   mergeRoom,
   nextReview,
   pendingReviewCount,
+  roomCountsBySlug,
   renameRoom,
   skipReview,
 } from '../room-review.js';
@@ -446,9 +447,11 @@ export function registerMemoryTools(
           if (!roomRegistry) return { notice: 'Room 注册表未装配(需要插件重载以初始化)。' };
           const registry = roomRegistry.list();
           const counts = stores.l1.listRooms();
-          const countOf = (slug: string) => counts.find((r) => r.room === slug)?.count ?? 0;
+          // 取数口径单点(`roomCountsBySlug` 注释说明了为何收它):本行原先对每个注册条目
+          // 线性 find,上限 200 条注册表 × N 个 Room——语义相同、形状不同就是分叉位。
+          const countOf = roomCountsBySlug(counts);
           const regLines = registry.map(
-            (e) => `- ${e.slug}${e.label ? `(${e.label})` : ''} [${e.source}/${e.status}] 现有 ${countOf(e.slug)} 条${e.description ? ` — ${e.description}` : ''}`,
+            (e) => `- ${e.slug}${e.label ? `(${e.label})` : ''} [${e.source}/${e.status}] 现有 ${countOf.get(e.slug) ?? 0} 条${e.description ? ` — ${e.description}` : ''}`,
           );
           const grownOnly = counts.filter((r) => !registry.some((e) => e.slug === r.room));
           return {

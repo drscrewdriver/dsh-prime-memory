@@ -27,7 +27,7 @@ import { emptyRecallStats, type RecallSessionStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import type { RebuildController } from './pipeline/rebuild.js';
 import type { RuminateController } from './pipeline/ruminate.js';
-import { mergeRoom, renameRoom } from './room-review.js';
+import { mergeRoom, renameRoom, roomCountsBySlug } from './room-review.js';
 import type { RoomRegistryStore } from './store/rooms-registry.js';
 import type { MemorySourceStore, SourceKind } from './store/memory-sources.js';
 import type { SkillStore } from './store/skill-store.js';
@@ -1377,7 +1377,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       };
       if (kind === 'rooms') {
         const registry = roomRegistry?.list() ?? [];
-        const counts = new Map(stores.l1.listRooms().map((r) => [r.room, r.count]));
+        const counts = roomCountsBySlug(stores.l1.listRooms());
         const lines = ['slug,count,source,label,description,status,aliases'];
         let n = 0;
         const seen = new Set<string>();

@@ -22,10 +22,19 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from './config.js';
-import type { MemoryLogger, MemoryRecord } from './types.js';
+import type { MemoryLogger, MemoryRecord, RoomCount } from './types.js';
 export declare const ROOM_CANDIDATES_KEY = "roomCandidates";
 export declare const ROOM_REVIEW_KEY = "roomReview";
 export type RoomReviewState = 'pending' | 'confirmed' | 'skipped';
+/**
+ * `listRooms()` 结果里的 slug→计数索引（单点定义，供四个消费方共用）。
+ *
+ * 为何需要它（issue #27）：同一句「注册表条目的真实计数」在本仓写了四处，其中三处
+ * 已经是对的形态（`stats.ts` 的 rooms-get / rooms-export、`tools` 的 room-admin list），
+ * 只有候选词表这一处把算好的计数**写死成 0**。计数一旦有本地定义就有分叉位，
+ * 所以取数口径收到这里，各调用点只剩「查不到时给多少」这一个本地决策。
+ */
+export declare function roomCountsBySlug(rooms: readonly RoomCount[]): Map<string, number>;
 /** 复查与候选操作对 L1 的最小依赖面(便于测试注入)。 */
 export interface RoomReviewStore {
     list(opts: {

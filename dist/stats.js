@@ -19,7 +19,7 @@ import { typeCatalogEntries } from './memory-types.js';
 import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats } from './hooks/recall.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
-import { mergeRoom, renameRoom } from './room-review.js';
+import { mergeRoom, renameRoom, roomCountsBySlug } from './room-review.js';
 import { scanSources } from './memport/scan.js';
 import { projectDistillChain, validateDistillChain } from './settings.js';
 import { RECEIPTS_QUERY_LIMIT_MAX, dimensionOf, toReceiptView } from './store/receipts.js';
@@ -1149,7 +1149,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
             };
             if (kind === 'rooms') {
                 const registry = roomRegistry?.list() ?? [];
-                const counts = new Map(stores.l1.listRooms().map((r) => [r.room, r.count]));
+                const counts = roomCountsBySlug(stores.l1.listRooms());
                 const lines = ['slug,count,source,label,description,status,aliases'];
                 let n = 0;
                 const seen = new Set();
