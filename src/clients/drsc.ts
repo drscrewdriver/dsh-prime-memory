@@ -25,6 +25,7 @@
  * trustedHosts / origin 均惰性读取(webStartup、webServer 可能晚于本插件就绪),
  * 每次请求现算,无缓存陈旧面。
  */
+import { callCollectorRead } from './drsc-inproc.js';
 import type { ConversationMessage } from '../types.js';
 
 /** collector API 路径(与其 DRS_API_PATH 字面一致;不跨包 import)。 */
@@ -194,8 +195,17 @@ export interface DrscClientOptions {
    * 下线,故与 trustedHosts 同款每次现取;取不到即返回 undefined → 落回 8080 老行为。
    */
   origin?: () => string | undefined;
-  /** 注入面(单测);缺省全局 fetch。 */
+  /**
+   * 注入面（单测）；缺省全局 fetch。**显式传入即表示要走 HTTP**（见 getJson 分流）。
+   */
   fetchImpl?: typeof fetch;
+  /**
+   * 进程内读面（issue #20 追加修复，缺省 {@link callCollectorRead}）：直调
+   * collector 导出的只读查询函数。宿主对所有注册路由有 pre-dispatch 鉴权
+   * （插件服务端无 cookie 可用，真机实测 401），HTTP 路在桌面宿主上走不通；
+   * 只有显式给了 `baseUrl`（跨机/外部 collector）时才保留 HTTP 退路。
+   */
+  read?: (query: string) => Promise<Record<string, unknown>>;
   /** 单请求超时 ms;缺省 {@link DRSC_DEFAULT_TIMEOUT_MS}。 */
   timeoutMs?: number;
 }
@@ -232,8 +242,34 @@ export class DrscClient {
     }
   }
 
+  /**
+   * 一次读：优先进程内直调，失败/缺席一律包成 DrscClientError（与 HTTP 路同口径，
+   * 调用方的「显式报错 vs 空窗降级」分面处理不变）。
+   */
+  private async readInproc(query: string): Promise<Record<string, unknown>> {
+    const read = this.options.read ?? callCollectorRead;
+    try {
+      const body = await read(query);
+      // body 已是 Record<string, unknown>，不必也不应再转 DrscEnvelope（TS2352）。
+      if (body === null || typeof body !== 'object' || body.ok !== true) {
+        throw new Error('返回包络缺 ok:true');
+      }
+      return body;
+    } catch (err) {
+      if (err instanceof DrscClientError) throw err;
+      throw new DrscClientError(`collector 进程内读失败(${query}): ${err instanceof Error ? err.message : String(err)}`, {
+        cause: err,
+      });
+    }
+  }
+
   /** 一个 GET 的 JSON 包络(非 2xx / ok!==true / 超时 / 断网一律抛 DrscClientError)。 */
   private async getJson(query: string): Promise<Record<string, unknown>> {
+    // 分流规则：只有「显式 HTTP 意图」才走 fetch —— 即配了 baseUrl（跨机/自托管
+    // collector）或调用方自己注入了 fetchImpl（单测面）。两者都没给时走进程内：
+    // 桌面宿主上插件服务端的 HTTP 必被 pre-dispatch 鉴权拦成 401（#20 真机实证）。
+    const explicit = this.options.baseUrl?.trim() ?? '';
+    if (explicit === '' && this.options.fetchImpl === undefined) return this.readInproc(query);
     const { url, hostHeader } = this.base();
     let response: Response;
     try {

@@ -1,5 +1,12 @@
 # 更新日志（Changelog）
 
+## [0.26.21] — 2026-11-02
+
+- **#20 追加修复：DRSC 读面从 HTTP 改为进程内直调**。桌面宿主在**任何**注册路由之前有一道 pre-dispatch 鉴权（`isAuthenticated` 只认由 `requestAudience(Host)` 派生的签名 cookie，豁免分支仅 `GET /?token=` 与已认证的 `GET /`），而插件服务端 `fetch` 既无 cookie 也无可取用 launch token 的服务面（该字段是宿主 `BrowserAuth` 私有）。真机实测确认：基址修对后请求确实发出、参数形状正确，但仍被回 `401` —— 即上一版只解决了「打错端口」，没解决「打不通」。本版新增 `src/clients/drsc-inproc.ts`，直调 collector 导出的只读查询面（`resolveIndexDir` → `openProjectionStore` → `createQueryContext` → `search` / `sessionDetail` / `listSessions`），全程不碰 `ProjectionSync` 写侧引擎，故不会与 collector 自身的同步器抢水位、也不会多挂一个 interval；索引库为 WAL（实测同目录有 `-wal`/`-shm`），宿主持写连接时本侧只读句柄可并发读，且句柄只开一次（常驻 summaries 是内存 Map，每请求重开等于重扫全表）。
+- **传输分流规则**：只有「显式 HTTP 意图」才走 fetch —— 即配了 `baseUrl`（跨机/自托管 collector）或调用方注入 `fetchImpl`。两者皆未给时走进程内。四个读点仍汇聚在 `getJson`，查询串形状与旧 HTTP 逐字一致，因此字段映射、「`session=null` → 空数组」「limit 钳位」「`redact` 硬臂」这些口径全部不变；进程内读失败同样包成 `DrscClientError`，调用方的「显式报错 vs 空窗降级」分面处理不受影响。
+- **真数据端到端自证**：以真实 collector 模块 + 真实索引库驱动，直调与走适配器的 `tail:4` / 全量两条臂返回**逐位一致的 seq 序列**（4 行 / 1770 行）；`DrscClient.sessionTail` 得到 4 行且 `role/kind/time/text` 映射正常，`search('端口')` 命中 3 条含 snippet，`listSessions` total=103。新增 `tests/drsc-inproc.test.ts`（参数映射 + 句柄单次开启 + 载入失败不缓存 rejection 以自愈）与 `drsc-client.test.ts` 的传输分流用例，合计 12 例；全量 **1898 例 / 189 文件**。
+- **过程中修掉两处自身缺陷**：① `{ limit: undefined }` 会让 `'limit' in opts` 为真，而 collector 可能据此走钳位分支 —— 改为非法/缺省时整个键缺席；② 适配器误把 `openProjectionStore` 的返回值丢弃、试图从模块上读一个不存在的属性取句柄 —— 已改回持有返回值。
+
 ## [0.26.20] — 2026-11-02
 
 - **内部命名与计划对齐**：共用取数助手按其计划原名 `mergeRoomCatalog()` 落地（0.26.18/0.26.19 线上产物里叫 `roomCountsBySlug()`，功能与形状不变，纯内部导出名，无外部消费方）。同时重写该函数的文档注释：原先「四处同形中三处已正确」的表述不准确，现按实证写明 rooms-export / room-admin list / 候选词表三处已接，而 rooms-get 端点除计数外还要把注册表 `source`/`label` 覆盖回已存在条目，属不同形状，有意不接（该处就地留了说明注释）。

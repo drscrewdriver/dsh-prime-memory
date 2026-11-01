@@ -285,3 +285,70 @@ describe('DrscClient(wire 契约,mock fetch)', () => {
     await expect(client.sessionTail('s', 8)).rejects.toBeInstanceOf(DrscClientError);
   });
 });
+
+// issue #20 追加修复：桌面宿主对所有注册路由有 pre-dispatch 鉴权，插件服务端 HTTP
+// 拿不到 cookie 就只会 401（真机已实测）。因此缺省传输改成进程内直调 collector
+// 只读面；但「显式 HTTP 意图」（配 baseUrl 或注入 fetchImpl）必须原样保留，
+// 否则跨机/自托管 collector 与现有 wire 契约测试都会被误路由。
+describe('传输分流：进程内为缺省、显式 HTTP 意图不被抢走（#20 追加）', () => {
+  it('未给 baseUrl 且未注入 fetchImpl → 走进程内读面，不发请求', async () => {
+    const seen: string[] = [];
+    const client = new DrscClient({
+      read: async (q) => {
+        seen.push(q);
+        return { ok: true, hits: [] };
+      },
+    });
+    await client.search('端口', 5);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('op=search');
+    expect(seen[0]).toContain('redact=1');
+  });
+
+  it('四个读点全部过进程内面，查询串形状与旧 HTTP 逐字一致', async () => {
+    const seen: string[] = [];
+    const client = new DrscClient({
+      read: async (q) => {
+        seen.push(q);
+        return { ok: true, rows: [], hits: [], total: 0 };
+      },
+    });
+    await client.sessionTail('s-1', 8);
+    await client.sessionAll('s-1');
+    await client.listSessions(10, 500);
+    await client.search('a b', 3);
+    expect(seen).toEqual([
+      '?op=session&session=s-1&tail=8&redact=1',
+      '?op=session&session=s-1&redact=1',
+      '?op=sessions&offset=10&limit=500',
+      '?op=search&q=a%20b&limit=3&redact=1',
+    ]);
+  });
+
+  it('显式配了 baseUrl → 仍走 HTTP（跨机/自托管 collector 的意图不被抢）', async () => {
+    const { impl, calls } = mockFetch(() => jsonResponse({ ok: true, hits: [] }));
+    const client = new DrscClient({
+      baseUrl: 'http://10.0.0.9:8080',
+      fetchImpl: impl,
+      read: async () => {
+        throw new Error('进程内面不该被调用');
+      },
+    });
+    await client.search('q', 2);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('http://10.0.0.9:8080/api/dsh-reference-session-collector?op=search&q=q&limit=2&redact=1');
+  });
+
+  it('进程内读面抛错 → 包成 DrscClientError（调用方的报错/降级分面不变）', async () => {
+    const client = new DrscClient({
+      read: async () => {
+        throw new Error('collector 未知 op: (missing)');
+      },
+    });
+    await expect(client.search('q', 1)).rejects.toBeInstanceOf(DrscClientError);
+    await expect(client.search('q', 1)).rejects.toThrow(/进程内读失败/u);
+
+    const noEnvelope = new DrscClient({ read: async () => ({ ok: false }) });
+    await expect(noEnvelope.search('q', 1)).rejects.toThrow(/ok:true/u);
+  });
+});

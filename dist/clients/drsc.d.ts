@@ -1,30 +1,3 @@
-/**
- * DrscClient(T8.4 读切,drsc-redact-memory-wiring task_18):memory 读历史
- * 面的 dsh-reference-session-collector HTTP 客户端。
- *
- * 两个读点(R7):
- * - 蒸馏背景窗(recentBySession 等价供给)→ `op=session&tail=N&redact=1`
- *   (collector task_11 尾窗升序 + task_12 redact 臂);
- * - 工具面 conversation_search → `op=search&redact=1`(命中基于原文 fts,
- *   返回 snippet 取脱敏锚定文本)。
- *
- * 加上 issue #14-B 的**重建事实源**：`op=sessions` 枚举 + `op=session`（**不带 tail**）
- * 逐会话拉全量——对全量重建来说“尾窗”不够用，而 collector 侧不带 tail 即 `ORDER BY seq ASC`
- * 无 LIMIT。此路径同样恒带 `redact=1`。
- *
- * 硬依赖纪律(对齐 T7.3 裁定):collector 缺席/超时/非 2xx/ok=false 一律抛
- * {@link DrscClientError}——**绝不回退本地 l0**(表已退役,无退路);调用方
- * 分口径处理:蒸馏背景窗空窗降级(runner),工具面显式报错(tools)。
- *
- * 同源 Host 解析(steward drs-source 的 resolveDrsBaseUrl 同款):
- * 显式 baseUrl > 首个 trustedHosts 条目(补 http://)> 宿主实际监听 origin
- * (issue #20:Desktop App 走随机端口,写死 8080 永远对不上)> `http://127.0.0.1:8080`
- * (宿主缺省口)。Host 头**只回显被选作基址的那个 trustedHosts 条目**:collector
- * 信任门是精确匹配,条目省略端口而 URL 带端口会失配——所以基址来自 origin 兜底时
- * 索性不回显(等价于旧版 trustedHosts 为空时的形状),而不是拿另一个 authority 去撞门。
- * trustedHosts / origin 均惰性读取(webStartup、webServer 可能晚于本插件就绪),
- * 每次请求现算,无缓存陈旧面。
- */
 import type { ConversationMessage } from '../types.js';
 /** collector API 路径(与其 DRS_API_PATH 字面一致;不跨包 import)。 */
 export declare const DRSC_API_PATH = "/api/dsh-reference-session-collector";
@@ -105,8 +78,17 @@ export interface DrscClientOptions {
      * 下线,故与 trustedHosts 同款每次现取;取不到即返回 undefined → 落回 8080 老行为。
      */
     origin?: () => string | undefined;
-    /** 注入面(单测);缺省全局 fetch。 */
+    /**
+     * 注入面（单测）；缺省全局 fetch。**显式传入即表示要走 HTTP**（见 getJson 分流）。
+     */
     fetchImpl?: typeof fetch;
+    /**
+     * 进程内读面（issue #20 追加修复，缺省 {@link callCollectorRead}）：直调
+     * collector 导出的只读查询函数。宿主对所有注册路由有 pre-dispatch 鉴权
+     * （插件服务端无 cookie 可用，真机实测 401），HTTP 路在桌面宿主上走不通；
+     * 只有显式给了 `baseUrl`（跨机/外部 collector）时才保留 HTTP 退路。
+     */
+    read?: (query: string) => Promise<Record<string, unknown>>;
     /** 单请求超时 ms;缺省 {@link DRSC_DEFAULT_TIMEOUT_MS}。 */
     timeoutMs?: number;
 }
@@ -119,6 +101,11 @@ export declare class DrscClient {
     private base;
     /** origin 探针失败(服务未就绪/属性读抛)不得影响请求:视作取不到,落老行为。 */
     private safeOrigin;
+    /**
+     * 一次读：优先进程内直调，失败/缺席一律包成 DrscClientError（与 HTTP 路同口径，
+     * 调用方的「显式报错 vs 空窗降级」分面处理不变）。
+     */
+    private readInproc;
     /** 一个 GET 的 JSON 包络(非 2xx / ok!==true / 超时 / 断网一律抛 DrscClientError)。 */
     private getJson;
     /**
