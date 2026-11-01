@@ -1,5 +1,13 @@
 # 更新日志（Changelog）
 
+## [0.26.22] — 2026-11-02
+
+- **#27 真机通过**：用户在 desktop 上 `register(work/dsh-host)` → `list` 显示「**现有 59 条**」，与注册前自生长清单里的 `work/dsh-host(59)` 逐位一致；`?? 0` 分支也未被误伤（有绑定即显示真数）。
+- **修掉这次验证顺带查出的口径缺陷**（`memory_room_admin` 的 `action=list`）：`grownOnly` 原先用 `roomRegistry.list()`（**含 retired**）排除自生长项，而归类词表面（`room-review.ts`）用 `listActive()`。两侧口径不一致的后果是——**一个 slug 退役后，它既不在注册表活跃词表里、又被从「自生长未注册」清单排除，若它还挂着记录，那些记录的 Room 归属就在两个面上同时隐形**，且没有任何动作能把它找回来（工具面只有 `retire`，无 un-retire；恢复只能走 RPC `dsh-memory/room-admin` 的 `action=retire, active:true`，工具没暴露该参数）。现改为按 `activeSlugs` 排除，退役项回到自生长面继续可见可计数。
+- **额度显示同步**：`注册表 N 条(上限 200)` 原先把 retired 条目也计入 N（占额度视觉位），现 N = 活跃条目数，并在存在退役项时追加「已退役 M 条（不占额度、可用面板「恢复」切回 active）」。退役条目本身仍列在明细里并标 `[source/retired]`，便于恢复。
+- **测试**：新增 `tests/room-admin-list.test.ts` 3 例（注册项真计数 / 退役后两侧口径一致 / 零绑定仍显示 0）。**红绿已验**：把排除集退回修复前的 `registry.some(...)` 写法后 1 例转红，恢复即全绿。全量 **1901 例 / 190 文件**。
+- **冒烟脚本去钉版**：`scripts/verify-desktop-smoke.mjs` 的版本断言从等值改为 `0.26.` 族前缀（上一版每发一次就得改脚本，是自我制造的维护债）；同时清掉两个未使用变量使 lint 归零。
+
 ## [0.26.21] — 2026-11-02
 
 - **#20 追加修复：DRSC 读面从 HTTP 改为进程内直调**。桌面宿主在**任何**注册路由之前有一道 pre-dispatch 鉴权（`isAuthenticated` 只认由 `requestAudience(Host)` 派生的签名 cookie，豁免分支仅 `GET /?token=` 与已认证的 `GET /`），而插件服务端 `fetch` 既无 cookie 也无可取用 launch token 的服务面（该字段是宿主 `BrowserAuth` 私有）。真机实测确认：基址修对后请求确实发出、参数形状正确，但仍被回 `401` —— 即上一版只解决了「打错端口」，没解决「打不通」。本版新增 `src/clients/drsc-inproc.ts`，直调 collector 导出的只读查询面（`resolveIndexDir` → `openProjectionStore` → `createQueryContext` → `search` / `sessionDetail` / `listSessions`），全程不碰 `ProjectionSync` 写侧引擎，故不会与 collector 自身的同步器抢水位、也不会多挂一个 interval；索引库为 WAL（实测同目录有 `-wal`/`-shm`），宿主持写连接时本侧只读句柄可并发读，且句柄只开一次（常驻 summaries 是内存 Map，每请求重开等于重扫全表）。

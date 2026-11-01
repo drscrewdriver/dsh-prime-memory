@@ -453,10 +453,17 @@ export function registerMemoryTools(
           const regLines = registry.map(
             (e) => `- ${e.slug}${e.label ? `(${e.label})` : ''} [${e.source}/${e.status}] 现有 ${countOf.get(e.slug) ?? 0} 条${e.description ? ` — ${e.description}` : ''}`,
           );
-          const grownOnly = counts.filter((r) => !registry.some((e) => e.slug === r.room));
+          // 口径必须跟词表一致（`room-review.ts` 用 listActive）：已退役条目不再进归类词表，
+          // 那它的 slug 就应回到「自生长未注册」面。原先用全量 registry 排除，使退役后的
+          // slug 两边都不显示（带记录时那些记录在词表上隐形）——退役不可逆地捐掉可见性。
+          const activeSlugs = new Set(registry.filter((e) => e.status === 'active').map((e) => e.slug));
+          const grownOnly = counts.filter((r) => !activeSlugs.has(r.room));
+          const activeCount = activeSlugs.size;
+          const retiredCount = registry.length - activeCount;
           return {
             notice:
-              `注册表 ${registry.length} 条(上限 200),自生长未注册 ${grownOnly.length} 个。\n` +
+              // 额度与词表同步：上限 200 算的是活跃条目，退役项不占额度（另计）。
+              `注册表 ${activeCount} 条(上限 200)${retiredCount > 0 ? `，已退役 ${retiredCount} 条（不占额度、可用面板「恢复」切回 active）` : ''}，自生长未注册 ${grownOnly.length} 个。\n` +
               (regLines.join('\n') || '(注册表为空——用 action=register 预注册)') +
               `\n自生长未注册:${grownOnly.map((r) => `${r.room}(${r.count})`).join(", ") || "无"}`,
             rooms: `${registry.length}+${grownOnly.length}`,

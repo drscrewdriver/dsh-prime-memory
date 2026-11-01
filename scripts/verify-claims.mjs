@@ -121,8 +121,8 @@ try {
     tools: sctx.tools,
     get: sctx.get,
   };
-  // agent 身份就是 sessionId（插件内 agent.id === sessionId）；拿背景窗最大的会话当会话上下文。
-  const probeSession = ranked[0]?.session_id ?? 'probe-session';
+  // agent 身份就是 sessionId（插件内 agent.id === sessionId），但桩 ctx 未走到会话分支，
+  // 此处不需传会话上下文。
   try { await mod.apply?.(ctx); } catch { /* 装配尾部依赖真实服务，抛出可忽略 */ }
   try { mod.default?.apply?.(ctx); } catch { /* 同上：两种导出形态都试 */ }
 

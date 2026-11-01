@@ -29,8 +29,8 @@ import { pathToFileURL } from 'node:url';
 
 const PROFILE = path.join(os.homedir(), '.dsh', 'profiles', 'desktop');
 const INSTALLED = path.join(PROFILE, 'node_modules', 'dsh-prime-memory');
-const COLLECTOR_PATH = '/api/dsh-reference-session-collector';
-const EXPECTED_VERSION = '0.26.21';
+// 只校主minor 与预期同族，不钉死补丁号：否则每发一版都要改本脚本（上一版就踩了）。
+const EXPECTED_FAMILY = '0.26.';
 
 const argv = process.argv.slice(2);
 const portFlag = (() => {
@@ -53,9 +53,9 @@ if (!fs.existsSync(INSTALLED)) {
 } else {
   const pkg = JSON.parse(fs.readFileSync(path.join(INSTALLED, 'package.json'), 'utf8'));
   const profilePkg = JSON.parse(fs.readFileSync(path.join(PROFILE, 'package.json'), 'utf8'));
-  (pkg.version === EXPECTED_VERSION ? pass : fail)(
+  (pkg.version.startsWith(EXPECTED_FAMILY) ? pass : fail)(
     `已装版本 = ${pkg.version}`,
-    `profile pin = ${profilePkg.dependencies['dsh-prime-memory']}`,
+    `profile pin = ${profilePkg.dependencies['dsh-prime-memory']}（预期同 ${EXPECTED_FAMILY}x）`,
   );
   const read = (rel) => {
     const p = path.join(INSTALLED, rel);
