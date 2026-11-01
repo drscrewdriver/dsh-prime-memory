@@ -29,7 +29,7 @@ import process from 'node:process';
 const PROFILE = path.join(os.homedir(), '.dsh', 'profiles', 'desktop');
 const INSTALLED = path.join(PROFILE, 'node_modules', 'dsh-prime-memory');
 const COLLECTOR_PATH = '/api/dsh-reference-session-collector';
-const EXPECTED_VERSION = '0.26.20';
+const EXPECTED_VERSION = '0.26.21';
 
 const argv = process.argv.slice(2);
 const portFlag = (() => {
@@ -76,6 +76,13 @@ if (!fs.existsSync(INSTALLED)) {
   (/winner_maturity/.test(tools) && /loser_maturity/.test(tools) ? pass : fail)(
     '#23 schema 已声明 winner_maturity / loser_maturity',
   );
+  // #20 追加修复：读面已从 HTTP 改为进程内直调 collector 只读面。
+  const inproc = read('dist/clients/drsc-inproc.js');
+  (/callCollectorRead/.test(inproc) && /dsh-reference-session-collector/.test(inproc) ? pass : fail)(
+    '#20 追加修复：进程内读适配器在产物里',
+  );
+  const client = read('dist/clients/drsc.js');
+  (/drsc-inproc/.test(client) ? pass : fail)('#20 客户端已接线到进程内面（不再缺省走 HTTP）');
   const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
   info('dist/room-review.js sha256', sha(roomReview));
 }
