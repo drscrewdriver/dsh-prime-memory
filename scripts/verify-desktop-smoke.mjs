@@ -84,6 +84,26 @@ if (!fs.existsSync(INSTALLED)) {
   );
   const client = read('dist/clients/drsc.js');
   (/drsc-inproc/.test(client) ? pass : fail)('#20 客户端已接线到进程内面（不再缺省走 HTTP）');
+  // #22：本地嵌入 token 护栏。这里钉的是「装到机器上的包」：件存在 + child 能同目录 require 到
+  // + 主进程真把预算装进了子进程配置。三者缺一就是护栏在装机侧不存在（前两项还会直接让子进程起不来）。
+  const guardTxt = (() => {
+    try {
+      return read('dist/embedding-token-guard.cjs');
+    } catch {
+      return '';
+    }
+  })();
+  (/module.exports = \{ shrinkToBudget \}/.test(guardTxt) ? pass : fail)('#22 token 精截件在装机产物里');
+  const childTxt = read('dist/embedding-child.cjs');
+  (/require\('\.\/embedding-token-guard\.cjs'\)/.test(childTxt)
+    && /const sent = shrinkToBudget\(screened, MAX_INPUT_TOKENS, tokenizer\)/.test(childTxt)
+    ? pass
+    : fail)('#22 child 已接线到精截（非只定义不调用）');
+  const localTxt = read('dist/store/local-embedding.js');
+  (/maxInputTokens: budget\.tokens/.test(localTxt) && /deriveTokenBudget/.test(localTxt) ? pass : fail)(
+    '#22 主进程把 token 预算装进了 DSH_EMBED_CFG',
+  );
+  (/signal=/.test(localTxt) ? pass : fail)('#22 退出记录含 signal（硬杀可归因）');
   const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
   info('dist/room-review.js sha256', sha(roomReview));
 }
