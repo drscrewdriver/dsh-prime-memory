@@ -126,8 +126,12 @@ describe('task_28 §E 工作区标识：纯字符串归一，不碰文件系统'
 
   it('win32 归一小写（E:\\Proj 与 e:\\proj 是同一目录）', () => {
     expect(normalizeWorkspacePath('E:\\Proj\\A', 'win32')).toBe(normalizeWorkspacePath('e:\\proj\\a', 'win32'));
-    // 反斜杠 `..` 折叠也是 win32 语义（POSIX 下 `\` 只是普通字符）
-    expect(normalizeWorkspacePath('E:\\proj\\a\\..\\a', 'win32')).toBe(normalizeWorkspacePath('E:\\proj\\a', 'win32'));
+  });
+
+  // 反斜杠 `..` 的折叠由**宿主** path.resolve 决定（platform 参数只管是否转小写），
+  // POSIX 下 `\` 只是普通字符 —— 故这条只能在 win32 宿主上验，不能用参数模拟。
+  it.skipIf(process.platform !== 'win32')('win32 宿主：反斜杠 `..` 被折叠', () => {
+    expect(normalizeWorkspacePath('E:\\proj\\a\\..\\a')).toBe(normalizeWorkspacePath('E:\\proj\\a'));
   });
 
   it('非 win32 **保留**大小写（POSIX 下 A 与 a 是两个不同目录）——区分力：平台参数确实改变结果', () => {
