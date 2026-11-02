@@ -40,6 +40,7 @@ export type EmbedWorkerReply = {
     ok: true;
     type: 'embedded';
     vectors: Float32Array[];
+    tokensMax?: number;
 } | {
     id: number;
     ok: false;
@@ -60,6 +61,12 @@ export interface EmbedWorkerChannel {
  * signal 同时进 crashed 串、向上传为 loadError,故一处修三处可见。
  */
 export declare function describeExit(what: string, code: number | null, signal: string | null): string;
+/**
+ * 每批推理的可见性行(info 才能进 memory.log)。`tokensMax` 是子进程**实测**上报的
+ * 「本轮真正进模型的最大 token 数」(-1 = 不可证):把它落盘才能事后回答
+ * 「护栏当时到底生效了没有」,否则它只存在于本地脚本的探针里。
+ */
+export declare function describeEmbedBatch(modelId: string, n: number, tokensMax: number | undefined, ms: number): string;
 export interface LocalEmbeddingOptions {
     /** 数据目录 runtime/(推理侧据此 createRequire 加载 transformers)。 */
     runtimeDir: string;

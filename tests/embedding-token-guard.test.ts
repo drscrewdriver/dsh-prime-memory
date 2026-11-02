@@ -18,7 +18,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { memorySchema } from '../src/config.js';
 import { deriveTokenBudget, HARD_CAP_TOKENS } from '../src/store/model-catalog.js';
-import { describeExit } from '../src/store/local-embedding.js';
+import { describeExit, describeEmbedBatch } from '../src/store/local-embedding.js';
 
 const require = createRequire(import.meta.url);
 // 只 require 无副作用的纯模块。`embedding-child.cjs` 是 fork 专用入口,顶层有 process.on 与
@@ -336,5 +336,39 @@ describe('#22 退出归因(signal 不得丢弃)', () => {
     expect(svc.getState()).toBe('failed');
     expect(svc.getLoadError()).toContain('SIGTRAP');
     await expect(svc.embedBatch(['x'])).rejects.toThrow(/SIGTRAP/u);
+  });
+
+  it('每批推理落盘实测 tokensMax 与耗时（护栏事后可核）', async () => {
+    const lines: string[] = [];
+    const logger = { info: (s: string) => lines.push(s), warn: () => {}, error: () => {} };
+    const channel = {
+      request: async () =>
+        ({ id: 0, ok: true, type: 'embedded', vectors: [new Float32Array(4).fill(0.5)], tokensMax: 1535 }) as never,
+      terminate: () => {},
+      setOnCrash: () => {},
+    };
+    const { LocalEmbeddingService } = await import('../src/store/local-embedding.js');
+    const svc = new LocalEmbeddingService(
+      {
+        id: 'fake', name: 'f', repo: 'x/f', revision: 'r', dims: 4, contextTokens: 8192,
+        pooling: 'cls', tags: [], description: '', files: [],
+      },
+      '/tmp/models/fake',
+      { runtimeDir: '/tmp/runtime', channel: channel as never, logger },
+    );
+    await svc.embedBatch(['x', 'y']);
+    const line = lines.find((l) => l.includes('一批完成'));
+    expect(line).toBeDefined();
+    expect(line).toContain('tokensMax=1535');
+    expect(line).toContain('n=2');
+    expect(/耗时=\d+ms/.test(line ?? '')).toBe(true);
+    svc.close();
+  });
+
+  it('不可证时记「未知」而不是 0（-1 不得被当作「一条也没进」）', () => {
+    expect(describeEmbedBatch('bge-m3', 3, -1, 100)).toContain('tokensMax=未知');
+    expect(describeEmbedBatch('bge-m3', 3, undefined, 100)).toContain('tokensMax=未知');
+    expect(describeEmbedBatch('bge-m3', 3, 0, 100)).toContain('tokensMax=0');
+    expect(describeEmbedBatch('bge-m3', 3, 1536, 100)).toContain('tokensMax=1536');
   });
 });

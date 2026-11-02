@@ -1,5 +1,15 @@
 # 更新日志（Changelog）
 
+## [0.26.28] — 2026-11-02
+
+> 本版只修一个错：**我在 `0.26.26`/`0.26.27` 的 CHANGELOG 与 issue 留言里说「子进程上报本批实测进模型的最大 token 数」，但那个值从来没进过日志**。它只被本地验证脚本的探针读到，插件自己的 `memory.log` 里一行都没有——而 #22 这类问题事后能核的只有日志。计划本身是要求这一行落盘的（每批 info 记 `n / 最大tokens / inferMs`，fork 时记 `pid`），是我执行时漏了两项。
+
+- **每批推理现在真会落一行 info**（`describeEmbedBatch()`）：`[memory] 本地嵌入一批完成:model=<id> n=<条数>,进模型 tokensMax=<实测值>,耗时=<ms>`。三个细节：① `tokensMax` 是子进程按库口径**实测**回来的值，不是推算；② 不可证（子进程给 -1）时印「未知」而不是 0，避开「一条也没进」的误读；③ 用 `info` 而非 `debug`（`src/util/filelog.ts` 只镜像 info+，debug 根本进不了 `memory.log`）。这样报告人按我给的清单回验时，「日志里每批 `tokensMax ≤ 预算`」这一条才真的可验。
+- **fork 后补记子进程 `pid`**（`RealChildChannel` 新增 `onForked` 回调）：#22 的归因本来就是靠「系统崩溃报告 ↔ 插件日志」对时间戳，有 pid 才能把一份 `.ips` 对上哪个子进程，`taskkill /T` 的进程树也因此可核。原先只有 `execPath/release/model/tokenBudget`，没 pid。
+- **协议类型同步**：`EmbedWorkerReply` 的 `embedded` 分支加上可选 `tokensMax`，让这个值在主线程类型可见（不再是只存在于未声明字段的 JSON 里）。
+- **验证**：`scripts/verify-token-guard-realmodel.mjs` 的端到端段现在**直接断言真落盘的日志行**（而不只是内存里取个值）：拉起行含 `execPath`+`tokenBudget`、另有一行 `pid=\d+`、每批一行 `tokensMax` 且均 ≤ 预算。实测：`pid=37384`、两批 `tokensMax=1535,1535`（预算 1536）、混批与同文本长批均正常返回 1024 维向量。新增 CI 用例 2 例（每批日志内容断言 + 「不可证记未知」边界），本刀累计 31 例。
+- 全量 **1935 例 / 191 文件**全绿；typecheck 0、lint 0 error、build/build:smoke/smoke/verify-catalog 均 0。无配置面变更，无破坏性变更。
+
 ## [0.26.27] — 2026-11-02
 
 > #22 报告人在 macOS/M5 上回验了 `0.26.25`：**三个原致死档不再 SIGTRAP、护栏确实接上**（这验证了主线结论），但翻出一个**比原缺陷更贴近真实负载**的问题，本版纳入他的二分实测。

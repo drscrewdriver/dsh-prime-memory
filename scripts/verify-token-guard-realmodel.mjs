@@ -223,11 +223,17 @@ console.log('\n=== 端到端（真实 fork 子进程走完整 IPC 链路）===')
   );
   const entry = catalogById('bge-m3');
   let maxReported = -1;
-  // 故意注入一个探针：从子进程的 embedded 回执里读 tokensMax（协议可选字段，主线程不消费）
+  // 收集服务自己发的 info/warn：要断的是**真落盘的那行日志**，而不是只在内存里拿个值。
+  // （已向报告人承诺「日志里每批 tokensMax ≤ 预算」，不验证这行就是空头话）
+  const logs = [];
   const svc = new LocalEmbeddingService(entry, modelDir, {
     runtimeDir,
     childPath: path.join(root, 'dist', 'embedding-child.cjs'),
-    logger: { info: () => {}, warn: (s) => console.log('  w:', String(s).slice(0, 120)), error: () => {} },
+    logger: {
+      info: (s) => logs.push(String(s)),
+      warn: (s) => logs.push(String(s)),
+      error: (s) => logs.push(String(s)),
+    },
     // 不传 maxInputTokens → 走自动档，验证 deriveTokenBudget 在真链路上给出 1536
   });
   try {
@@ -238,6 +244,19 @@ console.log('\n=== 端到端（真实 fork 子进程走完整 IPC 链路）===')
     ok('真链路 embedBatch 返回 3 条 1024 维向量（护栏未搞坏链路）', vecs.length === 3 && vecs[0].length === 1024, `dim=${vecs[0].length}`);
     const mixed = await svc.embedBatch([long, '记'.repeat(5000).replaceAll('记', '忆'), long]);
     ok('混合批次（含不同长文本）仍全部返回', mixed.length === 3 && mixed.every((v) => v.length === 1024));
+
+    // 拉起日志必须带 pid 与生效预算（Spec 要求 execPath/release/pid/model/预算 五项可核）
+    const launch = logs.find((l) => l.includes('子进程拉起'));
+    ok('拉起日志含 execPath 与生效预算', /execPath=.+tokenBudget=\d+/.test(launch ?? ''), (launch ?? '').slice(0, 150));
+    const pidLine = logs.find((l) => l.includes('子进程 pid='));
+    ok('拉起后另有一行记录子进程 pid', /pid=\d+/.test(pidLine ?? ''), (pidLine ?? '(无)').slice(0, 80));
+
+    // 每批一行 info，其中的 tokensMax 必须≤预算
+    const batchLines = logs.filter((l) => l.includes('一批完成'));
+    ok(`每批都落了一行含 tokensMax 的 info（实得 ${batchLines.length} 行）`, batchLines.length >= 2);
+    const reported = batchLines.map((l) => Number(/tokensMax=(\d+)/.exec(l)?.[1] ?? -1));
+    ok(`日志里的 tokensMax 均 ≤ 预算 ${argBudget}`, reported.every((v) => v >= 0 && v <= argBudget), reported.join(','));
+
     maxReported = await readChildTokensMax(path.join(root, 'dist', 'embedding-child.cjs'), long, argBudget);
   } catch (err) {
     ok('真链路 embedBatch 未抛错', false, err instanceof Error ? err.message : String(err));
@@ -245,7 +264,7 @@ console.log('\n=== 端到端（真实 fork 子进程走完整 IPC 链路）===')
     svc.close();
   }
   if (maxReported >= 0) {
-    ok(`子进程实测上报 tokensMax ≤ 预算`, maxReported <= argBudget, `tokensMax=${maxReported}`);
+    ok(`子进程直接回传 tokensMax ≤ 预算`, maxReported <= argBudget, `tokensMax=${maxReported}`);
   } else {
     console.log('  跳：未能从子进程读到 tokensMax（需第二路直接 fork 探针）');
   }

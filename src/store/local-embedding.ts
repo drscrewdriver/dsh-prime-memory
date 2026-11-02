@@ -53,7 +53,7 @@ export type EmbedWorkerCall =
 export type EmbedWorkerReply =
   | { id: number; ok: true; type: 'pong' }
   | { id: number; ok: true; type: 'ready' }
-  | { id: number; ok: true; type: 'embedded'; vectors: Float32Array[] }
+  | { id: number; ok: true; type: 'embedded'; vectors: Float32Array[]; tokensMax?: number }
   | { id: number; ok: false; stage: 'load' | 'infer'; error: string };
 
 /** worker 通道抽象(测试缝:注入假实现验证协议与状态机)。 */
@@ -152,6 +152,21 @@ export function describeExit(what: string, code: number | null, signal: string |
 }
 
 /**
+ * 每批推理的可见性行(info 才能进 memory.log)。`tokensMax` 是子进程**实测**上报的
+ * 「本轮真正进模型的最大 token 数」(-1 = 不可证):把它落盘才能事后回答
+ * 「护栏当时到底生效了没有」,否则它只存在于本地脚本的探针里。
+ */
+export function describeEmbedBatch(
+  modelId: string,
+  n: number,
+  tokensMax: number | undefined,
+  ms: number,
+): string {
+  const tok = typeof tokensMax === 'number' && tokensMax >= 0 ? String(tokensMax) : '未知';
+  return `[memory] 本地嵌入一批完成:model=${modelId} n=${n},进模型 tokensMax=${tok},耗时=${ms}ms`;
+}
+
+/**
  * 真实子进程通道(fix #11 默认):fork 独立进程隔离 sharp/libvips DLL 冲突。
  * 与 RealWorkerChannel 同协议语义,差异仅在传输层:
  * - 配置经 env DSH_EMBED_CFG(JSON 字符串,fork env 只收标量);
@@ -168,13 +183,16 @@ class RealChildChannel implements EmbedWorkerChannel {
   private crashed: string | undefined;
   private crashCb: ((error: string) => void) | undefined;
 
-  constructor(childPath: string, cfg: EmbedWorkerData) {
+  constructor(childPath: string, cfg: EmbedWorkerData, onForked?: (pid: number | undefined) => void) {
     this.child = fork(childPath, [], {
       // execPath 显式沿用当前二进制:宿主 Electron 自带 Node runtime,打包后 PATH 里没有 node
       execPath: process.execPath,
       env: { ...process.env, DSH_EMBED_CFG: JSON.stringify(cfg) },
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
     });
+    // pid 必须落日志:#22 报告人就是靠「崩溃报告 ↔ 日志」的时间对撞才归因上的,而有 pid
+    // 才能把一份系统崩溃报告对上哪个子进程(taskkill /T 的进程树也因此可核)。
+    onForked?.(this.child.pid);
     this.child.on('message', (msg: EmbedWorkerReply | { type: 'fatal'; error: string }) => {
       if (msg && (msg as { type?: string }).type === 'fatal') {
         this.failAll(`本地嵌入子进程致命错误: ${(msg as { error?: string }).error ?? '未知'}`);
@@ -312,7 +330,10 @@ export class LocalEmbeddingService implements EmbeddingService {
       opts.channel ??
       (opts.useWorker
         ? new RealWorkerChannel(opts.workerPath ?? defaultWorkerPath(), cfgObj)
-        : new RealChildChannel(opts.childPath ?? defaultChildPath(), cfgObj));
+        : new RealChildChannel(opts.childPath ?? defaultChildPath(), cfgObj, (pid) => {
+            // pid 只能在 fork 后拿到,故补一条(与上方拉起日志同前缀,便于 grep 成对)
+            this.logger?.info(`[memory] 本地嵌入子进程 pid=${pid ?? '未知'}(model=${entry.id})`);
+          }));
     // 崩溃不自愈(换源/重启恢复):拒绝语义沿 EmbedHelper 降级链走 FTS
     this.channel.setOnCrash((error) => {
       if (this.state === 'terminated') return;
@@ -380,6 +401,7 @@ export class LocalEmbeddingService implements EmbeddingService {
     }
     if (this.state !== 'ready') this.state = 'loading';
     // 单条请求(召回 query)带优先标记:worker 侧插队,不被 reindex 批次堵队尾
+    const startedAt = Date.now();
     const reply = await this.requestWithTimeout(
       { type: 'embed', texts, priority: texts.length === 1 },
       callOpts?.timeoutMs,
@@ -396,6 +418,9 @@ export class LocalEmbeddingService implements EmbeddingService {
         throw new Error(`本地嵌入维度不匹配:期望 ${this.entry.dims},得到 ${v.length}`);
       }
     }
+    // 每批一行 info(#22 取证面):子进程**实测**进模型的 tokensMax 必须落盘,
+    // 否则事后无法回答「护栏当时生效了没」;耗时兼作 EMA 熔断之外的裸值参考。
+    this.logger?.info(describeEmbedBatch(this.entry.id, texts.length, reply.tokensMax, Date.now() - startedAt));
     return reply.vectors;
   }
 
