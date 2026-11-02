@@ -31,6 +31,13 @@ const { createRequire } = require('node:module');
 // 「无 IPC 就 exit」守卫,被测试 require 会把副作用带进来。截断逻辑本身必须零模型可验。
 const { shrinkToBudget } = require('./embedding-token-guard.cjs');
 
+/**
+ * 本文件是 **fork 专用入口**：顶层的 `process.on('message'/'disconnect'/'uncaughtException')`
+ * 与「无 IPC 就 exit」守卫都是执行体行为，**不得被测试 require**（给宿主进程装全局监听会
+ * 污染同进程的其他代码：实测过给 vitest worker 装 `uncaughtException` 后，同 worker 的
+ * `memory-md-sync` 用例无端转红）。需要零模型可验的逻辑一律放 `embedding-token-guard.cjs`。
+ */
+
 // 必须由 fork 启动(需要 IPC channel);裸 node 执行时静默退出,不报 SyntaxError、不永挂。
 if (typeof process.send !== 'function') {
   console.error('[embedding-child] 未经 fork 启动,无 IPC 通道,退出');
@@ -138,21 +145,15 @@ async function pump() {
       try {
         // 字符粗筛(IPC 体积) + token 精截(#22 崩溃/内存护栏);截断只在推理前,run() 同步不可中断
         const screened = job.text.slice(0, MAX_INPUT_CHARS);
-        const sent = shrinkToBudget(screened, MAX_INPUT_TOKENS, tokenizer);
-        const result = await extractor([sent], { pooling: POOLING, normalize: true });
+        const cut = shrinkToBudget(screened, MAX_INPUT_TOKENS, tokenizer);
+        const result = await extractor([cut.text], { pooling: POOLING, normalize: true });
         const data = result[0] && result[0].data;
         job.request.vectors[job.index] = data instanceof Float32Array ? data : new Float32Array(data);
-        // 实测优先于推断:特征抽取输出是 [1, seq, hidden],seq 就是**真正进了模型**的 token 数
-        // (含 special token、含 padding 与否取决于 pipeline)——比“截断后 id 长度”可靠,
-        // 后者在 decode 失败回退原文时会给出错的数。不可读时给 -1(=不可证,不是 0)。
-        let real = -1;
-        try {
-          const shape = result[0] && result[0].shape;
-          if (Array.isArray(shape) && shape.length >= 3) real = Number(shape[1]) || -1;
-        } catch {
-          /* shape 不可读不致命 */
-        }
-        if (real > job.request.tokensMax) job.request.tokensMax = real;
+        // tokensMax 用 cut.seq（按库口径实测将要进模型的 seq 长度,含 special token）。
+        // 曾试过从**输出**张量取 shape——真 bge-m3 实测证明两事:① Tensor 上根本没有 `.shape`
+        // (叫 `.dims`),② 池化后输出是 `[1024]` 一维,里面不存在 seq ——旧写法恒为 -1,等于没上报。
+        // 不可证时为 -1（不是 0）,不拿假数据当护栏证据。
+        if (cut.seq > job.request.tokensMax) job.request.tokensMax = cut.seq;
         job.request.remaining -= 1;
         settle(job.request);
       } catch (err) {

@@ -61,8 +61,10 @@ async function main(): Promise<void> {
   // 所以下面三条分别钉住「件在 dist」「child 载得到」「guard 真导出函数」。
   const guard = await readFile(path.join(dist, 'embedding-token-guard.cjs'), 'utf-8');
   check('child: 相对 require 同级 token guard', child.includes(`require('./embedding-token-guard.cjs')`));
-  check('guard: 导出 shrinkToBudget', guard.includes('module.exports = { shrinkToBudget }'));
-  check('guard: 预算留 special token 位(maxTokens - 2)', guard.includes('maxTokens - 2'));
+  // 断言写意图不断字面量：上一版贴了 `module.exports = { shrinkToBudget }` 与 `maxTokens - 2`，
+  // 实现一改（导出多一个辅助函数、递降量变公式）这两条就误报。导出与「实测预算」才是契约。
+  check('guard: 导出 shrinkToBudget', /module\.exports\s*=\s*\{[^}]*\bshrinkToBudget\b[^}]*\}/.test(guard));
+  check('guard: 按实测序列长度约束预算(不只看 id 数)', /seqLenOf\(/.test(guard) && /maxTokens/.test(guard));
   // 主线程侧默认通道必须是子进程(fix #11):local-embedding.js 不得只剩 worker 路径
   const localEmbed = await readFile(path.join(dist, 'store', 'local-embedding.js'), 'utf-8');
   check('child: 主线程默认走 RealChildChannel', localEmbed.includes('RealChildChannel') && localEmbed.includes('embedding-child.cjs'));

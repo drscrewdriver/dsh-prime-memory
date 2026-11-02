@@ -1,5 +1,19 @@
 # 更新日志（Changelog）
 
+## [0.26.26] — 2026-11-02
+
+> `0.26.25` 把 #22 的 token 护栏落地了，但把**最关键的那条验证当成了「已接上报」而非「已实测」**。本版用真 bge-m3 把它跑完，跑出了三个真实缺陷并逐个修掉。
+
+- **T1 从「上报机制」补成「真模型实证」**（新增 `scripts/verify-token-guard-realmodel.mjs` + `scripts/_t3-runner.mjs`，可选跑、不进 CI——需本机 runtime 与 bge-m3）。在真 bge-m3 上实测：**5000/4000/3800 中文字符（报告里全部 SIGTRAP 的那三档）截断后进模型的序列长度均为 2047 ≤ 预算 2048**；无护栏时实测 **5003**；截断前后向量不同（排除「只报了个数、实际没截」）。护栏留位从「假设」变成「事实」。
+- **修掉三个被真模型才抓得出的缺陷**（桩测试永远测不到）：
+  1. **`tokensMax` 恒为 -1，等于没上报**——原实现从输出张量取 `.shape`，而实测发现 transformers 的 Tensor **根本没有 `.shape`**（叫 `.dims`），且池化后输出是 `[1024]` 一维、里面**不存在 seq** 这个维度。现改为截断时按库自己的口径（`padding:true, truncation:true`）实测并上报，脚本还拿两个独立取法互验（实测 2047 == 2047）。
+  2. **「预算留 2 位」是侥幸不是保证**——真测：切 2046 个 id → decode → 重分词得 2045 token，+2 special = 2047，预算 2048 **只剩 1 位余量**；BPE/Unigram 的切片→解码→再编码不保证同序列，换一段文本就可能多漂而越界。现改为**由实测超出量逐轮递降收紧**（每轮重编码取真 seq，严格变短，至多 3 轮；量不出来就报 -1 而不是猜）。
+  3. **基准不能只看 encode 的 id 数**——5000 中文字符的 `encode` 长 5000，而 pipeline 实际会送进 5003；已改为取两者较大值作基准。
+- **消除一个我自己引入的测试污染**：本为取 `shrinkToBudget` 而让测试 `require('embedding-child.cjs')`，会把它的顶层 `process.on('uncaughtException')`（处理器会 `process.exit(1)`）与 `message` 监听装进 vitest 的 worker——**实测同 worker 的 `tests/memory-md-sync.test.ts` 因此无端转红（单跑绿、全量红）**。现恢复 child 的 fork-only 契约（只加一条文件头说明为何不可被 require），截断逻辑住在无副作用纯模块，对 child 仅做字面接线断言 + 产物 smoke，真行为由真模型脚本负责。
+- 另记一条**既有偶发失败**（非本次引入、本次未修）：`memory-md-sync.test.ts` 在全量并行下会间歇红（恢复活跃时 `.md.disable` 后缀未及时消失）。已用基线 worktree 对照：**不含本批改动的 `f3c1c07` 连跑 5 次也红过 1 次**，而本树连跑 3 次全绿，故不属本刀回归；具体原因是该用例的异步写盘与 `existsSync` 同步断言竞速，待另案。
+- smoke 的两条产物断言从「贴字面量」改为「断意图」（上一版贴了 `module.exports = { shrinkToBudget }` 与 `maxTokens - 2`，实现一改就误报）。
+- **测试**：`tests/embedding-token-guard.test.ts` 24 → **29 例**（新增逐轮递降、量不出来降级报 -1、`seqLenOf` 同时吃数组/张量两形等）；全量 **1933 例 / 191 文件**全绿（连跑 3 次），typecheck 0 error、lint 0 error（4 条既有 warning）、build/build:smoke/smoke/verify-catalog 均 0。公开配置面无破坏性变更（`maxInputTokens`/`maxInputChars` 语义与默认值未动）。
+
 ## [0.26.25] — 2026-11-02
 
 - **#22 根治：本地嵌入新增 token 维度护栏**。报告实测同一 5000 中文字符（≈3651 token）在纯 node 跑通（峰值 RSS **4.7GB**）、在宿主 Electron-node 被 **SIGTRAP 静默打死**（796ms、峰值仅 1.05GB），且崩溃瞬间 writable resident 只 3381K、机器 24GB 未吃满——**不是 OOM，是「单笔大块对齐分配被拒」**。本轮在本机（Windows/纯 node）实测内存峰值严格 **O(T²)**（750/1500/3003 token → ΔRSS +106/437/1635 MB，比 1:4.1:15.4 对应 T² 的 1:4:16），机制是 attention 张量 `[1,heads,T,T]`；外推 3651 token ≈4.6GB，与报告的 4.7GB 跨平台互证。**T 是唯一可控自变量，降 token 预算同时是崩溃护栏和内存护栏。**
