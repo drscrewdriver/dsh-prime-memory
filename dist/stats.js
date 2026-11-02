@@ -123,6 +123,7 @@ export const MEMORY_ENDPOINTS = [
     'dsh-memory/llm-providers',
     'dsh-memory/llm-models',
     'dsh-memory/embedding-state-get',
+    'dsh-memory/drsc-health',
     'dsh-memory/embedding-source-set',
     'dsh-memory/embedding-download-start',
     'dsh-memory/embedding-download-cancel',
