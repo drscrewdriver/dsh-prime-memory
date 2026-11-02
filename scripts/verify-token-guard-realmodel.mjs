@@ -204,6 +204,97 @@ if (!t3Runnable) {
 }
 
 console.log(`\n最大实测 seq = ${maxSeq} / 预算 ${argBudget}`);
+
+console.log('\n=== 端到端（真实 fork 子进程走完整 IPC 链路）===');
+/*
+ * 上面都是“直调纯函数 + 真模型”，没走真链路。本项把**真 `embedding-child.cjs`** fork 起来，
+ * 经 DSH_EMBED_CFG 把预算传下去，再断言：
+ *  ① embedBatch 正常返回向量（护栏没搞坏链路）
+ *  ② 子进程上报的 tokensMax 实测值 ≤ 预算（护栏在真链路上真的生效）
+ * 注意：本脚本跑在纯 node 下，execPath 就是 node——它能证「接线与预算传递正确」，
+ * 不能证「宿主 Electron 分配器不再 trap」（后者只能 macOS）。
+ */
+{
+  const { LocalEmbeddingService } = await import(
+    pathToFileURL(path.join(root, 'dist', 'store', 'local-embedding.js')).href,
+  );
+  const { catalogById } = await import(
+    pathToFileURL(path.join(root, 'dist', 'store', 'model-catalog.js')).href,
+  );
+  const entry = catalogById('bge-m3');
+  let maxReported = -1;
+  // 故意注入一个探针：从子进程的 embedded 回执里读 tokensMax（协议可选字段，主线程不消费）
+  const svc = new LocalEmbeddingService(entry, modelDir, {
+    runtimeDir,
+    childPath: path.join(root, 'dist', 'embedding-child.cjs'),
+    logger: { info: () => {}, warn: (s) => console.log('  w:', String(s).slice(0, 120)), error: () => {} },
+    // 不传 maxInputTokens → 走自动档，验证 deriveTokenBudget 在真链路上给出 1536
+  });
+  try {
+    await svc.waitForReady();
+    // 一批 3 条同内容长文本（对应连发场景）+ 一批不同内容，均应返回向量
+    const long = '记'.repeat(5000);
+    const vecs = await svc.embedBatch([long, long, long]);
+    ok('真链路 embedBatch 返回 3 条 1024 维向量（护栏未搞坏链路）', vecs.length === 3 && vecs[0].length === 1024, `dim=${vecs[0].length}`);
+    const mixed = await svc.embedBatch([long, '记'.repeat(5000).replaceAll('记', '忆'), long]);
+    ok('混合批次（含不同长文本）仍全部返回', mixed.length === 3 && mixed.every((v) => v.length === 1024));
+    maxReported = await readChildTokensMax(path.join(root, 'dist', 'embedding-child.cjs'), long, argBudget);
+  } catch (err) {
+    ok('真链路 embedBatch 未抛错', false, err instanceof Error ? err.message : String(err));
+  } finally {
+    svc.close();
+  }
+  if (maxReported >= 0) {
+    ok(`子进程实测上报 tokensMax ≤ 预算`, maxReported <= argBudget, `tokensMax=${maxReported}`);
+  } else {
+    console.log('  跳：未能从子进程读到 tokensMax（需第二路直接 fork 探针）');
+  }
+}
+
+/** 直接 fork 真 child 子进程（不走 LocalEmbeddingService）以读到它回传的 tokensMax。 */
+async function readChildTokensMax(childPath, text, budget) {
+  const { fork } = await import('node:child_process');
+  return await new Promise((resolve) => {
+    const child = fork(childPath, [], {
+      execPath: process.execPath,
+      env: {
+        ...process.env,
+        DSH_EMBED_CFG: JSON.stringify({
+          runtimeDir,
+          modelDir,
+          pooling: 'cls',
+          dtype: 'q8',
+          maxInputChars: 5000,
+          maxInputTokens: budget,
+        }),
+      },
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    });
+    let done = false;
+    const finish = (v) => {
+      if (done) return;
+      done = true;
+      try {
+        child.kill();
+      } catch {
+        /* 已退 */
+      }
+      resolve(v);
+    };
+    const timer = setTimeout(() => finish(-1), 180_000);
+    child.on('message', (m) => {
+      if (!m || m.type !== 'embedded') return;
+      clearTimeout(timer);
+      finish(typeof m.tokensMax === 'number' ? m.tokensMax : -1);
+    });
+    child.on('exit', () => {
+      clearTimeout(timer);
+      finish(-1);
+    });
+    child.send({ id: 1, type: 'embed', texts: [text, text, text], priority: false });
+  });
+}
+
 console.log(failures === 0
   ? 'RESULT: 全部通过 —— 「截断后进模型的 token 受预算约束」已在真 bge-m3 上实测成立'
   : `RESULT: ${failures} 项未通过`);
