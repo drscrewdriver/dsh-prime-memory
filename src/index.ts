@@ -183,7 +183,14 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     logger,
     proxy: config.embedding.proxy,
   });
-  const makeLocalService = makeLocalServiceFactory(installer, downloader, logger, config.embedding.maxInputChars);
+  const makeLocalService = makeLocalServiceFactory(
+    installer,
+    downloader,
+    logger,
+    config.embedding.maxInputChars,
+    undefined,
+    config.embedding.maxInputTokens,
+  );
   let initial: InitialEmbedding = { svc: new NoopEmbeddingService(), dims: 0 };
   /** 管理器引用:启动重嵌链/backfill 闭包在运行期解引用(声明早于创建避免 TDZ)。 */
   // eslint-disable-next-line prefer-const -- 声明早于创建,后续单点赋值(TS 不允许 const 无初值)
@@ -407,6 +414,17 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
               );
             } else if (r1.failed > 0) {
               logger.warn(`[memory] 向量补齐未完成(L1 失败 ${r1.failed}),下个周期重试`);
+            } else if (missingAfter < 0) {
+              // 计数失败时 sqlite 层给 -1(它自己已 warn);本侧**不得**把「数不出」当「无缺失」
+              // 而滑进下方的停摆告警,更不能标 synced。
+              logger.warn('[memory] 向量补齐:缺失数统计失败,本轮不判定完成');
+            } else {
+              // 本轮未写入且仍有缺失:典型形态是本地嵌入转入 failed 后 reindex 首行早退
+              // (`if (!vectorReady()) return 0/0/0`),与「本轮无事可做」在日志里原本不可区分。
+              logger.warn(
+                `[memory] 向量补齐停摆:本轮未写入且仍差 ${missingAfter} 条` +
+                  `(本地嵌入可能处于 failed 态,见上一条带 signal 的退出记录)`,
+              );
             }
           } catch (err) {
             logger.warn(`[memory] 向量补齐失败: ${err instanceof Error ? err.message : String(err)}`);

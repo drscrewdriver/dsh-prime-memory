@@ -1,5 +1,8 @@
 // DEPRECATED: use embedding-child.cjs (subprocess isolation, fix #11)
 // 保留一版兼容(opts.useWorker 逃生门),下版删除。不再主动修改。
+// 决策记录:#22 的 token 预算护栏**有意不同步到这里**（本通道仍只按 maxInputChars 粗筛）。
+// 逃生门本身就是「回到 #11 前的风险状态」，给它同步一份预算代码 = 维护两份口径;
+// 真需护栏请用默认 child 通道。参 embedding-child.cjs `shrinkToBudget`。
 /**
  * 本地嵌入 worker:transformers.js 的模型加载与推理在本线程执行,主线程只
  * 投递文本、收回向量。onnxruntime-node 的 run/loadModel 是 setImmediate 回调里

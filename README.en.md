@@ -330,6 +330,7 @@ the bundle layer appends and causes `duplicate loader entry id` startup failure)
 | `embedding.model` | empty | embedding model name |
 | `embedding.dimensions` | `0` | Vector dimensions (required when enabled; must match model output) |
 | `embedding.maxInputChars` | `5000` | Max characters per text (overlong inputs truncated) |
+| `embedding.maxInputTokens` | `0` | Per-text **token** budget for local embedding: `0` (default) = min(model window, hard cap 2048); >0 = explicit, clamped with a warn above the cap. Not the same guard as the row above — the character cap only bounds the remote tier and IPC size, while local crash/memory limits must be in tokens (#22) |
 | `embedding.timeoutMs` | `10000` | Per-call embedding timeout (ms) |
 | `embedding.allowLocalModels` | `true` | Allow the local embedding tier (deployment ceiling; when off, no model downloads and no local tier in settings) |
 | `embedding.mirror` | `https://hf-mirror.com` | Download mirror root for local models (can be changed back to `https://huggingface.co`) |

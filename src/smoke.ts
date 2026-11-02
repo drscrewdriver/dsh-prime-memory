@@ -38,7 +38,7 @@ async function exists(p: string): Promise<boolean> {
 async function main(): Promise<void> {
   // ── dist 产物就位 ──
   const dist = path.join(root, 'dist');
-  for (const f of ['index.js', 'index.d.ts', 'client.js', 'embedding-worker.cjs', 'embedding-child.cjs', 'runtime-package-lock.json', 'contract.d.ts', 'store/sqlite.js']) {
+  for (const f of ['index.js', 'index.d.ts', 'client.js', 'embedding-worker.cjs', 'embedding-child.cjs', 'embedding-token-guard.cjs', 'runtime-package-lock.json', 'contract.d.ts', 'store/sqlite.js']) {
     check(`dist/${f} 存在`, await exists(path.join(dist, f)));
   }
 
@@ -57,6 +57,12 @@ async function main(): Promise<void> {
   check('child: 读取 env DSH_EMBED_CFG', child.includes('DSH_EMBED_CFG'));
   check('child: transformers 本地加载(禁远程模型)', child.includes('allowRemoteModels = false'));
   check('child: 向量序列化为普通数组(settle 经 Array.from)', child.includes('Array.from'));
+  // #22:child 以同级相对路径 require token 精截模块。漏拷 = 子进程根本起不来(硬故障),
+  // 所以下面三条分别钉住「件在 dist」「child 载得到」「guard 真导出函数」。
+  const guard = await readFile(path.join(dist, 'embedding-token-guard.cjs'), 'utf-8');
+  check('child: 相对 require 同级 token guard', child.includes(`require('./embedding-token-guard.cjs')`));
+  check('guard: 导出 shrinkToBudget', guard.includes('module.exports = { shrinkToBudget }'));
+  check('guard: 预算留 special token 位(maxTokens - 2)', guard.includes('maxTokens - 2'));
   // 主线程侧默认通道必须是子进程(fix #11):local-embedding.js 不得只剩 worker 路径
   const localEmbed = await readFile(path.join(dist, 'store', 'local-embedding.js'), 'utf-8');
   check('child: 主线程默认走 RealChildChannel', localEmbed.includes('RealChildChannel') && localEmbed.includes('embedding-child.cjs'));

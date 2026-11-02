@@ -10,11 +10,12 @@
  *
  * 协议(与 src/store/local-embedding.ts 的 RealChildChannel 配对;自增 id):
  * - 启动配置:env DSH_EMBED_CFG(JSON 字符串:{runtimeDir,modelDir,pooling,dtype,
- *   maxInputChars}——fork 的 env 只收标量,嵌套对象经序列化传递);
+ *   maxInputChars,maxInputTokens}——fork 的 env 只收标量,嵌套对象经序列化传递);
  * - 入向:{id,type:'ping'} | {id,type:'warmup'} | {id,type:'embed',texts,priority}
- * - 出向:{id,ok:true,type:'pong'|'ready'|'embedded',vectors?}(vectors 为
+ * - 出向:{id,ok:true,type:'pong'|'ready'|'embedded',vectors?,tokensMax?}(vectors 为
  *   number[][],fork IPC 默认 JSON 序列化不支持 TypedArray,主线程侧重建
- *   Float32Array;512d×32 条 ≈64KB,序列化 <5ms,瓶颈在推理不在传输)
+ *   Float32Array;512d×32 条 ≈64KB,序列化 <5ms,瓶颈在推理不在传输)。
+ *   tokensMax = 本批真正进模型的最大 token 数(#22 护栏自证用,主线程不消费也不报错)
  *   | {id,ok:false,stage:'load'|'infer',error} | {type:'fatal',error}
  *
  * 信任边界(沿 AGENTS.md 审查记录):runtime/ 目录在数据目录信任边界内,
@@ -26,6 +27,9 @@
 
 const path = require('node:path');
 const { createRequire } = require('node:module');
+// token 精截放在独立无副作用模块(而非本文件):本文件是 fork 入口,顶层有进程监听与
+// 「无 IPC 就 exit」守卫,被测试 require 会把副作用带进来。截断逻辑本身必须零模型可验。
+const { shrinkToBudget } = require('./embedding-token-guard.cjs');
 
 // 必须由 fork 启动(需要 IPC channel);裸 node 执行时静默退出,不报 SyntaxError、不永挂。
 if (typeof process.send !== 'function') {
@@ -44,6 +48,15 @@ const MODEL_DIR = typeof cfg.modelDir === 'string' ? cfg.modelDir : '';
 const POOLING = cfg.pooling === 'cls' ? 'cls' : 'mean';
 const DTYPE = typeof cfg.dtype === 'string' ? cfg.dtype : 'q8';
 const MAX_INPUT_CHARS = cfg.maxInputChars > 0 ? cfg.maxInputChars : 5000;
+/**
+ * token 预算(issue #22)。预算值由主进程从模型窗口与硬上限推导后传进来(单一真值源
+ * 在 src/store/model-catalog.ts);本处只消费。**截断必须在子进程做**:tokenizer 只在
+ * pipeline 对象上可达,且 ORT run() 同步阻塞——单条内部不可中断,预检只能放推理前。
+ */
+const MAX_INPUT_TOKENS = cfg.maxInputTokens > 0 ? cfg.maxInputTokens : 0; // 0 = 未给,不启用 token 截断
+
+// 字符粗筛后的 token 精截需要 tokenizer(pipeline 对象上的 .tokenizer,加载后可达)
+let tokenizer = null;
 
 let extractor = null; // pipeline('feature-extraction', …)
 let loadState = 'idle'; // idle | loading | ready | failed
@@ -66,6 +79,8 @@ function ensureLoaded() {
         if (mod.env.allowLocalModels !== undefined) mod.env.allowLocalModels = true;
       }
       extractor = await mod.pipeline('feature-extraction', MODEL_DIR, { dtype: DTYPE });
+      // token 截断要用到 pipeline 内部的 tokenizer（未单独暴露 AutoTokenizer,4.x 形态）
+      tokenizer = extractor && extractor.tokenizer ? extractor.tokenizer : null;
       loadState = 'ready';
     } catch (err) {
       loadState = 'failed';
@@ -98,6 +113,8 @@ function settle(request) {
     ok: true,
     type: 'embedded',
     vectors: request.vectors.map((v) => Array.from(v)),
+    // #22 护栏自证:本批**实测**进模型的最大 token 数(不可测时为 -1,主线程不读此字段也不会坏)
+    tokensMax: request.tokensMax,
   });
 }
 
@@ -119,9 +136,23 @@ async function pump() {
       const job = queue.shift();
       if (job.request.failed) continue;
       try {
-        const result = await extractor([job.text.slice(0, MAX_INPUT_CHARS)], { pooling: POOLING, normalize: true });
+        // 字符粗筛(IPC 体积) + token 精截(#22 崩溃/内存护栏);截断只在推理前,run() 同步不可中断
+        const screened = job.text.slice(0, MAX_INPUT_CHARS);
+        const sent = shrinkToBudget(screened, MAX_INPUT_TOKENS, tokenizer);
+        const result = await extractor([sent], { pooling: POOLING, normalize: true });
         const data = result[0] && result[0].data;
         job.request.vectors[job.index] = data instanceof Float32Array ? data : new Float32Array(data);
+        // 实测优先于推断:特征抽取输出是 [1, seq, hidden],seq 就是**真正进了模型**的 token 数
+        // (含 special token、含 padding 与否取决于 pipeline)——比“截断后 id 长度”可靠,
+        // 后者在 decode 失败回退原文时会给出错的数。不可读时给 -1(=不可证,不是 0)。
+        let real = -1;
+        try {
+          const shape = result[0] && result[0].shape;
+          if (Array.isArray(shape) && shape.length >= 3) real = Number(shape[1]) || -1;
+        } catch {
+          /* shape 不可读不致命 */
+        }
+        if (real > job.request.tokensMax) job.request.tokensMax = real;
         job.request.remaining -= 1;
         settle(job.request);
       } catch (err) {
@@ -141,7 +172,7 @@ function handleEmbed(msg) {
     postReply({ id: msg.id, ok: true, type: 'embedded', vectors: [] });
     return;
   }
-  const request = { id: msg.id, vectors: new Array(texts.length), remaining: texts.length, failed: false };
+  const request = { id: msg.id, vectors: new Array(texts.length), remaining: texts.length, failed: false, tokensMax: 0 };
   // 单条请求(召回 query)插队到队首;批次追加到队尾(批内条目间仍会被后来的插队)
   const priority = msg.priority === true && texts.length === 1;
   for (let i = 0; i < texts.length; i++) {

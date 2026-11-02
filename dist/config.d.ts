@@ -360,6 +360,15 @@ export interface MemoryConfig {
         dimensions: number;
         /** 单条文本最大字符数(超长截断)。 */
         maxInputChars: number;
+        /**
+         * 本地嵌入的单条 **token** 预算(0 = 按模型窗口与硬上限自动推导)。
+         *
+         * 与 `maxInputChars` 不是同类护栏:字符帽只管 IPC 体积与远程档,bge-m3/embeddinggemma
+         * 是 Unigram/BPE、中文≈1 字/token 而 emoji/泰文>1.5,所以**字符帽约不到安全线**
+         * (issue #22:5000 字符≈3651 token,已在宿主分配器致死线 ≈2700 之上)。本键只管本地推理。
+         * 超上限会被 clamp 并留 warn(不抛错,见 model-catalog.ts `deriveTokenBudget`)。
+         */
+        maxInputTokens: number;
         /** 单次调用超时(ms)。 */
         timeoutMs: number;
         /** 允许本地嵌入模型档(部署上限:公司环境可禁下载与本地推理)。 */

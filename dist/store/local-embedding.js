@@ -22,6 +22,7 @@ import { fork, spawn } from 'node:child_process';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import { deriveTokenBudget, HARD_CAP_TOKENS } from './model-catalog.js';
 /** 默认 worker 资产路径(旧通道,useWorker 逃生门):dist/store/ → dist/embedding-worker.cjs(构建期拷入)。 */
 function defaultWorkerPath() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'embedding-worker.cjs');
@@ -56,9 +57,12 @@ class RealWorkerChannel {
         });
         // error(未捕获异常且 worker 未自处理)与 exit(含 fatal 后的退出)都兜底拒绝
         this.worker.on('error', (err) => this.failAll(`本地嵌入 worker 线程错误: ${err.message}`));
-        this.worker.on('exit', (code) => {
+        this.worker.on('exit', (code, signal) => {
+            // signal 必须留痕:被信号硬杀时 code===null,单看 code 无法区分「SIGTRAP/OOM-kill/自然退出」
+            // (issue #22 就是靠 macOS 崩溃报告对毫秒时间戳才归因上的)。
+            // worker 的 exit 事件在 typings 里无强类型重载,故 signal 取守性可选形参。
             if (!this.terminated)
-                this.failAll(`本地嵌入 worker 线程退出(code=${code})`);
+                this.failAll(describeExit('本地嵌入 worker 线程', code, signal ?? null));
         });
     }
     request(call) {
@@ -95,6 +99,14 @@ class RealWorkerChannel {
             this.crashCb?.(error);
         }
     }
+}
+/**
+ * 退出描述归一化(issue #22 取证面):被信号硬杀时 Node 给的是 `code===null` + `signal`,
+ * 只打 code 会让 SIGTRAP(分配器 trap)/OOM-kill(SIGKILL)/自然退出(code=0)在日志里长得一模一样。
+ * signal 同时进 crashed 串、向上传为 loadError,故一处修三处可见。
+ */
+export function describeExit(what, code, signal) {
+    return `${what}退出(code=${code ?? 'null'},signal=${signal ?? 'null'})`;
 }
 /**
  * 真实子进程通道(fix #11 默认):fork 独立进程隔离 sharp/libvips DLL 冲突。
@@ -140,9 +152,10 @@ class RealChildChannel {
         });
         // error(fork 启动失败等)与 exit(含 fatal 后自杀、OOM 被杀)都钉底拒绝
         this.child.on('error', (err) => this.failAll(`本地嵌入子进程错误: ${err.message}`));
-        this.child.on('exit', (code) => {
+        this.child.on('exit', (code, signal) => {
+            // 同上:signal 是被硬杀的唯一线索,不得丢弃(#22)
             if (!this.terminated)
-                this.failAll(`本地嵌入子进程退出(code=${code})`);
+                this.failAll(describeExit('本地嵌入子进程', code, signal));
         });
     }
     request(call) {
@@ -213,13 +226,25 @@ export class LocalEmbeddingService {
         this.entry = entry;
         this.logger = opts.logger;
         const maxInputChars = opts.maxInputChars && opts.maxInputChars > 0 ? opts.maxInputChars : 5000;
+        const budget = deriveTokenBudget(entry.contextTokens, opts.maxInputTokens);
+        if (budget.clamped) {
+            // 用户写了个必崩的值:压到上限并留痕(不抛错——拒绝启动比 clamp 更难排查)
+            this.logger?.warn(`[memory] 本地嵌入 token 预算已从 ${opts.maxInputTokens} 压到 ${budget.tokens}` +
+                `(模型窗口 ${entry.contextTokens} / 硬上限 ${HARD_CAP_TOKENS},#22 安全余量)`);
+        }
         const cfgObj = {
             runtimeDir: opts.runtimeDir,
             modelDir,
             pooling: entry.pooling,
             dtype: 'q8',
             maxInputChars,
+            maxInputTokens: budget.tokens,
         };
+        // #22 取证面:同一份代码在纯 node 能跑、在 Electron-node 崩,而仓内任何地方都没记录
+        // execPath 差异与生效预算 —— 下次不用靠系统崩溃报告对时间戳。
+        this.logger?.info(`[memory] 本地嵌入子进程拉起:execPath=${process.execPath},release=${process.release?.name ?? 'unknown'},` +
+            `model=${entry.id},contextTokens=${entry.contextTokens},tokenBudget=${budget.tokens},` +
+            `粗筛 chars=${maxInputChars},通道=${opts.useWorker ? 'worker(旧逃生门,无 token 护栏)' : 'child'}`);
         this.channel =
             opts.channel ??
                 (opts.useWorker

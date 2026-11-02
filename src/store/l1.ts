@@ -1128,9 +1128,16 @@ export class L1Store {
       let vecs: Float32Array[];
       try {
         vecs = await this.embedSvc.embedBatch(chunk.map((c) => c.content));
-      } catch {
+      } catch (err) {
+        // 必须带 id(#22 取证面):本腿直接调 embedSvc、绕过 EmbedHelper 的熔断/超时/截断,
+        // 一整批全失败是常态(进程被杀时后续 chunk 均秒拒);不带 id 就无从定位是哪条长文本致崩。
+        // 只打前 3 个:失败可能是整库堆积,全打会把日志挤掉。
         failed += chunk.length;
         done += chunk.length;
+        this.logger?.warn(
+          `[memory] 重嵌批次失败(${chunk.length} 条,本 chunk 首三个 id=` +
+            `${chunk.slice(0, 3).map((c) => c.id).join(',')}…): ${err instanceof Error ? err.message : String(err)}`,
+        );
         opts?.onProgress?.(done, total);
         continue;
       }

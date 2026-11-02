@@ -153,10 +153,13 @@ export async function resolveInitialEmbedding(cfg, sourceStore, downloader, make
     return { svc, dims: cfg.embedding.dimensions, providerInfo: svc.getProviderInfo() };
 }
 /** 本地服务构造工厂(index.ts 的初始解析与 Manager 共用一份实现,防漂移)。
- *  推理在 fork 子进程(见 local-embedding.ts,fix #11);此处只传 runtime 目录与模型目录。 */
+ *  推理在 fork 子进程(见 local-embedding.ts,fix #11);此处只传 runtime 目录与模型目录。
+ *  新键一律**追加在末尾**:`childPath` 已有位置参数调用方(含测试),插中间会静默串位。 */
 export function makeLocalServiceFactory(installer, downloader, logger, maxInputChars, 
 /** 测试注入缝:子进程资产路径(源码态下 dist 产物不存在,显式指向 resources 源文件)。 */
-childPath) {
+childPath, 
+/** 本地推理 token 预算(config `embedding.maxInputTokens`;0/缺省 = 按模型窗口与硬上限推导)。 */
+maxInputTokens) {
     return (modelId) => {
         const entry = catalogById(modelId);
         if (!entry)
@@ -166,6 +169,7 @@ childPath) {
             childPath,
             logger,
             maxInputChars,
+            maxInputTokens,
         });
     };
 }
@@ -245,7 +249,8 @@ export class EmbeddingManager {
     }
     /** 构造绑定真实运行时 loader 的本地服务(deps.makeLocal 可注入,测试替换)。 */
     makeLocalService(modelId) {
-        const factory = this.deps.makeLocal ?? makeLocalServiceFactory(this.installer, this.downloader, this.deps.logger, this.deps.cfg.embedding.maxInputChars);
+        const factory = this.deps.makeLocal ??
+            makeLocalServiceFactory(this.installer, this.downloader, this.deps.logger, this.deps.cfg.embedding.maxInputChars, undefined, this.deps.cfg.embedding.maxInputTokens);
         return factory(modelId);
     }
     /** 活切换请求:验证通过即接受,后台执行应用链(进度轮询可见)。 */

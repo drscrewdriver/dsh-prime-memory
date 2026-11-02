@@ -1,5 +1,5 @@
 import type { MemoryLogger } from '../types.js';
-import type { CatalogEntry } from './model-catalog.js';
+import { type CatalogEntry } from './model-catalog.js';
 import type { EmbedCallOptions, EmbeddingProviderInfo, EmbeddingService } from './embedding.js';
 type LocalState = 'idle' | 'loading' | 'ready' | 'failed' | 'terminated';
 /** 推理侧启动参数(worker 经 workerData / 子进程经 env DSH_EMBED_CFG;构造后不可变)。 */
@@ -8,7 +8,13 @@ export interface EmbedWorkerData {
     modelDir: string;
     pooling: 'cls' | 'mean';
     dtype: string;
+    /** 字符粗筛上限(IPC 体积护栏;不是语义护栏,也**不是**崩溃护栏——token 帽才是)。 */
     maxInputChars: number;
+    /**
+     * 本地推理的单条 token 预算(issue #22)。主进程推导(`deriveTokenBudget`)、
+     * 子进程执行截断——因为 tokenizer 只在子进程可达,且 ORT `run()` 同步不可中断。
+     */
+    maxInputTokens: number;
 }
 /** 主线程 → worker 的调用(id 由通道分配)。 */
 export type EmbedWorkerCall = {
@@ -48,6 +54,12 @@ export interface EmbedWorkerChannel {
     /** worker 意外崩溃通知(此后所有未决请求已被通道拒绝)。 */
     setOnCrash(cb: (error: string) => void): void;
 }
+/**
+ * 退出描述归一化(issue #22 取证面):被信号硬杀时 Node 给的是 `code===null` + `signal`,
+ * 只打 code 会让 SIGTRAP(分配器 trap)/OOM-kill(SIGKILL)/自然退出(code=0)在日志里长得一模一样。
+ * signal 同时进 crashed 串、向上传为 loadError,故一处修三处可见。
+ */
+export declare function describeExit(what: string, code: number | null, signal: string | null): string;
 export interface LocalEmbeddingOptions {
     /** 数据目录 runtime/(推理侧据此 createRequire 加载 transformers)。 */
     runtimeDir: string;
@@ -61,6 +73,11 @@ export interface LocalEmbeddingOptions {
     channel?: EmbedWorkerChannel;
     logger?: MemoryLogger;
     maxInputChars?: number;
+    /**
+     * 用户显式 token 预算(config `embedding.maxInputTokens`);缺省/0 = 按模型窗口与
+     * `HARD_CAP_TOKENS` 自动推导。超限只 clamp + warn,不抛错。
+     */
+    maxInputTokens?: number;
 }
 export declare class LocalEmbeddingService implements EmbeddingService {
     private state;

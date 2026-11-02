@@ -341,6 +341,10 @@ export const memorySchema = Schema.object({
         // 0 = 纯 FTS 模式(合法值,勿设 min>0)
         dimensions: Schema.number().min(0).max(8192).default(0),
         maxInputChars: Schema.number().min(100).max(100_000).default(5000),
+        // 12-13 个已有 fixture 用 maxInputChars;本键**只增不改**(schemastery 实测未知键静默透传,
+        // 改名会让已部署 YAML 无声失效),且**不收窄边界**(越界值抛错的故障半径是整个配置树)。
+        // 上限交由 deriveTokenBudget 按模型窗口 clamp,这里给宽松外壁仅为防溢出输入。
+        maxInputTokens: Schema.number().min(0).max(100_000).default(0),
         timeoutMs: Schema.number().min(1000).max(300_000).default(10_000),
         allowLocalModels: Schema.boolean().default(true),
         mirror: Schema.string().default('https://hf-mirror.com'),

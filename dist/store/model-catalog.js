@@ -75,6 +75,36 @@ export const MODEL_CATALOG = [
 export function catalogById(id) {
     return MODEL_CATALOG.find((m) => m.id === id);
 }
+/**
+ * 本地 ONNX 推理的单条 token 上限（**唯一硬编码源**,issue #22）。
+ *
+ * 取值 2048 的理由（不是拍脑袋）：#22 实测 Electron 宿主下约 **2700 token** 即被分配器
+ * SIGTRAP 打死（栈：MatMul 输出张量 → BFCArena::Extend → malloc_zone_memalign），且峰值
+ * 内存按 **O(T²)** 增长（attention 张量 `[1,heads,T,T]`）——2048 在致死线下留 ≈24% 余量，
+ * 同时把单次峰值从 ≈4.7GB 压到 ≈0.43 倍。它是**崩溃护栏也是内存护栏**，两者同源。
+ *
+ * 不拿 `maxInputChars` 当护栏的原因：bge-m3/embeddinggemma 是 Unigram/BPE，中文≈**1 字/token**
+ * 而 emoji/泰文可 >1.5，所以 5000 字符**既可只 750 token（英文）也可近 8192（中文）**——
+ * 字符与 token 无稳定比值，字符帽永远约不到安全线。
+ */
+export const HARD_CAP_TOKENS = 2048;
+/**
+ * 推导生效的本地嵌入 token 预算（**单一实现点**,截断执行在 `resources/embedding-child.cjs`）。
+ *
+ * 默认（`userTokens` 缺省/0/负）= `min(modelContext, HARD_CAP_TOKENS)`：bge-small-zh(512)
+ * 不受 HARD_CAP 影响（本来就到 512 窗口），bge-m3(8192) 被压到 2048。`modelContext`
+ * 取不到（非目录模型）时回退 HARD_CAP_TOKENS，**取小不取大**。
+ *
+ * 用户显式超限只 **clamp 不抛错**（收窄 schema 边界会让已部署 YAML 解析直接失败，故障半径
+ * 是整个插件配置树），`clamped` 由调用方打 warn 使其可见。
+ */
+export function deriveTokenBudget(modelContext, userTokens) {
+    const cap = Math.min(modelContext && modelContext > 0 ? modelContext : HARD_CAP_TOKENS, HARD_CAP_TOKENS);
+    const raw = userTokens && userTokens > 0 ? Math.floor(userTokens) : 0;
+    if (raw === 0)
+        return { tokens: cap, clamped: false };
+    return { tokens: Math.min(raw, cap), clamped: raw > cap };
+}
 /** 模型总字节数（磁盘检查与整体进度分母）。 */
 export function catalogTotalBytes(entry) {
     return entry.files.reduce((sum, f) => sum + f.size, 0);
