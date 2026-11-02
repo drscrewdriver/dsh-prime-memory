@@ -147,14 +147,36 @@ if (!fs.existsSync(COLLECTOR_ENTRY)) {
     adapter.resetCollectorReadState();
     const client = new DrscClient({ read: (q) => adapter.callCollectorRead(q, async () => real) });
 
-    const hits = await client.search('\u7aef\u53e3', 3);
-    (hits.length > 0 ? pass : fail)(`search \u2192 ${hits.length} \u547d\u4e2d`,
-      hits[0] ? `snippet ${JSON.stringify(String(hits[0].snippet).slice(0, 40))}` : '\uff08\u7a7a\uff09');
+    // 重试封装：0.26.24 起，对端已升版但拿不到门面时会先做**有界重试**（前 3 次抛错），
+    // 预算耗尽才回退自开只读库。本脚本跑在**宿主外**，没人 apply() collector，因此一定
+    // 走回退路；只做一次读会撞在重试窗口里得到假失败。重试至多 6 次（>3 即可穿过去）。
+    const readWithRetry = async (label, run) => {
+      let lastErr;
+      for (let i = 0; i < 6; i++) {
+        try {
+          return await run();
+        } catch (err) {
+          lastErr = err;
+          const m = /第 (\d+)\/(\d+) 次重试/u.exec(String(err && err.message));
+          if (!m) break; // 非重试类错误，直接报
+        }
+      }
+      fail(`${label} 异常`, String(lastErr && lastErr.message));
+      return undefined;
+    };
 
-    const listed = await client.listSessions(0, 5);
-    (listed.total > 0 && listed.rows.length > 0 ? pass : fail)(
-      `listSessions \u2192 total=${listed.total} rows=${listed.rows.length}`,
-    );
+    const hits = await readWithRetry('search', () => client.search('\u7aef\u53e3', 3));
+    if (hits) {
+      (hits.length > 0 ? pass : fail)(`search \u2192 ${hits.length} \u547d\u4e2d`,
+        hits[0] ? `snippet ${JSON.stringify(String(hits[0].snippet).slice(0, 40))}` : '\uff08\u7a7a\uff09');
+    }
+
+    const listed = await readWithRetry('listSessions', () => client.listSessions(0, 5));
+    if (listed) {
+      (listed.total > 0 && listed.rows.length > 0 ? pass : fail)(
+        `listSessions \u2192 total=${listed.total} rows=${listed.rows.length}`,
+      );
+    }
 
     // 挑「真挂到记录」的会话而不是列表首项：最新会话常无 user/assistant 段，
     // 用它会得到 0 行——那是弱断言（空也算 PASS）。
