@@ -2,6 +2,8 @@
 
 ## [0.26.30] — 2026-11-03
 
+- **#22 机理刀三层防线 + 同会话批内去重 + DRSC 提示 + 锁文件修复**
+
 > #22 机理刀：前几版只修了 token 护栏的**截断面**（把进模型的 token 压到 1536），机理本体未动——相邻两次大推理的 T² 张量在 BFCArena 高水位不回落时**共存叠加**（m=2），且崩一次就停摆到宿主重启。本版把防线从「只截」扩成**三层**：① token 帽 1536（既有）② 关 memPattern 压低共存峰（新）③ 崩溃有界自愈 respawn（新，默认开可关）。**诚实边界**：三层都在 Windows/纯 node 侧证峰值/状态机/续试；SIGTRAP 的消除只能由报告人在 macOS 回验裁决，#22 是否关闭取决于那次回验。
 
 - **第二层：`resources/embedding-child.cjs` / `embedding-worker.cjs` 的 pipeline 加 `session_options:{enableMemPattern:false}`**。ORT 默认按图形预分配、把输入绑定驻留 BFCArena，连发时新旧 T² 张量共存把峰值叠成 m×T²；关掉后同形状连发峰值本机实测 **1597MB→1264MB（−333MB，m:2→1 方向）**、稳态 infer 零代价。关键——**同输入改前/改后向量 bit 级全同**（真 bge-m3 `--equivalence` 实测 `maxAbsDiff=0`，短文本+致死长文本两样本），所以**不触发重嵌**（库里向量不失效）。边界：对 macOS 分配器 trap 的消除效果本机不可证，**不得据此宣称「不再崩」**；决定性实验是报告人用 `scripts/repro` 在 macOS 重跑 `--budget 2048` 连发看是否仍 trap。
