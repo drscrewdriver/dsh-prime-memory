@@ -23,6 +23,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterAll, describe, expect, it } from 'vitest';
 import { L1Store } from '../src/store/l1.js';
 import { MemoryDb } from '../src/store/sqlite.js';
+import { normalizeWorkspacePath } from '../src/workspace.js';
 
 let dir: string;
 afterAll(async () => {
@@ -176,8 +177,8 @@ describe('task_29 §E 旧库迁移：标注归属，不搬运', () => {
     const store = new L1Store(dir, db, undefined, 'keyword');
     await store.init();
     try {
-      const a = (await store.search('alpha', 10, { workspaceId: 'e:\\proj\\a' })).map((h) => h.id);
-      const b = (await store.search('alpha', 10, { workspaceId: 'e:\\proj\\b' })).map((h) => h.id);
+      const a = (await store.search('alpha', 10, { workspaceId: normalizeWorkspacePath('e:\\proj\\a') as string })).map((h) => h.id);
+      const b = (await store.search('alpha', 10, { workspaceId: normalizeWorkspacePath('e:\\proj\\b') as string })).map((h) => h.id);
       expect(a.sort()).toEqual(['old-a', 'old-b', 'old-c']);
       expect(b.sort()).toEqual(['old-a', 'old-b', 'old-c']);
     } finally {
@@ -201,8 +202,9 @@ describe('task_28 §E FTS 重建回灌必须带上可见范围（一次索引重
   it('缺 scope 列的 FTS 被重建后，workspace 归属仍然生效', async () => {
     if (!dir) dir = await mkdtemp(join(tmpdir(), 'dsh-scope-migrate-'));
     const file = join(dir, 'fts-rebuild.db');
-    const WS = 'e:\\proj\\iso';
-    const OTHER = 'e:\\proj\\other';
+    // 夹具用归一后的形态：写入（sqlite 内归一）与查询两侧必须同源，否则 POSIX 下对不上。
+    const WS = normalizeWorkspacePath('proj-iso') as string;
+    const OTHER = normalizeWorkspacePath('proj-other') as string;
 
     // 1) 正常建库（新 schema），写入一条 workspace 归属的 work 记录
     const db1 = new MemoryDb(file, 0);

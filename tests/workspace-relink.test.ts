@@ -19,16 +19,20 @@ import { L1Store } from '../src/store/l1.js';
 import { MemoryDb } from '../src/store/sqlite.js';
 import { relinkWorkspaces } from '../src/pipeline/workspace-relink.js';
 import type { WorkspaceRoute } from '../src/workspace-route.js';
+import { normalizeWorkspacePath } from '../src/workspace.js';
 import type { EmbeddingService } from '../src/store/embedding.js';
 import type { MemoryRecord } from '../src/types.js';
 
 const DIM = 16;
+// 路由的 `path` 与断言用的 `DIR_*` 必须是**同一份归一结果**：
+// routeWorkspace 返回 normalizeWorkspacePath(path)，POSIX 下不会再转小写，
+// 拿原始 Windows 字面量去比会在 Linux CI 上必红。
+const DIR_AGENT = normalizeWorkspacePath('E:/test/rewrite-agently/.agents') as string;
+const DIR_NO_DSH = normalizeWorkspacePath('E:/test/agent-no-dsh') as string;
 const ROUTES: WorkspaceRoute[] = [
-  { path: 'E:\\test\\rewrite-agently\\.agents', anyOf: ['dsh', 'cordis', 'prime-memory'], noneOf: [] },
-  { path: 'E:\\test\\agent-no-dsh', anyOf: ['hanako', 'inferglow'], noneOf: ['dsh'] },
+  { path: DIR_AGENT, anyOf: ['dsh', 'cordis', 'prime-memory'], noneOf: [] },
+  { path: DIR_NO_DSH, anyOf: ['hanako', 'inferglow'], noneOf: ['dsh'] },
 ];
-const DIR_AGENT = 'e:\\test\\rewrite-agently\\.agents';
-const DIR_NO_DSH = 'e:\\test\\agent-no-dsh';
 
 const dirs: string[] = [];
 afterAll(async () => {

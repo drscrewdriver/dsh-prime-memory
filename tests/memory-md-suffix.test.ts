@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MdLedgerStore } from '../src/store/memory-md-ledger.js';
+import { normalizeWorkspacePath } from '../src/workspace.js';
 import { exportRecords } from '../src/store/memory-md-export.js';
 import { convergeDisabledSuffix, disableProjectionFile } from '../src/store/memory-md-disable.js';
 import { digest as digestOf } from '../src/store/memory-md.js';
@@ -47,7 +48,7 @@ async function ctx() {
   dirs.push(dataDir, wsDir);
   const ledger = new MdLedgerStore(dataDir);
   await ledger.init();
-  return { dataDir, wsDir, ws: resolve(wsDir).toLowerCase(), ledger };
+  return { dataDir, wsDir, ws: normalizeWorkspacePath(wsDir) as string, ledger };
 }
 
 type Ctx = Awaited<ReturnType<typeof ctx>>;

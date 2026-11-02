@@ -24,6 +24,7 @@ import { describe, expect, it } from 'vitest';
 import { memorySchema } from '../src/config.js';
 import { isScopeVisible, normScope, resolveRecordScope } from '../src/types.js';
 import { normalizeWorkspacePath, workspaceIdOf } from '../src/workspace.js';
+import { join } from 'node:path';
 
 /** schemastery schema 对象可调用产出默认值（既有用法见 tests/contract-keys.test.ts:126）。 */
 const parse = memorySchema as unknown as (v: unknown) => Record<string, unknown>;
@@ -116,14 +117,17 @@ describe('task_27 §E 四象限：显式覆盖必须能赢过默认', () => {
 
 describe('task_28 §E 工作区标识：纯字符串归一，不碰文件系统', () => {
   it('同一目录的两种拼写归一到同一标识（否则同一工作区的记忆会被劈成两份）', () => {
-    const plain = normalizeWorkspacePath('E:\\proj\\a');
-    expect(normalizeWorkspacePath('E:\\proj\\a\\..\\a')).toBe(plain);
-    expect(normalizeWorkspacePath('E:/proj/a/')).toBe(plain);
-    expect(normalizeWorkspacePath('  E:\\proj\\a  ')).toBe(plain);
+    // `..` 折叠只在**平台原生分隔符**下成立（POSIX 不把 `\` 当分隔符），故用 join 构造；
+    // “盘符 + 反斜杠”的折叠属 win32 语义，放在下一条里单独验。
+    expect(normalizeWorkspacePath(join('proj', 'a', '..', 'a'))).toBe(normalizeWorkspacePath(join('proj', 'a')));
+    expect(normalizeWorkspacePath('E:/proj/a/')).toBe(normalizeWorkspacePath('E:/proj/a'));
+    expect(normalizeWorkspacePath('  E:/proj/a  ')).toBe(normalizeWorkspacePath('E:/proj/a'));
   });
 
   it('win32 归一小写（E:\\Proj 与 e:\\proj 是同一目录）', () => {
     expect(normalizeWorkspacePath('E:\\Proj\\A', 'win32')).toBe(normalizeWorkspacePath('e:\\proj\\a', 'win32'));
+    // 反斜杠 `..` 折叠也是 win32 语义（POSIX 下 `\` 只是普通字符）
+    expect(normalizeWorkspacePath('E:\\proj\\a\\..\\a', 'win32')).toBe(normalizeWorkspacePath('E:\\proj\\a', 'win32'));
   });
 
   it('非 win32 **保留**大小写（POSIX 下 A 与 a 是两个不同目录）——区分力：平台参数确实改变结果', () => {

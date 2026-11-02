@@ -95,7 +95,10 @@ describe('T1.1 目录 fsync', () => {
     expect(h.renames).toHaveLength(1);
   });
 
-  it('本机(win32)真实调用:不抛、返回 false', async () => {
+  // 真实平台分支：win32 上 syncDirectory 恒返回 false（不打开目录）；
+  // POSIX 上它会真的 fsync 目录并返回 true —— 所以这条**只能在 win32 上断言**，
+  // 否则在 Linux CI 上必红（旧写法把「本机就是 win32」当成了永远成立的前提）。
+  it.skipIf(realPlatform !== 'win32')('本机(win32)真实调用:不抛、返回 false', async () => {
     expect(await syncDirectory('.')).toBe(false);
   });
 });

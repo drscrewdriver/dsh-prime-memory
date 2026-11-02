@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MdLedgerStore } from '../src/store/memory-md-ledger.js';
+import { normalizeWorkspacePath } from '../src/workspace.js';
 import { exportRecords, reconcileLedger } from '../src/store/memory-md-export.js';
 import { disableProjectionFile } from '../src/store/memory-md-disable.js';
 import { targetFor } from '../src/store/memory-md.js';
@@ -33,8 +34,9 @@ async function ctx() {
   dirs.push(dataDir, wsDir);
   const ledger = new MdLedgerStore(dataDir);
   await ledger.init();
-  // 库里的 workspace_id 是归一化后的小写形态（normalizeWorkspacePath 在 win32 转小写）。
-  const ws = resolve(wsDir).toLowerCase();
+  // 库里的 workspace_id 是归一化后的形态（normalizeWorkspacePath：path.resolve；win32 额外转小写）。
+  //   ——必须与实现同源，不能无条件 toLowerCase（POSIX 下大小写敏感）。
+  const ws = normalizeWorkspacePath(wsDir) as string;
   return { dataDir, wsDir, ws, ledger };
 }
 
@@ -84,7 +86,7 @@ describe('targetFor / 导出落点（N10）', () => {
     dirs.push(wsB);
     const rep = await run([
       rec('sa', 'A 项目里的同名记忆', { name: 'same-name', workspaceId: wsA }),
-      rec('sb', 'B 项目里的同名记忆', { name: 'same-name', workspaceId: resolve(wsB) }),
+      rec('sb', 'B 项目里的同名记忆', { name: 'same-name', workspaceId: normalizeWorkspacePath(wsB) as string }),
     ], c);
     expect(rep.written).toBe(2);
     const keys = c.ledger.all().map((e) => e.id).sort();

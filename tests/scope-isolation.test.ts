@@ -24,14 +24,18 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { L1Store } from '../src/store/l1.js';
 import { MemoryDb } from '../src/store/sqlite.js';
+import { normalizeWorkspacePath } from '../src/workspace.js';
 import type { MemoryFamily, MemoryRecord, MemoryScope } from '../src/types.js';
 
 let dir: string;
 let db: MemoryDb;
 let store: L1Store;
 
-const WS_A = 'e:\\proj\\a';
-const WS_B = 'e:\\proj\\b';
+// 夹具用**已归一**的绝对路径：写入与查询两侧都直接用它。
+// 旧写法 `e:\\proj\\a` 在 POSIX 下会被 path.resolve 解析成 <cwd>/e:\proj\a，
+// 而查询若传原始串（写入已归一）就对不上 → Linux CI 上隔离用例必红。
+const WS_A = normalizeWorkspacePath('proj-a') as string;
+const WS_B = normalizeWorkspacePath('proj-b') as string;
 
 /** 四条记录覆盖 ③ 里需要的全部组合。内容同含 `alpha`，保证 FTS 都能命中。 */
 function rec(id: string, family: MemoryFamily, scope: MemoryScope, wsId: string): MemoryRecord {

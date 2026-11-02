@@ -11,7 +11,10 @@ import { describe, expect, it } from 'vitest';
 import { routeConflictsWithProvenance, routeWorkspace, type WorkspaceRoute } from '../src/workspace-route.js';
 import { WORKSPACE_SUBDIR, targetFor } from '../src/store/memory-md.js';
 import { memorySchema } from '../src/config.js';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync } from 'node:fs';
+import { normalizeWorkspacePath } from '../src/workspace.js';
 
 /**
  * 两份东西分开测，别混：
@@ -78,12 +81,21 @@ describe('routeWorkspace', () => {
   });
 
   it('有 workspace_id 的记录落点在 workspace 根下，不在单根（N10 口径）', () => {
-    const t = targetFor(
-      { id: 'r1', content: 'x', type: 'work_fact', name: '测试条目', workspaceId: 'E:\\test\\rewrite-agently' },
-      undefined, 'C:\\tmp\\data',
-    );
-    expect(t.inWorkspace).toBe(resolve(t.root).toLowerCase().includes('rewrite-agently'));
-    expect(t.root.replace(/\\/g, '/')).toContain('.agents/memory');
+    // 用**平台原生**绝对路径当夹具：POSIX 下 Windows 盘符会被 path.resolve 当成相对路径，
+    // 落点与断言就对不上（旧写法拿 'E:\\...' 做夹具，在 Linux CI 上必红）。
+    const ws = normalizeWorkspacePath(join(tmpdir(), 'dsh-ws-root-probe')) as string;
+    // targetFor 的护栏要求 workspace 根**真实存在**（不存在就落回单根，不造孤儿树）。
+    mkdirSync(ws, { recursive: true });
+    try {
+      const t = targetFor(
+        { id: 'r1', content: 'x', type: 'work_fact', name: '测试条目', workspaceId: ws },
+        undefined, join(tmpdir(), 'dsh-data-probe'),
+      );
+      expect(t.inWorkspace).toBe(true);
+      expect(t.root).toBe(join(ws, ...WORKSPACE_SUBDIR));
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
   });
 
   it('同一段内容既谈 Hanako 又谈 DSH → 归 DSH 侧（用户口径，排序即优先级）', () => {
@@ -118,7 +130,7 @@ describe('routeWorkspace', () => {
       { path: 'E:\\x\\dsh', anyOf: ['dsh'], noneOf: [] },
       { path: 'E:\\x\\no-dsh', anyOf: ['dsh'], noneOf: ['dsh'] },
     ];
-    expect(routeWorkspace('dsh 相关', routes)).toBe('e:\\x\\dsh');
+    expect(routeWorkspace('dsh 相关', routes)).toBe(normalizeWorkspacePath('E:\\x\\dsh'));
   });
 
   it('空路由表 = 全不命中（关状态下调用方不该写任何归属）', () => {
@@ -127,8 +139,13 @@ describe('routeWorkspace', () => {
 });
 
 describe('routeConflictsWithProvenance — 来源链只作交叉验证', () => {
-  it('两侧一致(含大小写/盘符差异)不算冲突', () => {
+  // 大小写是否等价取决于平台：win32 不敏感（normalizeWorkspacePath 转小写），POSIX 敏感。
+  // 旧写法把 win32 语义当普适，Linux CI 必红。
+  it.skipIf(process.platform !== 'win32')('win32: 两侧仅大小写/盘符差异不算冲突', () => {
     expect(routeConflictsWithProvenance('E:\\test\\rewrite-agently\\.agents', 'e:\\test\\rewrite-agently\\.agents')).toBe(false);
+  });
+  it.skipIf(process.platform === 'win32')('POSIX: 大小写不同 = 两个工作区（区分力）', () => {
+    expect(routeConflictsWithProvenance('E:/proj/A', 'E:/proj/a')).toBe(true);
   });
   it('两侧不同 → 冲突为真(应当可观测，而不是默默选一边)', () => {
     expect(routeConflictsWithProvenance('E:\\test\\rewrite-agently\\.agents', 'E:\\test\\other-proj')).toBe(true);

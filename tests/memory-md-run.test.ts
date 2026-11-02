@@ -8,9 +8,10 @@
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MdLedgerStore } from '../src/store/memory-md-ledger.js';
+import { normalizeWorkspacePath } from '../src/workspace.js';
 import { mdRunStatus, runProjection } from '../src/store/memory-md-run.js';
 import type { MemoryRecord } from '../src/types.js';
 
@@ -45,7 +46,7 @@ async function ctx() {
   dirs.push(dataDir, wsDir);
   const ledger = new MdLedgerStore(dataDir);
   await ledger.init();
-  return { dataDir, ws: resolve(wsDir).toLowerCase(), ledger };
+  return { dataDir, ws: normalizeWorkspacePath(wsDir) as string, ledger };
 }
 
 /** 造 n 条记录（一半标成已退场，好让收敛阶段真有活可干）。 */
