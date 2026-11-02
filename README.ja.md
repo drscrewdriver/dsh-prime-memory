@@ -274,7 +274,7 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `embedding.model` | 空 | 埋め込みモデル名 |
 | `embedding.dimensions` | `0` | ベクトル次元（有効時必須） |
 | `embedding.maxInputChars` | `5000` | 単テキスト最大文字数（超長は切り捨て） |
-| `embedding.maxInputTokens` | `0` | ローカル埋め込みの 1 件あたり **トークン** 予算：`0`（既定）= モデル窓と上限 2048 の小さい方、>0 = 明示値（超過は clamp + warn）。上の行とは役割が異なる——文字上限はリモートモードと IPC サイズのみを制限し、ローカルのクラッシュ/メモリ防護はトークン単位が必須（#22） |
+| `embedding.maxInputTokens` | `0` | ローカル埋め込みの 1 件あたり **トークン** 予算：`0`（既定）= モデル窓と上限 1536 の小さい方、>0 = 明示値（超過は clamp + warn）。上の行とは役割が異なる——文字上限はリモートモードと IPC サイズのみを制限し、ローカルのクラッシュ/メモリ防護はトークン単位が必須（#22） |
 | `embedding.timeoutMs` | `10000` | 単回埋め込み呼び出しタイムアウト（ms） |
 | `embedding.allowLocalModels` | `true` | ローカル埋め込み档を許可（デプロイ上限） |
 | `embedding.mirror` | `https://hf-mirror.com` | ローカルモデルダウンロードミラー根 |

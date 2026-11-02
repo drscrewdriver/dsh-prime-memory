@@ -150,8 +150,8 @@ async function pump() {
         const data = result[0] && result[0].data;
         job.request.vectors[job.index] = data instanceof Float32Array ? data : new Float32Array(data);
         // tokensMax 用 cut.seq（按库口径实测将要进模型的 seq 长度,含 special token）。
-        // 曾试过从**输出**张量取 shape——真 bge-m3 实测证明两事:① Tensor 上根本没有 `.shape`
-        // (叫 `.dims`),② 池化后输出是 `[1024]` 一维,里面不存在 seq ——旧写法恒为 -1,等于没上报。
+        // 曾试过从**输出**张量取形状——真 bge-m3 实测证明两事:① Tensor 上根本没有 `.shape`
+        // (属性叫 `.dims`),② 池化后输出是一维向量,里面不存在 seq 维——旧写法永远拿不到值。
         // 不可证时为 -1（不是 0）,不拿假数据当护栏证据。
         if (cut.seq > job.request.tokensMax) job.request.tokensMax = cut.seq;
         job.request.remaining -= 1;

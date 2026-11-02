@@ -324,7 +324,7 @@ Los ajustes que pisan los valores por defecto se escriben en el `cordis.patch.ym
 | `embedding.model`            | vacío                   | Nombre del modelo de embeddings |
 | `embedding.dimensions`       | `0`                     | Dimensión de los vectores (obligatoria si está activada, debe coincidir con la salida del modelo) |
 | `embedding.maxInputChars`    | `5000`                  | Número máximo de caracteres por texto (recorte si se supera) |
-| `embedding.maxInputTokens`   | `0`                     | Presupuesto de **tokens** por texto para la incrustación local: `0` (pred.) = min(ventana del modelo, límite 2048); >0 = explícito, recortado con warn si excede. No es el mismo límite que la fila de arriba: el de caracteres solo cubre el modo remoto y el tamaño de IPC, y la protección local contra fallos/memoria debe ir en tokens (#22) |
+| `embedding.maxInputTokens`   | `0`                     | Presupuesto de **tokens** por texto para la incrustación local: `0` (pred.) = min(ventana del modelo, límite 1536); >0 = explícito, recortado con warn si excede. No es el mismo límite que la fila de arriba: el de caracteres solo cubre el modo remoto y el tamaño de IPC, y la protección local contra fallos/memoria debe ir en tokens (#22) |
 | `embedding.timeoutMs`        | `10000`                 | Tiempo máximo de una llamada de embeddings (ms) |
 | `embedding.allowLocalModels` | `true`                  | Permite el modo de embeddings local (techo de despliegue: desactivado, la página de ajustes no puede descargar modelos ni pasar a local) |
 | `embedding.mirror`           | `https://hf-mirror.com` | Raíz del espejo de descarga de modelos locales (se puede devolver al oficial `https://huggingface.co`) |

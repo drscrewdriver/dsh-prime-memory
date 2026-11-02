@@ -88,11 +88,11 @@ function stubTokenizer(
 }
 
 describe('#22 token 预算推导(单一真值来源)', () => {
-  it('默认走「模型窗口与硬上限取小」,不是无条件 2048', () => {
+  it('默认走「模型窗口与硬上限取小」,不是无条件硬上限', () => {
     expect(deriveTokenBudget(8192, undefined)).toEqual({ tokens: HARD_CAP_TOKENS, clamped: false });
     expect(deriveTokenBudget(8192, 0)).toEqual({ tokens: HARD_CAP_TOKENS, clamped: false });
     expect(deriveTokenBudget(512, undefined)).toEqual({ tokens: 512, clamped: false });
-    expect(deriveTokenBudget(2048, undefined)).toEqual({ tokens: 2048, clamped: false });
+    expect(deriveTokenBudget(HARD_CAP_TOKENS, undefined)).toEqual({ tokens: HARD_CAP_TOKENS, clamped: false });
   });
 
   it('取不到窗口(非目录模型)回退硬上限,取小不取大', () => {
@@ -102,75 +102,82 @@ describe('#22 token 预算推导(单一真值来源)', () => {
   });
 
   it('用户显式值:窗口内照收,超限 clamp 并标记(不抛错)', () => {
-    expect(deriveTokenBudget(8192, 1600)).toEqual({ tokens: 1600, clamped: false });
+    const under = Math.max(1, HARD_CAP_TOKENS - 448); // 总取一个低于硬上限的值,不贴魔数
+    expect(deriveTokenBudget(8192, under)).toEqual({ tokens: under, clamped: false });
     expect(deriveTokenBudget(8192, 100_000)).toEqual({ tokens: HARD_CAP_TOKENS, clamped: true });
     expect(deriveTokenBudget(512, 4096)).toEqual({ tokens: 512, clamped: true });
   });
 
-  it('硬上限必须显著低于 #22 实测致死线 2700', () => {
-    // 护栏的意义在于「比死线低」;数值被人上调到死线之上时本断言即红
-    expect(HARD_CAP_TOKENS).toBeLessThan(2700);
+  it('硬上限必须低于 **#22 报告人 macOS 二分的「连发」致死线**,不是单发线', () => {
+    // 真实负载是连发：graph 投影逐条 `await embed()`，一个批里常有 5～8 个节点。
+    // 报告人实测：1960 串行全过、1990 起第 2 条即 SIGTRAP → 连发致死线 = 1960 以下。
+    // 单发线≈2700 不得当依据（0.26.25 就是按单发线取 2048，连发仍会崩）。
+    const SERIAL_DEATH_LINE = 1960;
+    expect(HARD_CAP_TOKENS).toBeLessThan(SERIAL_DEATH_LINE);
     expect(HARD_CAP_TOKENS).toBeGreaterThan(0);
   });
 });
 
 describe('#22 shrinkToBudget(按库口径实测,而不是按字符猜)', () => {
   it('最坏情形:中文一字符一 token,超限必须裁到预算内并回报实测 seq', () => {
-    const out = childShrink('记'.repeat(3800), 2048, stubTokenizer());
-    // 逐轮收紧的第一档 target=2046 -> text 长 2046,库口径 seq=2046+2=2048 正好贴线
-    expect(out.seq).toBeLessThanOrEqual(2048);
+    const out = childShrink('记'.repeat(3800), HARD_CAP_TOKENS, stubTokenizer());
+    expect(out.seq).toBeLessThanOrEqual(HARD_CAP_TOKENS);
     expect(out.seq).toBeGreaterThan(0);
     expect(out.text.length).toBe(out.seq - 2); // 桩口径:seq = 字符数 + 2 special
   });
 
   it('漂移较小时首轮就能收敛,且结果仍满足预算(不靠常数留位碰运气)', () => {
-    // base = 5000+2+3 = 5005 → cut = 5000-(5005-2048)-2 = 2041 → seq = 2041+2+3 = 2046 ≤ 2048
+    // 不断精确长度（属实现细节）：首轮的 cut 用**原始 ids 长度**与**库口径 base** 相减,
+    // 两者各自含 special token,故结果天然留了 ≈4 位富余。要断的是契约：收到预算内且真的截了。
     const tok = stubTokenizer({ drift: 3 });
-    const out = childShrink('记'.repeat(5000), 2048, tok);
-    expect(out.seq).toBe(2046);
-    expect(out.text.length).toBe(2041);
+    const out = childShrink('记'.repeat(5000), HARD_CAP_TOKENS, tok);
+    expect(out.seq).toBeGreaterThan(0);
+    expect(out.seq).toBeLessThanOrEqual(HARD_CAP_TOKENS);
+    expect(out.text.length).toBeLessThan(5000);
+    // 首轮就达标:不得出现无意义的多轮重试
     expect(tok.calls.filter((c) => c.fn === 'decode').length).toBe(1);
   });
 
   it('首轮递降过头时确实重算下一轮,而不是停在错值上', () => {
-    // special=1、无漂移：首轮 cut=2047 得 seq=2048 已达标；取 special=1 且预算边界的
-    // 极端组合会过冲,本例用 budget=10：cut = 11-(12-10)-2 = 7 → seq=8 ≠ 10（过冲）,
-    // 算法仍须报出**实测**值而非碰运气的目标值。
+    // 预算取极小值使递降过冲：算法仍须报出**实测**值而非碰运气的目标值
     const tok = stubTokenizer({ special: 1 });
     const out = childShrink('记'.repeat(11), 10, tok);
     expect(out.seq).toBe(8);
     expect(out.seq).toBeLessThanOrEqual(10);
     expect(tok.calls.filter((c) => c.fn === 'decode').length).toBe(1);
   });
-  
+
   it('special token 占额很大时,按实测超出量递降仍能收敛(不靠常数留位)', () => {
-    // 库补 900 个 special token:固定留位（-2）会直接越界,递降算法需一次性收到位
-    const out = childShrink('记'.repeat(5000), 2048, stubTokenizer({ special: 900 }));
-    expect(out.seq).toBe(2046);
-    expect(out.seq).toBeLessThanOrEqual(2048);
-    expect(out.text.length).toBe(1146);
+    // 库补 900 个 special token：固定留位（只减 2）会直接越界，必须靠实测超出量收到位
+    const out = childShrink('记'.repeat(5000), HARD_CAP_TOKENS, stubTokenizer({ special: 900 }));
+    expect(out.seq).toBeGreaterThan(0);
+    expect(out.seq).toBeLessThanOrEqual(HARD_CAP_TOKENS);
+    // 真的收到了 900 以外的量级：文本长度必须远小于原文,且不得为负
+    expect(out.text.length).toBeGreaterThan(0);
+    expect(out.text.length).toBeLessThan(HARD_CAP_TOKENS);
   });
 
-  it('量不出来就降级报 -1,绝不拿算不清的数当安全证据', () => {
+  it('库口径不可用时降级报 -1（不可证），不拿算不清的数当安全证据', () => {
     const raw = '记'.repeat(3800);
     // 库口径不可用(抛错) -> seq 不可证
-    expect(childShrink(raw, 2048, stubTokenizer({ throwOn: 'call' }))).toEqual({ text: raw, seq: -1 });
+    expect(childShrink(raw, HARD_CAP_TOKENS, stubTokenizer({ throwOn: 'call' }))).toEqual({ text: raw, seq: -1 });
   });
-
+  
   it('未超限的文本仍按库口径实测一次,不因「ids 不超」就免检', () => {
     const tok = stubTokenizer();
     const raw = '短文本'.repeat(10); // 30 字符
-    const out = childShrink(raw, 2048, tok);
+    const out = childShrink(raw, HARD_CAP_TOKENS, tok);
     expect(out.text).toBe(raw);
     expect(out.seq).toBe(32); // 30 + 2 special,实测值而非 0/-1
     expect(tok.calls.filter((c) => c.fn === 'call').length).toBe(1);
   });
 
   it('库口径超了但 id 数没超(中文 1 字≈1 token 的常态)时,仍走截断不直通', () => {
-    // 2040 个字符:encode 得 2040 ≤ 2048,但库口径 2040+2+6=2048 边缘;drift=10 使其真超
-    const raw = '记'.repeat(2040);
-    const out = childShrink(raw, 2048, stubTokenizer({ drift: 10 }));
-    expect(out.seq).toBeLessThanOrEqual(2048);
+    // encode 得 2040 ≤ 预算,但库口径 2040+2+10 = 2052 真超；预算取小值使该情形可构造
+    const budget = 200;
+    const raw = '记'.repeat(195);
+    const out = childShrink(raw, budget, stubTokenizer({ drift: 10 }));
+    expect(out.seq).toBeLessThanOrEqual(budget);
     expect(out.text.length).toBeLessThan(raw.length);
   });
 
@@ -182,29 +189,29 @@ describe('#22 shrinkToBudget(按库口径实测,而不是按字符猜)', () => {
 
   it('降级路径一律退回粗筛原文并标不可证:护栏不得搞坏能跑的链路', () => {
     const raw = '记'.repeat(3800);
-    expect(childShrink(raw, 2048, null)).toEqual({ text: raw, seq: -1 });
+    expect(childShrink(raw, HARD_CAP_TOKENS, null)).toEqual({ text: raw, seq: -1 });
     expect(childShrink(raw, 0, stubTokenizer())).toEqual({ text: raw, seq: -1 });
-    expect(childShrink(raw, 2048, stubTokenizer({ throwOn: 'encode' })).text).toBe(raw);
-    expect(childShrink(raw, 2048, stubTokenizer({ throwOn: 'decode' })).seq).toBe(-1);
-    expect(childShrink(raw, 2048, stubTokenizer({ throwOn: 'call' })).seq).toBe(-1);
-    expect(childShrink(raw, 2048, stubTokenizer({ decodeEmpty: true })).text).toBe(raw);
+    expect(childShrink(raw, HARD_CAP_TOKENS, stubTokenizer({ throwOn: 'encode' })).text).toBe(raw);
+    expect(childShrink(raw, HARD_CAP_TOKENS, stubTokenizer({ throwOn: 'decode' })).seq).toBe(-1);
+    expect(childShrink(raw, HARD_CAP_TOKENS, stubTokenizer({ throwOn: 'call' })).seq).toBe(-1);
+    expect(childShrink(raw, HARD_CAP_TOKENS, stubTokenizer({ decodeEmpty: true })).text).toBe(raw);
   });
 
   it('实测陷阱:return_tensor 必须显式关掉(否则拿到没有 length 的张量)', () => {
     const raw = '记'.repeat(3800);
     const tok = stubTokenizer({ tensorWhenOptionMissing: true });
-    childShrink(raw, 2048, tok);
+    childShrink(raw, HARD_CAP_TOKENS, tok);
     const enc = tok.calls.find((c) => c.fn === 'encode');
     expect((enc?.arg as { return_tensor?: boolean })?.return_tensor).toBe(false);
     // 给了选项拿到数组 -> 确实裁了(而不是静默地「测不到长度就不裁」)
-    expect(childShrink(raw, 2048, tok).text).not.toBe(raw);
+    expect(childShrink(raw, HARD_CAP_TOKENS, tok).text).not.toBe(raw);
     // 不管选项都给张量(异常/老版) -> 退回原文,不抛错、不猜长度
-    expect(childShrink(raw, 2048, stubTokenizer({ alwaysTensor: true }))).toEqual({ text: raw, seq: -1 });
+    expect(childShrink(raw, HARD_CAP_TOKENS, stubTokenizer({ alwaysTensor: true }))).toEqual({ text: raw, seq: -1 });
   });
 
   it('实测陷阱:decode 必须 skip_special_tokens,否则 [CLS]/[SEP] 被编回文本二次分词', () => {
     const tok = stubTokenizer();
-    childShrink('记'.repeat(3800), 2048, tok);
+    childShrink('记'.repeat(3800), HARD_CAP_TOKENS, tok);
     const dec = tok.calls.find((c) => c.fn === 'decode');
     expect((dec?.arg as { skip_special_tokens?: boolean })?.skip_special_tokens).toBe(true);
   });
@@ -254,10 +261,10 @@ describe('#22 接线契约(哨兵级,非运行时证明)', () => {
   });
 
   it('单一真值来源:HARD_CAP_TOKENS 不得在子进程/服务层被重新写一遍', () => {
-    expect(childSrc).not.toMatch(/\b2048\b/u);
-    expect(localSrc).not.toMatch(/maxInputTokens[^\n]*\b2048\b/u);
+    expect(childSrc).not.toMatch(/\b(1536|2048|2700)\b/u);
+    expect(localSrc).not.toMatch(/maxInputTokens[^\n]*\b(1536|2048)\b/u);
     const catalogSrc = readFileSync(new URL('../src/store/model-catalog.ts', import.meta.url), 'utf-8');
-    expect(catalogSrc).toMatch(/export const HARD_CAP_TOKENS = 2048;/u);
+    expect(catalogSrc).toMatch(/export const HARD_CAP_TOKENS = \d+;/u);
   });
 
   it('嵌入预算路径不得复用上下文占用的 CHARS_PER_TOKEN=4(中文会低估 4 倍)', () => {

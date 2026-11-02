@@ -323,7 +323,7 @@ Drei Embedding-Quellen: **aus** (Standard, reine BM25-Schlüsselwortsuche), **re
 | `embedding.model`            | leer                    | Embedding-Modellname |
 | `embedding.dimensions`       | `0`                     | Vektordimension (bei Aktivierung Pflicht, muss zur Modellausgabe passen) |
 | `embedding.maxInputChars`    | `5000`                  | Maximale Zeichen je Text (bei Überlänge abgeschnitten) |
-| `embedding.maxInputTokens`   | `0`                     | **Token**-Budget pro Text für lokale Einbettung: `0` (Standard) = min(Modellfenster, harte Grenze 2048); >0 = explizit, bei Überschreitung geklemmt inkl. warn. Andere Rolle als die Zeile oben – das Zeichenlimit betrifft nur Remote-Modus & IPC-Größe, die lokale Absturz-/Speichergrenze muss in Tokens stehen (#22) |
+| `embedding.maxInputTokens`   | `0`                     | **Token**-Budget pro Text für lokale Einbettung: `0` (Standard) = min(Modellfenster, harte Grenze 1536); >0 = explizit, bei Überschreitung geklemmt inkl. warn. Andere Rolle als die Zeile oben – das Zeichenlimit betrifft nur Remote-Modus & IPC-Größe, die lokale Absturz-/Speichergrenze muss in Tokens stehen (#22) |
 | `embedding.timeoutMs`        | `10000`                 | Timeout eines einzelnen Embedding-Aufrufs (ms) |
 | `embedding.allowLocalModels` | `true`                  | Lokale Embedding-Stufe erlauben (Deployment-Obergrenze: ausgeschaltet kann die Einstellungsseite keine Modelle laden und nicht auf Lokal schalten) |
 | `embedding.mirror`           | `https://hf-mirror.com` | Wurzeladresse des Download-Spiegels für lokale Modelle (zurücksetzbar auf das offizielle `https://huggingface.co`) |

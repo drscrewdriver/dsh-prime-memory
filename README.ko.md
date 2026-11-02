@@ -274,7 +274,7 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `embedding.model` | 빈값 | 임베딩 모델명 |
 | `embedding.dimensions` | `0` | 벡터 차원（활성 시 필수） |
 | `embedding.maxInputChars` | `5000` | 단텍스트 최대 문자 수（초장 잘림） |
-| `embedding.maxInputTokens` | `0` | 로컬 임베딩 1건당 **토큰** 예산: `0`(기본) = 모델 창과 상한 2048 중 작은 값, >0 = 명시값(초과 시 clamp + warn). 위 행과 역할이 다름 — 문자 상한은 원격 모드와 IPC 크기만 제한하고, 로컬 충돌/메모리 방지는 토큰 단위가 필수(#22) |
+| `embedding.maxInputTokens` | `0` | 로컬 임베딩 1건당 **토큰** 예산: `0`(기본) = 모델 창과 상한 1536 중 작은 값, >0 = 명시값(초과 시 clamp + warn). 위 행과 역할이 다름 — 문자 상한은 원격 모드와 IPC 크기만 제한하고, 로컬 충돌/메모리 방지는 토큰 단위가 필수(#22) |
 | `embedding.timeoutMs` | `10000` | 단회 임베딩 호출 타임아웃（ms） |
 | `embedding.allowLocalModels` | `true` | 로컬 임베딩档 허용（배포 상한） |
 | `embedding.mirror` | `https://hf-mirror.com` | 로컬 모델 다운로드 미러 루트 |

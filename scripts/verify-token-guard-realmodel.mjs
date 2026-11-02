@@ -24,6 +24,11 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// 默认预算从唯一真值源读，不在本脚本里再写一个魔数（否则改了常量这里就说谎）
+const { HARD_CAP_TOKENS: HARD_CAP_DEFAULT } = await import(
+  pathToFileURL(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'store', 'model-catalog.js')).href,
+).then((m) => ({ HARD_CAP_TOKENS: m.HARD_CAP_TOKENS }));
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dataDir = process.env.PM_DATA_DIR || path.join(process.env.HOME || process.env.USERPROFILE || '', '.dsh', 'memory');
 const runtimeDir = path.join(dataDir, 'runtime');
@@ -31,7 +36,13 @@ const modelDir = path.join(dataDir, 'models', 'bge-m3');
 
 const argBudget = (() => {
   const i = process.argv.indexOf('--budget');
-  return i > -1 && process.argv[i + 1] ? Number(process.argv[i + 1]) : 2048;
+  return i > -1 && process.argv[i + 1] ? Number(process.argv[i + 1]) : HARD_CAP_DEFAULT;
+})();
+// 连发次数：#22 报告人实测“单发安全≠连发安全”（arena 高水位不回落，同一段长文本
+// 串行第 2 条就 SIGTRAP），本仓真实负载就是连发（graph 投影逐条 await embed）。
+const argSerial = (() => {
+  const i = process.argv.indexOf('--serial');
+  return i > -1 && process.argv[i + 1] ? Number(process.argv[i + 1]) : 5;
 })();
 
 let failures = 0;
@@ -125,6 +136,26 @@ console.log('\n=== 护栏生效的旁证：截断前后向量必须不同（相�
 const guardedVec = await measure('记'.repeat(5000), argBudget);
 const rawVec = await measure('记'.repeat(5000), 0);
 ok('截断后与未截断的向量不同', JSON.stringify(guardedVec.vector) !== JSON.stringify(rawVec.vector), `guarded seq=${guardedVec.seq} raw seq=${rawVec.byLibrary}`);
+
+console.log('\n=== 连发护栏（报告人实测：单发安全≠连发安全）===');
+/*
+ * 同一段超长文本在**同一个子进程（同一 pipeline 实例）**里串行喂 argSerial 次：
+ * 只要有任何一轮 seq 超预算，预算就是只对单发成立——那等于没护栏。
+ * 本机（Windows/纯 node）不会像 Electron-node 那样 trap，所以本项只能证
+ * “预算对连发一致成立”，不能证“连发不崩”（后者只能 macOS）。
+ */
+{
+  const raw = '记'.repeat(5000);
+  const seqs = [];
+  for (let i = 0; i < argSerial; i++) {
+    const m = await measure(raw, argBudget);
+    seqs.push(m.seq);
+  }
+  const allIn = seqs.every((s) => s > 0 && s <= argBudget);
+  ok(`${argSerial} 条串行同文本：每一轮实测 seq 均 ≤ 预算`, allIn, `seqs=${seqs.join(',')}`);
+  const uniq = new Set(seqs);
+  ok('连发各轮的 seq 一致（预算不随轮次漂移）', uniq.size === 1, `[...${[...uniq].join(',')}]`);
+}
 
 console.log('\n=== T3: 内存峰值代理上界（Windows 无 SIGTRAP，用峰值替代判据）===');
 /*

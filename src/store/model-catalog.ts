@@ -115,22 +115,30 @@ export function catalogById(id: string): CatalogEntry | undefined {
 /**
  * 本地 ONNX 推理的单条 token 上限（**唯一硬编码源**,issue #22）。
  *
- * 取值 2048 的理由（不是拍脑袋）：#22 实测 Electron 宿主下约 **2700 token** 即被分配器
- * SIGTRAP 打死（栈：MatMul 输出张量 → BFCArena::Extend → malloc_zone_memalign），且峰值
- * 内存按 **O(T²)** 增长（attention 张量 `[1,heads,T,T]`）——2048 在致死线下留 ≈24% 余量，
- * 同时把单次峰值从 ≈4.7GB 压到 ≈0.43 倍。它是**崩溃护栏也是内存护栏**，两者同源。
+ * 为什么是 1536 而不是 2048：本值受**连发**致死线约束，不是单发线。
+ * #22 报告人在 macOS/M5 上二分实测（Electron-node，5×5000 中文字符串行）：
+ * 512/1024 全过、1900/1960 全过、**1990/2000/2010/2016/2020/2040/2048 均第 2 条即 SIGTRAP**
+ * —— 即**连发致死线落在 1960～1990**，而单发致死线是 ≈2700（issue 初测）。
+ * 两者不同源的机理：BFCArena 高水位不回落，第二条进来时第一份 T² 张量尚未回收完，
+ * 新块与旧块共存瞬间的峰值才是真正的天花板。
+ *
+ * 而**真实负载就是连发**：`pipeline/graph.ts` 对 touched 节点「`for … await embed(…)`」
+ * 逐条串行，一个投影批里常有 5～8 个节点，其中两条长就命中。
+ * 1536 在连发线（≈1960）下留 ≈21% 余量（报告人建议值）；代价是单条 infer 从 ~2.2s
+ * 降到 ~1.2s，反而使 `embedding.ts` 的 EMA>5s 熔断更不容易被误触发。
+ * 它同时是**崩溃护栏与内存护栏**：峰值按 O(T²) 增长（attention 张量 `[1,heads,T,T]`）。
  *
  * 不拿 `maxInputChars` 当护栏的原因：bge-m3/embeddinggemma 是 Unigram/BPE，中文≈**1 字/token**
  * 而 emoji/泰文可 >1.5，所以 5000 字符**既可只 750 token（英文）也可近 8192（中文）**——
  * 字符与 token 无稳定比值，字符帽永远约不到安全线。
  */
-export const HARD_CAP_TOKENS = 2048;
+export const HARD_CAP_TOKENS = 1536;
 
 /**
- * 推导生效的本地嵌入 token 预算（**单一实现点**,截断执行在 `resources/embedding-child.cjs`）。
+ * 推导生效的本地嵌入 token 预算（**单一实现点**,截断执行在 `resources/embedding-token-guard.cjs`）。
  *
  * 默认（`userTokens` 缺省/0/负）= `min(modelContext, HARD_CAP_TOKENS)`：bge-small-zh(512)
- * 不受 HARD_CAP 影响（本来就到 512 窗口），bge-m3(8192) 被压到 2048。`modelContext`
+ * 不受 HARD_CAP 影响（本来就到 512 窗口），bge-m3(8192) 被压到硬上限。`modelContext`
  * 取不到（非目录模型）时回退 HARD_CAP_TOKENS，**取小不取大**。
  *
  * 用户显式超限只 **clamp 不抛错**（收窄 schema 边界会让已部署 YAML 解析直接失败，故障半径
