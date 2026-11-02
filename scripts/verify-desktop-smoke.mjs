@@ -93,12 +93,24 @@ if (!fs.existsSync(INSTALLED)) {
       return '';
     }
   })();
-  (/module.exports = \{ shrinkToBudget \}/.test(guardTxt) ? pass : fail)('#22 token 精截件在装机产物里');
+  // 断言写**意图**不写字面量：上一版贴了 `module.exports = { shrinkToBudget }` 与
+  // `const sent = shrinkToBudget(...)`，实现一改（导出多一个辅函数、变量改名、递降量变公式）
+  // 这三条就误报——同一个契约在 smoke.ts 与本脚本各写了一份，同步跟不上就是漂移。
+  (/module\.exports\s*=\s*\{[^}]*\bshrinkToBudget\b[^}]*\}/.test(guardTxt) ? pass : fail)(
+    '#22 token 精截件在装机产物里（导出可用）',
+  );
+  (/seqLenOf\(/.test(guardTxt) ? pass : fail)('#22 精截按实测序列长度收预算（不只看 id 数）');
   const childTxt = read('dist/embedding-child.cjs');
   (/require\('\.\/embedding-token-guard\.cjs'\)/.test(childTxt)
-    && /const sent = shrinkToBudget\(screened, MAX_INPUT_TOKENS, tokenizer\)/.test(childTxt)
+    && /shrinkToBudget\(screened, MAX_INPUT_TOKENS, tokenizer\)/.test(childTxt)
+    && /extractor\(\[cut\.text\]/.test(childTxt)
     ? pass
     : fail)('#22 child 已接线到精截（非只定义不调用）');
+  // 只否「代码里读 `.shape`」，不能用 /\.shape/ ——该串也出现在解释旧写法为何错的**注释**里
+  // （实测就是被自己的说明注释误伤过一次）。
+  (/result\[[^\]]*\]\.shape|\.shape\s*&&|Array\.isArray\([^)]*shape/i.test(childTxt) ? fail : pass)(
+    '#22 child 不再从输出张量取不存在的 .shape（旧上报恒 -1）',
+  );
   const localTxt = read('dist/store/local-embedding.js');
   (/maxInputTokens: budget\.tokens/.test(localTxt) && /deriveTokenBudget/.test(localTxt) ? pass : fail)(
     '#22 主进程把 token 预算装进了 DSH_EMBED_CFG',
