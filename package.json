@@ -1,6 +1,6 @@
 {
   "name": "dsh-prime-memory",
-  "version": "0.26.30",
+  "version": "0.26.31",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
