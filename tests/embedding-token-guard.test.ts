@@ -371,4 +371,44 @@ describe('#22 退出归因(signal 不得丢弃)', () => {
     expect(describeEmbedBatch('bge-m3', 3, 0, 100)).toContain('tokensMax=0');
     expect(describeEmbedBatch('bge-m3', 3, 1536, 100)).toContain('tokensMax=1536');
   });
+
+  /**
+   * 上面那组曾经是个**假安全**：它只证明「纯函数收到 -1 时印未知」，
+   * 却没证明「子进程会送来 -1」。报告人实测：child 侧 tokensMax 初值为 0,
+   * 而累加用严格大于,于是 -1 永远赢不了 0 —— 不可证被压成 0,
+   * 正好印成它想避免的「一条也没进」。下列三例钉的是那个真正的链路缺口。
+   */
+  it('子进程侧初值必须是 -1（不可证）而不是 0', () => {
+    const src = readFileSync(new URL('../resources/embedding-child.cjs', import.meta.url), 'utf-8');
+    const m = /remaining: texts\.length, failed: false, tokensMax: (-?\d+)/.exec(src);
+    expect(m, '未找到 tokensMax 初值行（结构被改动了,请同步本哨兵）').not.toBeNull();
+    expect(m?.[1]).toBe('-1');
+  });
+
+  it('归并语义复现：初值 0 会吞掉不可证，初值 -1 不会', () => {
+    const fold = (init: number, seqs: number[]) => {
+      let acc = init;
+      for (const s of seqs) if (s > acc) acc = s;
+      return acc;
+    };
+    // 缺陷复现：全不可证 + 初值 0 -> 净果是 0,主线程会把它当有效值印出来
+    expect(fold(0, [-1, -1, -1])).toBe(0);
+    // 修复后：同样输入留下 -1,主线程印「未知」
+    expect(fold(-1, [-1, -1, -1])).toBe(-1);
+    // 只要有一轮量得到，就必须取到那个实测值（-1 初值不得污染结果）
+    expect(fold(-1, [-1, 803, -1])).toBe(803);
+    expect(fold(-1, [1535, 1535])).toBe(1535);
+  });
+
+  it('端到端：预算为 0（护栏关闭）时上报值不得退化成 0', async () => {
+    // 走真 shrinkToBudget：maxTokens=0 应返回 {text:raw, seq:-1},
+    // 经上面的归并后净果为 -1 -> 主线程印「未知」而不是 tokensMax=0。
+    const raw = '记'.repeat(500);
+    const cut = childShrink(raw, 0, stubTokenizer());
+    expect(cut.seq).toBe(-1);
+    let acc = -1;
+    if (cut.seq > acc) acc = cut.seq;
+    expect(acc).toBe(-1);
+    expect(describeEmbedBatch('bge-m3', 1, acc, 10)).toContain('tokensMax=未知');
+  });
 });

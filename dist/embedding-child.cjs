@@ -15,7 +15,8 @@
  * - 出向:{id,ok:true,type:'pong'|'ready'|'embedded',vectors?,tokensMax?}(vectors 为
  *   number[][],fork IPC 默认 JSON 序列化不支持 TypedArray,主线程侧重建
  *   Float32Array;512d×32 条 ≈64KB,序列化 <5ms,瓶颈在推理不在传输)。
- *   tokensMax = 本批真正进模型的最大 token 数(#22 护栏自证用,主线程不消费也不报错)
+ *   tokensMax = 本批**实测**进模型的最大 token 数(#22 护栏自证用,主线程不消费也不报错);
+ *   初值为 -1 而非 0 —— -1 表示「不可证」,与「真的一个 token 也没进」必须区分开。
  *   | {id,ok:false,stage:'load'|'infer',error} | {type:'fatal',error}
  *
  * 信任边界(沿 AGENTS.md 审查记录):runtime/ 目录在数据目录信任边界内,
@@ -173,7 +174,11 @@ function handleEmbed(msg) {
     postReply({ id: msg.id, ok: true, type: 'embedded', vectors: [] });
     return;
   }
-  const request = { id: msg.id, vectors: new Array(texts.length), remaining: texts.length, failed: false, tokensMax: 0 };
+  // tokensMax 初值必须是 -1（不可证）而不是 0：下面的累加用严格大于，若初值为 0，
+  // 则永远量不出 seq 的情形（tokenizer 不可达/预算为 0）会把 -1 压成 0，
+  // 而主线程的 `>= 0` 判据会把 0 当有效值印出来——正好印成「一条也没进」，
+  // 与「不可证」撞车，使这行日志在最需要它的时刻说谎（#22 报告人回验实测）。
+  const request = { id: msg.id, vectors: new Array(texts.length), remaining: texts.length, failed: false, tokensMax: -1 };
   // 单条请求(召回 query)插队到队首;批次追加到队尾(批内条目间仍会被后来的插队)
   const priority = msg.priority === true && texts.length === 1;
   for (let i = 0; i < texts.length; i++) {
