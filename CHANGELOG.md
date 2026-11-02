@@ -1,5 +1,12 @@
 # 更新日志（Changelog）
 
+## [0.26.24] — 2026-11-02
+
+- **修掉 `0.26.23` 自己引入的回归：读面可能被永久堵死**。上一版规定「对端已升版但 `drsReadFacade()` 返回 undefined 时抛可重试错、不回退自开库」，用意是避免把自开库结果永久缓存。但**未就绪是无法与「本进程根本不会有人 activate collector」区分的**，两类真实场景落进后者：① 宿主外跑本仓读面做校验的脚本（新进程 import collector，`apply()` 从未运行，门面永远 undefined）；② collector 装了但未进当前 profile 的装载清单。它们会每次读都报错，比 `0.26.21` 的直接自开库更糟。
+- **改法：有界重试后再回退**（`src/clients/drsc-inproc.ts`）。预算 `FACADE_RETRY_BUDGET = 3`：前 3 次读抛可重试错且不缓存（给宿主内 collector 的 `setImmediate` 初始化留出窗口，保住「优先用门面」）；第 4 次仍拿不到门面即认定本进程等不到，回退自开只读库。两条路径都读的是同一个 WAL 库、句柄只读，不存在读到错数据的风险，差别只是是否多占一份常驻 `summaries`。门面一旦就绪，计数器归零。
+- **测试**：`tests/drsc-inproc.test.ts` 相应改为断言完整状态机——预算内逐次抛错（错误文本含 `1/3`、`2/3`、`3/3`）且期间**绝不**调用 `openProjectionStore`；第 4 次回退成功打开自有句柄并返回正常结果；`resetCollectorReadState()` 后门面就绪能拿回门面。全量 **1904 例 / 190 文件**，typecheck/lint/build/build:smoke/smoke 全 0。
+- **验证口径提示**：宿主外脚本按设计走的是**回退路径**（会开自己的只读句柄），因此「脚本里出现自开库」不是缺陷；宿主内的判据是日志无「背景窗拉取失败」且蒸馏/`conversation_search` 出真数据。
+
 ## [0.26.23] — 2026-11-02
 
 - **方案 B：DRSC 读面改走 collector 的正式门面（`drsReadFacade`）**。`0.26.21` 的进程内直调虽然绕开了宿主鉴权，但代价是**耦合 collector 的五个内部导出名**（`openProjectionStore`/`createQueryContext`/`search`/`sessionDetail`/`listSessions`），并且**自己另开一份投影库**——多占一份常驻 `summaries` 内存与一个读事务。现在 collector `0.2.5` 导出 `drsReadFacade()`，返回绑它**自己活 QueryContext** 的只读对象；本仓优先用这个门面，只认一个稳定符号，也不再开第二份库。

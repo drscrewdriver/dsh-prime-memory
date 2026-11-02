@@ -191,22 +191,31 @@ describe('callCollectorRead 优先走 collector 读门面（>=0.2.5）', () => {
     expect(mod.openProjectionStore).not.toHaveBeenCalled();
   });
 
-  it('对端是新版本但库未就绪：本轮报错且不缓存，不会退化成永久自开库', async () => {
+  it('对端新版本但库未就绪：先给有界重试（不缓存自开库），超预算后回退自开只读库', async () => {
     const { mod, calls } = facadeModule(false);
     const load = (async () => mod) as unknown as () => Promise<CollectorReadModule>;
 
-    await expect(callCollectorRead('?op=sessions&offset=0&limit=1', load)).rejects.toThrow(/尚未就绪/u);
-    expect(calls.filter((c) => c.fn === 'openProjectionStore')).toHaveLength(0);
+    // 预算内：每次报错且不缓存，也不提前自开库。
+    for (let i = 1; i <= 3; i++) {
+      await expect(callCollectorRead('?op=sessions&offset=0&limit=1', load))
+        .rejects.toThrow(new RegExp(`${i}/3`));
+      expect(calls.filter((c) => c.fn === 'openProjectionStore')).toHaveLength(0);
+    }
 
-    // 对端初始化完成后，下一次读必须拿到门面（而不是缓存住的自开库）。
+    // 第 4 次：认定本进程不会有人 activate 它 → 回退自开库，读面不能永久堵死。
+    const body = await callCollectorRead('?op=sessions&offset=0&limit=1', load);
+    expect(body.ok).toBe(true);
+    expect(calls.filter((c) => c.fn === 'openProjectionStore')).toHaveLength(1);
+
+    // 回退后若门面就绪，应能拿回门面（不因缓存而永久停在自开库）。
+    resetCollectorReadState();
     mod.drsReadFacade.mockImplementation(() => ({
       listSessions: () => ({ total: 7, rows: [] }),
       sessionDetail: () => ({ session: undefined, rows: [] }),
       search: () => ({ query: '', match: '', hits: [] }),
     }));
-    const body = await callCollectorRead('?op=sessions&offset=0&limit=1', load);
-    expect(body.total).toBe(7);
-    expect(calls.filter((c) => c.fn === 'openProjectionStore')).toHaveLength(0);
+    const again = await callCollectorRead('?op=sessions&offset=0&limit=1', load);
+    expect(again.total).toBe(7);
   });
 
   it('旧版 collector（无 drsReadFacade）仍回退自开只读库', async () => {

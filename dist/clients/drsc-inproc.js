@@ -23,6 +23,14 @@ const COLLECTOR_PACKAGE = 'dsh-reference-session-collector';
 const defaultLoader = async () => (await import(/* @vite-ignore */ COLLECTOR_PACKAGE));
 let modulePromise;
 /**
+ * 对端已升版但库未就绪时的重试预算。不能无限重试：宿主**外**的脚本、以及
+ * 「collector 装了但未装载」的部署里，drsReadFacade() 永远返回 undefined，
+ * 死等会把读面永久堵死（比回退更糟）。也不能一上来就回退：那会把自开库
+ * 结果永久缓存，把“优先用门面”变成只在首轮赌运气。
+ */
+const FACADE_RETRY_BUDGET = 3;
+let facadeMisses = 0;
+/**
  * 兼容路径（旧 collector）的只读句柄（`openProjectionStore` 的返回值）。常驻 summaries
  * 是内存 Map，每请求重开等于重扫全表，故只开一次；undefined 是合法的未开哨兵。
  */
@@ -31,6 +39,7 @@ let storeHandle;
 export function resetCollectorReadState() {
     modulePromise = undefined;
     storeHandle = undefined;
+    facadeMisses = 0;
 }
 /** 把门面对象适配成本模块统一的「模块形」，以便与兼容路径共用同一套参数映射。
  * 前三个成员在门面路径上永不会被调用：moduleOf 命中门面后直接返回，不走进兼容分支。
@@ -54,14 +63,18 @@ async function moduleOf(load) {
         const mod = (await load());
         if (typeof mod.drsReadFacade === 'function') {
             const facade = mod.drsReadFacade();
-            // 对端是新版本但库未就绪（collector 的重活推迟在 setImmediate 臂）：本轮**不**回退
-            // 自开库，而是抛可重试错——否则会把自开库结果永久缓存，把“优先用门面”变成
-            // 只在首轮赌运气。抛错走既有降级链（背景窗当轮空窗、工具面显式报错），
-            // 且不缓存 rejection，下一次读会重取门面。
-            if (facade === undefined) {
-                throw new Error('collector 投影库尚未就绪（稍后自动重试）');
+            // 对端是新版本但库未就绪（collector 的重活推迟在 setImmediate 臂）：先给它几次
+            // 重试机会（抛可重试错、不缓存 rejection，下一次读重取门面）；超过预算就认定
+            // 本进程里不会有人 activate 它（宿主外的脚本、或 collector 装了但未装载），
+            // 回退自开只读库。两条路都不会读错数据：库是同一个 WAL 文件，自开句柄只读。
+            facadeMisses += 1;
+            if (facade !== undefined) {
+                facadeMisses = 0;
+                return fromFacade(facade);
             }
-            return fromFacade(facade);
+            if (facadeMisses <= FACADE_RETRY_BUDGET) {
+                throw new Error(`collector 投影库尚未就绪（第 ${facadeMisses}/${FACADE_RETRY_BUDGET} 次重试）`);
+            }
         }
         return legacyStoreModule(mod);
     })().catch((err) => {
