@@ -302,6 +302,7 @@ Los ajustes que pisan los valores por defecto se escriben en el `cordis.patch.ym
 | `extract.idleSeconds`        | `300`                   | Red de seguridad por inactividad: tras N segundos de silencio de la sesión las rebanadas sin destilar se sacan del bache (atrapa el caso «se fue sin llegar al umbral»); `0` lo desactiva |
 | `extract.backgroundMessages` | `10`                    | Número de mensajes de contexto adjuntos a la extracción (consultados al vuelo en L0 por la sesión, sin contaminación entre sesiones) |
 | `extract.candidatePool`      | `5`                     | Tamaño del vaso de candidatos de deduplicación |
+| `extract.intraBatchDedupe`   | `true`                  | Deduplicación intra-lote (misma ronda/sesión): normaliza + agrupa por vectores (misma familia/tipo) antes del dedupe LLM, para que los fragmentos de una conversación no se fusionen en una sola memoria larga (solo reduce número y tiempo, no el pico por inferencia) |
 | `l2.enabled`                 | `true`                  | Consolidación de escenas L2 |
 | `l2.minNewMemories`          | `5`                     | Umbral de memorias nuevas desde la última consolidación L2 |
 | `l2.maxScenes`               | `12`                    | Límite superior de bloques de escena |

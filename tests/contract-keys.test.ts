@@ -106,6 +106,7 @@ const ENDPOINTS = [
   'dsh-memory/llm-providers',
   'dsh-memory/llm-models',
   'dsh-memory/embedding-state-get',
+  'dsh-memory/drsc-health',
   'dsh-memory/embedding-source-set',
   'dsh-memory/embedding-download-start',
   'dsh-memory/embedding-download-cancel',
@@ -174,10 +175,11 @@ describe('wing catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 66 contracted endpoints, records-delete and graph included', () => {
-    // 66 = 65 + `skills-detect`（技能历史回灌手动入口，issue #15 接生产者）。上一阶 65 = 64 + `graph-cleanup-dead`。
-    expect(ENDPOINTS.length).toBe(66);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(66);
+  it('exposes exactly the 67 contracted endpoints, records-delete and graph included', () => {
+    // 67 = 66 + `drsc-health`（设置面板 DRSC 依赖 banner 的探针端点）。
+    // 上一阶 66 = 65 + `skills-detect`；65 = 64 + `graph-cleanup-dead`。
+    expect(ENDPOINTS.length).toBe(67);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(67);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {

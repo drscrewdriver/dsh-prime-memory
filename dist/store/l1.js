@@ -486,8 +486,11 @@ export class L1Store {
     resolveConflictPending(pairId, resolution, resolvedAt) {
         return this.db.resolveConflictPending(pairId, resolution, resolvedAt);
     }
-    /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */
-    async appendNew(records) {
+    /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。
+     *
+     *  `opts.vectors`:调用方（L1 批内自去重）已算好的向量；非 undefined 位直接复用，
+     *  其余现嵌。长度不等时**整批回落实嵌**（不猜位置，宁可多嵌一次）。 */
+    async appendNew(records, opts) {
         if (records.length === 0)
             return;
         // 写侧标注汇流口(task_3.2):所有新写路径(pipeline / memory_add / import / memport /
@@ -512,7 +515,19 @@ export class L1Store {
         for (const [day, list] of byDay) {
             await appendJsonl(path.join(this.recordsDir, `${day}.jsonl`), list);
         }
-        const vecs = await this.helper.batch(records.map((r) => r.content));
+        const reuse = opts?.vectors;
+        let vecs;
+        if (reuse && reuse.length === records.length && reuse.some((v) => v !== undefined)) {
+            const missing = records.map((_, i) => i).filter((i) => reuse[i] === undefined);
+            const fresh = missing.length > 0 ? await this.helper.batch(missing.map((i) => records[i].content)) : [];
+            vecs = reuse.slice();
+            missing.forEach((ri, k) => {
+                vecs[ri] = fresh[k];
+            });
+        }
+        else {
+            vecs = await this.helper.batch(records.map((r) => r.content));
+        }
         // 单事务批量写:逐条开事务在 WAL FULL 下每条一次 fsync。
         // 双写失败闭环:JSONL 事实源已先行追加,DB 缺行 = 这批记忆检索不可见、
         // 去重候选缺失(重复记忆会累积)。upsert 内部已有逐条 warn,这里升 error
@@ -524,15 +539,16 @@ export class L1Store {
         // 写对称:新增也即时上盘(不阻塞、失败只 warn)——否则「文件树 = 库当前状态」只对删成立。
         this.fireFileSync(records.map((r) => r.id), 'appendNew');
     }
-    /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。 */
-    async upsert(record) {
+    /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。
+     *  `opts.vector`:同 `appendNew`，merge 产出的**新正文**通常不复用（调用方不传即现嵌）。 */
+    async upsert(record, opts) {
         if (!record.family)
             record.family = familyForType(record.type);
         // 写侧标注汇流口(与 appendNew 同口径):merge 分支会继承胜方的 name；
         // 两边都没名字时在这里补上，别让新铸的行继续带空名。
         stampValidity(record, Date.now());
         this.assignMissingNames([record], { persist: false });
-        const vec = (await this.helper.batch([record.content]))[0];
+        const vec = opts?.vector ?? (await this.helper.batch([record.content]))[0];
         if (!this.db.upsertL1(record, vec)) {
             this.logger?.error(`[memory] L1 检索库写入失败 id=${record.id}(JSONL 事实源完好),该记忆暂不可检索,重建可修复`);
         }
@@ -924,6 +940,16 @@ export class L1Store {
         return this.helper.query(text, timeoutMs);
     }
     /**
+     * 批量取向量（批内自去重用）：走与写侧同一条 `helper.batch`。
+     *
+     * 为什么不用逐条 `embedText`：批内代表项的向量要同时喂给「候选召回」与「写入腿」，
+     * 一次取回才能把「同一条记忆嵌两次」压成一次；且熔断态下 `batch` 统一返回 undefined，
+     * 调用方能自然降级为「只做精确层」，不必各自判错。
+     */
+    embedMany(texts) {
+        return this.helper.batch(texts);
+    }
+    /**
      * 去重候选召回(官方 3 级):空库跳过 → 向量优先 → FTS 兜底。
      * 传入 family 时只在同族记录里召回(去重永不跨族);传入 workspaceId 时
      * 只在**本工作区可见**的记录里召回(§E)——**去重也不跨工作区**。
@@ -932,7 +958,12 @@ export class L1Store {
      * 理由:候选池决定**新的去重决策**,若此处跨工作区,产出的是「项目 B 里看不见、
      * 但已经决定了项目 A 记忆去向」的记录——比不隔离更糟。
      */
-    async searchCandidates(query, limit, family, workspaceId) {
+    async searchCandidates(query, limit, family, workspaceId, 
+    /**
+     * 调用方已算好的查询向量（批内自去重场景）：给了就不再内部重嵌一次。
+     * 不传 → 维持旧行为（内部 `helper.query`）。增参不改旧签名，既有调用零改动。
+     */
+    opts) {
         // 治理哨兵(治理 W0 T0.2):标记去重候选路径;治理权重误入即抛(dev/test)。
         return markDedupPath(async () => {
             if (this.db.countL1() === 0)
@@ -940,7 +971,7 @@ export class L1Store {
             const caps = this.db.getCapabilities();
             if (caps.vectorSearch && this.helper.vectorReady()) {
                 try {
-                    const vec = await this.helper.query(query);
+                    const vec = opts?.queryVector ?? (await this.helper.query(query));
                     if (vec) {
                         const hits = this.db.searchL1Vector(vec, limit, family, workspaceId);
                         if (hits.length > 0)

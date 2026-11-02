@@ -4,6 +4,7 @@ import type { RpcFn } from './rpc.js';
 import { watchSidebarIcon } from './sidebar-icon.js';
 import { applySkin, getSkin, setSkin, type Skin } from './skin.js';
 import { S } from './styles.js';
+import { DrscHealthBanner } from './components/DrscHealthBanner.js';
 import { ensureThemeStyle } from './theme.js';
 import { ConflictsTab } from './tabs/ConflictsTab.js';
 import { ConnectTab } from './tabs/ConnectTab.js';
@@ -84,6 +85,8 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
     <div className="dsh-mem-root" style={S.section}>
       <h2 style={S.heading}>记忆 (Memory)</h2>
       <p style={S.intro}>L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。</p>
+      {/* DRSC 依赖状态：顶部一条横幅，跨 12 个 tab 全局可见；ok 态自作 null 不占版面 */}
+      <DrscHealthBanner rpc={rpc} />
       <div
         style={{
           display: 'flex',

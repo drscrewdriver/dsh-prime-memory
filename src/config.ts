@@ -76,6 +76,18 @@ export interface MemoryConfig {
     dedupRetryCap?: number;
     /** 抽取结果 checkpoint 落盘:去重/落库失败后下轮从去重续跑、不重抽已成功块。R1″。 */
     extractCheckpoint?: boolean;
+    /**
+     * L1 **批内自去重**（同轮/同会话）：进 LLM 跨库去重前，先做"精确归一合并 → 同族同类向量聚类"。
+     *
+     * 解的是实测缺陷：候选池只来自库，同批 `extracted[]` 从不互相比，于是同一段对话被抽成的
+     * 多条碎片会一起塞进 LLM 批，只能由模型把内容"撑在一起"。关闭 = 回到旧行为（逐字节一致）。
+     */
+    intraBatchDedupe?: boolean;
+    /**
+     * 批内向量的余弦阈值（有效区间 0.85–0.99，缺省 0.92）。只在同 family + 同 type 内生效。
+     * 越界**不报错**（配置树抛错的故障半径是整个配置），由代码 clamp 并留 warn。
+     */
+    intraBatchCosine?: number;
   };
   l2: {
     enabled: boolean;
@@ -653,6 +665,11 @@ export const memorySchema: ConfigSchema = Schema.object({
     candidatePool: Schema.number().min(1).max(20).default(5),
     dedupRetryCap: Schema.number().min(1).max(20).default(5),
     extractCheckpoint: Schema.boolean().default(true),
+    // 批内自去重（#同会话碎片收拢）：默认开；关闭即回到 0.26.30 前的行为。
+    intraBatchDedupe: Schema.boolean().default(true),
+    // 宽外壁（0–10）只为防溢出输入；有效区间 0.85–0.99 在代码内 clamp+warn，
+    // 不用 min/max 卡窄区间——schemastery 越界会抛，故障半径是整个配置树。
+    intraBatchCosine: Schema.number().min(0).max(10).default(0.92),
   }),
   l2: Schema.object({
     enabled: Schema.boolean().default(true),

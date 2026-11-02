@@ -24,6 +24,7 @@ import { typeCatalogEntries } from './memory-types.js';
 import type { BackfillProgress } from './contract.js';
 import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats, type RecallSessionStats } from './hooks/recall.js';
+import { probeDrscHealth } from './clients/drsc-inproc.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import type { RebuildController } from './pipeline/rebuild.js';
 import type { RuminateController } from './pipeline/ruminate.js';
@@ -161,6 +162,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/llm-providers',
   'dsh-memory/llm-models',
   'dsh-memory/embedding-state-get',
+  'dsh-memory/drsc-health',
   'dsh-memory/embedding-source-set',
   'dsh-memory/embedding-download-start',
   'dsh-memory/embedding-download-cancel',
@@ -311,6 +313,7 @@ export interface SessionInfoSource {
 import type {
   EffortChoice,
   EmbeddingStateResponse,
+  DrscHealthResponse,
   LayerChainView,
   ListRecordsResponse,
   CleanupRetiredResponse,
@@ -2580,6 +2583,12 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         return v;
       }
       const v: EmbeddingStateResponse = { supported: true, ...(await embedManager.snapshot()) };
+      return v;
+    }
+
+    // DRSC 健康（设置面板 banner）：纯观测，不改读写路径，故不依赖 ctx/embedManager。
+    case 'dsh-memory/drsc-health': {
+      const v: DrscHealthResponse = await probeDrscHealth();
       return v;
     }
 

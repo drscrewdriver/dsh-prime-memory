@@ -252,6 +252,7 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `extract.idleSeconds` | `300` | 유휴兜底：세션이 N초 무음이면 미증류 슬라이스 투하. `0` 비활성 |
 | `extract.backgroundMessages` | `10` | 추출 시 수반하는 배경 메시지 수 |
 | `extract.candidatePool` | `5` | 중복 제거 후보 풀 크기 |
+| `extract.intraBatchDedupe` | `true` | 배치 내 중복 제거(같은 라운드/세션): LLM 중복 제거 전에 정규화 + 동일 family/type 벡터 클러스터링으로, 같은 대화의 파편이 하나의 긴 기억으로 합쳐지는 것을 막음(개수와 소요 시간만 줄이고, 추론 1회당 피크는 낮추지 않음) |
 | `l2.enabled` | `true` | L2 장면 통합 |
 | `l2.minNewMemories` | `5` | 직전 L2 이후 신규 기억 임계값 |
 | `l2.maxScenes` | `12` | 장면 블록 수 상한 |

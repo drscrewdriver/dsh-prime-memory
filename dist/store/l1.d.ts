@@ -335,10 +335,18 @@ export declare class L1Store {
     }): ConflictPair[];
     /** §C 打上裁决结论(已裁决的不覆盖)。 */
     resolveConflictPending(pairId: string, resolution: ConflictResolution, resolvedAt: string): number;
-    /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。 */
-    appendNew(records: MemoryRecord[]): Promise<void>;
-    /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。 */
-    upsert(record: MemoryRecord): Promise<void>;
+    /** 新记忆落盘:JSONL 按天追加(事实源)+ 检索库 upsert + 向量。
+     *
+     *  `opts.vectors`:调用方（L1 批内自去重）已算好的向量；非 undefined 位直接复用，
+     *  其余现嵌。长度不等时**整批回落实嵌**（不猜位置，宁可多嵌一次）。 */
+    appendNew(records: MemoryRecord[], opts?: {
+        vectors?: Array<Float32Array | undefined>;
+    }): Promise<void>;
+    /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。
+     *  `opts.vector`:同 `appendNew`，merge 产出的**新正文**通常不复用（调用方不传即现嵌）。 */
+    upsert(record: MemoryRecord, opts?: {
+        vector?: Float32Array;
+    }): Promise<void>;
     /** 活切换嵌入源:同步换底层服务(嵌入源三态切换用)。 */
     setEmbeddingService(svc: EmbeddingService): void;
     /** 向量写入能力是否就绪。`reindex` 在未就绪时**静默短路**成 0/0/0
@@ -501,6 +509,14 @@ export declare class L1Store {
     /** 查询向量(域软门禁用):复用既有嵌入源;失败/未就绪返回 undefined,调用方降级。 */
     embedText(text: string, timeoutMs?: number): Promise<Float32Array | undefined>;
     /**
+     * 批量取向量（批内自去重用）：走与写侧同一条 `helper.batch`。
+     *
+     * 为什么不用逐条 `embedText`：批内代表项的向量要同时喂给「候选召回」与「写入腿」，
+     * 一次取回才能把「同一条记忆嵌两次」压成一次；且熔断态下 `batch` 统一返回 undefined，
+     * 调用方能自然降级为「只做精确层」，不必各自判错。
+     */
+    embedMany(texts: string[]): Promise<Array<Float32Array | undefined>>;
+    /**
      * 去重候选召回(官方 3 级):空库跳过 → 向量优先 → FTS 兜底。
      * 传入 family 时只在同族记录里召回(去重永不跨族);传入 workspaceId 时
      * 只在**本工作区可见**的记录里召回(§E)——**去重也不跨工作区**。
@@ -509,7 +525,14 @@ export declare class L1Store {
      * 理由:候选池决定**新的去重决策**,若此处跨工作区,产出的是「项目 B 里看不见、
      * 但已经决定了项目 A 记忆去向」的记录——比不隔离更糟。
      */
-    searchCandidates(query: string, limit: number, family?: MemoryFamily, workspaceId?: string): Promise<MemoryRecord[]>;
+    searchCandidates(query: string, limit: number, family?: MemoryFamily, workspaceId?: string, 
+    /**
+     * 调用方已算好的查询向量（批内自去重场景）：给了就不再内部重嵌一次。
+     * 不传 → 维持旧行为（内部 `helper.query`）。增参不改旧签名，既有调用零改动。
+     */
+    opts?: {
+        queryVector?: Float32Array;
+    }): Promise<MemoryRecord[]>;
     /**
      * 增量重嵌入(embedding 配置变化 / 周期性补齐用):只处理缺失向量的记录,
      * 排除已判定"当前 provider 不可嵌入"的 skip 集。返回写入/失败/跳过数——

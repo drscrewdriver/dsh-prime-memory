@@ -308,6 +308,7 @@ the bundle layer appends and causes `duplicate loader entry id` startup failure)
 | `extract.idleSeconds` | `300` | Idle flush: distill a session's pending slice after N seconds of silence (catches "user left before reaching the threshold"); `0` disables |
 | `extract.backgroundMessages` | `10` | Background messages attached to extraction (fetched per session from L0 — no cross-session contamination) |
 | `extract.candidatePool` | `5` | Dedup candidate pool size |
+| `extract.intraBatchDedupe` | `true` | Intra-batch dedupe (same round/session): normalise + cluster by vector within the same family/type before the LLM dedup call, so one conversation's fragments are not merged into a single long memory (cuts count and runtime only, not the per-inference peak) |
 | `l2.enabled` | `true` | L2 scene consolidation |
 | `l2.minNewMemories` | `5` | New-memory threshold since last L2 consolidation |
 | `l2.maxScenes` | `12` | Scene block count cap |

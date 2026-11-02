@@ -301,6 +301,7 @@ Drei Embedding-Quellen: **aus** (Standard, reine BM25-Schlüsselwortsuche), **re
 | `extract.idleSeconds`        | `300`                   | Inaktivitäts-Auffangnetz: nach N Sekunden Stille der Sitzung werden undestillierte Scheiben verbucht (fängt „Nutzer ging vor Erreichen des Schwellwerts"); `0` deaktiviert |
 | `extract.backgroundMessages` | `10`                    | Zahl der Kontextnachrichten, die der Extraktion beiliegen (je Sitzung frisch aus L0 erfragt, keine Verschmutzung zwischen Sitzungen) |
 | `extract.candidatePool`      | `5`                     | Größe des Dedupe-Kandidatenpools |
+| `extract.intraBatchDedupe`   | `true`                  | Dedupe innerhalb eines Batches (gleiche Runde/Session): Normalisierung + Vektor-Clustering (gleiche Familie/Typ) vor dem LLM-Dedupe, damit Fragmente derselben Konversation nicht zu einem langen Eintrag verschmolzen werden (senkt nur Anzahl und Laufzeit, nicht den Peak pro Inferenz) |
 | `l2.enabled`                 | `true`                  | L2-Szenenkonsolidierung |
 | `l2.minNewMemories`          | `5`                     | Schwellwert neuer Erinnerungen seit der letzten L2-Konsolidierung |
 | `l2.maxScenes`               | `12`                    | Obergrenze der Szenenblöcke |

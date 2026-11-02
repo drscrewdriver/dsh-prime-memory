@@ -1961,6 +1961,8 @@ export interface DshMemoryRequestMap {
   'dsh-memory/llm-providers': Record<string, never>;
   'dsh-memory/llm-models': LlmModelsRequest;
   'dsh-memory/embedding-state-get': Record<string, never>;
+  /** DRSC（参考会话库）健康探针：设置面板 banner 用（无入参）。 */
+  'dsh-memory/drsc-health': Record<string, never>;
   'dsh-memory/embedding-source-set': EmbeddingSourceSetRequest;
   'dsh-memory/embedding-download-start': EmbeddingDownloadStartRequest;
   'dsh-memory/embedding-download-cancel': Record<string, never>;
@@ -1988,6 +1990,21 @@ export interface DshMemoryRequestMap {
   'dsh-memory/mem-sync': MemSyncRequest;
   'dsh-memory/mem-orphans': MemOrphansRequest;
   'dsh-memory/skills-action': SkillsActionRequest;
+}
+
+/** DRSC 健康五态（与 `drsc-inproc.probeDrscHealth` 返回同步；此处只保留形状，不引 node 侧代码）。 */
+export type DrscHealthStateName = 'ok' | 'not-running' | 'stale' | 'missing' | 'unknown';
+
+export interface DrscHealthResponse {
+  state: DrscHealthStateName;
+  installed: boolean;
+  mounted: boolean;
+  lastSyncAt: number | null;
+  lagMs: number | null;
+  staleAfterMs: number;
+  indexPath: string | null;
+  checkedAt: number;
+  error?: string;
 }
 
 export interface DshMemoryResponseMap {
@@ -2030,6 +2047,7 @@ export interface DshMemoryResponseMap {
   'dsh-memory/llm-providers': LlmProvidersResponse;
   'dsh-memory/llm-models': LlmModelsResponse;
   'dsh-memory/embedding-state-get': EmbeddingStateResponse;
+  'dsh-memory/drsc-health': DrscHealthResponse;
   'dsh-memory/embedding-source-set': EmbeddingSourceSetResponse;
   'dsh-memory/embedding-download-start': EmbeddingDownloadStartResponse;
   'dsh-memory/embedding-download-cancel': EmbeddingCancelResponse;

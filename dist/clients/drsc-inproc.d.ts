@@ -48,3 +48,37 @@ export declare function resetCollectorReadState(): void;
  * 把传输从 fetch 换成函数调用，不顺手改任何语义。
  */
 export declare function callCollectorRead(query: string, load?: CollectorLoader): Promise<Record<string, unknown>>;
+/** 五态：`ok` 不渲染 banner；`unknown` 是探针失败的兜底（不得当成故障去误报）。 */
+export type DrscHealthState = 'ok' | 'not-running' | 'stale' | 'missing' | 'unknown';
+export interface DrscHealth {
+    state: DrscHealthState;
+    /** 包能 import → true。`missing` 时为 false。 */
+    installed: boolean;
+    /** 门面可用（= collector 真跑起来了）→ true。装了没启用时为 false。 */
+    mounted: boolean;
+    /** 投影库 `MAX(synced_at)` 的 epoch ms；无从读取为 null。 */
+    lastSyncAt: number | null;
+    /** now - lastSyncAt；null = 无从计算。 */
+    lagMs: number | null;
+    staleAfterMs: number;
+    indexPath: string | null;
+    checkedAt: number;
+    error?: string;
+}
+/** 超过这个滞后就判 `stale`（“装了但库不新鲜”）。30 分钟与同步器节拍同量级。 */
+export declare const DRSC_STALE_AFTER_MS: number;
+/**
+ * 探针（只观测，不改变读路径）。
+ *
+ * 三条铁律（违一条就会污染读面或误报）：
+ * 1. **不经 `moduleOf`**：它会推进 `facadeMisses` 并把结果缓进 `modulePromise`，
+ *    探针是观测面，不得改动读路径的重试预算与缓存——故这里直接调 `load()` 与 `drsReadFacade()`。
+ * 2. **复用模块级 `storeHandle`**：`openProjectionStore` 会把摘要全表载入（Issue #1 的根因），
+ *    每 60s 轮询重开一次就是事故；只在 undefined 时开。
+ * 3. **读库失败一律落 `unknown`**：探针失败不等于功能坏了，不得当成故障吓用户。
+ */
+export declare function probeDrscHealth(opts?: {
+    load?: CollectorLoader;
+    now?: number;
+    staleAfterMs?: number;
+}): Promise<DrscHealth>;

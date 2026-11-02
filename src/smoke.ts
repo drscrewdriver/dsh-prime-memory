@@ -47,6 +47,11 @@ async function main(): Promise<void> {
   check('client.js: __ModuleLoader__.load 包装', client.startsWith('window.__ModuleLoader__.load({'));
   check('client.js: bundle id 与包名一致', client.includes('"dsh-prime-memory"'));
   check('client.js: react external(require 调用存在)', client.includes('require("react")'));
+  // DRSC 依赖提示：banner 文案与端点必须真的进构建产物/客户端包，否则用户永远看不到
+  check('client.js: DRSC banner 文案在场', client.includes('不会自动启用参考会话库'));
+  check('client.js: DRSC banner 已接端点', client.includes('dsh-memory/drsc-health'));
+  const drscInproc = await readFile(path.join(dist, 'clients', 'drsc-inproc.js'), 'utf-8');
+  check('drsc-inproc: 导出 probeDrscHealth', drscInproc.includes('probeDrscHealth'));
   check('client.js: 无裸 import(纯 CJS 体)', !/^import[\s{"' ]/m.test(client));
 
   // ── worker/child 协议头(workerData/env 消费 + transformers 本地加载) ──
@@ -99,6 +104,7 @@ async function main(): Promise<void> {
   check('contract.d.ts 含 records-delete', contractDts.includes("'dsh-memory/records-delete'"));
   check('contract.d.ts 含图谱端点', contractDts.includes("'dsh-memory/graph-search'") && contractDts.includes("'dsh-memory/graph-node-get'"));
   check('contract.d.ts 含 memoryMutate/embedRemote*', contractDts.includes('memoryMutate') && contractDts.includes('embedRemoteBaseURL'));
+  check('contract.d.ts 含 drsc-health 端点', contractDts.includes("'dsh-memory/drsc-health'"));
 
   // ── 包元数据 ──
   const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf-8')) as {

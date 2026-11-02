@@ -159,6 +159,11 @@ export const memorySchema = Schema.object({
         candidatePool: Schema.number().min(1).max(20).default(5),
         dedupRetryCap: Schema.number().min(1).max(20).default(5),
         extractCheckpoint: Schema.boolean().default(true),
+        // 批内自去重（#同会话碎片收拢）：默认开；关闭即回到 0.26.30 前的行为。
+        intraBatchDedupe: Schema.boolean().default(true),
+        // 宽外壁（0–10）只为防溢出输入；有效区间 0.85–0.99 在代码内 clamp+warn，
+        // 不用 min/max 卡窄区间——schemastery 越界会抛，故障半径是整个配置树。
+        intraBatchCosine: Schema.number().min(0).max(10).default(0.92),
     }),
     l2: Schema.object({
         enabled: Schema.boolean().default(true),

@@ -252,6 +252,7 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `extract.idleSeconds` | `300` | アイドル兜底：セッションが N 秒無言で未蒸留スライスを落とす。`0` で無効 |
 | `extract.backgroundMessages` | `10` | 抽出時付随の背景メッセージ数 |
 | `extract.candidatePool` | `5` | 重複排除候補プールサイズ |
+| `extract.intraBatchDedupe` | `true` | バッチ内の重複排除（同一ラウンド/セッション）：LLM 去重の前に正規化＋同族・同型のベクトルクラスタリングを行い、同一会話の断片が1件の長い記憶に融合されるのを防ぐ（件数と所要時間を削減するだけで、推論ごとのピークは下げない） |
 | `l2.enabled` | `true` | L2 シナリオ統合 |
 | `l2.minNewMemories` | `5` | 前回 L2 からの新記憶閾値 |
 | `l2.maxScenes` | `12` | シナリオブロック数上限 |

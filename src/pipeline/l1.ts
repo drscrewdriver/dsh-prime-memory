@@ -29,6 +29,7 @@ import { normTags, normUsageScenario, readCognitiveHall, readWing } from '../met
 import { acceptTitle } from '../util/md-name.js';
 import { clampPriority } from '../util/priority.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
+import { preDedupeBatch } from './intra-dedupe.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
 import { stampValidity, validToSourceOf } from '../store/validity.js';
 import type { L1Store } from '../store/l1.js';
@@ -582,11 +583,34 @@ export async function runExtraction(
     return { stored: 0, skipped: false, sceneName: lastScene, newRecords: [], failedMessages: [] };
   }
 
+  // ── Step 1.5: 批内自去重（同轮/同会话）──
+  // 根因：候选池只来自库，同批 extracted[] 之间从不互比 → 同一段对话抽出的多条碎片
+  // 全被塞进同一条 LLM 批，只能靠模型的 merged_content 把内容"撬在一起"。
+  // 逻辑全在 `preDedupeBatch`（可注入 embedMany，故不必驱动 LLM 就能单测接线）。
+  const pre = await preDedupeBatch(extracted, (texts) => store.embedMany(texts), {
+    enabled: cfg.extract.intraBatchDedupe !== false,
+    tau: cfg.extract.intraBatchCosine ?? 0.92,
+    onWarn: (m) => logger.warn(m),
+  });
+  const effective = pre.effective;
+  /** 代表项 record_id → 其**本正文**的向量（候选召回与写侧复用同一份，免二次嵌入）。 */
+  const vecByRecordId = pre.vectors;
+  /** 批内吸收关系（被吸收 record_id → 代表 record_id），给 receipt 审计用。 */
+  const intraAbsorbedBy = pre.absorbedBy;
+  if (cfg.extract.intraBatchDedupe !== false) {
+    logger.info(
+      `[memory] L1 批内自去重:raw=${pre.raw} exact=${pre.exact} ` +
+        `vector=${pre.vector} effective=${effective.length}（吸收 ${Object.keys(intraAbsorbedBy).length} 条）`,
+    );
+  }
+
   // ── Step 2: 去重(batch 冲突检测;候选只在本族内召回,去重永不跨族) ──
   const matches = await Promise.all(
-    extracted.map(async (m) => ({
+    effective.map(async (m) => ({
       newMemory: m,
-      candidates: await store.searchCandidates(m.content, cfg.extract.candidatePool, m.family, wsFilter),
+      candidates: await store.searchCandidates(m.content, cfg.extract.candidatePool, m.family, wsFilter, {
+        queryVector: vecByRecordId.get(m.record_id),
+      }),
     })),
   );
   // 按固定条数切块发送,失败半径与上下文同时可控(#10 去重侧同精)
@@ -619,13 +643,13 @@ export async function runExtraction(
 
   // 去重决策统计:无决策的记录按 skip 处理,聚合成单行日志便于排查
   const actionCount: Record<string, number> = {};
-  for (const m of extracted) {
+  for (const m of effective) {
     const action = byRecord.get(m.record_id)?.action ?? 'skip(未返回)';
     actionCount[action] = (actionCount[action] ?? 0) + 1;
   }
   const candidateTotal = matches.reduce((n, m) => n + m.candidates.length, 0);
   logger.info(
-    `[memory] L1 去重判定:${extracted.length} 条候选记忆召回 ${candidateTotal} 条已有记录,决策 ${Object.entries(actionCount)
+    `[memory] L1 去重判定:${effective.length} 条候选记忆召回 ${candidateTotal} 条已有记录,决策 ${Object.entries(actionCount)
       .map(([k, v]) => `${k}=${v}`)
       .join(' ')}`,
   );
@@ -642,12 +666,21 @@ export async function runExtraction(
   const runId = newRunId();
   let byKind: Record<string, number> | undefined;
   {
-    const items = extracted.map((m, i) => ({
+    const items = effective.map((m, i) => ({
       recordId: m.record_id,
       candidateIds: (matches[i]?.candidates ?? []).map((c) => c.id),
       action: byRecord.get(m.record_id)?.action,
     }));
-    const rows = buildReceipts(runId, new Date().toISOString(), items);
+    // 批内被吸收的条目也必须留痕：否则「这条为何没进库」在库里完全查不到（skip 是现有
+    // 唯一零痕迹分支，批内吸收不能重蹈）。用既有 `kind='merge'` + candidateIds=[代表 id]：
+    // 不新增表列、不扩词表，回答“本条被批内哪条吸收”只需一次 (runId, recordId) 回溯。
+    // 关闭特性时 intraAbsorbedBy 为空 ⇒ 凭证与改动前逐字节一致。
+    const absorbedItems = Object.entries(intraAbsorbedBy).map(([absorbedId, repId]) => ({
+      recordId: absorbedId,
+      candidateIds: [repId],
+      action: 'merge',
+    }));
+    const rows = buildReceipts(runId, new Date().toISOString(), [...items, ...absorbedItems]);
     persistReceiptsSafely((rows) => store.recordReceipts(rows), rows, logger);
     // §F 追踪捎带:六值决策词表聚合(与凭证同源,runner 侧并入 distill_run 事件)
     byKind = rows.reduce<Record<string, number>>((acc, r) => {
@@ -673,7 +706,7 @@ export async function runExtraction(
    *    不成对而回落 store**(2026-09-18 取证确认,见 findings R6 / Agent A);
    * ② 队满自动了结的护栏 —— 败方若属本批新记忆,不得自动退场(见下方分支)。
    */
-  const batchIds = new Set(extracted.map((e) => e.record_id));
+  const batchIds = new Set(effective.map((e) => e.record_id));
   /**
    * update/merge 取代掉的旧记录 → **取代它的**新记录 id。
    * 用 Map 而非 Set:退场标记要带 `by`,否则"被谁取代"只能靠时间猜。
@@ -690,7 +723,7 @@ export async function runExtraction(
   const rejected: ConflictRejected[] = [];
   const now = Date.now();
 
-  for (const m of extracted) {
+  for (const m of effective) {
     const decision = byRecord.get(m.record_id);
     if (!decision || decision.action === 'skip') continue;
     const action = decision.action;
@@ -898,7 +931,14 @@ export async function runExtraction(
     added.push(mergedRec);
   }
 
-  await store.appendNew(added);
+  await store.appendNew(added, {
+    vectors: added.map((r) => {
+      // 写侧复用：代表项正文未被改写 → 复用批内向量（免掉同一条记忆的第二次嵌入）。
+      // merge/update 产出的 merged_content 是**新文本**，同 record_id 也不得复用。
+      const orig = effective.find((m) => m.record_id === r.id)?.content;
+      return orig !== undefined && orig === r.content ? vecByRecordId.get(r.id) : undefined;
+    }),
+  });
   if (supersededBy.size > 0) {
     // **软删**(取代):不是物理删除——主表行保留 + 取代标记(marker 单源，门1 解耦后
     // 不再闭合 valid_to)，FTS/向量撤出检索面。于是"合并错了"也能恢复,而不必去
@@ -984,7 +1024,7 @@ export async function runExtraction(
   markExtracted(states, mode, lastScene);
 
   logger.info(
-    `[memory] L1 抽取完成(mode=${mode}):消息 ${pending.length} 条,抽取 ${extracted.length} 条,去重后新增 ${added.length} 条(取代退场 ${supersededBy.size} 条,chat=${addedByFamily.chat}/work=${addedByFamily.work}),累计 chat=${states.chat.totalExtracted}/work=${states.work.totalExtracted}`,
+    `[memory] L1 抽取完成(mode=${mode}):消息 ${pending.length} 条,抽取 ${extracted.length} 条(批内收拢 ${effective.length}),去重后新增 ${added.length} 条(取代退场 ${supersededBy.size} 条,chat=${addedByFamily.chat}/work=${addedByFamily.work}),累计 chat=${states.chat.totalExtracted}/work=${states.work.totalExtracted}`,
   );
   return { stored: added.length, skipped: false, sceneName: lastScene, newRecords: added, runId, byKind, failedMessages };
 }

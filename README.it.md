@@ -302,6 +302,7 @@ Le impostazioni che scavalcano i predefiniti si scrivono nel `cordis.patch.yml` 
 | `extract.idleSeconds`        | `300`                   | Rete d'inattività: dopo N secondi di silenzio della sessione le fette non distillate vengono incassate (recupera «l'utente andato via prima della soglia»); `0` disattiva |
 | `extract.backgroundMessages` | `10`                    | Numero di messaggi di contesto allegati all'estrazione (interrogati al volo da L0 per la sessione, senza contaminazione tra sessioni) |
 | `extract.candidatePool`      | `5`                     | Dimensione del bacino di candidati della deduplica |
+| `extract.intraBatchDedupe`   | `true`                  | Deduplica intra-batch (stesso turno/sessione): normalizzazione + clustering vettoriale (stessa famiglia/tipo) prima della deduplica LLM, così i frammenti di una conversazione non vengono fusi in un'unica memoria lunga (riduce solo numero e durata, non il picco per inferenza) |
 | `l2.enabled`                 | `true`                  | Consolidamento delle scene L2 |
 | `l2.minNewMemories`          | `5`                     | Soglia di nuove memorie dall'ultimo consolidamento L2 |
 | `l2.maxScenes`               | `12`                    | Limite superiore di blocchi di scena |

@@ -300,6 +300,7 @@ Les réglages par-dessus les valeurs par défaut s'écrivent dans le `cordis.pat
 | `extract.idleSeconds`        | `300`                   | Filet d'inactivité : après N secondes de silence de la session, enregistre les tranches non distillées (rattrape « l'utilisateur parti avant d'atteindre le seuil ») ; `0` désactive |
 | `extract.backgroundMessages` | `10`                    | Nombre de messages de contexte joints à l'extraction (interrogés à la volée dans L0 pour la session en question, sans contamination entre sessions) |
 | `extract.candidatePool`      | `5`                     | Taille du bassin de candidats de déduplication |
+| `extract.intraBatchDedupe`   | `true`                  | Déduplication intra-lot (même tour/session) : normalisation + regroupement vectoriel (même famille/type) avant l'appel LLM, pour que les fragments d'une conversation ne soient pas fusionnés en une seule mémoire longue (réduit le nombre et la durée, pas le pic par inférence) |
 | `l2.enabled`                 | `true`                  | Consolidation de scènes L2 |
 | `l2.minNewMemories`          | `5`                     | Seuil de nouvelles mémoires depuis la dernière consolidation L2 |
 | `l2.maxScenes`               | `12`                    | Nombre maximal de blocs de scène |

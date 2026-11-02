@@ -156,3 +156,91 @@ function positiveInt(raw) {
 }
 /** 统一形后的模块不再需要真 QueryContext，这个占位只用来占位。 */
 const READ_SURFACE = 'inproc-read-surface';
+/** 超过这个滞后就判 `stale`（“装了但库不新鲜”）。30 分钟与同步器节拍同量级。 */
+export const DRSC_STALE_AFTER_MS = 30 * 60 * 1000;
+/** `synced_at` 实测是 TEXT ISO（如 "2026-11-01T21:00:57.415Z"），兼容数值形式。 */
+function parseSyncStamp(v) {
+    if (typeof v === 'string' && v.trim() !== '') {
+        const t = Date.parse(v);
+        return Number.isFinite(t) ? t : null;
+    }
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0)
+        return v;
+    return null;
+}
+/**
+ * 探针（只观测，不改变读路径）。
+ *
+ * 三条铁律（违一条就会污染读面或误报）：
+ * 1. **不经 `moduleOf`**：它会推进 `facadeMisses` 并把结果缓进 `modulePromise`，
+ *    探针是观测面，不得改动读路径的重试预算与缓存——故这里直接调 `load()` 与 `drsReadFacade()`。
+ * 2. **复用模块级 `storeHandle`**：`openProjectionStore` 会把摘要全表载入（Issue #1 的根因），
+ *    每 60s 轮询重开一次就是事故；只在 undefined 时开。
+ * 3. **读库失败一律落 `unknown`**：探针失败不等于功能坏了，不得当成故障吓用户。
+ */
+export async function probeDrscHealth(opts = {}) {
+    const now = opts.now ?? Date.now();
+    const staleAfterMs = opts.staleAfterMs ?? DRSC_STALE_AFTER_MS;
+    const load = opts.load ?? defaultLoader;
+    const base = {
+        state: 'unknown',
+        installed: false,
+        mounted: false,
+        lastSyncAt: null,
+        lagMs: null,
+        staleAfterMs,
+        indexPath: null,
+        checkedAt: now,
+    };
+    let mod;
+    try {
+        mod = (await load());
+    }
+    catch (err) {
+        return { ...base, state: 'missing', error: err instanceof Error ? err.message : String(err) };
+    }
+    // 门面活 → 已启用（ok 态由客户端 return null，不占版面）
+    try {
+        if (typeof mod.drsReadFacade === 'function' && mod.drsReadFacade() !== undefined) {
+            return { ...base, state: 'ok', installed: true, mounted: true };
+        }
+    }
+    catch (err) {
+        // 门面自身抛错：按“装了没启用”继续往下判，不因此报 missing
+        base.error = err instanceof Error ? err.message : String(err);
+    }
+    // 装了没启用：读投影库水位区分 not-running / stale
+    let indexPath = null;
+    try {
+        indexPath = mod.resolveIndexDir();
+        if (storeHandle === undefined)
+            storeHandle = mod.openProjectionStore(indexPath);
+        const db = storeHandle.db;
+        if (!db)
+            return { ...base, state: 'unknown', installed: true, indexPath, error: '投影库句柄无 .db' };
+        const row = db.prepare('SELECT MAX(synced_at) AS s FROM sessions').get();
+        const lastSyncAt = parseSyncStamp(row?.s);
+        if (lastSyncAt === null) {
+            return { ...base, state: 'unknown', installed: true, indexPath, error: 'synced_at 无法解析（期望 ISO 字符串或 epoch ms）' };
+        }
+        const lagMs = Math.max(0, now - lastSyncAt);
+        return {
+            ...base,
+            state: lagMs <= staleAfterMs ? 'not-running' : 'stale',
+            installed: true,
+            lastSyncAt,
+            lagMs,
+            indexPath,
+            error: undefined,
+        };
+    }
+    catch (err) {
+        return {
+            ...base,
+            state: 'unknown',
+            installed: true,
+            indexPath,
+            error: err instanceof Error ? err.message : String(err),
+        };
+    }
+}

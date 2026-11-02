@@ -18,6 +18,7 @@ import { EFFORT_CHOICES, resolveDataDir } from './config.js';
 import { typeCatalogEntries } from './memory-types.js';
 import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats } from './hooks/recall.js';
+import { probeDrscHealth } from './clients/drsc-inproc.js';
 import { buildRouteChain, decideSendableEffort, LAYER_DEFAULT_BUDGETS, layerChainOrNull, resolveModelContextWindow, resolveModelEfforts, resolveModelRoute } from './llm.js';
 import { mergeRoom, renameRoom, mergeRoomCatalog } from './room-review.js';
 import { scanSources } from './memport/scan.js';
@@ -2352,6 +2353,11 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 return v;
             }
             const v = { supported: true, ...(await embedManager.snapshot()) };
+            return v;
+        }
+        // DRSC 健康（设置面板 banner）：纯观测，不改读写路径，故不依赖 ctx/embedManager。
+        case 'dsh-memory/drsc-health': {
+            const v = await probeDrscHealth();
             return v;
         }
         case 'dsh-memory/embedding-source-set': {
