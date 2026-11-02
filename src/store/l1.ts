@@ -1143,12 +1143,16 @@ export class L1Store {
       }
       const pending: Array<{ id: string; embedding: Float32Array }> = [];
       chunk.forEach((c, j) => {
-        if (isZeroVector(vecs[j])) {
+        // #22 机理刀:断点续试只补「尾部未完段」,头 ack 段的向量随崩溃子进程一起丢了
+        // → embedBatch 对这些位返回空洞(undefined)。这里必须当作「本 chunk 暂未取到向量」跳过
+        // (交后台 backfill 逐条补),否则 undefined 进 isZeroVector 会抛 TypeError 打断整轮重嵌。
+        const vec = vecs[j];
+        if (vec == null || isZeroVector(vec)) {
           skipped++;
           skippedNow.push(c.id);
           return;
         }
-        pending.push({ id: c.id, embedding: vecs[j] });
+        pending.push({ id: c.id, embedding: vec });
       });
       if (pending.length > 0) {
         const ok = this.db.updateL1VecBatch(pending);

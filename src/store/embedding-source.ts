@@ -229,6 +229,8 @@ export function makeLocalServiceFactory(
   childPath?: string,
   /** 本地推理 token 预算(config `embedding.maxInputTokens`;0/缺省 = 按模型窗口与硬上限推导)。 */
   maxInputTokens?: number,
+  /** 崩溃有界自愈开关(config `embedding.respawnOnCrash`;缺省 true,与 LocalEmbeddingService 内默认一致)。 */
+  respawnOnCrash?: boolean,
 ): (modelId: string) => LocalEmbeddingService | null {
   return (modelId) => {
     const entry = catalogById(modelId);
@@ -239,6 +241,7 @@ export function makeLocalServiceFactory(
       logger,
       maxInputChars,
       maxInputTokens,
+      respawnOnCrash,
     });
   };
 }
@@ -354,6 +357,7 @@ export class EmbeddingManager {
         this.deps.cfg.embedding.maxInputChars,
         undefined,
         this.deps.cfg.embedding.maxInputTokens,
+        this.deps.cfg.embedding.respawnOnCrash,
       );
     return factory(modelId);
   }

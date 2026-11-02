@@ -380,6 +380,14 @@ export interface MemoryConfig {
      * 超上限会被 clamp 并留 warn(不抛错,见 model-catalog.ts `deriveTokenBudget`)。
      */
     maxInputTokens: number;
+    /**
+     * 本地嵌入子进程被硬杀后是否**有界自愈**(#22 机理刀,默认 true)。
+     *
+     * 开:崩溃由 crashCb 单点重 fork+重预热,60s 窗内 ≤2 次;多条目批按实时断点(ack)
+     * 续试**一次**(不整批重放,毒输入最多多吃两批不成活锁);超限回 failed(旧语义)。
+     * 关:回到 0.26.25 语义——崩一次停摆到宿主重启/换源。**有意翻转**当时的「不做自愈」公告。
+     */
+    respawnOnCrash: boolean;
     /** 单次调用超时(ms)。 */
     timeoutMs: number;
     /** 允许本地嵌入模型档(部署上限:公司环境可禁下载与本地推理)。 */
@@ -833,6 +841,9 @@ export const memorySchema: ConfigSchema = Schema.object({
     maxInputTokens: Schema.number().min(0).max(100_000).default(0),
     timeoutMs: Schema.number().min(1000).max(300_000).default(10_000),
     allowLocalModels: Schema.boolean().default(true),
+    // #22 机理刀:只增不改。**默认开**有界自愈(重 fork ≤2/60s + ack 断点续试一次),
+    // 有意翻转 0.26.25「不做自愈」公告;关键即回旧语义(崩一次停摆到重启)。
+    respawnOnCrash: Schema.boolean().default(true),
     mirror: Schema.string().default('https://hf-mirror.com'),
     proxy: Schema.string().default(''),
   }),

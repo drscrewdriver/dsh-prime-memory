@@ -68,6 +68,9 @@ async function main(): Promise<void> {
   // 主线程侧默认通道必须是子进程(fix #11):local-embedding.js 不得只剩 worker 路径
   const localEmbed = await readFile(path.join(dist, 'store', 'local-embedding.js'), 'utf-8');
   check('child: 主线程默认走 RealChildChannel', localEmbed.includes('RealChildChannel') && localEmbed.includes('embedding-child.cjs'));
+  // #22 机理刀装机双断言:child 关 memPattern(降峰)、主线程侧带 respawn 自愈代码(与发布前 grep 同口径)
+  check('child: 关 memPattern(session_options enableMemPattern:false)', /enableMemPattern:\s*false/.test(child));
+  check('#22 自愈:local-embedding 带 respawnChannel 与 respawnOnCrash', localEmbed.includes('respawnChannel') && localEmbed.includes('respawnOnCrash'));
 
   // ── 包入口可加载 + 导出面(名字/inject/Config schema 形状) ──
   const entry = (await import(pathToFileURL(path.join(dist, 'index.js')).href)) as {
@@ -86,6 +89,8 @@ async function main(): Promise<void> {
   const defaults = (entry.Config as unknown as (v: unknown) => Record<string, unknown>)({});
   check('Config 产出部署默认键', ['dataDir', 'family', 'capture', 'extract', 'l2', 'l3', 'recall', 'embedding', 'llm', 'hall', 'tokenCost', 'tools', 'benchControl', 'conflictFreeze'].every((k) => k in defaults));
   check('Config 默认 family=auto', (defaults.family as string) === 'auto');
+  // #22 机理刀:有界自愈默认开(有意翻转 0.26.25「不做自愈」公告)
+  check('#22 Config embedding.respawnOnCrash 默认 true', ((defaults.embedding as Record<string, unknown>).respawnOnCrash) === true);
 
   // ── 类型契约与端点面 ──
   const contractDts = await readFile(path.join(dist, 'contract.d.ts'), 'utf-8');

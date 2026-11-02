@@ -347,6 +347,9 @@ export const memorySchema = Schema.object({
         maxInputTokens: Schema.number().min(0).max(100_000).default(0),
         timeoutMs: Schema.number().min(1000).max(300_000).default(10_000),
         allowLocalModels: Schema.boolean().default(true),
+        // #22 机理刀:只增不改。**默认开**有界自愈(重 fork ≤2/60s + ack 断点续试一次),
+        // 有意翻转 0.26.25「不做自愈」公告;关键即回旧语义(崩一次停摆到重启)。
+        respawnOnCrash: Schema.boolean().default(true),
         mirror: Schema.string().default('https://hf-mirror.com'),
         proxy: Schema.string().default(''),
     }),

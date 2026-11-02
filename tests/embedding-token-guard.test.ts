@@ -245,6 +245,15 @@ describe('#22 接线契约(哨兵级,非运行时证明)', () => {
     expect(childSrc).toMatch(/cut\.seq > job\.request\.tokensMax/u); // 上报用实测值
   });
 
+  // #22 机理面哨兵:两条推理通道都关 memPattern。改前/改后向量 bit 级全同(不触发重嵌)由
+  // verify 脚本 --equivalence 真 bge-m3 实测(本机 maxAbsDiff=0);本哨兵只钉「选项确实写进了
+  // pipeline 调用」——删掉即红(macOS trap 消除未证,不得据此声称不再崩)。
+  it('两条推理通道都把 enableMemPattern:false 写进 pipeline session_options', () => {
+    expect(childSrc).toMatch(/session_options:\s*\{\s*enableMemPattern:\s*false\s*\}/u);
+    const workerSrc = readFileSync(new URL('../resources/embedding-worker.cjs', import.meta.url), 'utf-8');
+    expect(workerSrc).toMatch(/session_options:\s*\{\s*enableMemPattern:\s*false\s*\}/u);
+  });
+
   it('子进程必须载到纯模块,且构建拷贝清单含它(漏拷 = 子进程起不来的硬故障)', () => {
     expect(childSrc).toMatch(/require\('\.\/embedding-token-guard\.cjs'\)/u);
     expect(copySrc).toMatch(/resources', 'embedding-token-guard\.cjs'/u);
@@ -290,6 +299,16 @@ describe('#22 配置面回归(只增不改——防「改名=无声失效」)', 
     const cfg = memorySchema({ embedding: { maxInputChars: 3000, maxInputTokens: 1600 } }) as EmbCfg;
     expect(cfg.embedding.maxInputChars).toBe(3000);
     expect(cfg.embedding.maxInputTokens).toBe(1600);
+  });
+
+  // #22 机理刀新键：有界自愈默认开（有意翻转 0.26.25「不做自愈」），可显式关；加键不改键。
+  it('respawnOnCrash 默认开(true)、可显式关(false)', () => {
+    const on = memorySchema({}) as { embedding: { respawnOnCrash: boolean } };
+    expect(on.embedding.respawnOnCrash).toBe(true);
+    const off = memorySchema({ embedding: { respawnOnCrash: false } }) as { embedding: { respawnOnCrash: boolean } };
+    expect(off.embedding.respawnOnCrash).toBe(false);
+    // 新键不抢旧键语义
+    expect((memorySchema({}) as EmbCfg).embedding.maxInputChars).toBe(5000);
   });
 
   it('maxInputChars 边界未收窄(收窄会让已部署 YAML 直接解析抛错)', () => {

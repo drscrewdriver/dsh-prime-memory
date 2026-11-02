@@ -275,6 +275,7 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `embedding.dimensions` | `0` | 벡터 차원（활성 시 필수） |
 | `embedding.maxInputChars` | `5000` | 단텍스트 최대 문자 수（초장 잘림） |
 | `embedding.maxInputTokens` | `0` | 로컬 임베딩 1건당 **토큰** 예산: `0`(기본) = 모델 창과 상한 1536 중 작은 값, >0 = 명시값(초과 시 clamp + warn). 위 행과 역할이 다름 — 문자 상한은 원격 모드와 IPC 크기만 제한하고, 로컬 충돌/메모리 방지는 토큰 단위가 필수(#22) |
+| `embedding.respawnOnCrash` | `true` | 로컬 임베딩 자식 프로세스가 강제 종료 후 **유한하게 자가 복구**하는지(#22): 기본 켜짐 — 60초 창 내 재 fork+재워밍 ≤2회, 다중 항목 배치는 라이브 지점에서 한 번만 재시도(죽은 자식과 함께 사라진 머리 벡터는 backfill가 보충); 끄면 기존 동작(한 번 충돌하면 호스트 재시작/소스 전환까지 정지). 0.26.25의 "자가 복구 없음" 공지를 의도적으로 뒤집음. 삼중 방어 = 가드레일(1536)/피크 감소(memPattern)/자가 복구(respawn). |
 | `embedding.timeoutMs` | `10000` | 단회 임베딩 호출 타임아웃（ms） |
 | `embedding.allowLocalModels` | `true` | 로컬 임베딩档 허용（배포 상한） |
 | `embedding.mirror` | `https://hf-mirror.com` | 로컬 모델 다운로드 미러 루트 |

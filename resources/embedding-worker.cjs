@@ -62,7 +62,12 @@ function ensureLoaded() {
         mod.env.allowRemoteModels = false;
         if (mod.env.allowLocalModels !== undefined) mod.env.allowLocalModels = true;
       }
-      extractor = await mod.pipeline('feature-extraction', MODEL_DIR, { dtype: DTYPE });
+      // #22 机理面:关 memPattern(与 embedding-child.cjs 同口径,峰值 m:2→1 方向、输出等价;
+      // 本逃生门无 token 护栏是既有限制,注明不在机理刀里扩面)
+      extractor = await mod.pipeline('feature-extraction', MODEL_DIR, {
+        dtype: DTYPE,
+        session_options: { enableMemPattern: false },
+      });
       loadState = 'ready';
     } catch (err) {
       loadState = 'failed';
@@ -86,7 +91,7 @@ function postReply(msg, transfer) {
 function settle(request) {
   if (request.failed || request.remaining !== 0) return;
   postReply(
-    { id: request.id, ok: true, type: 'embedded', vectors: request.vectors },
+    { id: request.id, ok: true, type: 'embedded', vectors: request.vectors, ack: request.total },
     request.vectors.map((v) => v.buffer),
   );
 }
@@ -113,6 +118,8 @@ async function pump() {
         const data = result[0] && result[0].data;
         job.request.vectors[job.index] = data instanceof Float32Array ? data : new Float32Array(data);
         job.request.remaining -= 1;
+        // 多条目批实时上报断点(与 child 通道同协议;cid 回显,见 embedding-child.cjs 注释)
+        if (job.request.total > 1) postReply({ id: job.request.id, cid: job.request.cid, type: 'embedProgress', done: job.request.total - job.request.remaining });
         settle(job.request);
       } catch (err) {
         failRequest(job.request, err, 'infer');
@@ -131,7 +138,7 @@ function handleEmbed(msg) {
     postReply({ id: msg.id, ok: true, type: 'embedded', vectors: [] });
     return;
   }
-  const request = { id: msg.id, vectors: new Array(texts.length), remaining: texts.length, failed: false };
+  const request = { id: msg.id, cid: msg.cid, total: texts.length, vectors: new Array(texts.length), remaining: texts.length, failed: false };
   // 单条请求(召回 query)插队到队首;批次追加到队尾(批内条目间仍会被后来的插队)
   const priority = msg.priority === true && texts.length === 1;
   for (let i = 0; i < texts.length; i++) {

@@ -159,7 +159,9 @@ export function makeLocalServiceFactory(installer, downloader, logger, maxInputC
 /** 测试注入缝:子进程资产路径(源码态下 dist 产物不存在,显式指向 resources 源文件)。 */
 childPath, 
 /** 本地推理 token 预算(config `embedding.maxInputTokens`;0/缺省 = 按模型窗口与硬上限推导)。 */
-maxInputTokens) {
+maxInputTokens, 
+/** 崩溃有界自愈开关(config `embedding.respawnOnCrash`;缺省 true,与 LocalEmbeddingService 内默认一致)。 */
+respawnOnCrash) {
     return (modelId) => {
         const entry = catalogById(modelId);
         if (!entry)
@@ -170,6 +172,7 @@ maxInputTokens) {
             logger,
             maxInputChars,
             maxInputTokens,
+            respawnOnCrash,
         });
     };
 }
@@ -250,7 +253,7 @@ export class EmbeddingManager {
     /** 构造绑定真实运行时 loader 的本地服务(deps.makeLocal 可注入,测试替换)。 */
     makeLocalService(modelId) {
         const factory = this.deps.makeLocal ??
-            makeLocalServiceFactory(this.installer, this.downloader, this.deps.logger, this.deps.cfg.embedding.maxInputChars, undefined, this.deps.cfg.embedding.maxInputTokens);
+            makeLocalServiceFactory(this.installer, this.downloader, this.deps.logger, this.deps.cfg.embedding.maxInputChars, undefined, this.deps.cfg.embedding.maxInputTokens, this.deps.cfg.embedding.respawnOnCrash);
         return factory(modelId);
     }
     /** 活切换请求:验证通过即接受,后台执行应用链(进度轮询可见)。 */

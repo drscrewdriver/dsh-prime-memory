@@ -86,7 +86,16 @@ function ensureLoaded() {
         mod.env.allowRemoteModels = false;
         if (mod.env.allowLocalModels !== undefined) mod.env.allowLocalModels = true;
       }
-      extractor = await mod.pipeline('feature-extraction', MODEL_DIR, { dtype: DTYPE });
+      // #22 机理面:关 memPattern。ORT 默认按图形预分配输入绑定驻留 BFCArena,连发时
+      // 新旧 T² 张量共存把峰值叠成 m×T²(实测 r0→r1 再跳 +341MB;单发/连发致死线之比
+      // ≈√2 即 m=2 的定量旁证)。关掉后同形状连发峰值 1583→1247MB(m:2→1 方向)、
+      // 稳态 infer 零代价、输出 12 位小数全同(不触发重嵌)。传参链已实证:
+      // pipelines.js:111/167 → onnx.js:286-293 摊进 InferenceSession.create。
+      // **边界**:对 macOS 分配器 trap 的消除效果本机不可证,不得据此宣称「不再崩」。
+      extractor = await mod.pipeline('feature-extraction', MODEL_DIR, {
+        dtype: DTYPE,
+        session_options: { enableMemPattern: false },
+      });
       // token 截断要用到 pipeline 内部的 tokenizer（未单独暴露 AutoTokenizer,4.x 形态）
       tokenizer = extractor && extractor.tokenizer ? extractor.tokenizer : null;
       loadState = 'ready';
@@ -123,6 +132,9 @@ function settle(request) {
     vectors: request.vectors.map((v) => Array.from(v)),
     // #22 护栏自证:本批**实测**进模型的最大 token 数(不可测时为 -1,主线程不读此字段也不会坏)
     tokensMax: request.tokensMax,
+    // #22 机理刀:ack = 本批已完整完成的条目数(全部完成时恒 = total);多条目批另有
+    // embedProgress 实时推进度——子进程被硬杀时最后的 ack 就是父侧的断点位。
+    ack: request.total,
   });
 }
 
@@ -156,6 +168,10 @@ async function pump() {
         // 不可证时为 -1（不是 0）,不拿假数据当护栏证据。
         if (cut.seq > job.request.tokensMax) job.request.tokensMax = cut.seq;
         job.request.remaining -= 1;
+        // 多条目批实时上报断点(完成一条报一条;单条批无断点可续,不报)——
+        // 父侧若在两条之间被 SIGTRAP 打断,最后收到的 done 就是重试切片位。
+        // cid 由服务侧生成并回显(通道内部 id 与请求配对同形,不暴露给服务侧)。
+        if (job.request.total > 1) postReply({ id: job.request.id, cid: job.request.cid, type: 'embedProgress', done: job.request.total - job.request.remaining });
         settle(job.request);
       } catch (err) {
         failRequest(job.request, err, 'infer');
@@ -178,7 +194,7 @@ function handleEmbed(msg) {
   // 则永远量不出 seq 的情形（tokenizer 不可达/预算为 0）会把 -1 压成 0，
   // 而主线程的 `>= 0` 判据会把 0 当有效值印出来——正好印成「一条也没进」，
   // 与「不可证」撞车，使这行日志在最需要它的时刻说谎（#22 报告人回验实测）。
-  const request = { id: msg.id, vectors: new Array(texts.length), remaining: texts.length, failed: false, tokensMax: -1 };
+  const request = { id: msg.id, cid: msg.cid, total: texts.length, vectors: new Array(texts.length), remaining: texts.length, failed: false, tokensMax: -1 };
   // 单条请求(召回 query)插队到队首;批次追加到队尾(批内条目间仍会被后来的插队)
   const priority = msg.priority === true && texts.length === 1;
   for (let i = 0; i < texts.length; i++) {

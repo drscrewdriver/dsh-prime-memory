@@ -24,9 +24,10 @@ export type EmbedWorkerCall = {
 } | {
     type: 'embed';
     texts: string[];
-    priority: boolean;
+    priority: boolean; /** 服务侧关联号(#22 断点续试进度归属;透传回 embedProgress) */
+    cid?: number;
 };
-/** worker → 主线程的应答。 */
+/** worker → 主线程的应答(仅请求-应答配对;embedProgress 是单向实时进度、不在此列,否则并集成员无 ok 会破掉窄化)。 */
 export type EmbedWorkerReply = {
     id: number;
     ok: true;
@@ -41,11 +42,19 @@ export type EmbedWorkerReply = {
     type: 'embedded';
     vectors: Float32Array[];
     tokensMax?: number;
+    ack?: number;
 } | {
     id: number;
     ok: false;
     stage: 'load' | 'infer';
     error: string;
+};
+/** 通道消息全集 = 请求应答 + 单向实时进度(#22 断点续试;progress 带 cid,不进 pending 配对)。 */
+export type EmbedWorkerMessage = EmbedWorkerReply | {
+    id: number;
+    cid?: number;
+    type: 'embedProgress';
+    done: number;
 };
 /** worker 通道抽象(测试缝:注入假实现验证协议与状态机)。 */
 export interface EmbedWorkerChannel {
@@ -54,6 +63,10 @@ export interface EmbedWorkerChannel {
     terminate(): void;
     /** worker 意外崩溃通知(此后所有未决请求已被通道拒绝)。 */
     setOnCrash(cb: (error: string) => void): void;
+    /** 通道是否可用(#22 断点续试判定;假通道不实现,服务侧对 undefined 按「可用」处理)。 */
+    isAlive?(): boolean;
+    /** 指定 cid 的多条目批最后实时断点(#22;failAll 不清进度,崩溃后仍可读)。 */
+    lastProgressFor?(cid: number): number | undefined;
 }
 /**
  * 退出描述归一化(issue #22 取证面):被信号硬杀时 Node 给的是 `code===null` + `signal`,
@@ -85,15 +98,49 @@ export interface LocalEmbeddingOptions {
      * `HARD_CAP_TOKENS` 自动推导。超限只 clamp + warn,不抛错。
      */
     maxInputTokens?: number;
+    /**
+     * 崩溃有界自愈开关(config `embedding.respawnOnCrash`,默认 true)。
+     * 关闭后回到旧行为:崩一次停摆到宿主重启/换源(#22 机理刀前的语义)。
+     */
+    respawnOnCrash?: boolean;
 }
 export declare class LocalEmbeddingService implements EmbeddingService {
     private state;
     private loadError;
-    private readonly channel;
+    private channel;
     private readonly entry;
     private readonly logger?;
+    /** 通道重建上下文(构造期固化;respawn 时原样重建,不重新推导预算)。 */
+    private readonly cfgObj;
+    private readonly useWorker;
+    private readonly workerPath;
+    private readonly childPath;
+    private readonly injectedChannel;
+    private readonly respawnOnCrash;
+    /** 生效 token 预算(留痕用，见 embedding-source 的 recordTokenBudget 调用点)。 */
+    private readonly tokenBudgetTokens;
+    /** 自愈发起时刻滚动窗(60s ≤2 次;只允许 crashCb 单点读写)。 */
+    private readonly respawnTimes;
+    /** 服务侧请求关联号(#22 断点续试:多条目批带 cid,进度按 cid 归属)。 */
+    private nextCid;
+    /** 在飞自愈合流点——非空期间所有崩溃事件归并到同一次重建(防 fork 风暴)。 */
+    private respawnPromise;
     constructor(entry: CatalogEntry, modelDir: string, opts: LocalEmbeddingOptions);
+    /** 真通道工厂(构造与自愈共用同一重建路径;假通道注入缝原样返回同一实例,不重建)。 */
+    private createChannel;
+    /** 60s 滚动窗内是否还允许一次自愈(调用即计入,先占位后重建)。 */
+    private respawnAllowed;
+    /**
+     * 单点自愈：关旧通道→新通道→重预热→markReady。
+     * 不变量：在飞期间 `respawnPromise` 非空且 `state='loading'`（isReady 为假），
+     * 现有 vectorsReady 门/EmbedHelper 降级链天然接管半成品窗口，不加新契约态。
+     */
+    private respawnChannel;
+    /** 自愈在飞时外部请求的等待缝(带超时;超时/失败都让调用方走既有降级链)。 */
+    private awaitRespawn;
     getDimensions(): number;
+    /** 生效的单条 token 预算(=子进程侧 shrinkToBudget 的硬帽;embedding_meta 留痕用)。 */
+    getTokenBudget(): number;
     getProviderInfo(): EmbeddingProviderInfo;
     isReady(): boolean;
     /** 状态(进度展示用)。 */

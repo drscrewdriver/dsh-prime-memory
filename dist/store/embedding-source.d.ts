@@ -69,7 +69,9 @@ export declare function makeLocalServiceFactory(installer: RuntimeInstaller, dow
 /** 测试注入缝:子进程资产路径(源码态下 dist 产物不存在,显式指向 resources 源文件)。 */
 childPath?: string, 
 /** 本地推理 token 预算(config `embedding.maxInputTokens`;0/缺省 = 按模型窗口与硬上限推导)。 */
-maxInputTokens?: number): (modelId: string) => LocalEmbeddingService | null;
+maxInputTokens?: number, 
+/** 崩溃有界自愈开关(config `embedding.respawnOnCrash`;缺省 true,与 LocalEmbeddingService 内默认一致)。 */
+respawnOnCrash?: boolean): (modelId: string) => LocalEmbeddingService | null;
 export interface EmbeddingManagerDeps {
     dataDir: string;
     cfg: MemoryConfig;

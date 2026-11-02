@@ -9,6 +9,9 @@
  *
  * - 懒加载:首次嵌入/warmup 才让子进程加载模型,close()=kill 释放进程与
  *   模型(嵌入源切走/关闭时调用),terminated 后不可复用;
+ * - 崩溃有界自愈(#22 机理刀,config `embedding.respawnOnCrash` 默认开):子进程被硬杀后
+ *   由 crashCb 单点重 fork+重预热,60s 窗内 ≤2 次;多条目批按实时断点(ack)续试一次,
+ *   不整批重放——毒输入最多多吃两批,不成活锁;超限回 failed(旧语义:换源/重启恢复);
  * - 模型从数据目录 models/<id>/ 本地加载(子进程侧 env.allowRemoteModels=false);
  * - channel 可注入(测试缝):用假通道验证协议与状态机,不触真模型;
  * - useWorker=true 切回旧 worker_threads 通道(回滚逃生门;若宿主侧 DLL 冲突
@@ -23,6 +26,13 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { deriveTokenBudget, HARD_CAP_TOKENS } from './model-catalog.js';
+/**
+ * 崩溃自愈速率窗(#22 机理刀)：60s 滚动窗内最多 2 次重 fork。
+ * 对齐 EmbedHelper 的 COOLDOWN_MS=60_000 口径；超限回 failed 是故意留的终局——
+ * 反复 fork 风暴比停摆更贵(每次 fork+载入≈1.7s、峰值≈550MB)。
+ */
+const RESPAWN_WINDOW_MS = 60_000;
+const RESPAWN_MAX_PER_WINDOW = 2;
 /** 默认 worker 资产路径(旧通道,useWorker 逃生门):dist/store/ → dist/embedding-worker.cjs(构建期拷入)。 */
 function defaultWorkerPath() {
     return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'embedding-worker.cjs');
@@ -35,6 +45,8 @@ function defaultChildPath() {
 class RealWorkerChannel {
     worker;
     pending = new Map();
+    /** #22 断点位:多条目批实时上报的 done 计数(按请求 id;回复/终止时清理)。 */
+    progress = new Map();
     nextId = 1;
     terminated = false;
     crashed;
@@ -44,6 +56,14 @@ class RealWorkerChannel {
         this.worker.on('message', (msg) => {
             if (msg && msg.type === 'fatal') {
                 this.failAll(`本地嵌入 worker 致命错误: ${msg.error ?? '未知'}`);
+                return;
+            }
+            if (msg && msg.type === 'embedProgress') {
+                // 非请求-应答消息:按 cid 记断点位,不进 pending 配对(#22 机理刀)
+                const cid = msg.cid;
+                const done = msg.done;
+                if (typeof cid === 'number' && typeof done === 'number')
+                    this.progress.set(cid, done);
                 return;
             }
             const id = msg.id;
@@ -77,6 +97,13 @@ class RealWorkerChannel {
             this.worker.postMessage({ ...call, id });
         });
     }
+    isAlive() {
+        return !this.terminated && !this.crashed;
+    }
+    /** #22 断点续试:按 cid 读最后实时进度(旧通道死后的值保留在此供服务侧读)。 */
+    lastProgressFor(cid) {
+        return this.progress.get(cid);
+    }
     terminate() {
         if (this.terminated)
             return;
@@ -94,6 +121,7 @@ class RealWorkerChannel {
         for (const [, entry] of this.pending)
             entry.reject(new Error(error));
         this.pending.clear();
+        // progress **不清**：崩溃时刻的断点位正是服务侧要读的(lastProgressFor);cid 单调不复用,无跨批误读之虞
         if (!this.terminated && !this.crashed) {
             this.crashed = error;
             this.crashCb?.(error);
@@ -129,6 +157,8 @@ export function describeEmbedBatch(modelId, n, tokensMax, ms) {
 class RealChildChannel {
     child;
     pending = new Map();
+    /** #22 断点位:与 worker 通道同语义(多条目批实时 done 计数;failAll 不清,新批才清)。 */
+    progress = new Map();
     nextId = 1;
     terminated = false;
     crashed;
@@ -146,6 +176,14 @@ class RealChildChannel {
         this.child.on('message', (msg) => {
             if (msg && msg.type === 'fatal') {
                 this.failAll(`本地嵌入子进程致命错误: ${msg.error ?? '未知'}`);
+                return;
+            }
+            if (msg && msg.type === 'embedProgress') {
+                // 非请求-应答消息:按 cid 记断点位,不进 pending 配对(#22 机理刀;与 worker 通道同语义)
+                const cid = msg.cid;
+                const done = msg.done;
+                if (typeof cid === 'number' && typeof done === 'number')
+                    this.progress.set(cid, done);
                 return;
             }
             const id = msg.id;
@@ -191,6 +229,14 @@ class RealChildChannel {
             });
         });
     }
+    isAlive() {
+        return !this.terminated && !this.crashed;
+    }
+    /** #22 断点续试:按 cid 读最后实时进度(旧通道死后的值保留在此供服务侧读;与 worker 通道同签名,
+     *  否则默认 fork 通道上 lastProgressFor 缺失 → 断点续试静默失效)。 */
+    lastProgressFor(cid) {
+        return this.progress.get(cid);
+    }
     terminate() {
         if (this.terminated)
             return;
@@ -222,6 +268,7 @@ class RealChildChannel {
         for (const [, entry] of this.pending)
             entry.reject(new Error(error));
         this.pending.clear();
+        // progress 不清:#22 断点续试要在崩溃后读到最后的 done(新批起批才清)
         if (!this.terminated && !this.crashed) {
             this.crashed = error;
             this.crashCb?.(error);
@@ -234,6 +281,21 @@ export class LocalEmbeddingService {
     channel;
     entry;
     logger;
+    /** 通道重建上下文(构造期固化;respawn 时原样重建,不重新推导预算)。 */
+    cfgObj;
+    useWorker;
+    workerPath;
+    childPath;
+    injectedChannel;
+    respawnOnCrash;
+    /** 生效 token 预算(留痕用，见 embedding-source 的 recordTokenBudget 调用点)。 */
+    tokenBudgetTokens;
+    /** 自愈发起时刻滚动窗(60s ≤2 次;只允许 crashCb 单点读写)。 */
+    respawnTimes = [];
+    /** 服务侧请求关联号(#22 断点续试:多条目批带 cid,进度按 cid 归属)。 */
+    nextCid = 1;
+    /** 在飞自愈合流点——非空期间所有崩溃事件归并到同一次重建(防 fork 风暴)。 */
+    respawnPromise = null;
     constructor(entry, modelDir, opts) {
         this.entry = entry;
         this.logger = opts.logger;
@@ -252,30 +314,147 @@ export class LocalEmbeddingService {
             maxInputChars,
             maxInputTokens: budget.tokens,
         };
+        this.cfgObj = cfgObj;
+        this.useWorker = opts.useWorker === true;
+        this.workerPath = opts.workerPath ?? defaultWorkerPath();
+        this.childPath = opts.childPath ?? defaultChildPath();
+        this.injectedChannel = opts.channel;
+        this.respawnOnCrash = opts.respawnOnCrash !== false;
+        this.tokenBudgetTokens = budget.tokens;
         // #22 取证面:同一份代码在纯 node 能跑、在 Electron-node 崩,而仓内任何地方都没记录
         // execPath 差异与生效预算 —— 下次不用靠系统崩溃报告对时间戳。
         this.logger?.info(`[memory] 本地嵌入子进程拉起:execPath=${process.execPath},release=${process.release?.name ?? 'unknown'},` +
             `model=${entry.id},contextTokens=${entry.contextTokens},tokenBudget=${budget.tokens},` +
             `粗筛 chars=${maxInputChars},通道=${opts.useWorker ? 'worker(旧逃生门,无 token 护栏)' : 'child'}`);
-        this.channel =
-            opts.channel ??
-                (opts.useWorker
-                    ? new RealWorkerChannel(opts.workerPath ?? defaultWorkerPath(), cfgObj)
-                    : new RealChildChannel(opts.childPath ?? defaultChildPath(), cfgObj, (pid) => {
-                        // pid 只能在 fork 后拿到,故补一条(与上方拉起日志同前缀,便于 grep 成对)
-                        this.logger?.info(`[memory] 本地嵌入子进程 pid=${pid ?? '未知'}(model=${entry.id})`);
-                    }));
-        // 崩溃不自愈(换源/重启恢复):拒绝语义沿 EmbedHelper 降级链走 FTS
+        this.channel = this.createChannel();
+        // 崩溃有界自愈(#22 机理刀;有意翻转 0.26.25 的「本刀声明不做自愈」——理由与 bound 面
+        // 见 RESPAWN_* 两常量与 respawnChannel 注释;注入假通道(测试)不重建:重建工厂会拿到
+        // 同一个假实例,自愈无意义且会混淆既有崩溃用例,故假通道维持旧语义)
         this.channel.setOnCrash((error) => {
             if (this.state === 'terminated')
                 return;
-            this.state = 'failed';
-            this.loadError = error;
-            this.logger?.warn(`[memory] ${error}(本地嵌入转入 failed 态,换源或重启可恢复)`);
+            if (!this.respawnOnCrash || this.injectedChannel || !this.respawnAllowed()) {
+                this.state = 'failed';
+                this.loadError = error;
+                this.logger?.warn(`[memory] ${error}(本地嵌入转入 failed 态,换源或重启可恢复)`);
+                return;
+            }
+            this.logger?.warn(`[memory] ${error}(#22 自愈第 ${this.respawnTimes.length} 次,60s 窗内 ≤${RESPAWN_MAX_PER_WINDOW})`);
+            void this.respawnChannel();
         });
+    }
+    /** 真通道工厂(构造与自愈共用同一重建路径;假通道注入缝原样返回同一实例,不重建)。 */
+    createChannel() {
+        if (this.injectedChannel)
+            return this.injectedChannel;
+        if (this.useWorker)
+            return new RealWorkerChannel(this.workerPath, this.cfgObj);
+        return new RealChildChannel(this.childPath, this.cfgObj, (pid) => {
+            // pid 只能在 fork 后拿到,故补一条(与拉起日志同前缀,便于 grep 成对)
+            this.logger?.info(`[memory] 本地嵌入子进程 pid=${pid ?? '未知'}(model=${this.entry.id})`);
+        });
+    }
+    /** 60s 滚动窗内是否还允许一次自愈(调用即计入,先占位后重建)。 */
+    respawnAllowed() {
+        const now = Date.now();
+        while (this.respawnTimes.length > 0 && now - this.respawnTimes[0] > RESPAWN_WINDOW_MS)
+            this.respawnTimes.shift();
+        if (this.respawnTimes.length >= RESPAWN_MAX_PER_WINDOW)
+            return false;
+        this.respawnTimes.push(now);
+        return true;
+    }
+    /**
+     * 单点自愈：关旧通道→新通道→重预热→markReady。
+     * 不变量：在飞期间 `respawnPromise` 非空且 `state='loading'`（isReady 为假），
+     * 现有 vectorsReady 门/EmbedHelper 降级链天然接管半成品窗口，不加新契约态。
+     */
+    respawnChannel() {
+        if (this.respawnPromise)
+            return this.respawnPromise;
+        const p = (async () => {
+            let next;
+            try {
+                next = this.createChannel();
+            }
+            catch (err) {
+                this.state = 'failed';
+                this.loadError = err instanceof Error ? err.message : String(err);
+                this.logger?.warn(`[memory] 本地嵌入自愈失败(通道重建): ${this.loadError}`);
+                return;
+            }
+            // close() 竞态窗口：重建期间被外部释放→新通道不得残留(terminated 后不自愈是铁律)
+            if (this.state === 'terminated') {
+                next.terminate();
+                return;
+            }
+            next.setOnCrash((error) => {
+                // 新通道预热完成前暂不挂钩(避免旧通道残景再触发);完成后同路径重装
+                if (this.channel !== next || this.state === 'terminated')
+                    return;
+                if (!this.respawnOnCrash || this.injectedChannel || !this.respawnAllowed()) {
+                    this.state = 'failed';
+                    this.loadError = error;
+                    this.logger?.warn(`[memory] ${error}(本地嵌入转入 failed 态,换源或重启可恢复)`);
+                    return;
+                }
+                this.logger?.warn(`[memory] ${error}(#22 自愈第 ${this.respawnTimes.length} 次,60s 窗内 ≤${RESPAWN_MAX_PER_WINDOW})`);
+                void this.respawnChannel();
+            });
+            this.channel.terminate();
+            this.channel = next;
+            this.state = 'loading';
+            this.loadError = null;
+            try {
+                await next.request({ type: 'warmup' });
+                // 外部 close() 可能在 await 期间把状态推至 terminated(插件卸载/切走);TS 因调用发生在
+                // next 上不失效 'loading' 窄化,故显式 cast 回完整并集再比——不能当作不可能分支删掉。
+                if (this.state === 'terminated')
+                    return;
+                this.markReady();
+                this.logger?.info(`[memory] 本地嵌入自愈完成(第 ${this.respawnTimes.length} 次,60s 窗)`);
+            }
+            catch (err) {
+                if (this.state === 'terminated')
+                    return;
+                const msg = err instanceof Error ? err.message : String(err);
+                this.state = 'failed';
+                this.loadError = msg;
+                this.logger?.warn(`[memory] 本地嵌入自愈失败(重预热): ${msg}`);
+            }
+            finally {
+                this.respawnPromise = null;
+            }
+        })();
+        this.respawnPromise = p;
+        return p;
+    }
+    /** 自愈在飞时外部请求的等待缝(带超时;超时/失败都让调用方走既有降级链)。 */
+    async awaitRespawn(timeoutMs) {
+        const p = this.respawnPromise;
+        if (!p)
+            return;
+        if (!(timeoutMs && timeoutMs > 0)) {
+            await p;
+            return;
+        }
+        let timer;
+        try {
+            await Promise.race([p, new Promise((resolve) => {
+                    timer = setTimeout(resolve, timeoutMs);
+                })]);
+        }
+        finally {
+            if (timer)
+                clearTimeout(timer);
+        }
     }
     getDimensions() {
         return this.entry.dims;
+    }
+    /** 生效的单条 token 预算(=子进程侧 shrinkToBudget 的硬帽;embedding_meta 留痕用)。 */
+    getTokenBudget() {
+        return this.tokenBudgetTokens;
     }
     getProviderInfo() {
         // dimensions 语义与远程路径一致(sqlite 的 providerInfo 比对含维度)
@@ -329,7 +508,47 @@ export class LocalEmbeddingService {
             this.state = 'loading';
         // 单条请求(召回 query)带优先标记:worker 侧插队,不被 reindex 批次堵队尾
         const startedAt = Date.now();
-        const reply = await this.requestWithTimeout({ type: 'embed', texts, priority: texts.length === 1 }, callOpts?.timeoutMs);
+        const usedChannel = this.channel;
+        // 多条目批才带 cid(单条批无断点可续;消息形态对旧通道保持向后兼容)
+        const cid = texts.length > 1 ? this.nextCid++ : undefined;
+        let reply;
+        try {
+            reply = await this.requestWithTimeout({ type: 'embed', texts, priority: texts.length === 1, cid }, callOpts?.timeoutMs);
+        }
+        catch (err) {
+            // #22 机理刀·断点续试：仅当**所用通道已死**(被杀/崩溃)才触发——超时降级/infer 错误回执/
+            // 假通道注入缝都不走此路。旧批条目已进不了库(子进程连同未回执向量一起消失)，
+            // 但从实时进度拿到的断点位把重做面从「整批」压到「尾部未完段」；只续一次，
+            // 再失败走既有 reject——毒输入最多多吃两批，不把补齐链拖进活锁。
+            const ack = cid !== undefined && typeof usedChannel.lastProgressFor === 'function' ? usedChannel.lastProgressFor(cid) : undefined;
+            const alive = typeof usedChannel.isAlive === 'function' ? usedChannel.isAlive() : true;
+            if (!alive &&
+                this.respawnOnCrash &&
+                !this.injectedChannel &&
+                texts.length > 1 &&
+                ack !== undefined &&
+                ack < texts.length) {
+                await this.awaitRespawn(callOpts?.timeoutMs);
+                if (this.state === 'ready' || this.state === 'loading') {
+                    const tail = texts.slice(ack);
+                    this.logger?.warn(`[memory] 本地嵌入断点续试:model=${this.entry.id} from=${ack}(已 ack 不重放,剩 ${tail.length} 条,仅一次)`);
+                    const retry = await this.requestWithTimeout({ type: 'embed', texts: tail, priority: false, cid }, callOpts?.timeoutMs);
+                    if (!retry.ok)
+                        throw new Error(`断点续试仍失败(from=${ack}): ${retry.error}`);
+                    if (retry.type !== 'embedded')
+                        throw new Error(`嵌入通道返回异常消息类型: ${retry.type}`);
+                    this.markReady();
+                    for (const v of retry.vectors) {
+                        if (v.length !== this.entry.dims) {
+                            throw new Error(`本地嵌入维度不匹配:期望 ${this.entry.dims},得到 ${v.length}`);
+                        }
+                    }
+                    this.logger?.info(describeEmbedBatch(this.entry.id, tail.length, retry.tokensMax, Date.now() - startedAt));
+                    return new Array(ack).concat(retry.vectors);
+                }
+            }
+            throw err;
+        }
         if (!reply.ok) {
             if (reply.stage === 'load')
                 this.applyLoadFailure(reply.error);

@@ -145,6 +145,14 @@ export declare class MemoryDb {
     private readMetaString;
     private writeMetaString;
     /**
+     * #22 口径留痕:记下本库向量是在哪个 token 帽下嵌出来的(生效 tokenBudget)。
+     *
+     * **只记录不比对、不进 providerInfo drop 判据**(调档不重嵌——帽变化不触发向量失效,
+     * 故此键仅作事后取证/排障用,与是否重建索引无关)。写失败静默:留痕是辅助面,
+     * 绝不因它拖垮主链路。
+     */
+    recordEmbeddingTokenBudget(budget: number): void;
+    /**
      * 持久化 embedding meta(语义:物理向量表当前对应的 provider/维度)。
      * 活切换在 swapProvider 成功后即写(表已是新维度);启动/补齐链在
      * 缺失向量补齐收敛(missing=0)后写——缺失行补齐判据是行数差,不依赖 meta。

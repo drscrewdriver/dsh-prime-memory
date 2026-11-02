@@ -1,5 +1,17 @@
 # 更新日志（Changelog）
 
+## [0.26.30] — 2026-11-03
+
+> #22 机理刀：前几版只修了 token 护栏的**截断面**（把进模型的 token 压到 1536），机理本体未动——相邻两次大推理的 T² 张量在 BFCArena 高水位不回落时**共存叠加**（m=2），且崩一次就停摆到宿主重启。本版把防线从「只截」扩成**三层**：① token 帽 1536（既有）② 关 memPattern 压低共存峰（新）③ 崩溃有界自愈 respawn（新，默认开可关）。**诚实边界**：三层都在 Windows/纯 node 侧证峰值/状态机/续试；SIGTRAP 的消除只能由报告人在 macOS 回验裁决，#22 是否关闭取决于那次回验。
+
+- **第二层：`resources/embedding-child.cjs` / `embedding-worker.cjs` 的 pipeline 加 `session_options:{enableMemPattern:false}`**。ORT 默认按图形预分配、把输入绑定驻留 BFCArena，连发时新旧 T² 张量共存把峰值叠成 m×T²；关掉后同形状连发峰值本机实测 **1597MB→1264MB（−333MB，m:2→1 方向）**、稳态 infer 零代价。关键——**同输入改前/改后向量 bit 级全同**（真 bge-m3 `--equivalence` 实测 `maxAbsDiff=0`，短文本+致死长文本两样本），所以**不触发重嵌**（库里向量不失效）。边界：对 macOS 分配器 trap 的消除效果本机不可证，**不得据此宣称「不再崩」**；决定性实验是报告人用 `scripts/repro` 在 macOS 重跑 `--budget 2048` 连发看是否仍 trap。
+- **第三层：崩溃有界自愈 respawn（`src/store/local-embedding.ts`）。⚠ 有意翻转 `0.26.25` 公告的「本刀声明不做自愈」**——那是当时边界，本轮把 bound 面逐条补齐后开。默认**开**，新键 `embedding.respawnOnCrash`（`.boolean().default(true)`，只增不改键）可关回旧语义（崩一次停摆到重启）。做法：通道工厂化（`createChannel`）→ `crashCb` 为**唯一** respawn 发起点（消 warmup/embed/reindex 三入口的 fork 风暴，`respawnPromise` 单点合流）→ 复用 `loading` 态（**不加新契约态**，`contract.ts` 不动，现有 vectorsReady 门天然接管半成品窗口）→ 重建通道 + await warmup。**速率上限 60s 窗内 ≤2 次**，超限回 `failed`（旧终局）。
+- **崩批断点续试（协议加 `ack`，只增不改）**：子进程对多条目批逐条实时上报 `embedProgress{cid,done}`，父侧记断点位；子进程被硬杀时最后的 `done` 就是重试切片位，`texts.slice(ack)` **仅续一次**，再败走既有 reject。**诚实边界（表述红线之二）**：头段 `ack` 条的向量随崩溃子进程一起丢失、本批不返回（返回位为空洞，交后台 backfill 逐条补）——所以自愈**不保证不丢向量**，只把「重做面」从整批压到尾部未完段，且毒输入最多吃 2 批不成活锁（`l1.ts` 重嵌腿已加 `undefined` 守卫，把空洞当「本轮未取到」跳过）。
+- **第一层口径留痕（还 `0.26.25/27` 欠下的「无声混叠」债最小形态）**：生效 `tokenBudget` 写入 `embedding_meta` 新键 `embedding_token_budget`（`MemoryDb.recordEmbeddingTokenBudget`，**只记录不比对、不进 providerInfo drop 判据**——调档不重嵌，1536 仍是**实测经验值、不是证明**）。`index.ts` 在 db.init 后落一次。
+- **worker 逃生门通道**同法接入（`RealWorkerChannel` 进度也按 cid、`lastProgressFor` 对齐），既有 worker 用例零回归。`smoke` 补三条产物/配置断言（child 含 memPattern、local-embedding 含 respawn 代码、`Config.embedding.respawnOnCrash` 默认 true）。
+- **复现件收编 `scripts/repro/`（报告人 gist 三件，不进 `tests/`）**：`embedding-repeat-crash.repro.mjs`（独立 CLI，`--budget` 从 `dist` 读 `HARD_CAP_TOKENS` 不写死）、`embedding-repeat-crash.test.ts`（vitest 包装，三重门 darwin+开关+本机模型/宿主）、`README.md`。理由：CI 只 ubuntu-latest、三重门恒跳=负债件；macOS 每次崩会记 `.ips` 并弹「意外退出」污染维护者机器。跨平台可证的崩溃状态机走 `tests/embedding-respawn.test.ts`（SIGKILL 代替 SIGTRAP）。
+- **测试**：新增 `tests/embedding-respawn.test.ts` 7 例（真 fork 无模型 stub：kill→respawn→ready→下一条成功、ack 断点续试一次、毒输入≤2 批不活锁、60s 速率上限超限转 failed、禁 respawn 变异对照、close 后 terminated 不复用、崩溃归因含 signal）；`embedding-token-guard.test.ts` +2 例（两条通道 memPattern session_options 哨兵、respawnOnCrash 默认开可关）；`memory-db.test.ts` +1 例（预算留痕写读且正交于重嵌判定）。全量 **1948 例 / 192 文件**全绿；typecheck 0、lint 0 error、build/build:smoke/smoke/verify-catalog 均 0。配置面**只增键不改键**（`embedding.respawnOnCrash`）。对外表述红线三条：不写「消除崩溃」、不写「自愈不丢向量」、1536 保持「经验值非证明」。
+
 ## [0.26.29] — 2026-11-02
 
 > #22 报告人（DESXIE）回验 `0.26.28`：**自动档预算 = 1536、`5×5000` 串行全过**，且用同脚本换 `--budget 2048` 作对照组仍在第 2 条 SIGTRAP——说明“全过”不是环境变了，是 1536 真拦住了。同时他拓出一个真 bug。

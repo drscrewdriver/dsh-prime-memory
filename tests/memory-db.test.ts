@@ -96,6 +96,41 @@ describe('MemoryDb', () => {
     db.close();
   });
 
+  // #22 口径留痕:记下本库向量在哪个 token 帽下嵌出来的。**只记录不比对**——帽变化不得
+  // 触发重嵌/进 providerInfo drop 判据,故只验「写进去 + 可原样读回 + 非法值不写 + 幂等覆盖」。
+  it('#22 recordEmbeddingTokenBudget 写 embedding_meta 且可原样读回(不进 drop 判据)', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const file = join(await tmpDirSafe(), 'budget.db');
+    const db = new MemoryDb(file, 0);
+    const res = db.init();
+    expect(res.needsReindex).toBe(false);
+    db.recordEmbeddingTokenBudget(1536);
+    const readVal = () => {
+      const raw = new DatabaseSync(file);
+      const row = raw
+        .prepare("SELECT value FROM embedding_meta WHERE key = 'embedding_token_budget'")
+        .get() as { value: string } | undefined;
+      const cnt = raw
+        .prepare("SELECT COUNT(*) c FROM embedding_meta WHERE key = 'embedding_token_budget'")
+        .get() as { c: number };
+      raw.close();
+      return { value: row?.value, cnt: cnt.c };
+    };
+    expect(readVal()).toEqual({ value: '1536', cnt: 1 });
+    // 幂等覆盖(ON CONFLICT DO UPDATE):不留第二条
+    db.recordEmbeddingTokenBudget(1024);
+    expect(readVal()).toEqual({ value: '1024', cnt: 1 });
+    // 非法值(0/负/NaN)不写,保持上一次值不变
+    db.recordEmbeddingTokenBudget(0);
+    db.recordEmbeddingTokenBudget(Number.NaN);
+    expect(readVal()).toEqual({ value: '1024', cnt: 1 });
+    // 留痕与重嵌判定正交:再次 init 不因此标记 needsReindex
+    db.close();
+    const db2 = new MemoryDb(file, 0);
+    expect(db2.init().needsReindex).toBe(false);
+    db2.close();
+  });
+
   it('upsert + FTS search roundtrip; batch failure rolls back whole batch', async () => {
     const db = new MemoryDb(join(await tmpDirSafe(), 't2.db'), 0);
     db.init();

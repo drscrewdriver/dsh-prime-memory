@@ -18,7 +18,8 @@ export default tseslint.config(
       'resources/**',
       'bench/**',
       'coverage/**',
-      '*.cjs',
+      // CommonJS 入口(fork 子进程/测试 fixture stub)用 require 是设计使然;`*.cjs` 只匹根层,需 `**` 才覆盖 tests/fixtures
+      '**/*.cjs',
     ],
   },
   js.configs.recommended,

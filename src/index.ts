@@ -28,6 +28,7 @@ import {
   resolveInitialEmbedding,
   type InitialEmbedding,
 } from './store/embedding-source.js';
+import { LocalEmbeddingService } from './store/local-embedding.js';
 import { ModelDownloadQueue } from './store/download-queue.js';
 import { PINNED_TRANSFORMERS_VERSION, RuntimeInstaller } from './store/runtime-installer.js';
 import { cleanupOrphanTmp, ensureDir } from './util/io.js';
@@ -190,6 +191,7 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     config.embedding.maxInputChars,
     undefined,
     config.embedding.maxInputTokens,
+    config.embedding.respawnOnCrash,
   );
   let initial: InitialEmbedding = { svc: new NoopEmbeddingService(), dims: 0 };
   /** 管理器引用:启动重嵌链/backfill 闭包在运行期解引用(声明早于创建避免 TDZ)。 */
@@ -220,6 +222,11 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   if (storageOk) {
     try {
       dbInit = db.init(initial.providerInfo);
+      // #22 口径留痕:库里向量是在哪个 token 帽下嵌出来的,事后必须可查
+      // (providerInfo 判据不含预算——未来调档若无声,这行是唯一证据)
+      if (initial.providerInfo?.provider === 'local' && embed instanceof LocalEmbeddingService) {
+        db.recordEmbeddingTokenBudget(embed.getTokenBudget());
+      }
       if (db.isDegraded()) {
         storageOk = false;
         logger.error('[memory] 检索库初始化失败(schema/FTS 不可用),记忆功能停用');

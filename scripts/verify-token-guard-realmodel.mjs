@@ -17,6 +17,8 @@
  * 用法：
  *   node scripts/verify-token-guard-realmodel.mjs
  *   node scripts/verify-token-guard-realmodel.mjs --budget 24    # 自定义预算（验证不同档位）
+ *   node scripts/verify-token-guard-realmodel.mjs --equivalence   # memPattern 开/关向量 bit 级全同对比
+ *   node scripts/verify-token-guard-realmodel.mjs --repeat 6      # 同形状连发峰值两臂对拍(关 memPattern 降峰方向)
  * 需要本机已有 runtime 与 bge-m3（默认 ~/.dsh/memory，可用 PM_DATA_DIR 覆盖）。
  */
 import * as path from 'node:path';
@@ -43,6 +45,16 @@ const argBudget = (() => {
 const argSerial = (() => {
   const i = process.argv.indexOf('--serial');
   return i > -1 && process.argv[i + 1] ? Number(process.argv[i + 1]) : 5;
+})();
+// #22 机理刀复现面两开关：--equivalence 比对 memPattern 开/关两条会话的输出是否 bit 级全同
+// （判定「关 memPattern 会不会触发重嵌」的关键——不同则必须重嵌，代价巨大）；
+// --repeat N 同形状连发 N 轮、外部轮询两条臂峰值（证 m:2→1 的降峰方向，非 macOS 不证不崩）。
+const argEquivalence = process.argv.includes('--equivalence');
+const argRepeat = (() => {
+  const i = process.argv.indexOf('--repeat');
+  if (i < 0) return 0;
+  const v = process.argv[i + 1];
+  return v && !v.startsWith('--') ? Number(v) : 6;
 })();
 
 let failures = 0;
@@ -192,6 +204,47 @@ async function peakOfRun(budget, chars) {
   return { peakMB: Math.round(peakKb / 1024), seq: (done && done.seq) ?? -1 };
 }
 
+/**
+ * 通用臂执行(#22 机理刀):fork _t3-runner 跑指定 memPattern/连发轮数,父侧外部轮询峰值(win32),
+ * 可选回传向量(--equivalence)。与 peakOfRun 同一采样纪律:峰值必须由外部观察者采。
+ */
+async function armRun({ budget, chars, memPattern, repeat = 1, echo = false }) {
+  const { fork } = await import('node:child_process');
+  const child = fork(path.join(root, 'scripts', '_t3-runner.mjs'), [], {
+    env: {
+      ...process.env,
+      T3_RUNTIME: runtimeDir,
+      T3_MODEL: modelDir,
+      T3_BUDGET: String(budget),
+      T3_CHARS: String(chars),
+      T3_MEMPATTERN: memPattern ? 'on' : 'off',
+      T3_REPEAT: String(repeat),
+      T3_ECHO: echo ? '1' : '0',
+    },
+    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+  });
+  const canPoll = process.platform === 'win32';
+  let peakKb = 0;
+  const pid = child.pid;
+  const poll = canPoll
+    ? setInterval(() => {
+        try {
+          const out = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true });
+          const m = /"(\d[\d,]*) K"/.exec(out.stdout || '');
+          if (m) peakKb = Math.max(peakKb, Number(m[1].replace(/,/g, '')));
+        } catch {
+          /* 子进程已退,轮询失败不影响结论 */
+        }
+      }, 50)
+    : null;
+  const done = await new Promise((res) => {
+    child.once('message', res);
+    child.once('exit', () => res({ seq: -1 }));
+  });
+  if (poll) clearInterval(poll);
+  return { peakMB: Math.round(peakKb / 1024), seq: (done && done.seq) ?? -1, vector: done && done.vector };
+}
+
 let t3Runnable = process.platform === 'win32';
 if (!t3Runnable) {
   console.log('  SKIP T3：峰值采样当前只接了 Windows(tasklist)，非 Windows 不拿无效数据当结论');
@@ -201,6 +254,54 @@ if (!t3Runnable) {
   console.log(`  受护栏 seq=${guardedPeak.seq} 峰值=${guardedPeak.peakMB}MB;无护栏 seq=${rawPeak.seq} 峰值=${rawPeak.peakMB}MB`);
   ok('两组的峰值都采到了（>0 表示轮询真的看见过子进程）', guardedPeak.peakMB > 0 && rawPeak.peakMB > 0, `guarded=${guardedPeak.peakMB} raw=${rawPeak.peakMB}`);
   ok('无护栏的峰值高于受护栏的（预算真的在削峰）', rawPeak.peakMB > guardedPeak.peakMB, `raw=${rawPeak.peakMB}MB vs guarded=${guardedPeak.peakMB}MB`);
+}
+
+if (argEquivalence) {
+  /*
+   * memPattern 开/关两条会话(跨进程两臂)对同一输入的输出必须 bit 级全同——
+   * 否则“关 memPattern”就是改变了嵌入结果,会触发全量重嵌(代价巨大)。同模型同权重,
+   * 预期全同;不一致即证明 memPattern 影响数值。本项不依赖 win32(只比向量不比峰值)。
+   */
+  console.log('\n=== --equivalence: memPattern 开/关向量 bit 级对比(跨进程两臂)===');
+  const EQ_SAMPLES = [
+    { label: '短文本 chars=64', chars: 64 },
+    { label: '中文本 chars=512', chars: 512 },
+    { label: '致死长文本 chars=5000(截到预算)', chars: 5000 },
+  ];
+  for (const s of EQ_SAMPLES) {
+    const onArm = await armRun({ budget: argBudget, chars: s.chars, memPattern: true, repeat: 1, echo: true });
+    const offArm = await armRun({ budget: argBudget, chars: s.chars, memPattern: false, repeat: 1, echo: true });
+    if (!onArm.vector || !offArm.vector) {
+      ok(`${s.label}: 两臂都回传了向量`, false, `on=${!!onArm.vector} off=${!!offArm.vector}`);
+      continue;
+    }
+    let equal = onArm.vector.length === offArm.vector.length;
+    let maxDiff = 0;
+    for (let i = 0; i < onArm.vector.length; i++) {
+      if (!Object.is(onArm.vector[i], offArm.vector[i])) equal = false;
+      const d = Math.abs(onArm.vector[i] - offArm.vector[i]);
+      if (d > maxDiff) maxDiff = d;
+    }
+    ok(`${s.label}: memPattern 开/关输出 bit 级全同(len=${onArm.vector.length})`, equal, `maxAbsDiff=${maxDiff}`);
+  }
+}
+
+if (argRepeat > 0) {
+  /*
+   * 同形状连发峰值两臂对拍:开 memPattern(改前)与关 memPattern(改后)各自同进程连发 N 轮,
+   * 父侧外部轮询峰值。预期关臂峰值≤开臂(共存峰 m:2→1 方向)。本机 Windows/纯 node
+   * 发不出 SIGTRAP,此拍只证降峰方向,不证“不崩”(后者只能 macOS 回验)。
+   */
+  console.log(`\n=== --repeat ${argRepeat}: 同形状连发峰值两臂对拍(关 memPattern 应把共存峰 m:2→1)===`);
+  if (process.platform !== 'win32') {
+    console.log('  SKIP：峰值采样仅接了 Windows(tasklist);非 Windows 不拿无效数据当结论');
+  } else {
+    const onRun = await armRun({ budget: argBudget, chars: 5000, memPattern: true, repeat: argRepeat });
+    const offRun = await armRun({ budget: argBudget, chars: 5000, memPattern: false, repeat: argRepeat });
+    console.log(`  连发 ${argRepeat}: 开 memPattern 峰值=${onRun.peakMB}MB(seq=${onRun.seq});关 memPattern 峰值=${offRun.peakMB}MB(seq=${offRun.seq})`);
+    ok('两臂峰值都采到了(>0)', onRun.peakMB > 0 && offRun.peakMB > 0, `on=${onRun.peakMB} off=${offRun.peakMB}`);
+    ok('关 memPattern 的连发峰值 ≤ 开 memPattern(降峰方向)', offRun.peakMB <= onRun.peakMB, `off=${offRun.peakMB}MB on=${onRun.peakMB}MB`);
+  }
 }
 
 console.log(`\n最大实测 seq = ${maxSeq} / 预算 ${argBudget}`);

@@ -275,6 +275,7 @@ node bench/harness/retrieval-metrics.mjs <runDir> --flood 200,600               
 | `embedding.dimensions` | `0` | ベクトル次元（有効時必須） |
 | `embedding.maxInputChars` | `5000` | 単テキスト最大文字数（超長は切り捨て） |
 | `embedding.maxInputTokens` | `0` | ローカル埋め込みの 1 件あたり **トークン** 予算：`0`（既定）= モデル窓と上限 1536 の小さい方、>0 = 明示値（超過は clamp + warn）。上の行とは役割が異なる——文字上限はリモートモードと IPC サイズのみを制限し、ローカルのクラッシュ/メモリ防護はトークン単位が必須（#22） |
+| `embedding.respawnOnCrash` | `true` | ローカル埋め込み子プロセスが強制殺された後**有界で自己回復**するか（#22）：既定オン——60s ウィンドウ内 ≤2 回の再 fork+再ウォームアップ、複数項目バッチはライブ中間点から 1 回だけ再開（落ちた子と共になくなった先頭部ベクトルは backfill が補う）；オフにすると旧挙動（一度クラッシュするとホスト再起動/ソース切替まで停止）。0.26.25 の「自己回復しない」告知を意図的に反転。三層＝ガードレール(1536)/ピーク低減(memPattern)/自己回復(respawn)。 |
 | `embedding.timeoutMs` | `10000` | 単回埋め込み呼び出しタイムアウト（ms） |
 | `embedding.allowLocalModels` | `true` | ローカル埋め込み档を許可（デプロイ上限） |
 | `embedding.mirror` | `https://hf-mirror.com` | ローカルモデルダウンロードミラー根 |
