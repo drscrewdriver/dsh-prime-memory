@@ -116,6 +116,9 @@ if (!fs.existsSync(INSTALLED)) {
     '#22 主进程把 token 预算装进了 DSH_EMBED_CFG',
   );
   (/signal=/.test(localTxt) ? pass : fail)('#22 退出记录含 signal（硬杀可归因）');
+  // 每批 info 必须真的落盘：向报告人承诺过「日志里每批 tokensMax ≤ 预算」，而这行在
+  // 0.26.28 之前根本不存在（只在本地脚本探针里）。钉住它，否则同样的缺口可以再溜一次。
+  (/tokensMax=/.test(localTxt) ? pass : fail)('#22 每批落盘含实测 tokensMax 的 info（事后可核）');
   const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
   info('dist/room-review.js sha256', sha(roomReview));
 }
