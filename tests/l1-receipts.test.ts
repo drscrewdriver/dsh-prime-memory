@@ -16,7 +16,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterAll, describe, expect, it } from 'vitest';
-import { inputDigest } from '../src/store/receipts.js';
+import { buildReceipts, inputDigest } from '../src/store/receipts.js';
+import { receiptItemsForAbsorbed } from '../src/pipeline/intra-dedupe.js';
 import { MemoryDb } from '../src/store/sqlite.js';
 
 let dir: string;
@@ -109,5 +110,34 @@ describe('task_16 input_digest —— 候选池有序序列的稳定摘要', () 
   it('边界:分隔歧义不得导致碰撞 —— ["a|b"] 与 ["a","b"] 必须不同', () => {
     expect(inputDigest(['a|b'])).not.toBe(inputDigest(['a', 'b']));
     expect(inputDigest(['a\nb'])).not.toBe(inputDigest(['a', 'b']));
+  });
+});
+
+/**
+ * 批内自去重的“被谁吸收”必须可回溯（spec “测试与门禁” 明列项）。
+ *
+ * 为什么不新开表列/词表：吸收本质就是 merge，`candidateIds` 载代表项 id 就足够
+ * 让一次 (runId, recordId) 回溯回答“本条被批内哪条吸收”。这条用例钉的是**映射与凭证形状**，
+ * 而不是“管线跑得通”（后者由 intra-dedupe 的 preDedupeBatch 用例覆盖）。
+ */
+describe('§B 批内吸收关系入凭证（kind=merge + 代表 id）', () => {
+  it('映射成 merge 凭证；digest 指向代表项；空映射不产行', () => {
+    const runId = 'run_intra_1';
+    const at = '2026-11-03T00:00:00.000Z';
+    const absorbed = receiptItemsForAbsorbed({ a1: 'a2', b1: 'b3' });
+    expect(absorbed).toEqual([
+      { recordId: 'a1', candidateIds: ['a2'], action: 'merge' },
+      { recordId: 'b1', candidateIds: ['b3'], action: 'merge' },
+    ]);
+
+    const rows = buildReceipts(runId, at, absorbed);
+    expect(rows.map((r) => r.recordId)).toEqual(['a1', 'b1']);
+    expect(rows.every((r) => r.kind === 'merge')).toBe(true);
+    // 回溯键：该行的 input_digest 必须与“候选池=[代表 id]”同源，而不是别的记录
+    const same = buildReceipts(runId, at, [{ recordId: 'a1', candidateIds: ['a2'], action: 'merge' }])[0];
+    expect(rows[0].inputDigest).toBe(same.inputDigest);
+    expect(rows[0].inputDigest).not.toBe(inputDigest(['b3']));
+    // 特性关闭时 absorbedBy 为空 ⇒ 零额外行（凭证与改动前逐字节一致）
+    expect(buildReceipts(runId, at, receiptItemsForAbsorbed({}))).toEqual([]);
   });
 });

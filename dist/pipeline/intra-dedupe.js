@@ -177,6 +177,21 @@ export function clusterByVector(items, vectors, tau) {
     return finish(items, clusters);
 }
 /**
+ * 把「被吸收 → 代表」关系映射成 receipt 输入项。
+ *
+ * 为什么用既有 `kind='merge'` + `candidateIds=[代表 id]` 而不新增表列/词表即可：
+ * 吸收本质上就是「本条被并入另一条」，`merge` 正是这个词；`candidateIds` 载代表项 id，
+ * 于是「本条被批内哪条吸收」只需一次 `(runId, recordId)` 回溯（inputDigest 含代表 id）。
+ * 关闭特性时 `absorbedBy` 为空 ⇒ 不产生任何额外行（凭证与改动前逐字节一致）。
+ */
+export function receiptItemsForAbsorbed(absorbedBy) {
+    return Object.entries(absorbedBy).map(([absorbedId, repId]) => ({
+        recordId: absorbedId,
+        candidateIds: [repId],
+        action: 'merge',
+    }));
+}
+/**
  * 一次完成：精确层 → （可选）向量层，并把“代表项→向量”与“被吸收→代表”两表一并交回。
  *
  * 嵌入不可用时**降级只做精确层**（catch 后留一条 warn），绝不因向量故障阻断蒸馏——

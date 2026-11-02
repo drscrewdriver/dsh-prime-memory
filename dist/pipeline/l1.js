@@ -16,7 +16,7 @@ import { normTags, normUsageScenario, readCognitiveHall, readWing } from '../met
 import { acceptTitle } from '../util/md-name.js';
 import { clampPriority } from '../util/priority.js';
 import { formatBatchConflictPrompt, getConflictDetectionSystemPrompt } from '../prompts/l1-dedup.js';
-import { preDedupeBatch } from './intra-dedupe.js';
+import { preDedupeBatch, receiptItemsForAbsorbed } from './intra-dedupe.js';
 import { resolveSourceAnchors, withSourceAnchors } from './anchors.js';
 import { stampValidity, validToSourceOf } from '../store/validity.js';
 import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope, WING_FALLBACK } from '../types.js';
@@ -542,11 +542,7 @@ routeHealth) {
         // 唯一零痕迹分支，批内吸收不能重蹈）。用既有 `kind='merge'` + candidateIds=[代表 id]：
         // 不新增表列、不扩词表，回答“本条被批内哪条吸收”只需一次 (runId, recordId) 回溯。
         // 关闭特性时 intraAbsorbedBy 为空 ⇒ 凭证与改动前逐字节一致。
-        const absorbedItems = Object.entries(intraAbsorbedBy).map(([absorbedId, repId]) => ({
-            recordId: absorbedId,
-            candidateIds: [repId],
-            action: 'merge',
-        }));
+        const absorbedItems = receiptItemsForAbsorbed(intraAbsorbedBy);
         const rows = buildReceipts(runId, new Date().toISOString(), [...items, ...absorbedItems]);
         persistReceiptsSafely((rows) => store.recordReceipts(rows), rows, logger);
         // §F 追踪捎带:六值决策词表聚合(与凭证同源,runner 侧并入 distill_run 事件)
