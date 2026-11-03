@@ -32,6 +32,61 @@ export function clipByWidth(name: string, budget: number = LABEL_WIDTH_BUDGET): 
 }
 /** 星点条数(纯装饰层;再多会拖 DOM,再少不像星空)。 */
 export const STAR_COUNT = 90;
+
+/** 2D ego 聚焦的默认跳数：与 3D 同心壳同源（EGO_HOPS_MAX），两端“看到多大邻域”必须一致。 */
+export const EGO_SUBGRAPH_HOPS = 3;
+/** 2D ego 子图节点软上限：与服务端 graph-ego-subgraph 同量级（hub 三跳可爆千级，触顶即截并标记）。 */
+export const EGO_SUBGRAPH_CAP = 400;
+
+/**
+ * 2D 图的 ego 子集（纯函数）：从 root 沿无向边 BFS ≤hops 跳，只留可达节点与两端都入选的边。
+ *
+ * 为什么在客户端算而不是再发一次请求：full 块已在手（≤1500 节点），千级邻域扫描
+ * 零成本；且与当前画布元素集天然同源——服务端 ego 端点吃全图，可能包含被截断
+ * 预算排除的节点，两套判据对不齐会出现“子图里有根却没有邻居”。
+ * 确定性：同输入同输出（BFS 发现序 + 邻接表按边入参序），无 Math.random。
+ */
+export function egoSubgraph(
+  full: GraphFull,
+  rootId: string,
+  hops: number = EGO_SUBGRAPH_HOPS,
+  cap: number = EGO_SUBGRAPH_CAP,
+): GraphFull {
+  const byId = new Map(full.nodes.map((n) => [n.id, n]));
+  const root = byId.get(rootId);
+  if (!root) return { nodes: [], edges: [], truncated: false };
+  // 无向邻接表（重复边保留不影响 BFS）。
+  const adj = new Map<string, string[]>();
+  for (const e of full.edges) {
+    if (!adj.has(e.from)) adj.set(e.from, []);
+    if (!adj.has(e.to)) adj.set(e.to, []);
+    adj.get(e.from)!.push(e.to);
+    adj.get(e.to)!.push(e.from);
+  }
+  const depth = new Map<string, number>([[rootId, 0]]);
+  const order: string[] = [rootId];
+  let cutByCap = false;
+  for (let i = 0; i < order.length; i++) {
+    const cur = order[i]!;
+    const d = depth.get(cur)!;
+    if (d >= hops) continue;
+    for (const nb of adj.get(cur) ?? []) {
+      if (depth.has(nb)) continue;
+      if (order.length >= cap) {
+        cutByCap = true;
+        break;
+      }
+      depth.set(nb, d + 1);
+      order.push(nb);
+    }
+  }
+  const keep = new Set(order);
+  return {
+    nodes: order.map((id) => byId.get(id)!),
+    edges: full.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+    truncated: full.truncated || cutByCap,
+  };
+}
 /** 星点半径/透明度钳制区间(视觉下限:再小就看不见;上限:再大就成光斑)。 */
 const STAR_R_MIN = 0.12;
 const STAR_O_MIN = 0.12;

@@ -42548,6 +42548,43 @@ var __create = Object.create;
 		  return name;
 		}
 		var STAR_COUNT = 90;
+		var EGO_SUBGRAPH_HOPS = 3;
+		var EGO_SUBGRAPH_CAP = 400;
+		function egoSubgraph2(full, rootId, hops = EGO_SUBGRAPH_HOPS, cap = EGO_SUBGRAPH_CAP) {
+		  const byId = new Map(full.nodes.map((n) => [n.id, n]));
+		  const root = byId.get(rootId);
+		  if (!root) return { nodes: [], edges: [], truncated: false };
+		  const adj = /* @__PURE__ */ new Map();
+		  for (const e of full.edges) {
+		    if (!adj.has(e.from)) adj.set(e.from, []);
+		    if (!adj.has(e.to)) adj.set(e.to, []);
+		    adj.get(e.from).push(e.to);
+		    adj.get(e.to).push(e.from);
+		  }
+		  const depth = /* @__PURE__ */ new Map([[rootId, 0]]);
+		  const order = [rootId];
+		  let cutByCap = false;
+		  for (let i = 0; i < order.length; i++) {
+		    const cur = order[i];
+		    const d = depth.get(cur);
+		    if (d >= hops) continue;
+		    for (const nb of adj.get(cur) ?? []) {
+		      if (depth.has(nb)) continue;
+		      if (order.length >= cap) {
+		        cutByCap = true;
+		        break;
+		      }
+		      depth.set(nb, d + 1);
+		      order.push(nb);
+		    }
+		  }
+		  const keep = new Set(order);
+		  return {
+		    nodes: order.map((id) => byId.get(id)),
+		    edges: full.edges.filter((e) => keep.has(e.from) && keep.has(e.to)),
+		    truncated: full.truncated || cutByCap
+		  };
+		}
 		var STAR_R_MIN = 0.12;
 		var STAR_O_MIN = 0.12;
 		function radiusForDegree(deg) {
@@ -45602,12 +45639,19 @@ var __create = Object.create;
 		  const [linksError, setLinksError] = (0, import_react33.useState)(null);
 		  const [emphasisId, setEmphasisId] = (0, import_react33.useState)(void 0);
 		  const [view, setView] = (0, import_react33.useState)("3d");
+		  const [egoRoot, setEgoRoot] = (0, import_react33.useState)(null);
+		  const [searchText, setSearchText] = (0, import_react33.useState)("");
+		  const [searchMiss, setSearchMiss] = (0, import_react33.useState)(false);
+		  const [searchOpen, setSearchOpen] = (0, import_react33.useState)(false);
 		  const linksSeq = (0, import_react33.useRef)(0);
 		  const [mode, setMode] = (0, import_react33.useState)("query");
+		  const [entryPane, setEntryPane] = (0, import_react33.useState)(false);
 		  const [detailOpen, setDetailOpen] = (0, import_react33.useState)(false);
 		  const [detailW, setDetailW] = (0, import_react33.useState)(DETAIL_DEFAULT);
 		  const containerRef = (0, import_react33.useRef)(null);
 		  const dragWRef = (0, import_react33.useRef)(null);
+		  const modeRef = (0, import_react33.useRef)(mode);
+		  modeRef.current = mode;
 		  const startDrag = (0, import_react33.useCallback)((ev) => {
 		    ev.preventDefault();
 		    dragWRef.current = { startX: ev.clientX, startW: detailW };
@@ -45630,6 +45674,7 @@ var __create = Object.create;
 		  const loadGraph = (0, import_react33.useCallback)(() => {
 		    setGraphLoading(true);
 		    setGraphError(null);
+		    setEgoRoot(null);
 		    rpc("dsh-memory/graph-preview", { mode: "full" }).then((r) => {
 		      if (!r.ok) throw new Error(r.error.message);
 		      setStats(r.value.stats);
@@ -45643,13 +45688,13 @@ var __create = Object.create;
 		    for (const it of items) if (it.content) labels.current.set(it.id, it.content);
 		  }, []);
 		  const openRecord = (0, import_react33.useCallback)(
-		    (id) => {
+		    (id, opts) => {
 		      const token = ++linksSeq.current;
 		      setRecordId(id);
 		      setLinksLoading(true);
 		      setLinksError(null);
-		      setMode("graph");
-		      setDetailOpen(true);
+		      setEntryPane(true);
+		      if (modeRef.current === "graph") setDetailOpen(true);
 		      rpc("dsh-memory/record-links", { recordId: id }).then((r) => {
 		        if (token !== linksSeq.current) return;
 		        if (!r.ok) throw new Error(r.error.message);
@@ -45658,6 +45703,7 @@ var __create = Object.create;
 		        remember(v.records);
 		        setLinks(v);
 		        setEmphasisId(v.entities[0]?.id);
+		        if (!opts?.keepEgo && v.entities[0]) setEgoRoot(v.entities[0].id);
 		      }).catch((e) => {
 		        if (token !== linksSeq.current) return;
 		        setLinksError(String(e?.message ?? e));
@@ -45675,26 +45721,81 @@ var __create = Object.create;
 		      const known = links?.entities.find((e) => e.id === nodeId) ?? links?.neighbors.find((n) => n.id === nodeId);
 		      const first = known?.recordIds[0];
 		      if (first) {
-		        openRecord(first);
+		        openRecord(first, { keepEgo: true });
 		        return;
 		      }
 		      rpc("dsh-memory/graph-node-get", { id: nodeId }).then((r) => {
 		        const node = r.ok ? r.value.node : null;
 		        const id = node?.sourceRecordIds?.[0];
-		        if (id) openRecord(id);
+		        if (id) openRecord(id, { keepEgo: true });
 		      }).catch(() => {
 		      });
 		    },
 		    [links, openRecord, rpc]
 		  );
+		  const onPickNode2d = (0, import_react33.useCallback)(
+		    (nodeId) => {
+		      setEgoRoot(nodeId);
+		      onPickNode(nodeId);
+		    },
+		    [onPickNode]
+		  );
+		  const graphData = (0, import_react33.useMemo)(
+		    () => full && egoRoot ? egoSubgraph2(full, egoRoot) : full,
+		    [full, egoRoot]
+		  );
+		  const locateNode = (0, import_react33.useCallback)(
+		    (nodeId) => {
+		      setEmphasisId(nodeId);
+		      if (view === "2d") setEgoRoot(nodeId);
+		      setSearchOpen(false);
+		    },
+		    [view]
+		  );
+		  const searchHits = (0, import_react33.useMemo)(() => {
+		    const q = searchText.trim().toLowerCase();
+		    if (!q || !full) return [];
+		    const hits = full.nodes.filter((n) => n.name.toLowerCase().includes(q));
+		    return hits.slice(0, 200);
+		  }, [searchText, full]);
+		  const locateFirstHit = (0, import_react33.useCallback)(() => {
+		    const q = searchText.trim().toLowerCase();
+		    if (!q || !full) return;
+		    const hit = full.nodes.find((n) => n.name.toLowerCase().includes(q));
+		    if (!hit) {
+		      setSearchMiss(true);
+		      setTimeout(() => setSearchMiss(false), 1500);
+		      return;
+		    }
+		    setSearchMiss(false);
+		    locateNode(hit.id);
+		  }, [searchText, full, locateNode]);
+		  const jumpToGraph = (0, import_react33.useCallback)(
+		    (target) => {
+		      const root = links?.entities[0]?.id;
+		      setView(target);
+		      setMode("graph");
+		      setDetailOpen(true);
+		      if (root) {
+		        setEmphasisId(root);
+		        if (target === "2d") setEgoRoot(root);
+		      }
+		    },
+		    [links]
+		  );
+		  const backToEntry = (0, import_react33.useCallback)(() => {
+		    setMode("query");
+		    setEntryPane(true);
+		  }, []);
 		  const labelOfRecord = (0, import_react33.useCallback)((id) => labels.current.get(id) ?? id.slice(0, 10), []);
 		  const building = stats && stats.jobsTotal > 0 && stats.pendingJobs > 0;
 		  const summary = (0, import_react33.useMemo)(() => {
 		    if (!stats) return "统计未到";
-		    const drawn = full ? full.nodes.length : 0;
-		    const cut = full?.truncated ? `（已截断，仅画部分）` : "";
-		    return `节点 ${drawn}/${stats.nodes} · 边 ${full ? full.edges.length : 0}/${stats.edges} · 因果边 ${stats.causalEdges}${cut}`;
-		  }, [stats, full]);
+		    const drawn = graphData ? graphData.nodes.length : 0;
+		    const egoNote = egoRoot ? ` · ego ≤3 跳（${drawn} 节点）` : "";
+		    const cut = graphData?.truncated ? "（已截断，仅画部分）" : "";
+		    return `节点 ${drawn}/${stats.nodes} · 边 ${graphData ? graphData.edges.length : 0}/${stats.edges} · 因果边 ${stats.causalEdges}${cut}${egoNote}`;
+		  }, [stats, graphData, egoRoot]);
 		  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { ref: containerRef, style: { display: "flex", flexDirection: "column", gap: 8, padding: 12, height: "calc(100vh - 48px)", minHeight: 0 }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("h2", { style: { margin: 0, fontSize: 16 }, children: "记忆库" }),
@@ -45737,6 +45838,86 @@ var __create = Object.create;
 		        )
 		      ] }),
 		      mode === "graph" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { position: "relative", display: "inline-flex" }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            NInput,
+		            {
+		              value: searchText,
+		              onChange: (e) => {
+		                setSearchText(e.target.value);
+		                setSearchOpen(true);
+		              },
+		              onFocus: () => setSearchOpen(true),
+		              onBlur: () => setTimeout(() => setSearchOpen(false), 180),
+		              onKeyDown: (e) => {
+		                if (e.key === "Enter") locateFirstHit();
+		                if (e.key === "Escape") setSearchOpen(false);
+		              },
+		              placeholder: searchMiss ? "未命中该实体" : "搜实体名…",
+		              style: { width: 160, fontSize: 12 }
+		            }
+		          ),
+		          searchOpen && searchText.trim() && searchHits.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "div",
+		            {
+		              style: {
+		                position: "absolute",
+		                top: "calc(100% + 4px)",
+		                left: 0,
+		                zIndex: 20,
+		                width: 240,
+		                maxHeight: 260,
+		                overflow: "auto",
+		                background: "var(--dsh-mem-bg-card)",
+		                border: "1px solid var(--dsh-mem-border)",
+		                borderRadius: 8,
+		                boxShadow: "0 6px 18px rgba(0,0,0,.25)"
+		              },
+		              children: searchHits.map((n) => /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
+		                "div",
+		                {
+		                  onMouseDown: (e) => e.preventDefault(),
+		                  onClick: () => locateNode(n.id),
+		                  style: { padding: "5px 10px", fontSize: 12, cursor: "pointer", display: "flex", gap: 6, alignItems: "center" },
+		                  title: `${n.type}${n.aging != null ? ` · 老化 ${n.aging.toFixed(2)}` : ""}`,
+		                  children: [
+		                    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: n.name }),
+		                    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 10, color: "var(--dsh-mem-text-3)" }, children: n.type })
+		                  ]
+		                },
+		                n.id
+		              ))
+		            }
+		          ) : null,
+		          searchOpen && searchText.trim() && searchHits.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "div",
+		            {
+		              style: {
+		                position: "absolute",
+		                top: "calc(100% + 4px)",
+		                left: 0,
+		                zIndex: 20,
+		                width: 240,
+		                padding: "6px 10px",
+		                fontSize: 12,
+		                background: "var(--dsh-mem-bg-card)",
+		                border: "1px solid var(--dsh-mem-border)",
+		                borderRadius: 8,
+		                color: "var(--dsh-mem-text-3)"
+		              },
+		              children: "图里没有匹配的实体"
+		            }
+		          ) : null
+		        ] }),
+		        view === "2d" && egoRoot ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		          NButton,
+		          {
+		            onClick: () => setEgoRoot(null),
+		            title: "退出 ego 聚焦，重新渲染全图",
+		            style: { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" },
+		            children: "回全图"
+		          }
+		        ) : null,
 		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
 		          NButton,
 		          {
@@ -45751,26 +45932,77 @@ var __create = Object.create;
 		            children: "详情"
 		          }
 		        ),
-		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
-		          NButton,
-		          {
-		            onClick: () => setView((v) => v === "2d" ? "3d" : "2d"),
-		            title: "切换星图渲染：2D（G6 力导）↔ 3D（Canvas 投影）",
-		            style: view === "3d" ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : void 0,
-		            children: view === "3d" ? "3D" : "2D"
-		          }
-		        )
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { display: "inline-flex", border: "1px solid var(--dsh-mem-border)", borderRadius: 6, overflow: "hidden", fontSize: 12 }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "span",
+		            {
+		              onClick: () => setView("2d"),
+		              title: "G6 力导星图",
+		              style: { padding: "3px 10px", cursor: "pointer", background: view === "2d" ? "var(--dsh-mem-accent)" : "transparent", color: view === "2d" ? "#fff" : "var(--dsh-mem-text-2)" },
+		              children: "2D"
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "span",
+		            {
+		              onClick: () => setView("3d"),
+		              title: "Canvas 三维投影记忆海",
+		              style: { padding: "3px 10px", cursor: "pointer", background: view === "3d" ? "var(--dsh-mem-accent)" : "transparent", color: view === "3d" ? "#fff" : "var(--dsh-mem-text-2)" },
+		              children: "3D"
+		            }
+		          )
+		        ] })
 		      ] }) : null,
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, title: "重新拉取图与统计", children: "刷新图" }),
 		      onClose ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: onClose, title: "关闭", children: "关闭" }) : null
 		    ] }),
-		    mode === "query" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { flex: 1, minHeight: 0, overflow: "auto" }, children: /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(RecordPane, { rpc, activeId: recordId, onPick: openRecord }) }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", flex: 1, minHeight: 0, gap: 0 }, children: [
+		    mode === "query" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", flex: 1, minHeight: 0, gap: 0 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { flex: 1, minWidth: 0, minHeight: 0, overflow: "auto" }, children: /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(RecordPane, { rpc, activeId: recordId, onPick: openRecord }) }),
+		      entryPane && recordId ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
+		        "div",
+		        {
+		          style: {
+		            width: 420,
+		            minWidth: DETAIL_MIN,
+		            flexShrink: 0,
+		            minHeight: 0,
+		            overflow: "auto",
+		            borderLeft: "1px solid var(--dsh-mem-border)",
+		            paddingLeft: 10,
+		            display: "flex",
+		            flexDirection: "column",
+		            gap: 8
+		          },
+		          children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }, children: [
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "在图中定位本条目的实体：" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: () => jumpToGraph("2d"), disabled: !links || links.entities.length === 0, title: "切到 2D 力导星图并 ego 聚焦首实体", children: "2D 图" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: () => jumpToGraph("3d"), disabled: !links || links.entities.length === 0, title: "切到 3D 记忆海并 ego 聚焦首实体", children: "3D 图" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { flex: 1 } }),
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: () => setEntryPane(false), title: "收起条目面板", children: "收起" })
+		            ] }),
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		              LinkPane,
+		              {
+		                recordId,
+		                links,
+		                loading: linksLoading,
+		                error: linksError,
+		                onPickRecord: openRecord,
+		                onEmphasisNode: setEmphasisId,
+		                labelOfRecord
+		              }
+		            )
+		          ]
+		        }
+		      ) : null
+		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", flex: 1, minHeight: 0, gap: 0 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }, children: graphError ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-accent)", padding: 8 }, children: [
 		        "图数据读取失败：",
 		        graphError,
 		        " ",
 		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, children: "重试" })
-		      ] }) : graphLoading ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: "图加载中…" }) : full && full.nodes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: "图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。" }) : full ? view === "3d" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Scene3D, { full, onPick: onPickNode, emphasisId, height: canvasHeight }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(GraphCanvas, { full, onPick: onPickNode, emphasisId, fit: "view", height: "fill" }) : null }),
+		      ] }) : graphLoading ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: "图加载中…" }) : full && full.nodes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: "图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。" }) : full ? view === "3d" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Scene3D, { full, onPick: onPickNode, emphasisId, height: canvasHeight }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(GraphCanvas, { full: graphData ?? full, onPick: onPickNode2d, emphasisId, fit: "view", height: "fill" }) : null }),
 		      detailOpen ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
 		          "div",
@@ -45780,18 +46012,24 @@ var __create = Object.create;
 		            title: "拖动调整详情宽度"
 		          }
 		        ),
-		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { width: detailW, minWidth: DETAIL_MIN, flexShrink: 0, overflow: "auto", minHeight: 0, borderLeft: "1px solid var(--dsh-mem-border)", paddingLeft: 10 }, children: /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
-		          LinkPane,
-		          {
-		            recordId,
-		            links,
-		            loading: linksLoading,
-		            error: linksError,
-		            onPickRecord: openRecord,
-		            onEmphasisNode: setEmphasisId,
-		            labelOfRecord
-		          }
-		        ) })
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { width: detailW, minWidth: DETAIL_MIN, flexShrink: 0, overflow: "auto", minHeight: 0, borderLeft: "1px solid var(--dsh-mem-border)", paddingLeft: 10, display: "flex", flexDirection: "column", gap: 8 }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "本条目：" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: backToEntry, disabled: !recordId, title: "切回查询视图并展开本条目（保留当前选点）", children: "按条目展示" })
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            LinkPane,
+		            {
+		              recordId,
+		              links,
+		              loading: linksLoading,
+		              error: linksError,
+		              onPickRecord: openRecord,
+		              onEmphasisNode: setEmphasisId,
+		              labelOfRecord
+		            }
+		          )
+		        ] })
 		      ] }) : null
 		    ] })
 		  ] });

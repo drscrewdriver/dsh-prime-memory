@@ -20,8 +20,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GraphPreviewResponse, RecordLinksResponse } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
 import { GraphCanvas } from '../tabs/GraphCanvas.js';
+import { egoSubgraph } from '../tabs/graph-canvas-data.js';
 import type { GraphFull } from '../tabs/graph-canvas-data.js';
-import { NButton } from '../ui/primitives.js';
+import { NButton, NInput } from '../ui/primitives.js';
 import { LinkPane } from './LinkPane.js';
 import { RecordPane } from './RecordPane.js';
 import { Scene3D } from './Scene3D.js';
@@ -55,15 +56,29 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
   const [emphasisId, setEmphasisId] = useState<string | undefined>(undefined);
   /** 图块视图：2D（G6 星图）/ 3D（自研投影）——默认 3D（用户要求：进图默认 3D + 星空底）。 */
   const [view, setView] = useState<'2d' | '3d'>('3d');
+  /** 2D 的 ego 聚焦根：非空时只渲染 ≤3 跳邻域（与 3D 同心壳同语义，子集客户端算）。
+   *  3D 不用它——Scene3D 内部已有自己的 ego 态，由 emphasisId 驱动。 */
+  const [egoRoot, setEgoRoot] = useState<string | null>(null);
+  /** 图内搜索定位：关键词（按实体名子串匹配）与未命中提示。 */
+  const [searchText, setSearchText] = useState('');
+  const [searchMiss, setSearchMiss] = useState(false);
+  /** 联想下拉是否展开（输入即出候选，点选定位；Enter 取首个）。 */
+  const [searchOpen, setSearchOpen] = useState(false);
   const linksSeq = useRef(0);
 
-  /** 视图模式：查询（全屏列表）/ 图（图+详情）。 */
+  /** 视图模式：查询（列表+条目展开）/ 图（图+详情）。 */
   const [mode, setMode] = useState<'query' | 'graph'>('query');
+  /** 查询模式的条目展开面板：点记录**就地展开条目**，不自动跳图（用户裁定的跳转方式）；
+   *  跳图是条目面板里的显式动作（2D/3D 二选一）。 */
+  const [entryPane, setEntryPane] = useState(false);
   /** 图模式下右侧详情是否展开。 */
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailW, setDetailW] = useState(DETAIL_DEFAULT);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragWRef = useRef<{ startX: number; startW: number } | null>(null);
+  /** openRecord 是 useCallback（依赖不含 mode），事件里读最新 mode 用 ref。 */
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   /** 拖拽手柄：向左拖详情变宽。 */
   const startDrag = useCallback((ev: React.MouseEvent) => {
@@ -91,6 +106,8 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
   const loadGraph = useCallback(() => {
     setGraphLoading(true);
     setGraphError(null);
+    // 数据换了，旧 ego 根可能已不在新图里——回全图比留一个悬空子集诚实。
+    setEgoRoot(null);
     rpc('dsh-memory/graph-preview', { mode: 'full' })
       .then((r) => {
         if (!r.ok) throw new Error(r.error.message);
@@ -110,14 +127,15 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
   }, []);
 
   const openRecord = useCallback(
-    (id: string) => {
+    (id: string, opts?: { keepEgo?: boolean }) => {
       const token = ++linksSeq.current;
       setRecordId(id);
       setLinksLoading(true);
       setLinksError(null);
-      // 选中记录时自动切到图模式并展开详情
-      setMode('graph');
-      setDetailOpen(true);
+      // 点记录 = 就地展开条目（查询模式）；已在图模式时只保证右侧详情在位。
+      // 旧行为“选中即自动跳图+ego”已废：跳转必须是用户在条目面板里的显式选择。
+      setEntryPane(true);
+      if (modeRef.current === 'graph') setDetailOpen(true);
       rpc('dsh-memory/record-links', { recordId: id })
         .then((r) => {
           if (token !== linksSeq.current) return;
@@ -127,8 +145,10 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
           remember(v.records);
           setLinks(v);
           // 选中记录后把它的第一个实体作为图上强调起点——用户最想知道的
-          // 就是"这条记忆挂在图的哪个位置"。
+          // 就是"这条记忆挂在图的哪个位置"。2D 同步 ego 定位（记忆条目→图内条目
+          // 的跳转落点）；图内点击来的（keepEgo）不覆盖用户刚选的根。
           setEmphasisId(v.entities[0]?.id);
+          if (!opts?.keepEgo && v.entities[0]) setEgoRoot(v.entities[0].id);
         })
         .catch((e: unknown) => {
           if (token !== linksSeq.current) return;
@@ -151,14 +171,14 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
       const known = links?.entities.find((e) => e.id === nodeId) ?? links?.neighbors.find((n) => n.id === nodeId);
       const first = known?.recordIds[0];
       if (first) {
-        openRecord(first);
+        openRecord(first, { keepEgo: true });
         return;
       }
       rpc('dsh-memory/graph-node-get', { id: nodeId })
         .then((r) => {
           const node = r.ok ? r.value.node : null;
           const id = node?.sourceRecordIds?.[0];
-          if (id) openRecord(id);
+          if (id) openRecord(id, { keepEgo: true });
         })
         .catch(() => {
           /* 点不到来源记录只影响跳转，不影响看图 */
@@ -167,15 +187,85 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
     [links, openRecord, rpc],
   );
 
+  /** 2D 点击 = 详情链路 + ego 聚焦（与 3D 单击语义对齐：点谁就以谁为中心重排）。 */
+  const onPickNode2d = useCallback(
+    (nodeId: string) => {
+      setEgoRoot(nodeId);
+      onPickNode(nodeId);
+    },
+    [onPickNode],
+  );
+
+  /** 2D 实际渲染的数据：ego 态下客户端 BFS 子集（不重发请求，与当前画布元素集同源）。 */
+  const graphData = useMemo(
+    () => (full && egoRoot ? egoSubgraph(full, egoRoot) : full),
+    [full, egoRoot],
+  );
+
+  /** 搜索定位：按实体名子串（忽略大小写）取首个命中——2D 置 ego 根，
+   *  3D 走 emphasisId 驱动 Scene3D 内部 ego（「看图」同一条通道）。 */
+  const locateNode = useCallback(
+    (nodeId: string) => {
+      setEmphasisId(nodeId);
+      if (view === '2d') setEgoRoot(nodeId);
+      setSearchOpen(false);
+    },
+    [view],
+  );
+
+  /** 候选列表（联想）：名字子串命中，按入参序取前 200（full 块无度数字段，不排序）。 */
+  const searchHits = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q || !full) return [];
+    const hits = full.nodes.filter((n) => n.name.toLowerCase().includes(q));
+    return hits.slice(0, 200);
+  }, [searchText, full]);
+
+  const locateFirstHit = useCallback(() => {
+    const q = searchText.trim().toLowerCase();
+    if (!q || !full) return;
+    const hit = full.nodes.find((n) => n.name.toLowerCase().includes(q));
+    if (!hit) {
+      setSearchMiss(true);
+      setTimeout(() => setSearchMiss(false), 1500);
+      return;
+    }
+    setSearchMiss(false);
+    locateNode(hit.id);
+  }, [searchText, full, locateNode]);
+
+  /** 条目面板的显式跳图：用户选定 2D/3D 后才切视图并定位到首实体。 */
+  const jumpToGraph = useCallback(
+    (target: '2d' | '3d') => {
+      const root = links?.entities[0]?.id;
+      setView(target);
+      setMode('graph');
+      setDetailOpen(true);
+      if (root) {
+        setEmphasisId(root);
+        if (target === '2d') setEgoRoot(root);
+      }
+    },
+    [links],
+  );
+
+  /** 反向通道：图模式详情 → 按条目展示。只切视图，recordId/emphasisId 不动
+   *  ——来回切换带着同一个选点（用户裁定的“带点位切换”）。 */
+  const backToEntry = useCallback(() => {
+    setMode('query');
+    setEntryPane(true);
+  }, []);
+
   const labelOfRecord = useCallback((id: string) => labels.current.get(id) ?? id.slice(0, 10), []);
 
   const building = stats && stats.jobsTotal > 0 && stats.pendingJobs > 0;
   const summary = useMemo(() => {
     if (!stats) return '统计未到';
-    const drawn = full ? full.nodes.length : 0;
-    const cut = full?.truncated ? `（已截断，仅画部分）` : '';
-    return `节点 ${drawn}/${stats.nodes} · 边 ${full ? full.edges.length : 0}/${stats.edges} · 因果边 ${stats.causalEdges}${cut}`;
-  }, [stats, full]);
+    const drawn = graphData ? graphData.nodes.length : 0;
+    const egoNote = egoRoot ? ` · ego ≤3 跳（${drawn} 节点）` : '';
+    const cut = graphData?.truncated ? '（已截断，仅画部分）' : '';
+    return `节点 ${drawn}/${stats.nodes} · 边 ${graphData ? graphData.edges.length : 0}/${stats.edges} · 因果边 ${stats.causalEdges}${cut}${egoNote}`;
+  }, [stats, graphData, egoRoot]);
 
   return (
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, height: 'calc(100vh - 48px)', minHeight: 0 }}>
@@ -215,6 +305,83 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
         {/* 图模式专属控件 */}
         {mode === 'graph' ? (
           <>
+            {/* 图内搜索定位：输入即出联想候选，点选定位；Enter 取首个命中 */}
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <NInput
+                value={searchText}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setSearchText(e.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => setTimeout(() => setSearchOpen(false), 180)}
+                onKeyDown={(e: React.KeyboardEvent) => {
+                  if (e.key === 'Enter') locateFirstHit();
+                  if (e.key === 'Escape') setSearchOpen(false);
+                }}
+                placeholder={searchMiss ? '未命中该实体' : '搜实体名…'}
+                style={{ width: 160, fontSize: 12 }}
+              />
+              {searchOpen && searchText.trim() && searchHits.length > 0 ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    zIndex: 20,
+                    width: 240,
+                    maxHeight: 260,
+                    overflow: 'auto',
+                    background: 'var(--dsh-mem-bg-card)',
+                    border: '1px solid var(--dsh-mem-border)',
+                    borderRadius: 8,
+                    boxShadow: '0 6px 18px rgba(0,0,0,.25)',
+                  }}
+                >
+                  {searchHits.map((n) => (
+                    <div
+                      key={n.id}
+                      // mousedown 先于 blur：用 click 会被收起动作抢先吞掉（经典竞态）。
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => locateNode(n.id)}
+                      style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}
+                      title={`${n.type}${n.aging != null ? ` · 老化 ${n.aging.toFixed(2)}` : ''}`}
+                    >
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
+                      <span style={{ fontSize: 10, color: 'var(--dsh-mem-text-3)' }}>{n.type}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {searchOpen && searchText.trim() && searchHits.length === 0 ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    zIndex: 20,
+                    width: 240,
+                    padding: '6px 10px',
+                    fontSize: 12,
+                    background: 'var(--dsh-mem-bg-card)',
+                    border: '1px solid var(--dsh-mem-border)',
+                    borderRadius: 8,
+                    color: 'var(--dsh-mem-text-3)',
+                  }}
+                >
+                  图里没有匹配的实体
+                </div>
+              ) : null}
+            </span>
+            {view === '2d' && egoRoot ? (
+              <NButton
+                onClick={() => setEgoRoot(null)}
+                title="退出 ego 聚焦，重新渲染全图"
+                style={{ color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}
+              >
+                回全图
+              </NButton>
+            ) : null}
             <NButton
               onClick={() => {
                 if (!recordId && emphasisId) {
@@ -228,23 +395,73 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
             >
               详情
             </NButton>
-            <NButton
-              onClick={() => setView((v) => (v === '2d' ? '3d' : '2d'))}
-              title="切换星图渲染：2D（G6 力导）↔ 3D（Canvas 投影）"
-              style={view === '3d' ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : undefined}
-            >
-              {view === '3d' ? '3D' : '2D'}
-            </NButton>
+            {/* 2D/3D 段控件：与查询/图滑块同形，不再用互斥按钮 */}
+            <span style={{ display: 'inline-flex', border: '1px solid var(--dsh-mem-border)', borderRadius: 6, overflow: 'hidden', fontSize: 12 }}>
+              <span
+                onClick={() => setView('2d')}
+                title="G6 力导星图"
+                style={{ padding: '3px 10px', cursor: 'pointer', background: view === '2d' ? 'var(--dsh-mem-accent)' : 'transparent', color: view === '2d' ? '#fff' : 'var(--dsh-mem-text-2)' }}
+              >
+                2D
+              </span>
+              <span
+                onClick={() => setView('3d')}
+                title="Canvas 三维投影记忆海"
+                style={{ padding: '3px 10px', cursor: 'pointer', background: view === '3d' ? 'var(--dsh-mem-accent)' : 'transparent', color: view === '3d' ? '#fff' : 'var(--dsh-mem-text-2)' }}
+              >
+                3D
+              </span>
+            </span>
           </>
         ) : null}
         <NButton onClick={loadGraph} title="重新拉取图与统计">刷新图</NButton>
         {onClose ? <NButton onClick={onClose} title="关闭">关闭</NButton> : null}
       </div>
 
-      {/* 主体：查询模式全屏列表 / 图模式 = 图 + 右侧详情(可调宽) */}
+      {/* 主体：查询模式 = 列表 + 条目展开（点记录就地展开，跳图是面板里的显式动作） */}
       {mode === 'query' ? (
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-          <RecordPane rpc={rpc} activeId={recordId} onPick={openRecord} />
+        <div style={{ display: 'flex', flex: 1, minHeight: 0, gap: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' }}>
+            <RecordPane rpc={rpc} activeId={recordId} onPick={openRecord} />
+          </div>
+          {entryPane && recordId ? (
+            <div
+              style={{
+                width: 420,
+                minWidth: DETAIL_MIN,
+                flexShrink: 0,
+                minHeight: 0,
+                overflow: 'auto',
+                borderLeft: '1px solid var(--dsh-mem-border)',
+                paddingLeft: 10,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              {/* 显式跳图：选定 2D/3D 才切视图并定位到首实体（无实体时不可点） */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>在图中定位本条目的实体：</span>
+                <NButton onClick={() => jumpToGraph('2d')} disabled={!links || links.entities.length === 0} title="切到 2D 力导星图并 ego 聚焦首实体">
+                  2D 图
+                </NButton>
+                <NButton onClick={() => jumpToGraph('3d')} disabled={!links || links.entities.length === 0} title="切到 3D 记忆海并 ego 聚焦首实体">
+                  3D 图
+                </NButton>
+                <span style={{ flex: 1 }} />
+                <NButton onClick={() => setEntryPane(false)} title="收起条目面板">收起</NButton>
+              </div>
+              <LinkPane
+                recordId={recordId}
+                links={links}
+                loading={linksLoading}
+                error={linksError}
+                onPickRecord={openRecord}
+                onEmphasisNode={setEmphasisId}
+                labelOfRecord={labelOfRecord}
+              />
+            </div>
+          ) : null}
         </div>
       ) : (
         <div style={{ display: 'flex', flex: 1, minHeight: 0, gap: 0 }}>
@@ -264,7 +481,7 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
             view === '3d' ? (
               <Scene3D full={full} onPick={onPickNode} emphasisId={emphasisId} height={canvasHeight} />
             ) : (
-              <GraphCanvas full={full} onPick={onPickNode} emphasisId={emphasisId} fit="view" height="fill" />
+              <GraphCanvas full={graphData ?? full} onPick={onPickNode2d} emphasisId={emphasisId} fit="view" height="fill" />
             )
           ) : null}
           </div>
@@ -277,7 +494,14 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
                 style={{ width: 5, cursor: 'col-resize', flexShrink: 0, background: 'var(--dsh-mem-border)', borderRadius: 2, margin: '0 2px', alignSelf: 'stretch' }}
                 title="拖动调整详情宽度"
               />
-              <div style={{ width: detailW, minWidth: DETAIL_MIN, flexShrink: 0, overflow: 'auto', minHeight: 0, borderLeft: '1px solid var(--dsh-mem-border)', paddingLeft: 10 }}>
+              <div style={{ width: detailW, minWidth: DETAIL_MIN, flexShrink: 0, overflow: 'auto', minHeight: 0, borderLeft: '1px solid var(--dsh-mem-border)', paddingLeft: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* 与查询侧条目面板同构的头排（同槽位同样式）：带选点切回按条目展示。 */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>本条目：</span>
+                  <NButton onClick={backToEntry} disabled={!recordId} title="切回查询视图并展开本条目（保留当前选点）">
+                    按条目展示
+                  </NButton>
+                </div>
                 <LinkPane
                   recordId={recordId}
                   links={links}
