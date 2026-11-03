@@ -1,5 +1,17 @@
 # 更新日志（Changelog）
 
+## [Unreleased] — 新增英文与俄文本地化（zh 仍为源语言）
+
+- **界面文案接入宿主 locale 服务**：`client/src/i18n.ts` 用 `ctx.get('locale')` 懒解析 + 有界重试（不声明式注入可选服务，宿主缺席时保持中文、绝不阻塞挂载）。key 采用**中文原文**（gettext 式），翻译缺失时优雅降级为中文而不是露裸 key；`zh` 由 `en` 的 key 集运行期派生为恒等映射，中文用户不会被英文回退劫持。
+- **全量改写为 `tr(...)`**：`scripts/i18n-codemod.mjs` 用 TypeScript AST 机械包装 1362 处文案（42 个文件），跳过对象键、`case` 标签、比较运算、字符串匹配参数、`import/export` 与 `console/throw` 诊断——**翻错会改行为的位置一律不动**。
+- **字典**：`client/src/locales/{keys.json,en.ts,ru.ts}`（**1156 条，en / ru 各 100% 覆盖**），由 `scripts/i18n-extract.mjs` + `scripts/i18n-merge.mjs` 生成，禁止手改。
+- **守卫用例** `tests/i18n-dict.test.ts`：key 全集覆盖、占位符三语一致、译文不残留汉字、无 key 集之外的条目。
+- **语言由宿主决定**：插件只贡献字典，不注册语言、不做语言选择器（语言包经 `ctx.locale.addLanguage` 注册，例如俄语）。
+- 文案在**渲染期**求值（含模块级标签表、类型徽标、Wing 名称），切换语言即时生效；宿主侧槽位标签在注册时求值，随语言变更自动重注册。
+- 刻意不翻的部分见 [`docs/i18n.md`](./docs/i18n.md)：模型生成的画像/场景内容、服务端下发的 notice、用户自定义名称。
+- **已知不足：host 侧日志未本地化**（`src/` 约 248 处中文，Logs 页与 `memory.log` 仍是中文）。**是否要做目前没有结论**——翻译后日志将无法与上游 issue 逐字对照，方向待维护者决定。
+
+
 ## [0.26.33] — 2026-11-04
 
 - **根治 3D 记忆海「闪一下变暗」：不是掉帧，是 `resize()` 清空 canvas 位图后，空帧被合成器取样**

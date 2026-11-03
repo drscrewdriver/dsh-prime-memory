@@ -1017,7 +1017,7 @@ var __create = Object.create;
 		      function tn(t2) {
 		        return 10 === t2 || 13 === t2 || 8232 === t2 || 8233 === t2 || 32 === t2 || 9 === t2 || 11 === t2 || 12 === t2 || 160 === t2 || t2 >= 5760 && [5760, 6158, 8192, 8193, 8194, 8195, 8196, 8197, 8198, 8199, 8200, 8201, 8202, 8239, 8287, 12288, 65279].includes(t2);
 		      }
-		      function en(t2) {
+		      function en2(t2) {
 		        for (var e2 = t2.pathValue, n2 = t2.max; t2.index < n2 && tn(e2.charCodeAt(t2.index)); ) t2.index += 1;
 		      }
 		      function nn(t2) {
@@ -1041,11 +1041,11 @@ var __create = Object.create;
 		            default:
 		              return false;
 		          }
-		        })(i2)) if (t2.index += 1, en(t2), t2.data = [], o2) {
+		        })(i2)) if (t2.index += 1, en2(t2), t2.data = [], o2) {
 		          for (; ; ) {
 		            for (var A2 = o2; A2 > 0; A2 -= 1) {
 		              if (!nn(i2) || 3 !== A2 && 4 !== A2 ? Je(t2) : qe(t2), t2.err.length) return;
-		              t2.data.push(t2.param), en(t2), t2.index < e2 && 44 === n2.charCodeAt(t2.index) && (t2.index += 1, en(t2));
+		              t2.data.push(t2.param), en2(t2), t2.index < e2 && 44 === n2.charCodeAt(t2.index) && (t2.index += 1, en2(t2));
 		            }
 		            if (t2.index >= t2.max) break;
 		            if (!$e(n2.charCodeAt(t2.index))) break;
@@ -1062,7 +1062,7 @@ var __create = Object.create;
 		        var e2 = (function(t3) {
 		          if (Ve(t3)) return [].concat(t3);
 		          var e3 = new on(t3);
-		          for (en(e3); e3.index < e3.max && !e3.err.length; ) rn(e3);
+		          for (en2(e3); e3.index < e3.max && !e3.err.length; ) rn(e3);
 		          return e3.err ? e3.err : e3.segments;
 		        })(t2), n2 = 0, r2 = 0, i2 = 0, o2 = 0;
 		        return e2.map(function(t3) {
@@ -1631,11 +1631,11 @@ var __create = Object.create;
 		          return r2 = r2 ? r2.then(A2, A2) : A2();
 		        }, true);
 		      }
-		      function tr(t2, e2, n2, r2, i2) {
+		      function tr2(t2, e2, n2, r2, i2) {
 		        return new Jn(Zn().w(t2, e2, n2, r2), i2 || Promise);
 		      }
 		      function er(t2, e2, n2, r2, i2) {
-		        var o2 = tr(t2, e2, n2, r2, i2);
+		        var o2 = tr2(t2, e2, n2, r2, i2);
 		        return o2.next().then(function(t3) {
 		          return t3.done ? t3.value : o2.next();
 		        });
@@ -1700,7 +1700,7 @@ var __create = Object.create;
 		          }, isGeneratorFunction: r2, mark: t2.m, awrap: function(t3, e3) {
 		            return new qn(t3, e3);
 		          }, AsyncIterator: Jn, async: function(t3, e3, n3, i3, A2) {
-		            return (r2(e3) ? tr : er)(o2(t3), e3, n3, i3, A2);
+		            return (r2(e3) ? tr2 : er)(o2(t3), e3, n3, i3, A2);
 		          }, keys: nr, values: rr };
 		        })();
 		      }
@@ -6839,7 +6839,7 @@ var __create = Object.create;
 		        return 92 === t2 && 10 !== e2;
 		      }, nu = function(t2, e2, n2) {
 		        return t2 === Vl ? Zl(e2) || eu(e2, n2) : !!Zl(t2) || !(92 !== t2 || !eu(t2, e2));
-		      }, ru = function(t2, e2, n2) {
+		      }, ru2 = function(t2, e2, n2) {
 		        return t2 === Wl || t2 === Vl ? !!Xl(e2) || 46 === e2 && Xl(n2) : Xl(46 === t2 ? e2 : t2);
 		      }, iu = function(t2) {
 		        var e2 = 0, n2 = 1;
@@ -6889,18 +6889,18 @@ var __create = Object.create;
 		              if (61 === this.peekCodePoint(0)) return this.consumeCodePoint(), gu;
 		              break;
 		            case Wl:
-		              if (ru(t3, this.peekCodePoint(0), this.peekCodePoint(1))) return this.reconsumeCodePoint(t3), this.consumeNumericToken();
+		              if (ru2(t3, this.peekCodePoint(0), this.peekCodePoint(1))) return this.reconsumeCodePoint(t3), this.consumeNumericToken();
 		              break;
 		            case 44:
 		              return su;
 		            case Vl:
 		              var o2 = t3, A2 = this.peekCodePoint(0), s2 = this.peekCodePoint(1);
-		              if (ru(o2, A2, s2)) return this.reconsumeCodePoint(t3), this.consumeNumericToken();
+		              if (ru2(o2, A2, s2)) return this.reconsumeCodePoint(t3), this.consumeNumericToken();
 		              if (nu(o2, A2, s2)) return this.reconsumeCodePoint(t3), this.consumeIdentLikeToken();
 		              if (A2 === Vl && 62 === s2) return this.consumeCodePoint(), this.consumeCodePoint(), yu;
 		              break;
 		            case 46:
-		              if (ru(t3, this.peekCodePoint(0), this.peekCodePoint(1))) return this.reconsumeCodePoint(t3), this.consumeNumericToken();
+		              if (ru2(t3, this.peekCodePoint(0), this.peekCodePoint(1))) return this.reconsumeCodePoint(t3), this.consumeNumericToken();
 		              break;
 		            case 47:
 		              if (42 === this.peekCodePoint(0)) for (this.consumeCodePoint(); ; ) {
@@ -35907,8 +35907,2314 @@ var __create = Object.create;
 		});
 		module.exports = __toCommonJS(entry_exports);
 		
+		// client/src/i18n-core.ts
+		var I18N_NS = "dsh-prime-memory";
+		function identityOf(dict) {
+		  const out = {};
+		  for (const key of Object.keys(dict)) out[key] = key;
+		  return out;
+		}
+		function fill(template, params) {
+		  return template.replace(/\{(\w+)\}/g, (whole, name) => {
+		    const value = params[name];
+		    return value === void 0 ? whole : String(value);
+		  });
+		}
+		function registerDictionaries(svc, dicts) {
+		  svc.register(I18N_NS, "zh", identityOf(dicts.en));
+		  for (const [locale, dict] of Object.entries(dicts)) svc.register(I18N_NS, locale, dict);
+		}
+		function makeTr(svc) {
+		  const bound = svc.bind(I18N_NS);
+		  return (key, params) => {
+		    const text = bound(key);
+		    return params ? fill(text, params) : text;
+		  };
+		}
+		
+		// client/src/locales/en.ts
+		var en = {
+		  "，本次未跑完、剩 {p1} 条待再点一次": ", this run did not finish, {p1} left to click again",
+		  "，补 wing": ", fill in wing",
+		  "，产出": ", produced",
+		  "，超时跳过": ", timed out and skipped",
+		  "，打 tags": ", tagging",
+		  "，待补": ", to be filled",
+		  "，来自 llm.maxInputChars）": ", from llm.maxInputChars)",
+		  "，让出": ", yielded",
+		  "，失败 {p1} 条": ", {p1} failed",
+		  "，退场": ", retired",
+		  "，未移除记录": ", records not removed",
+		  "，无待消化缓冲": ", no buffer to digest",
+		  "，已中止、剩 {p1} 条待再点一次": ", aborted, {p1} left to click again",
+		  "，用时": ", time taken",
+		  "，预计 ≥": ", estimated ≥",
+		  "、失败": ", failed",
+		  "；晚于此时刻的记忆会被原样保留、不重新蒸馏（不会丢）。": "; memories later than this moment are kept as-is, not re-distilled (nothing is lost).",
+		  ";最近尝试": ";last attempt",
+		  ";最近使用": ";last used",
+		  "：新": ": new",
+		  "。上方数据为最后一次成功读取的值，记忆功能当前未工作。": ". The data above is from the last successful read, the memory feature is not working right now.",
+		  "· 本次预算 {p1} 个文件": "· {p1} files in this budget",
+		  "· 陈旧根 {p1} 个文件未参与同步（交给孤儿归档）": "· {p1} stale root files not synced (handed to orphan archive)",
+		  "· 冲突 {p1}": "· conflicts {p1}",
+		  "· 当前起点": "· current start",
+		  "· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条": "· mode:{p1}{p2} · covers {p3} sessions / {p4} evidence",
+		  "· 对**下一次点击**生效（正在跑的那轮不会改道）": "· takes effect on the **next click** (the running round will not reroute)",
+		  "· 防护拦下 {p1} 个链接/越界条目（未读）": "· guard blocked {p1} links/out-of-bounds entries (unread)",
+		  "· 共滚 {p1} 轮": "· {p1} rounds rolled",
+		  "· 构建中 {p1}/{p2}": "· building {p1}/{p2}",
+		  "· 关系": "· relations",
+		  "· 归档到 {p1}": "· archived to {p1}",
+		  "· 后缀对齐 改名 {p1}{p2} 改回 {p3}{p4}": "· suffix alignment renamed {p1}{p2} back to {p3}{p4}",
+		  "· 后缀还有 {p1} 个文件待对齐，再点一次继续": "· {p1} more files to align by suffix, click again to continue",
+		  "· 加载中…": "· loading…",
+		  "· 检索结果可能不完整": "· results may be incomplete",
+		  "· 近重复": "· near duplicate",
+		  "· 老化 {p1}": "· aged {p1}",
+		  "· 老化 {p1}%": "· aged {p1}%",
+		  "· 两边都变 {p1} 条已挂账（两侧都没动）": "· {p1} changed on both sides, parked (neither side touched)",
+		  "· 密钥未设置": "· key not set",
+		  "· 密钥已配置": "· key configured",
+		  "· 密钥已设置": "· key set",
+		  "· 模型": "· model",
+		  "· 起名失败 {p1} 条(下轮重试)": "· {p1} naming failures (retry next round)",
+		  "· 上次导入": "· last import",
+		  "· 上次蒸馏": "· last distillation",
+		  "· 上次重建：处理": "· last rebuild: processed",
+		  "· 剩余 {p1} 个文件，再点一次继续": "· {p1} files left, click again to continue",
+		  "· 剩余 {p1} 条，再点一次继续": "· {p1} left, click again to continue",
+		  "· 思考": "· thinking",
+		  "· 同记录多路径 {p1} 份未动（先跑孤儿归档再同步）": "· {p1} copies of the same record on multiple paths untouched (run orphan archive before sync)",
+		  "· 投影 完成{p1}/失败{p2}/排队{p3}": "· projection done {p1}/failed {p2}/queued {p3}",
+		  "· 未配置密钥": "· key not configured",
+		  "· 未签名 {p1} 个（老投射文件无 hash，下轮导出补盖）": "· {p1} unsigned (old projection files have no hash, next export will stamp them)",
+		  "· 新起名 {p1} 条": "· {p1} newly named",
+		  "· 新文件 {p1} 个未入库（导入须走写入内核）": "· {p1} new files not ingested (import must go through the write kernel)",
+		  "· 疑似冲突": "· possible conflict",
+		  "· 已达绘制上限,只画前 {p1} 个节点": "· draw limit reached, only the first {p1} nodes drawn",
+		  "· 已达子图上限,另有 {p1} 个连通节点未画": "· subgraph limit reached, {p1} more connected nodes not drawn",
+		  "· 已固定": "· pinned",
+		  "· 已停用": "· disabled",
+		  "· 已退役": "· retired",
+		  "· 已用": "· used",
+		  "· 因果边": "· causal edges",
+		  "· 再展开也没有新节点了": "· expanding again yields no new nodes",
+		  "· 直连": "· direct",
+		  "· 重标定：补 cogHall": "· recalibration: fill cogHall",
+		  "· 重复": "· duplicate",
+		  "· 自校验不符 {p1} 个（文件被外部改动，已按文件侧处理）": "· {p1} self-check mismatches (files changed externally, handled on the file side)",
+		  "· 总输出 token": "· total output token",
+		  "· ego ≤3 跳（{p1} 节点）": "· ego ≤3 hops ({p1} nodes)",
+		  "（保存后更新；当前显示已保存值）": "(updates after saving; currently showing the saved value)",
+		  "（被取消）": "(cancelled)",
+		  "（本次只扫了 {p1} 条，未扫全）": "(only {p1} scanned this run, not a full scan)",
+		  "（层链优先于全局）": "(layer chain takes precedence over global)",
+		  "（待补": "(to be filled",
+		  "（档位跟随部署配置，选定模型后可单独设置）": "(mode follows the deployment config, can be set separately once a model is chosen)",
+		  "（点击重试）": "(click to retry)",
+		  "（点右上“刷新”重试）": "(click “Refresh” at the top right to retry)",
+		  "（该记录正文不可得：已不在主表，或被更早的清理清掉了）": "(record body unavailable: no longer in the main table, or removed by an earlier cleanup)",
+		  "(进 topN 才算 used)": "(counts as used only if in topN)",
+		  "(空)": "(empty)",
+		  "（空）": "(empty)",
+		  "(起点)": "(start)",
+		  "（请选择）": "(select)",
+		  "（去重合并次数": "(dedupe merge count",
+		  "(人改过 {p1})": "(manually edited {p1})",
+		  "（未记录路径）": "(path not recorded)",
+		  "（未命名，投射回落 mem-": "(unnamed, projection falls back to mem-",
+		  "（未配置）": "(not configured)",
+		  "（未配置端点）": "(no endpoint configured)",
+		  "（文件": "(file",
+		  "（无）": "(none)",
+		  "(无标题)": "(untitled)",
+		  "（写回 {p1}{p2}）": "(written back {p1}{p2})",
+		  "（选择模型，可留空跟随默认）": "(select a model; leave empty to follow the default)",
+		  "（选择模型）": "(select a model)",
+		  "（已保存的嵌入源不变，重启后仍按原源运行）": "(the saved embedding source stays unchanged; after restart it still runs from the original source)",
+		  "（已不在列表）": "(no longer in the list)",
+		  "（已截断，仅画部分）": "(truncated; only part is drawn)",
+		  "（因果）": "(causal)",
+		  "（运行时开关无法开启）": "(the runtime switch cannot be turned on)",
+		  "（暂无 · 预留检索轴）": "(none · reserved retrieval axis)",
+		  "(暂无记录)": "(no records)",
+		  "（暂无可用路由）": "(no route available)",
+		  "(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)": "(emerges only in tags, not in the vocabulary — only after adoption will the annotator preferentially attach to it)",
+		  "（滞后约 {p1} 小时）": "(lags by about {p1} hours)",
+		  "（重新切换嵌入源可重试）": "(switch the embedding source again to retry)",
+		  "（注意：这里指的是「{p1}」开关，不是「{p2}」——后者只管模型能不能读图）": '(note: this refers to the "{p1}" switch, not "{p2}" — the latter only controls whether the model can read images)',
+		  "(自生长未注册)": "(self-grown, unregistered)",
+		  "）；思考档 high/xhigh/max 时实际限额自动 ×4": "); the actual limit is automatically ×4 at thinking tier high/xhigh/max",
+		  "[已退场]": "[retired]",
+		  "{p1} · 本批之外 {p2} 条处于漂移（不影响本批）": "{p1} · {p2} records outside this batch are drifting (does not affect this batch)",
+		  "{p1} 等 {p2} 域": "{p1} and other domains ({p2})",
+		  "{p1} 个技能 · 自动晋升{p2} · 需证据会话达阈": "{p1} skills · auto-promoted{p2} · requires evidence sessions to reach the threshold",
+		  "{p1} 路并发": "{p1} parallel",
+		  "{p1} 条": "{p1} items",
+		  "{p1} 已在 {p2} 下。": "{p1} is already under {p2}.",
+		  "{p1}：成功 {p2} 条{p3}{p4}": "{p1}: {p2} succeeded{p3}{p4}",
+		  "{p1}：写回 {p2} 条，留原文 {p3} 条{p4}{p5}": "{p1}: wrote back {p2}, kept original text {p3}{p4}{p5}",
+		  "{p1}：正在中止——先等在跑的那条收工，超时即强行中断（已写回的保留）…": "{p1}: aborting — waiting for the running one to finish; on timeout it is forcibly interrupted (already written back is kept)…",
+		  "{p1}{p2} · {p3} 跳 · 经由 {p4}": "{p1}{p2} · {p3} hops · via {p4}",
+		  "{p1}投影": "{p1} projection",
+		  "{p1}中：扫描完成，没有需要{p2}的记录…": "{p1} in progress: scan complete, no records need {p2}…",
+		  "{p1}中：真目标 {p2} 条": "{p1} in progress: {p2} real targets",
+		  "{p1}中：正在扫描存量 {p2}/{p3} 行，筛出需{p4}的记录…": "{p1} in progress: scanning {p2}/{p3} existing rows, filtering records that need {p4}…",
+		  "{p1}中：正在扫描活跃存量（已扫 {p2} 行），筛出需{p3}的记录…": "{p1} in progress: scanning active records (scanned {p2} rows), filtering records that need {p3}…",
+		  "{p1}中…": "{p1} in progress…",
+		  "「{p1}」{p2} 条 点按/拖动 = 以该角为主题（抑制其他角）": '"{p1}" {p2} items, tap/drag = make this corner the theme (suppress other corners)',
+		  "「已退场」（可恢复）": '"retired" (restorable)',
+		  "」归入": '" grouped into',
+		  "/ 留原文 {p1}": "/ kept original {p1}",
+		  "%(读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期)));越低越老": "%(read-path decay factor max(0.5, 0.5^(Δdays/half-life))); lower means older",
+		  "••••••••（已配置；留空提交可覆盖）": "•••••••• (configured; submit empty to overwrite)",
+		  "••••••••（已设置；输入新值提交可覆盖）": "•••••••• (set; enter a new value and submit to overwrite)",
+		  "← 取代了旧记忆": "← superseded the old memory",
+		  "→ 被新记忆取代": "→ superseded by a new memory",
+		  "+ 添加回退路由": "+ Add fallback route",
+		  "+小类": "+ subcategory",
+		  "×清除": "× Clear",
+		  "⚠ 存储不可用，记忆功能已停用": "⚠ storage unavailable, memory is disabled",
+		  "⚠ 供应商": "⚠ provider",
+		  "⚠ direct 未配置完整：需同时有端点 URL 与模型（llm.model / 全局链主路由），否则会回退宿主路由。": "⚠ direct is not fully configured: it needs both an endpoint URL and a model (llm.model / global-chain primary route), otherwise it falls back to the host route.",
+		  "0·跟随配置（默认 1=串行）": "0·follow config (default 1 = serial)",
+		  "1·串行逐条": "1·serial, one by one",
+		  "2D 图": "2D chart",
+		  "3D 图": "3D chart",
+		  "安装推理运行时中… 已耗时": "Installing inference runtime… elapsed",
+		  "按模型（累计）": "By model (cumulative)",
+		  "按条目展示": "Show by item",
+		  "按账本基线比对库与磁盘，只出报告：什么都不写，因此不需要高权限": "Compare the store with disk against the ledger baseline, report only: nothing is written, so no elevated permissions are needed",
+		  "按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)": "Hold and drag onto a hall to categorize (major/minor; records move along, the old name becomes an alias)",
+		  "把“平”的存量记忆按类型重排成分节骨架，顺带产关键词/情景；只有严格更优才写回（需先开重蒸馏整形开关）": 'Rearrange "flat" existing memories by type into a sectioned skeleton, producing keywords/scenarios along the way; write back only if strictly better (requires the re-distillation shaping switch first)',
+		  "把当前全部记忆渲染为 <根>/<类型>/<名称>.memory.md，并记下内容指纹（只写文件，不改库）。一次点完：一轮预算不够时服务端自己续跑下几轮，进度看下方进度条": "Render all current memories as <root>/<type>/<name>.memory.md and record the content fingerprint (writes files only, does not change the store). One click does it all: if one round's budget is not enough, the server continues the next rounds itself; see the progress bar below",
+		  "白底": "White background",
+		  "版本: v": "Version: v",
+		  "包 ·": "Package ·",
+		  "保存": "Save",
+		  "被取代": "Superseded",
+		  "被用": "Used",
+		  "本层跟随全局链，暂无可用路由。": "This layer follows the global chain; no route is available.",
+		  "本层链失败只在层内降级，绝不落到全局链；每行档位独立": "Failures in this layer's chain degrade only within the layer and never fall through to the global chain; each row's tier is independent",
+		  "本层未单独配置，走全局默认链": "This layer is not configured separately; it uses the global default chain",
+		  "本层走部署 YAML 层链（UI 只读，自定义可覆盖）": "This layer uses the deployment YAML layer chain (read-only in UI, custom config can override)",
+		  "本层走设置页自定义链": "This layer uses the custom chain from the settings page",
+		  "本次计划：可重造": "This plan: recreatable",
+		  "本地": "Local",
+		  "本地免 key 可留空": "Local, no key needed; can be left empty",
+		  "本地模型目录（下载后离线可用，不随插件分发）": "Local model directory (usable offline after download; not shipped with the plugin)",
+		  "本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）": "This session is invisible to the memory system: no capture, no distillation, no injection (data is retained)",
+		  "本会话记忆": "This session's memory",
+		  "本会话记忆域与档位（点击切换）": "This session's memory domain and tier (click to switch)",
+		  "本会话强制注入记忆": "Force memory injection in this session",
+		  "本会话尚未蒸馏": "This session is not distilled yet",
+		  "本会话正常捕获/蒸馏/注入记忆": "This session captures/distills/injects memory normally",
+		  "本记录取代掉的旧行，点击查看": "Old rows superseded by this record, click to view",
+		  "本条目：": "This entry:",
+		  "本月": "This month",
+		  "本周": "This week",
+		  "边": "Edge",
+		  "编辑": "Edit",
+		  "编辑为运行时链": "Edit as runtime chain",
+		  "编辑显示名/归类说明": "Edit display name/category note",
+		  "标签": "Tag",
+		  "标注校验/重标定中": "Label validation/recalibration in progress",
+		  "别名:": "Alias:",
+		  "并行 {p1}": "Parallel {p1}",
+		  "并行度写入失败": "Failed to write parallelism",
+		  "并行度写入失败：": "Failed to write parallelism:",
+		  "捕获": "Capture",
+		  "不含": "Excludes",
+		  "不可逆动作：需要先跑预览，再点两次确认；服务端那边还要高权限模式": "Irreversible action: run a preview first, then confirm twice; the server side also requires high-privilege mode",
+		  "不删只搬：进 <数据目录>/memories-orphans/<批次时间戳>/；需要先跑预览，再点两次确认；服务端还要高权限模式": "Move only, never delete: into <data dir>/memories-orphans/<batch timestamp>/; run a preview first, then confirm twice; the server also requires high-privilege mode",
+		  "步": "steps",
+		  "部分失败：{p1}": "Partial failure: {p1}",
+		  "部署 YAML ·": "Deployment YAML ·",
+		  "部署 YAML 层链（只读）": "Deployment YAML layer chain (read-only)",
+		  "部署基线：": "Deployment baseline:",
+		  "部署未配置远程嵌入（baseUrl/apiKey/model/dimensions）": "Remote embeddings not configured in deployment (baseUrl/apiKey/model/dimensions)",
+		  "部署未启用": "Not enabled in deployment",
+		  "部署已禁用本地嵌入模型": "Local embedding model disabled in deployment",
+		  "部署已锁定路由（pin），调整请修改 cordis.patch.yml 中 llm 的配置。": "Route pinned in deployment (pin); to change it, edit the llm config in cordis.patch.yml.",
+		  "财务": "Finance",
+		  "裁决结论本身不可覆盖。": "The verdict itself cannot be overridden.",
+		  "裁决失败": "Verdict failed",
+		  "裁决退场": "Retired by verdict",
+		  "裁决这一对？ 将要退场的记忆： 「{p1}」": "Resolve this pair? Memory to be retired: 「{p1}」",
+		  "裁决中…": "Resolving…",
+		  "操作失败": "Operation failed",
+		  "侧栏「记忆库」入口": "Sidebar 「Memory store」 entry",
+		  "层1 · 当前记录": "Layer 1 · Current record",
+		  "层2 · 涉及实体": "Layer 2 · Involved entities",
+		  "层3 · 关系邻居": "Layer 3 · Relation neighbors",
+		  "层级": "Level",
+		  "层级成本（单次 avg）": "Level cost (avg per call)",
+		  "层级成本（单次 median）": "Level cost (median per call)",
+		  "层级成本（输出 token）": "Level cost (output token)",
+		  "插件版本": "Plugin version",
+		  "插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦": "The plugin calls OpenAI-compatible endpoints directly over native HTTP, decoupled from the paid API",
+		  "查询": "Query",
+		  "查询（Enter）": "Query (Enter)",
+		  "查询失败：": "Query failed:",
+		  "产出": "Produced",
+		  "产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）": "ID of the distillation batch that produced this freeze (use memory_receipts to trace what was decided in that run)",
+		  "场景": "Scene",
+		  "超时": "Timeout",
+		  "成本": "Cost",
+		  "成本读取失败：": "Failed to read cost:",
+		  "成本趋势（按模型）": "Cost trend (by model)",
+		  "成熟": "Mature",
+		  "成熟·低": "Mature · low",
+		  "成熟·高": "Mature · high",
+		  "成熟·中": "Mature · mid",
+		  "成熟度 ·": "Maturity ·",
+		  "成熟度（优先级 + 被用次数 + 新鲜度合成）：": "Maturity (priority + use count + freshness combined):",
+		  "持续性 {p1}": "Persistence {p1}",
+		  "冲刷未蒸馏缓冲，跑一轮 L1→L2→L3 消化；不清库不改 L0": "Flush the undistilled buffer and run one L1→L2→L3 digestion pass; does not clear the store or touch L0",
+		  "冲突": "Conflict",
+		  "冲突工具": "Conflict tools",
+		  "抽取": "Extraction",
+		  "抽取输出": "Extraction output",
+		  "出处：": "Source:",
+		  "出行": "Travel",
+		  "串行": "Serial",
+		  "创建:": "Created:",
+		  "创作娱乐": "Creative & entertainment",
+		  "词表加载中": "Loading vocabulary",
+		  "次": "times",
+		  "次 · 输出": "times · output",
+		  "次调用": "calls",
+		  "次蒸馏调用。": "distillation calls.",
+		  "从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）": "Re-distill L1/L2/L3 from the raw L0 conversations; old data is archived first (not deleted)",
+		  "从存档同步回库": "Sync from archive back to store",
+		  "从起点向外展开几跳": "How many hops to expand from the start",
+		  "从左侧选一条记忆，这里会列出它涉及的实体、这些实体的关系邻居、以及邻居们的来源记忆——可以一路跳下去。": "Select a memory on the left and this will list its entities, those entities' relation neighbors, and the neighbors' source memories — you can keep hopping down the chain.",
+		  "存储处于降级状态，嵌入管理不可用。": "Storage is degraded; embedding management is unavailable.",
+		  "存量回填与整形": "Backfill and reshape existing data",
+		  "达到阈值后自动蒸馏（阈值随使用渐进爬坡到稳态）": "Auto-distill after the threshold is reached (the threshold ramps up gradually with use toward a steady state)",
+		  "打开记忆库（查询 L1 记忆与关联图谱）": "Open memory store (query L1 memories and the relation graph)",
+		  "待 L2 新记忆": "Pending new L2 memories",
+		  "待 L3 新记忆": "Pending new L3 memories",
+		  "待裁决 {p1} 对": "{p1} pairs pending verdict",
+		  "待删 {p1} 条（预览了前 {p2} 条）——未删除任何东西": "{p1} entries to delete (previewed the first {p2}) — nothing was deleted",
+		  "待投影记忆": "Memories pending projection",
+		  "待蒸馏": "Pending distillation",
+		  "待重试消息": "Messages awaiting retry",
+		  "单次输入": "Single input",
+		  "单次文件更新预算": "Per-file-update budget",
+		  '单次蒸馏调用超时(ms)：治"慢但未被网关掐"的路由需更大超时窗；留空或 0 = 跟随配置（当前生效': 'Per-distillation call timeout (ms): routes that are "slow but not cut by the gateway" need a larger timeout window; leave empty or 0 = follow config (currently active',
+		  "单次蒸馏调用超时(ms)（留空 = 跟随配置": "Per-distillation call timeout (ms) (leave empty = follow config",
+		  "单次蒸馏调用的输入字符上限（≈token）：L1 抽取按此分块、L2/L3 超限截断；留空或 0 = 跟随配置（当前生效": "Input character limit per distillation call (≈token): L1 extraction chunks by it, L2/L3 truncate when over; leave empty or 0 = follow config (currently active",
+		  "单次蒸馏输入字符上限（≈token，中文 1 字≈1 token；留空 = 跟随配置": "Input character limit per distillation (≈token, 1 Chinese character ≈ 1 token; leave empty = follow config",
+		  "当前：": "Current:",
+		  "当前：本地嵌入": "Current: local embeddings",
+		  "当前：关键词（BM25）检索，不做向量嵌入": "Current: keyword (BM25) retrieval, no vector embeddings",
+		  "当前：远程嵌入（": "Current: remote embeddings (",
+		  "当前服务端未提供全图块（旧版本降级），邻域视图无法本地裁剪。请点刷新重试。": "The server did not provide the full graph block (old-version fallback), so the neighborhood view cannot be trimmed locally. Click refresh to retry.",
+		  "当前复用宿主 ctx.llm（": "Currently reusing host ctx.llm (",
+		  "当前将直连端点：": "Will connect directly to endpoint:",
+		  "当前没有待投影的记忆，开启后新蒸馏的记忆会陆续进图。": "No memories are waiting for projection; once enabled, newly distilled memories will enter the graph over time.",
+		  "当前无层使用": "Currently unused by any layer",
+		  "当前状态:": "Current status:",
+		  "档位": "Mode",
+		  "档位读取失败：": "Failed to read mode:",
+		  "档位关闭": "Mode off",
+		  "档位关闭：未蒸馏切片挂起，切回档位后继续": "Mode off: undistilled slices are suspended and resume after you switch the mode back",
+		  "档位写入失败": "Failed to write mode",
+		  "档位写入失败：": "Failed to write mode:",
+		  "导出": "Export",
+		  "导出=库→文件；对账=只读比较；同步=文件→库；孤儿=搬走没人认领的残片；清理=物理删除（不可逆，需高权限模式）。": "Export = store → file; reconcile = read-only compare; sync = file → store; orphan = move out unclaimed fragments; cleanup = physical delete (irreversible, requires high-privilege mode).",
+		  "导出词表": "Export vocabulary",
+		  "导出分类数据 CSV(Room 词表+计数)": "Export classification data CSV (Room vocabulary + counts)",
+		  "导出该 Room 的记录清单 CSV": "Export this Room's record list CSV",
+		  "导出孤儿": "Export orphans",
+		  "导出孤儿 ·": "Export orphans ·",
+		  "导出为可携存档": "Export as portable archive",
+		  "导出为空": "Export is empty",
+		  "导出无 Room 绑定的孤儿清单 CSV(含候选)": "Export CSV list of orphans with no Room binding (including candidates)",
+		  "导出无 Room 绑定的孤儿清单(含候选)": "Export list of orphans with no Room binding (including candidates)",
+		  "地点": "Location",
+		  "登记来源": "Register source",
+		  "登记来源需要 id 与绝对路径 path": "Registering a source requires an id and an absolute path",
+		  "登记外部 AI 工具的记忆来源（仅存路径指针，正文不复制入库）。扫描为只读预览；实际导入由「memport 导入」经 memory_import 完成。整面需在设置开启": 'Register memory sources from external AI tools (path pointers only; content is not copied into the store). Scanning is a read-only preview; the actual import is done by "memport import" via memory_import. This whole panel must be enabled in settings',
+		  "等待 npm 输出…": "Waiting for npm output…",
+		  "低": "Low",
+		  "第 {p1}/{p2} 条": "Item {p1}/{p2}",
+		  "第 1 行主路由；失败（报错/掐断/网络异常/空输出）按序降级；每行档位独立": "Line 1 is the primary route; on failure (error/cut off/network issue/empty output) fall back in order; each line's mode is independent",
+		  "点": "Point",
+		  "点击此 hall:把「": 'Click this hall: add "',
+		  "点焦点/Esc 回全图 · 双击/Enter 打开记录": "Click focus / Esc to return to full graph · double-click / Enter to open record",
+		  "读取失败：": "Failed to read:",
+		  "度 {p1} · 因果 {p2} · 点击在图上强调": "Degree {p1} · causal {p2} · click to highlight on the graph",
+		  "度 {p1}(因果 {p2})——点击展开它的邻域": "Degree {p1} (causal {p2}) — click to expand its neighborhood",
+		  "端点 URL": "Endpoint URL",
+		  "端点无响应": "Endpoint not responding",
+		  "对存量未打标记忆批量补打 wing 标签 · 未打标 {p1} 条": "Batch-tag existing untagged memories with wing tags · {p1} untagged",
+		  "对话时注入相关记忆与画像": "Inject relevant memories and persona during chat",
+		  "反刍工具": "Rumination tools",
+		  "反刍整理": "Rumination tidy-up",
+		  "范围：": "Scope:",
+		  "分": "min",
+		  "分块蒸馏中": "Chunk distillation in progress",
+		  "分钟前": "minutes ago",
+		  "复用宿主": "Reuse host",
+		  "复用宿主 ctx.llm（与付费供应商同路）": "Reuse host ctx.llm (same path as the paid provider)",
+		  "复制": "Copy",
+		  "复制修复指引": "Copy repair guide",
+		  "该 Room 暂无记录。": "This Room has no records yet.",
+		  "该 Room 暂无记忆条目。": "This Room has no memory entries yet.",
+		  "该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除": "This memory has been retired (soft delete): removed from retrieval but still recoverable, not actually deleted",
+		  "该实体的其它来源记忆，点击查看": "Other source memories of this entity, click to view",
+		  "改名": "Rename",
+		  "改名(= merge 1:1 + 注册表改名)": "Rename (= merge 1:1 + rename in the registry)",
+		  "改名(可两级 slug;记录随迁,旧名进别名)": "Rename (two-level slug allowed; records move along, old name becomes an alias)",
+		  "概览": "Overview",
+		  "刚刚": "just now",
+		  "高": "High",
+		  "高权限:关": "High privilege: off",
+		  "高权限：关": "High privilege: off",
+		  "高权限:开": "High privilege: on",
+		  "高权限：开": "High privilege: on",
+		  "高权限模式": "High-privilege mode",
+		  "高权限模式未开启，删除不可用": "High-privilege mode is off; delete is unavailable",
+		  "高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。": 'High-privilege mode is off: turn it on via "High privilege: off" at the top right or the switch on the Overview page, then retire the memory.',
+		  "个场景块": "scene blocks",
+		  "个候选的证据会话数已达阈，但自动晋升关闭——确认无误后可手动「晋升」。": "candidates have reached the evidence-session threshold, but auto-promotion is off — promote manually once confirmed.",
+		  "个会话 ·": "sessions ·",
+		  "个节点 /": "nodes /",
+		  "个节点未列出。": "nodes not listed.",
+		  "个来源": "sources",
+		  "个实体节点,但还没有可连出的关系边(或投影未完成)。": "entity nodes, but no relation edges to connect yet (or projection is incomplete).",
+		  "个文件/次（0 = 默认 2000）": "files/run (0 = default 2000)",
+		  "个作业；每个作业一次 LLM 抽取（单批约 2 分钟），预计总计": "jobs; one LLM extraction per job (~2 minutes per batch), estimated total",
+		  "各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。": "They look contradictory only because their premises differ (environment/config/workspace); first confirm whether the premises still hold.",
+		  "跟随": "Follow",
+		  "跟随部署": "Follow deployment",
+		  "跟随部署配置": "Follow deployment config",
+		  "跟随默认模型": "Follow default model",
+		  "跟随默认模型（": "Follow default model (",
+		  "跟随全局": "Follow global",
+		  "更新": "Update",
+		  "更新失败": "Update failed",
+		  "工具": "Tools",
+		  "工具封印": "Tool seal",
+		  "工作": "Work",
+		  "工作（团队）": "Work (team)",
+		  "工作区": "Workspace",
+		  "供应商": "Provider",
+		  "共": "Total",
+		  "共 {p1} 条 ·": "Total {p1} entries ·",
+		  "勾选以批量删除": "Check to delete in bulk",
+		  "构建中": "Building",
+		  "孤儿文件归档": "Orphan file archive",
+		  "孤儿文件预览": "Orphan file preview",
+		  "固定": "Pin",
+		  "挂起切片": "Suspended slices",
+		  "关": "Off",
+		  "关(人工审阅)": "Off (manual review)",
+		  "关闭": "Off",
+		  "关闭高权限模式": "Turn off high-privilege mode",
+		  "关闭高权限模式(收回模型写删工具与管理操作)": "Turn off high-privilege mode (revokes the model's write/delete tools and management actions)",
+		  "关闭高权限模式（收回模型写删工具与删除权限）": "Turn off high-privilege mode (revokes the model's write/delete tools and delete permission)",
+		  "关键词": "Keywords",
+		  "关键词:": "Keywords:",
+		  "关键词回填": "Keyword backfill",
+		  "关键词回填：没有缺关键词的记录，无需回填": "Keyword backfill: no records are missing keywords, nothing to backfill",
+		  "关键词回填失败": "Keyword backfill failed",
+		  "关键词回填失败：": "Keyword backfill failed:",
+		  "关键词回填完成": "Keyword backfill complete",
+		  "关键词回填未开启：请先在概览开关组打开关键词回填": "Keyword backfill is off: turn it on first in the overview switch group",
+		  "关键词回填已中止": "Keyword backfill aborted",
+		  "关联查询失败：": "Relation query failed:",
+		  "关系清单（按跳数由近及远）": "Relation list (by hops, nearest first)",
+		  "管理操作需先开启高权限模式": "Management actions require high-privilege mode",
+		  "归": "Assign",
+		  "归档": "Archive",
+		  "归类": "Categorize",
+		  "归类/改名": "Categorize/rename",
+		  "归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)": "Categorize under an existing hall: click, then pick the target hall (records move along, old name becomes an alias)",
+		  "归类到已有 hall 下:点击后选目标 hall(收编+子类一步,记录随迁)": "Categorize under an existing hall: click, then pick the target hall (absorb + subcategory in one step, records move along)",
+		  "归类说明(喂标注器)": "Categorization note (fed to the labeler)",
+		  "归入 {p1} 下({p2}/{p3})": "Assign under {p1} ({p2}/{p3})",
+		  "含跨域": "Includes cross-domain",
+		  "含未打标": "Includes untagged",
+		  "合并": "Merge",
+		  "合并到另一个 Room(dryRun 预览→确认实跑)": "Merge into another Room (dryRun preview → confirm to run)",
+		  "合计 {p1} 条 · {p2} 个 room": "Total {p1} entries · {p2} rooms",
+		  "候选": "Candidate",
+		  "画像": "Persona",
+		  "画像读取失败：": "Persona read failed:",
+		  "画像尚未生成；蒸馏若干记忆后 L3 会自动产出。": "Persona not generated yet; L3 will produce it automatically after some memories are distilled.",
+		  "恢复": "Restore",
+		  "恢复到检索面": "Restore to the retrieval surface",
+		  "恢复该 Room 到词表": "Restore this Room to the vocabulary",
+		  "恢复该记忆到检索面（可撤销退场）": "Restore this memory to the retrieval surface (undoes retirement)",
+		  "恢复失败": "Restore failed",
+		  "辉光": "Glow",
+		  "回到全图": "Back to full graph",
+		  "回灌 {p1} · 重写文件 {p2} · 退场 {p3} · 一致 {p4}": "Reingested {p1} · files rewritten {p2} · retired {p3} · consistent {p4}",
+		  "回全图": "To full graph",
+		  "回全图并清掉起点": "Back to full graph and clear the start point",
+		  "回全图看看。": "Take a look at the full graph.",
+		  "回填": "Backfill",
+		  "回填：正在中止…": "Backfill: aborting…",
+		  "回填并行度": "Backfill parallelism",
+		  "回填失败": "Backfill failed",
+		  "回填失败：": "Backfill failed:",
+		  "回退路由必须显式选择供应商与模型": "Fallback route requires an explicit provider and model",
+		  "会话": "Session",
+		  "会话，产出": "session, produced",
+		  "会话，已蒸馏部分保留）": "session, distilled part kept)",
+		  "会话，已重建部分保留）": "session, rebuilt part kept)",
+		  "会话（": "Session (",
+		  "会话消息": "Session messages",
+		  "会话只写": "Session write-only",
+		  "活跃": "Active",
+		  "活跃时间:": "Active time:",
+		  "活跃与已退场混排（已退场的带徽标）": "Active and retired mixed (retired ones carry a badge)",
+		  "获取状态失败：": "Failed to get status:",
+		  "记录随迁;与反刍并发会互相覆盖,请在反刍空闲时执行。": "Records move along; running this concurrently with rumination overwrites each other, so run it while rumination is idle.",
+		  "记忆": "Memory",
+		  "记忆 ·": "Memory ·",
+		  "记忆 (Memory)": "Memory",
+		  "记忆概况": "Memory overview",
+		  "记忆库": "Memory store",
+		  "记忆库入口": "Memory store entry",
+		  "记忆模式": "Memory mode",
+		  "记忆稳定区": "Stable memory zone",
+		  "记忆占用": "Memory usage",
+		  "技能": "Skills",
+		  "技能（程序性记忆）": "Skills (procedural memory)",
+		  "技能工具": "Skill tools",
+		  "技能结晶": "Skill crystallization",
+		  "技能结晶（程序性记忆）未启用。到「概览」页开启「技能」开关（或部署配置 skills.enabled）：开启后，跨会话重复出现的「工作方法」记忆会累积为技能候选，在此审阅并手动晋升。": "Skill crystallization (procedural memory) is off. Turn on the Skills switch on the Overview page (or deployment config skills.enabled): once enabled, work-method memories that recur across sessions accumulate as skill candidates, to be reviewed and manually promoted here.",
+		  "继续下载": "Continue download",
+		  "加载更多": "Load more",
+		  "加载模型列表…": "Loading model list…",
+		  "加载嵌入模型中…（首次需数秒）": "Loading embedding model… (takes a few seconds the first time)",
+		  "加载失败": "Load failed",
+		  "加载失败：": "Load failed:",
+		  "加载实体详情…": "Loading entity details…",
+		  "加载中…": "Loading…",
+		  "间接相连": "Indirectly connected",
+		  "检索不可用（FTS 与向量均失效）": "Search unavailable (both FTS and vector down)",
+		  "检索降级：纯关键词（向量不可用）": "Search degraded: keywords only (vector unavailable)",
+		  "健康": "Health",
+		  "将扫描未蒸馏缓冲，按会话逐个跑蒸馏管线，完成后强制 L2 场景整合与 L3 画像更新。": "Scans the undistilled buffer, runs the distillation pipeline session by session, then forces L2 scene consolidation and an L3 persona update.",
+		  "将以 L0 原始对话为事实源重新蒸馏：": "Will re-distill using L0 raw conversations as the source of truth:",
+		  "焦点": "Focus",
+		  "节点 {p1} · 边 {p2} · 因果 {p3}": "nodes {p1} · edges {p2} · causal edges {p3}",
+		  "节点 {p1}/{p2} · 边 {p3}/{p4} · 因果边 {p5}{p6}{p7}": "nodes {p1}/{p2} · edges {p3}/{p4} · causal edges {p5}{p6}{p7}",
+		  "结论": "Conclusion",
+		  "今日": "Today",
+		  "仅活跃": "Active only",
+		  "仅库变 {p1}": "only store changes {p1}",
+		  "仅退场": "Retired only",
+		  "仅文件变 {p1}": "only file changes {p1}",
+		  "近": "Recent",
+		  "近N天": "Last N days",
+		  "进行中…": "In progress…",
+		  "晋升": "Promote",
+		  "静态 · YAML": "Static · YAML",
+		  "居家": "Home",
+		  "绝对路径(目录或 .mem)": "Absolute path (directory or .mem)",
+		  "开": "On",
+		  "开关写入失败": "Failed to write switch",
+		  "开关写入失败：": "Failed to write switch:",
+		  "开启": "Enable",
+		  "开启{p1}投影？": "Enable {p1} projection?",
+		  "开启高权限模式:模型获得写入/删除记忆工具,并解锁 Hall 页的分类管理操作。确定开启?": "Enable high-privilege mode: the model gets tools to write and delete memories and unlocks category management on the Hall page. Enable it?",
+		  "开启高权限模式:模型获得写入/删除记忆工具,并解锁 Room 管理操作。确定开启?": "Enable high-privilege mode: the model gets tools to write and delete memories and unlocks Room management. Enable it?",
+		  "开启高权限模式：模型获得写入/删除记忆工具，记忆库可删除指定记忆。确定开启？": "Enable high-privilege mode: the model gets tools to write and delete memories, and the memory store can delete specified memories. Enable it?",
+		  "开启高权限模式以解锁 Room 管理操作": "Enable high-privilege mode to unlock Room management",
+		  "开启高权限模式以解锁分类管理操作": "Enable high-privilege mode to unlock category management",
+		  "开启高权限模式以写删记忆": "Enable high-privilege mode to write and delete memories",
+		  "开始重建": "Start rebuild",
+		  "看过，暂不裁决": "Seen, defer verdict",
+		  "看过但暂不裁决——该对仍在队列里，重置超时并累计复看次数": "Seen but not yet resolved—the pair stays in the queue; the timeout is reset and a review is counted",
+		  "看图": "View image",
+		  "可从上方种子榜另选起点，或回全图单击任一星点。": "Pick another starting point from the seed list above, or go back to the full graph and click any star point.",
+		  "空角": "Empty corner",
+		  "跨域（general）兜底记忆也参与召回": "Cross-domain (general) fallback memories also take part in recall",
+		  "跨域与单主题相悖，默认不含": "Cross-domain contradicts a single topic, excluded by default",
+		  "来源": "Source",
+		  "来源 id(小写-连字符)": "source id (lowercase-hyphenated)",
+		  "来源记录 (": "source records (",
+		  "来源锚点:": "source anchor:",
+		  "来源锚点: -": "source anchor: -",
+		  "老化": "Aging",
+		  "老化亮度": "Aging brightness",
+		  "老化权重": "Aging weight",
+		  "老化权重（读路径衰减系数）": "Aging weight (read-path decay coefficient)",
+		  "老化权重效果口径:参与召回尝试的记忆中,进 topN(被注入上下文)的比例": "Aging weight effect metric: of memories that took part in a recall attempt, the share that made topN (injected into context)",
+		  "类型 {p1} · 关系数 {p2}": "type {p1} · relations {p2}",
+		  "类型 {p1} · 关系数 {p2}{p3}": "type {p1} · relations {p2}{p3}",
+		  "类型筛选": "Type filter",
+		  "累计": "Cumulative",
+		  "立即检测历史": "Check history now",
+		  "两边都变 {p1}": "both changed {p1}",
+		  "两者都保留": "Keep both",
+		  "亮度=老化": "brightness=aging",
+		  "亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧": "brightness=aging weight (freshness of the source record); even zoomed in, old and new stay distinguishable",
+		  "邻居或相关记忆过多，此处已截断（不是没有更多）。": "Too many neighboring or related memories; truncated here (not because there are no more).",
+		  "邻域": "Neighborhood",
+		  "邻域子图：以起点按跳数裁剪的浮动小图": "Neighborhood subgraph: a floating mini-graph cropped by hop count from the starting point",
+		  "另有": "also",
+		  "另有 {p1} 条未打标": "also {p1} untagged",
+		  "浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。": "To browse memory content by layer, switch the tab above; raw conversations (L0) are not shown in the browser and can be queried with the model-side conversation_search tool.",
+		  "留空或 0 = 跟随默认（当前生效": "leave empty or 0 = follow default (currently in effect",
+		  "路由链保存失败：": "Failed to save route chain:",
+		  "路由链最多 8 行（含主路由行），请删除多余行": "Route chain allows at most 8 rows (including the main route row); remove the extra rows",
+		  "矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。": "Conflict freeze is **opt-in**: it hands the verdict back to a human, at the cost of conflicts sitting there until you deal with them. If you are ready to take on those verdicts, turn it on in Overview — once on, already-parked pairs show up here right away.",
+		  "矛盾冻结未开启": "Conflict freeze is off",
+		  "矛盾冻结未开启。": "Conflict freeze is off.",
+		  "没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。": "No conflict pairs awaiting a verdict. When a new memory contradicts an old one on ingest and freeze is on, that pair lands here.",
+		  "没有符合条件的记忆。": "No memories match these criteria.",
+		  "没有已退场的记忆。": "No retired memories.",
+		  "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）": "No runtime override; using llm.mode/baseURL from cordis.patch.yml (default host)",
+		  "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读": "Effective chain per layer: runtime custom → deployment YAML layer chain → global default chain, falling back at each level; with a deployment pin, runtime edits are read-only",
+		  "门禁未通过": "Gate check failed",
+		  "秒": "s",
+		  "名称": "Name",
+		  "名称:": "Name:",
+		  "名称(可中文)": "Name (Chinese allowed)",
+		  "名称（名称蒸馏产物；投射文件的命名取它）：": "Name (name of the distillation output; used to name the projection file):",
+		  "模型 id（该供应商未提供列表，输入后回车）…": "Model id (this provider offers no list; type it and press Enter)…",
+		  "模型加载中…": "Loading models…",
+		  "模型名": "Model name",
+		  "默认档": "Default mode",
+		  "默认关闭；风险高于导出（会写库），需先开 md 投射再开本项": "Off by default; riskier than export (writes to the store); enable md projection first, then this",
+		  "默认关闭；开启后 memport 相关端点可用": "Off by default; when on, the memport endpoints become available",
+		  "默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）": "Off by default; when on, keyword backfill can run (feeds the FTS keyword axis)",
+		  "默认关闭；开启后才能跑重蒸馏整形（改正文会重算向量+覆盖 .memory.md）": "Off by default; when on, re-distillation reshaping can run (editing the body recomputes vectors and overwrites .memory.md)",
+		  "默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决": "Off by default; when on, conflicts the LLM would auto-close by winner/loser become frozen instead and need a manual verdict",
+		  "默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除": "Off by default; when on, the model gets memory write/delete tools and the panel unlocks memory deletion",
+		  "默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）": "Off by default; when on, registers the memory_skill_* tools and injection (the switch takes effect immediately)",
+		  "默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时": "Off by default: the knowledge graph is only built once this is on; this step calls the LLM per record, and the estimated duration is shown before the first enable",
+		  "目标 slug": "Target slug",
+		  "目标 slug 不能为空": "Target slug must not be empty",
+		  "目标与源相同": "Target and source are identical",
+		  "判 LLM 建议的胜方为真；败方从检索库退场": "Rule the LLM's suggested winner true; the loser is retired from recall",
+		  "判败方为真": "Rule the loser true",
+		  "判败方为真；胜方从检索库退场": "Rule the loser true; the winner is retired from recall",
+		  "判两者其实是各自独立的事实（LLM 判错了）；两条都保留，不删除": "Rule that both are in fact independent facts (the LLM judged wrong); keep both, delete neither",
+		  "判胜方为真": "Rule the winner true",
+		  "皮肤": "Skin",
+		  "皮肤：{p1}": "Skin: {p1}",
+		  "匹配 {p1} room / {p2} hall": "Matched {p1} room / {p2} hall",
+		  "漂移": "Drift",
+		  "启动失败": "Startup failed",
+		  "启动中…": "Starting…",
+		  "启用": "Enable",
+		  "起点:": "Start:",
+		  "起点不可见（可能已被取代或归档）。": "The starting point is not visible (it may have been superseded or archived).",
+		  "浅色": "Light",
+		  "嵌入维度须为 {p1}~{p2} 的整数（留空 = 跟随部署配置）": "Embedding dimension must be an integer in {p1}~{p2} (blank = follow deployment config)",
+		  "嵌入源切换进行中": "Switching embedding source",
+		  "嵌入源已关闭，请先启用": "The embedding source is off; enable it first",
+		  "嵌入状态读取失败：": "Failed to read embedding status:",
+		  "嵌入状态读取中…": "Reading embedding status…",
+		  "切到 2D 力导星图并 ego 聚焦首实体": "Switch to the 2D force-directed star map and ego-focus the first entity",
+		  "切到 3D 记忆海并 ego 聚焦首实体": "Switch to the 3D memory sea and ego-focus the first entity",
+		  "切换高权限模式失败": "Failed to switch elevated mode",
+		  "切换嵌入源后将按新模型重建向量索引（期间语义检索暂退化为关键词匹配，不影响对话）。确定切换？": "Switching the embedding source rebuilds the vector index with the new model (semantic recall degrades to keyword matching meanwhile; chat is unaffected). Switch?",
+		  "切换嵌入源中…": "Switching embedding source…",
+		  "切换失败：": "Switch failed:",
+		  "切回查询视图并展开本条目（保留当前选点）": "Back to the query view with this entry expanded (keeps the current selection)",
+		  "轻量刷新中": "Light refresh in progress",
+		  "清除": "Clear",
+		  "清除 Room/孤儿筛选": "Clear Room/orphan filters",
+		  "清除本会话覆盖，跟随全局召回开关": "Clear this session's override and follow the global recall switch",
+		  "清除筛选": "Clear filters",
+		  "清除自定义 · 跟随全局": "Clear custom · follow global",
+		  "清空并跟随部署配置": "Clear and follow deployment config",
+		  "清空失败，请重试": "Clear failed; try again",
+		  "清空失败：": "Clear failed:",
+		  "清空选择": "Clear selection",
+		  "清理并归档": "Clean up and archive",
+		  "清理失败": "Cleanup failed",
+		  "清理已中止（未删任何记录）：{p1}": "Cleanup aborted (no records deleted): {p1}",
+		  "清理预览（干跑）": "Cleanup preview (dry run)",
+		  "情境:": "Context:",
+		  "情境：": "Context:",
+		  "请先在下方下载一个本地嵌入模型，再切换到本地档。": "Download a local embedding model below first, then switch to the local mode.",
+		  "取代本记录的新行，点击查看": "Newer row that supersedes this record; click to view",
+		  "取代链": "Supersede chain",
+		  "取消": "Cancel",
+		  "取消孤儿筛选": "Clear orphan filter",
+		  "取消固定": "Unpin",
+		  "取消整理": "Cancel tidy-up",
+		  "取消中…": "Cancelling…",
+		  "取消重建": "Cancel rebuild",
+		  "去重": "Dedupe",
+		  "去重输出": "Dedupe output",
+		  "全部": "All",
+		  "全部 room": "All Room",
+		  "全部 Wing": "All Wing",
+		  "全部类型": "All types",
+		  "全部情境": "All contexts",
+		  "全局": "Global",
+		  "全局开关关闭": "Global switch off",
+		  "全局默认": "Global default",
+		  "全局默认链": "Global default chain",
+		  "全图": "Full graph",
+		  "全图星图：所有可见实体与关系一张图": "Full star map: all visible entities and relations in one graph",
+		  "全文档": "Full document",
+		  "确认搬走孤儿文件": "Confirm moving orphan files",
+		  "确认反刍整理？": "Confirm rumination?",
+		  "确认物理删除": "Confirm permanent deletion",
+		  "确认执行": "Confirm run",
+		  "确认重建全部记忆？": "Confirm rebuilding all memory?",
+		  "热度": "Heat",
+		  "人": "Person",
+		  "人工冲突裁决": "Manual conflict resolution",
+		  "人工退场": "Manual retire",
+		  "人际": "Interpersonal",
+		  "日": "Day",
+		  "日常": "Chat",
+		  "日常（个人）": "Chat (personal)",
+		  "日志": "Logs",
+		  "如 30": "e.g. 30",
+		  "如 http://127.0.0.1:11434/v1 或 https://api.xxx/v1": "e.g. http://127.0.0.1:11434/v1 or https://api.xxx/v1",
+		  "如 https://api.xxx/v1/embeddings 的服务基址": "e.g. service base URL of https://api.xxx/v1/embeddings",
+		  "如 text-embedding-3-small": "e.g. text-embedding-3-small",
+		  "扫描全部来源": "Scan all sources",
+		  "扫描预览": "Scan preview",
+		  "扫描中…": "Scanning…",
+		  "筛选中:": "Filtering:",
+		  "删除": "Delete",
+		  "删除 {p1} 行历史失败记录(它们覆盖的记录已在排队中，不影响投影)": "Delete {p1} rows of historical failure records (their covered records are already queued; projection is unaffected)",
+		  "删除该记忆（高权限）": "Delete this memory (elevated permission)",
+		  "删除勾选的记忆（一次最多": "Delete checked memories (max per run",
+		  "删除选中": "Delete selected",
+		  "删除已下载的": "Delete downloaded",
+		  "上次 L1 抽取": "Last L1 extraction",
+		  "上次 L2 整合": "Last L2 consolidation",
+		  "上次 L3 蒸馏": "Last L3 distillation",
+		  "上次反刍整理：失败：": "Last rumination: failed:",
+		  "上次反刍整理：完成（": "Last rumination: done (",
+		  "上次反刍整理：已取消（完成": "Last rumination: cancelled (completed",
+		  "上次扫描": "Last scan",
+		  "上次重建：失败：": "Last rebuild: failed:",
+		  "上次重建：完成（": "Last rebuild: done (",
+		  "上次重建：已取消（完成": "Last rebuild: cancelled (completed",
+		  "上移": "Move up",
+		  "上移（与主路由互换/顶替为主路由）": "Move up (swap with or take over as the primary route)",
+		  "尚未命名（名称蒸馏未产出）；投射回落 mem-": "Unnamed yet (name distillation produced nothing); projection falls back to mem-",
+		  "尚未蒸馏": "Not distilled yet",
+		  "尚无 hall:先注册一个(如 dsh-plugin),再归类。": "No Hall yet: register one first (e.g. dsh-plugin), then categorize.",
+		  "深色": "Dark",
+		  "生效：": "Active:",
+		  "生效端点": "Active endpoint",
+		  "声明过时": "Declared stale",
+		  "失败 {p1} 条": "{p1} failed",
+		  "失败：{p1}": "Failed: {p1}",
+		  "时间窗口总览": "Time window overview",
+		  "实际链": "Actual chain",
+		  "使用中": "In use",
+		  "事实层面直接互斥——两边不可能同时为真，必须由人给出结论。": "Directly mutually exclusive at the fact level — both cannot be true at once, so a human must give the verdict.",
+		  "事实源覆盖到：": "Fact source covers up to:",
+		  "收编": "Absorb",
+		  "收编进注册表(source=grown,原地)": "Absorb into registry (source=grown, in place)",
+		  "收编进注册表(source=grown)": "Absorb into registry (source=grown)",
+		  "收编失败": "Absorb failed",
+		  "收编源失败": "Failed to absorb source",
+		  "收起": "Collapse",
+		  "收起记忆条目": "Collapse memory entries",
+		  "收起内容": "Collapse content",
+		  "收起全部": "Collapse all",
+		  "收起全部 hall(只留 hall 头)": "Collapse all Halls (keep Hall headers only)",
+		  "收起条目面板": "Collapse entries panel",
+		  "收起未注册自生长 Room": "Collapse unregistered grown Rooms",
+		  "收起子 room": "Collapse sub-rooms",
+		  "收尾（强制 L2 场景 + L3 画像）": "Finish (force L2 scene + L3 persona)",
+		  "首次 {p1}": "First {p1}",
+		  "首次启用本地嵌入时会自动安装推理运行时（约 100~200MB）。": "Enabling local embeddings for the first time installs the inference runtime automatically (about 100–200 MB).",
+		  "输出预算": "Output budget",
+		  "输出预算（token，留空 = 默认": "Output budget (tokens, blank = default",
+		  "输出预算须为 0~1000000 的整数（留空或 0 = 跟随默认）": "Output budget must be an integer from 0 to 1000000 (blank or 0 = follow default)",
+		  "输入": "Input",
+		  "输入按字符、输出/思考按 token 计；趋势图 Y 轴为输出 token，上方可切换层级与颗粒度。": "Input counts by characters, output/thinking by tokens; the trend chart's Y axis is output tokens, and the level and granularity can be switched above.",
+		  "输入预算": "Input budget",
+		  "输入预算须为 0 或 1000~256000 的整数（留空或 0 = 跟随配置）": "Input budget must be 0 or an integer from 1000 to 256000 (blank or 0 = follow configuration)",
+		  "数据目录": "Data directory",
+		  "刷新": "Refresh",
+		  "刷新图": "Refresh graph",
+		  "搜实体名…": "Search entity name…",
+		  "搜索": "Search",
+		  "搜索 hall/room(slug、显示名、别名)": "Search Hall/Room (slug, display name, alias)",
+		  "搜索 room(slug、显示名、别名)": "Search Room (slug, display name, alias)",
+		  "搜索分页已达检索上限（200 条），更早的结果未显示。请用更精确的关键词或类型/情境过滤。": "Search pagination has reached the retrieval limit (200 items); earlier results are not shown. Use more precise keywords or type/scene filters.",
+		  "搜索记忆内容（关键词）…": "Search memory content (keywords)…",
+		  "搜索记忆内容（BM25 关键词）…": "Search memory content (BM25 keywords)…",
+		  "锁定 Wing 时两类无角记忆是否参与召回": "Whether both kinds of corner-less memories participate in recall when a Wing is locked",
+		  "锁定 Wing 时排除未打标记忆": "Exclude untagged memories when a Wing is locked",
+		  "它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。": 'It is removed from the retrieval surface (no longer recalled), but the record is kept — you can restore it in the "retired" section of the "Memory" page.',
+		  "探针：": "Probe:",
+		  "提示：登记/退役需先在面板开启「高权限模式」。": 'Note: registering/decommissioning requires turning on "High-privilege mode" in the panel first.',
+		  "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。": 'Note: promoting/archiving/pinning/scanning history requires turning on "High-privilege mode" in the panel.',
+		  "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。": 'Note: deleting memories requires high-privilege mode first (top-right switch or "High-privilege mode" on the Overview page); while it is off, the delete button is unavailable.',
+		  "提示档": "Hint tier",
+		  "天": "d",
+		  "天前": "days ago",
+		  "挑选中:点击目标 hall 头完成归类": "Picking: click a target hall header to finish classification",
+		  "条": "items",
+		  "条 · 原样保留": "items · kept as-is",
+		  "条，按每批 8 条约": "items; roughly 8 per batch, approx.",
+		  "条，此处显示": "items, shown here",
+		  "条，耗时": "items, took",
+		  "条,仅显示前": "items, showing only the first",
+		  "条（当前勾选": "items (currently selected",
+		  "条（无来源或来源不在本次快照）": "items (no source, or the source is not in this snapshot)",
+		  "条）": "items)",
+		  "条），请分批操作。": "items); please run this in batches.",
+		  "条边": "edges",
+		  "条记录": "records",
+		  "条记录）": "records)",
+		  "条记忆？ 它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。": 'memories? They are removed from the retrieval surface (no longer recalled), but the records are kept — you can restore them in the "retired" section below.',
+		  "条件冲突（不占额度）": "conditional conflicts (no quota used)",
+		  "条可恢复": "items can be restored",
+		  "条内容不可嵌入，已跳过）": "items could not be embedded and were skipped)",
+		  "条消息": "messages",
+		  "跳": "hop",
+		  "跳到这条邻居的来源记忆": "jump to this neighbor's source memory",
+		  "跳内": "hops",
+		  "跳内没有其它可达节点（孤点，或关系还没投影出来）。": "No other reachable nodes within these hops (an isolated node, or relations not projected yet).",
+		  "停用": "Disable",
+		  "统计未到": "Stats not in yet",
+		  "投射根：": "Projection root:",
+		  "投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。": 'Projection runs serially in the background and never blocks the conversation (newly distilled records always outrank backfilling existing ones); progress is visible on the "Graph" page, and you can flip the switch off at any time to stop it.',
+		  "图": "Graph",
+		  "图加载中…": "Loading graph…",
+		  "图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。": 'No nodes in the graph yet. Graph projection is off by default — turn on the switch under "Overview → Knowledge graph" in settings and existing memories will be projected into entities and relations in batches.',
+		  "图里没有匹配的实体": "No matching entities in the graph",
+		  "图谱": "Graph",
+		  "图谱读工具": "Graph read tools",
+		  "图谱还没有内容。": "The graph has no content yet.",
+		  "图谱投影进行中": "Graph projection in progress",
+		  "图谱投影预算": "Graph projection budget",
+		  "图数据读取失败：": "Failed to read graph data:",
+		  "推理运行时就绪（transformers.js v": "Inference runtime ready (transformers.js v",
+		  "退场": "Retire",
+		  "退场该 Room 下全部记忆(软删,可在「已退场」区恢复)": 'Retire all memories under this Room (soft delete; restorable in the "retired" section)',
+		  "退场该条记忆？ 它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。": 'Retire this memory? It is removed from the retrieval surface (no longer recalled), but the record is kept — you can restore it in the "retired" section below.',
+		  "退场勾选的": "Retire selected",
+		  "退场筛查": "Retirement screening",
+		  "退场筛选": "Retirement filter",
+		  "退场失败": "Retirement failed",
+		  "退出 ego 聚焦，重新渲染全图": "Exit ego focus and re-render the whole graph",
+		  "退役": "Decommission",
+		  "退役 Room:{p1} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)": 'Decommission Room {p1} and retire all its memories? (records are soft-deleted; each can be restored in the "retired" section of the Memory page)',
+		  "退役 Room:{p1}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)": "Decommission Room {p1}? (existing records' tags stay untouched; it is just no longer suggested from the vocabulary; restorable at any time)",
+		  "退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)": 'Decommission and retire all memories under this Room (soft delete; restorable in the "retired" section)',
+		  "退役该 Room(存量 tags 不动)": "Decommission this Room (existing tags untouched)",
+		  "拖动调整详情宽度": "Drag to resize the detail panel",
+		  "拖动空白平移 · 滚轮缩放 · 拖节点可钉住 · 悬停点亮邻域并在浮层里看全名 · 单击星点即以它为中心展开邻域": "Drag empty space to pan · scroll to zoom · drag a node to pin it · hover to light up its neighborhood and see full names in a popover · click a star point to expand its neighborhood around it",
+		  "拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)": "Drag into a room to classify under that hall (major/minor; records move along, the old name becomes an alias, confirm after preview)",
+		  "外部存档（markdown 投射）": "External archive (Markdown projection)",
+		  "外部记忆来源 Connect": "External memory source Connect",
+		  "完成": "Done",
+		  "维": "dim",
+		  "维 · 上下文": "dim · context",
+		  "维度": "Dimension",
+		  "维度跟随部署": "Dimension follows the deployment",
+		  "为缺 dsh_keywords 的存量记忆补检索关键词，喂 FTS 关键词轴（需先开关键词回填开关）": "Backfill retrieval keywords for existing memories missing dsh_keywords, feeding the FTS keyword axis (turn on the keyword backfill switch first)",
+		  "未安装参考会话库（DRSC）": "Reference session store (DRSC) is not installed",
+		  "未打标": "Untagged",
+		  "未打标计数加载中…": "Loading untagged count…",
+		  "未打标记忆默认包含": "Untagged memories are included by default",
+		  "未单独配置的层走这条链（当前在用：": "Layers without their own configuration use this chain (currently in use:",
+		  "未命名": "Untitled",
+		  "未命中该实体": "No hit on this entity",
+		  "未配置": "Not configured",
+		  "未配置模型": "No model configured",
+		  "未设置": "Not set",
+		  "未生成": "Not generated",
+		  "未生成画像": "No persona generated",
+		  "未写": "not written",
+		  "未知": "unknown",
+		  "未知错误": "unknown error",
+		  "文件 → 库：只有文件变过的回灌入库，`.disable` 后缀的退场；两边都变的那些两侧都不动，只挂账。会写库，因此需要高权限模式": "file → store: only files that changed are written back into the store, `.disable` suffixed ones are retired; those changed on both sides are left alone on both sides and only noted. Writes to the store, so high-permission mode is required",
+		  "文件缺失 {p1}": "file missing {p1}",
+		  "文字": "text",
+		  "我已了解，仍要继续（不重蒸水位后的记录）": "I understand, continue anyway (records behind the watermark are not re-distilled)",
+		  "无": "none",
+		  "无。": "none.",
+		  "无（本地 L0 没有任何正文）": "none (local L0 has no body text)",
+		  "无（该记录没有抽出实体）。": "none (no entities were extracted from this record).",
+		  "无（这些实体目前没有 active 关系的邻居）。": "none (these entities currently have no neighbours with active relations).",
+		  "无绑定": "unbound",
+		  "无绑定 ·": "unbound ·",
+		  "无法读取 DRSC 投影库": "cannot read the DRSC projection store",
+		  "无匹配的 hall/room。": "no matching hall/room.",
+		  "无匹配的 Room。": "no matching Room.",
+		  "无启用来源，或来源下未发现 .mem。": "no enabled source, or no .mem found under the source.",
+		  "无选项": "no options",
+		  "系统日志": "system log",
+		  "下(major/minor,预览后确认)": "down (major/minor, confirm after preview)",
+		  "下移": "move down",
+		  "下载": "download",
+		  "下载失败：": "download failed:",
+		  "显示名(可选)": "display name (optional)",
+		  "显示名(可中文)": "display name (Chinese allowed)",
+		  "现有 L1 记忆 / L2 场景 / L3 画像会整体归档（*.bak.时间戳，可手工找回），随后清空重建；重建期间可正常对话，新对话的蒸馏优先进行；中途可取消，已重建部分保留。": "Existing L1 memories / L2 scenes / L3 persona are archived as a whole (*.bak.timestamp, recoverable by hand), then wiped and rebuilt; you can chat normally during the rebuild, and distillation of new conversations goes first; you can cancel midway and the rebuilt part is kept.",
+		  "线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。": "the evidence points to the new one being more credible and the old one should step aside — but the machine does not resolve automatically, a human still confirms.",
+		  "相关度": "relevance",
+		  "相关记忆": "related memories",
+		  "详情": "details",
+		  "向量能力不可用": "vector capability unavailable",
+		  "向量索引": "vector index",
+		  "向量索引：宿主版本较旧，未上报计数": "vector index: host version is older, no count reported",
+		  "向量索引不可用（sqlite-vec 扩展缺失或检索库降级），重建无从谈起": "vector index unavailable (sqlite-vec extension missing or the retrieval store is degraded), rebuild is out of the question",
+		  "向量维度（留空/0 = 跟随部署配置）": "vector dimension (empty/0 = follow the deployment config)",
+		  "项目": "project",
+		  "消化未蒸馏的记忆缓冲": "consume the undistilled memory buffer",
+		  "小时量级。": "on the order of hours.",
+		  "小时前": "hours ago",
+		  "校验中": "validating",
+		  "写入空串清除运行时密钥（部署 .yml 的密钥不受影响）": "writing an empty string clears the runtime key (the key in the deployment .yml is unaffected)",
+		  "写入空串清除运行时密钥（部署 YAML 的密钥不受影响）": "writing an empty string clears the runtime key (the key in the deployment YAML is unaffected)",
+		  "写入失败：预算未改": "write failed: budget unchanged",
+		  "写删工具": "write/delete tools",
+		  "新 slug(可两级:hall/子类)": "new slug (two levels allowed: hall/subclass)",
+		  "新旧取代（不占额度）": "supersede old with new (does not use quota)",
+		  "星空底": "starfield background",
+		  "行重复": "duplicate row",
+		  "修复指引（可复制）": "repair guide (copyable)",
+		  "悬停星点 = 在浮层里看完整名称与类型 · 单击星点 = 改起点继续展开 · 拖拽钉位与全图一致": "hover a star = see the full name and type in a popover · click a star = change the origin and keep expanding · drag to pin, consistent with the full graph",
+		  "选 hall…": "select hall…",
+		  "选定某个角（单 Wing）后，这两项才生效": "these two only take effect after a corner (single Wing) is selected",
+		  "学习": "learning",
+		  "一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。": 'how many projection files are updated per click at most (export writes + suffix renames both use quota). Ones that "never changed" do not use quota. 0 = follow the deployment default (2000); the cap is 10000.',
+		  "一次最多退场": "max retired per run",
+		  "一致 {p1}": "consistent {p1}",
+		  "已搬 {p1} · 失败 {p2} · 仍被认领 {p3}": "moved {p1} · failed {p2} · still claimed {p3}",
+		  "已不在已注册路由中：该路由调用会失败并被链跳过（不阻止保存）。": "no longer among the registered routes: calls to this route will fail and be skipped by the chain (saving is not blocked).",
+		  "已裁决 {p1}：{p2}{p3}": "resolved {p1}: {p2}{p3}",
+		  "已达上限（8 条）": "limit reached (8 items)",
+		  "已封印：冲突三件从模型工具列表移除": "sealed: the three conflict tools are removed from the model's tool list",
+		  "已封印：反刍三件从模型工具列表移除": "sealed: the three rumination tools are removed from the model's tool list",
+		  "已封印：技能四件从模型工具列表移除（技能功能关闭时本就零表面积）": "sealed: the four skill tools are removed from the model's tool list (with skills off they already had zero surface)",
+		  "已封印：两个工具从模型工具列表移除": "sealed: two tools are removed from the model's tool list",
+		  "已封印：图谱读工具从模型工具列表移除": "sealed: the graph read tool is removed from the model's tool list",
+		  "已封印：L1 写删工具从模型工具列表移除（槽位三件不受此开关影响）": "sealed: the L1 write/delete tools are removed from the model's tool list (the three slot tools are unaffected by this switch)",
+		  "已复看 {p1} 次": "reviewed again {p1} times",
+		  "已复制": "copied",
+		  "已改为跟随部署默认": "changed to follow the deployment default",
+		  "已更新": "updated",
+		  "已关闭：不捕获、不蒸馏、不注入（数据保留）": "off: no capture, no distillation, no injection (data is kept)",
+		  "已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启": 'off: the "memory store" sidebar entry is removed; turning it on restores it instantly, no restart needed',
+		  "已归档": "archived",
+		  "已就绪": "ready",
+		  "已开启：捕获对话并蒸馏记忆": "on: conversations are captured and memories distilled",
+		  "已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）": 'on: "flat" existing memories can be rearranged into a sectioned skeleton by type (only strictly better ones are touched)',
+		  "已开启：可登记/扫描外部记忆源并导入": "on: external memory sources can be registered/scanned and imported",
+		  "已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）": 'on: retrieval keywords can be backfilled in bulk for existing memories (click the button in the "backfill and reshape existing" section below)',
+		  "已开启：可将 .memory.md 文件侧修改回灌入库（需先开 md 投射 + 高权限）": "on: side edits to .memory.md files can be written back into the store (requires md projection plus high-permission mode)",
+		  "已开启：模型获得记忆写入/删除工具，记忆 Tab 可删除指定记忆": "on: the model gets memory write/delete tools, and the memory tab can delete specific memories",
+		  '已开启：去重判定"两边都像对的"时冻结冲突对，停放到待人工裁决区': 'on: when dedup decides "both sides look right", the conflict pair is frozen and parked in the manual verdict area',
+		  "已开启：重复工作方法会结晶为技能候选，注入活跃技能，可在「技能」页审阅晋升": 'on: repeated work methods crystallize into skill candidates, are injected into active skills, and can be reviewed for promotion on the "skills" page',
+		  "已开启：左侧栏显示「记忆库」（L1 查询 + 关联跳转 + 2D/3D 记忆图）；关闭即时隐藏，无需重启": 'on: the "memory store" appears in the left sidebar (L1 query + relation jumps + 2D/3D memory graph); turning it off hides it instantly, no restart needed',
+		  "已开启：L1 记忆会投影成实体与关系，存量在启动/开启后逐批补齐（可与「图谱读工具」独立开关）": 'on: L1 memories are projected into entities and relations; existing ones are backfilled in batches after start/on (toggles independently of the "graph read tool")',
+		  "已列": "listed",
+		  "已配置": "configured",
+		  "已嵌入 L1": "Embedded into L1",
+		  "已删 {p1} 条 · 归档正文 {p2} · 文件搬家 {p3}(失败 {p4}) · 图索引 {p5}": "Deleted {p1} · archived bodies {p2} · files moved {p3} (failed {p4}) · graph index {p5}",
+		  "已设为每次最多 {p1} 个文件，下一次点击生效": "Set to at most {p1} files per run, takes effect on the next click",
+		  "已设置": "Set",
+		  "已收编:{p1}(source=grown)": "Adopted: {p1} (source=grown)",
+		  "已停用 · 显示现存残留": "Disabled · showing existing leftovers",
+		  "已退场": "Retired",
+		  "已退场（软删，可恢复）": "Retired (soft delete, recoverable)",
+		  "已退场列表加载失败": "Failed to load retired list",
+		  "已退役": "Retired",
+		  "已完成 {p1} 条": "Completed {p1}",
+		  "已写": "Written",
+		  "已写 {p1} · 未变 {p2} · 跳过 {p3}": "Written {p1} · unchanged {p2} · skipped {p3}",
+		  "已有": "Exists",
+		  "已注册:{p1}": "Registered: {p1}",
+		  "已注册：memory_add / memory_import / memory_delete（仍需高权限模式）": "Registered: memory_add / memory_import / memory_delete (high-privilege mode still required)",
+		  "已注册：memory_conflicts / _rejected / resolve_conflict": "Registered: memory_conflicts / _rejected / resolve_conflict",
+		  "已注册：memory_room_admin / memory_room_review（目录治理）": "Registered: memory_room_admin / memory_room_review (directory governance)",
+		  "已注册：memory_ruminate / _cancel / _status": "Registered: memory_ruminate / _cancel / _status",
+		  "已注册：memory_search_graph / memory_expand_graph_node": "Registered: memory_search_graph / memory_expand_graph_node",
+		  "已注册：memory_skill_list / _read / _pin / _archive（需先开启「技能结晶」）": 'Registered: memory_skill_list / _read / _pin / _archive (enable "Skill crystallization" first)',
+		  "以此为新起点": "Use this as the new starting point",
+		  "影响：蒸馏背景参考与跨会话检索会为空（记忆本身仍可捕获与检索本库）。": "Impact: distillation background reference and cross-session recall will be empty (memories themselves can still be captured and searched in this store).",
+		  "硬冲突（占额度）": "Hard conflict (counts toward quota)",
+		  "用": "Use",
+		  "用户默认": "User default",
+		  "用户默认 (global)": "User default (global)",
+		  "用户默认（global，任何工作区可见）": "User default (global, visible in any workspace)",
+		  "优先级": "Priority",
+		  "有效期起 {p1}": "Valid from {p1}",
+		  "有效期止 {p1}": "Valid until {p1}",
+		  "有新记录（样本省略）。": "New records exist (samples omitted).",
+		  "与存档对账": "Reconcile with archive",
+		  "与第": "with #",
+		  "与反刍并发会互相覆盖,请在反刍空闲时执行。": "Running this concurrently with rumination overwrites each other, so run it while rumination is idle.",
+		  "与重建不同：不清空 L1 检索库、不归档旧产物、不改 L0；仅消化攒而未蒸馏的切片，无缓冲时做轻量 L2/L3 刷新。": "Unlike rebuild: does not wipe the L1 retrieval store, does not archive old artifacts, does not touch L0; it only digests buffered, undistilled slices, and does a light L2/L3 refresh when the buffer is empty.",
+		  "与主路由完全相同（运行时会跳过，请去重）": "Identical to the main route (skipped at runtime, please deduplicate)",
+		  "语义检索（嵌入）": "Semantic search (embeddings)",
+		  "语义检索（嵌入源）": "Semantic search (embedding source)",
+		  "预览": "Preview",
+		  "预览失败": "Preview failed",
+		  "预算写入失败": "Failed to write budget",
+		  "预算写入失败：": "Failed to write budget:",
+		  "预算要 0~10000 的整数（0 = 跟随部署默认）": "Budget must be an integer 0~10000 (0 = follow deployment default)",
+		  "预填注册表单为 {p1}/…(注册该 hall 下的小类)": "Pre-fills the registration form as {p1}/… (registers a subcategory under that hall)",
+		  "域{p1}": "Domain {p1}",
+		  "域设置失败": "Failed to save domain settings",
+		  "域设置失败：": "Failed to save domain settings:",
+		  "远程": "Remote",
+		  "远程服务需要密钥时填写": "Fill in if the remote service requires a key",
+		  "远程连接（生效值；运行时覆盖优先于部署 YAML）": "Remote connection (effective value; runtime override takes precedence over deployment YAML)",
+		  "远程连接保存失败": "Failed to save remote connection",
+		  "远程连接保存失败：": "Failed to save remote connection:",
+		  "月": "months",
+		  "运行时 · 可编辑": "Runtime · editable",
+		  "运行时安装失败：": "Runtime install failed:",
+		  "运行时宿主": "Runtime host",
+		  "运行时锁定": "Locked at runtime",
+		  "运行时直连": "Direct runtime connection",
+		  "运行时自定义": "Custom at runtime",
+		  "运行状态": "Runtime status",
+		  "再点一次就真的搬——文件会被移出投射目录（不删，进归档目录，可手动搬回）": "Click again to actually move — files leave the projection directory (not deleted, moved into the archive directory, can be moved back by hand)",
+		  "再点一次就真的删——物理删除不可逆（但会先落快照与归档正文）": "Click again to actually delete — physical deletion is irreversible (a snapshot and archived bodies are written first)",
+		  "再点一次取消挑选;然后点击目标 hall 头完成归类": "Click again to cancel selection; then click the target hall header to finish classifying",
+		  "再改改": "Edit again",
+		  "在第 0 层，第 k 跳在第 k 层": "At level 0; the k-th hop is at level k",
+		  "在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。": 'After turning on the switch in Settings "Overview → {p1}", existing memories are projected into entities and relations in batches.',
+		  "在图上强调该节点": "Highlight this node on the graph",
+		  "在图中定位本条目的实体：": "Locate this entry's entity on the graph:",
+		  "在用：": "In use:",
+		  "攒批 · 挂起": "Batching · suspended",
+		  "攒批进度": "Batching progress",
+		  "暂无 Room:对话/反刍会从标签涌现,或在上方注册。": "No Rooms yet: they emerge from tags during chat/rumination, or register one above.",
+		  "暂无场景块。累计 5 条新记忆后 L2 会自动整合出第一个场景。": "No scene blocks yet. After 5 new memories accumulate, L2 consolidates the first scene automatically.",
+		  "暂无成本数据（触发一次蒸馏后这里会出现趋势）。": "No cost data yet (a trend appears here after one distillation run).",
+		  "暂无记忆。对话几轮后，蒸馏管线会自动抽取记忆。": "No memories yet. After a few conversation turns, the distillation pipeline extracts memories automatically.",
+		  "暂无技能：池中已有 {p1} 条「工作方法」，但还没重复到成候选的程度（需跨 ≥{p2} 个不同会话）。存量可点「立即检测历史」回灌。": 'No skills yet: the pool already has {p1} "work method" records, but they have not recurred enough to become candidates (needs ≥{p2} distinct sessions). For existing data, click "Detect history now" to backfill.',
+		  "暂无技能：记忆池里还没有「工作方法」类记录。技能是从重复出现的工作方法结晶来的，请先到概览页确认蒸馏在正常产出记忆。": 'No skills yet: the memory pool has no "work method" records. Skills crystallize from work methods that recur, so first check the Overview page to confirm distillation is producing memories.',
+		  '暂无技能。技能从重复出现的"工作方法"记忆结晶而来。': 'No skills yet. Skills crystallize from recurring "work method" memories.',
+		  "暂无可筛 Hall": "No Halls to filter",
+		  "暂无来源": "No source",
+		  "摘录档": "Excerpt archive",
+		  "展开": "Expand",
+		  "展开/收起右侧详情": "Expand/collapse the details panel",
+		  "展开查看该 Room 的记录内容(默认收起)": "Expand to view this Room's records (collapsed by default)",
+		  "展开查看该 Room 的记忆条目(默认收起)": "Expand to view this Room's memory entries (collapsed by default)",
+		  "展开到 {p1} 跳": "Expand to {p1} hops",
+		  "展开全部": "Expand all",
+		  "展开全部 hall 的子 room": "Expand the sub-rooms of every hall",
+		  "展开未注册自生长 Room": "Expand unregistered self-grown Rooms",
+		  "展开子 room(默认折叠)": "Expand sub-rooms (collapsed by default)",
+		  "展示近 N 天（正整数，清空=默认窗口；超出保留期后端自动回退）": "Show last N days (positive integer, empty = default window; beyond the retention period the backend falls back automatically)",
+		  "账本共 {p1} 条 · 仍被认领 {p2} · 无人认领 {p3}（未搬任何东西）": "Ledger: {p1} entries · still claimed {p2} · unclaimed {p3} (nothing moved)",
+		  "召回": "Recall",
+		  "召回命中": "Recall hits",
+		  "召回命中 ·": "Recall hits ·",
+		  "召回片段": "Recall snippets",
+		  "召回使用": "Recall usage",
+		  "召回已停用（": "Recall is off (",
+		  "召回已停用（开关关闭 / 档位关闭 / 部署未启用）": "Recall is off (switch off / mode off / deployment not enabled)",
+		  "召回追踪": "Recall tracing",
+		  "这个起点在": "This starting point is in",
+		  "这条记忆还没有被投影进图（图谱未开启，或投影尚未跑到）——所以暂时查不到它的关联。": "This memory has not been projected into the graph yet (graph off, or projection has not run yet) — so its relations cannot be looked up for now.",
+		  "蒸馏": "Distillation",
+		  "蒸馏参数": "Distillation parameters",
+		  "蒸馏超时": "Distillation timeout",
+		  "蒸馏超时须为 0 或 1000~600000 的整数（留空或 0 = 跟随配置）": "Distillation timeout must be 0 or an integer between 1000 and 600000 (empty or 0 = follow config)",
+		  "蒸馏跟随默认模型，未配置回退链。": "Distillation follows the default model; no fallback chain configured.",
+		  "蒸馏通道": "Distillation channel",
+		  "蒸馏追踪": "Distillation tracing",
+		  "整形": "Reshape",
+		  "整形完成": "Reshape complete",
+		  "整形已中止": "Reshape aborted",
+		  "正在读取记忆状态…": "Reading memory state…",
+		  "知识图谱": "Knowledge graph",
+		  "执行失败": "Execution failed",
+		  "直连端点": "Direct endpoint",
+		  "只补缺失向量；已有向量不动。零向量内容会被跳过（重试无意义）": "Only fills missing vectors; existing vectors are left alone. Content with a zero vector is skipped (retry is pointless)",
+		  "只读预览：列出将被物理删除的退场记忆（前 50 条）与总数，不删任何东西": "Read-only preview: lists the retired memories that will be physically deleted (first 50) plus the total; deletes nothing",
+		  "只读预览：扫账本，找出“我们写过但现在没记录认领它”的投射文件（改名/消歧留下的残片）。来路不明的文件一律不动，也不搬任何东西": "Read-only preview: scans the ledger for projection files we wrote but that no record claims anymore (leftovers from renames/disambiguation). Files of unknown origin are never touched, and nothing is moved",
+		  "只看词表未退役的 room": "Only rooms not retired in the vocabulary",
+		  "只看没有任何 Room 绑定的记忆": "Only memories not bound to any Room",
+		  "只看未退场的记忆": "Only memories not retired",
+		  "只看已退场（软删）的记忆，可在此恢复": "Only retired (soft-deleted) memories; restore them here",
+		  "只看已退役的 room": "Only retired rooms",
+		  "只写": "Write only",
+		  "只写：记忆照常沉淀，但不注入本会话": "Write only: memories are captured as usual but not injected into this session",
+		  "指定工作区": "Specify workspace",
+		  "智能": "Auto",
+		  "智能（双族）": "Auto (two families)",
+		  "智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）": "Auto mode: determines recall domains automatically (click the center / drag inward from a corner = all domains)",
+		  "置信度:": "Confidence:",
+		  "中": "Medium",
+		  "中止": "Abort",
+		  "中止请求失败：": "Abort request failed:",
+		  "中止中…": "Aborting…",
+		  "重建记忆": "Rebuild memory",
+		  "重建索引": "Rebuild index",
+		  "重建已在进行中": "Rebuild already in progress",
+		  "重拉注册表与计数": "Refetch registry and counts",
+		  "重嵌入中 L1": "Re-embedding L1",
+		  "重试": "Retry",
+		  "重新拉取图与统计": "Refetch graph and stats",
+		  "重新蒸馏全部记忆": "Re-distill all memories",
+		  "重蒸馏整形": "Re-distill reshape",
+		  "重蒸馏整形：没有需要整形的记录（骨架都已齐备），无需处理": "Re-distill reshape: no records need reshaping (all skeletons are complete), nothing to do",
+		  "重蒸馏整形失败": "Re-distill reshape failed",
+		  "重蒸馏整形失败：": "Re-distill reshape failed:",
+		  "重蒸馏整形未开启：请先在概览开关组打开重蒸馏整形": "Re-distill reshape is off: enable re-distill reshape in the overview switch group first",
+		  "重置为跟随默认": "Reset to follow default",
+		  "周": "Week",
+		  "主": "Main",
+		  "主路由失败，按序降级": "Primary route failed, falling back in order",
+		  "主路由失败，只降级到本层回退": "Primary route failed, falling back only to this layer's fallback",
+		  "主路由行必须显式选择供应商与模型（层链不支持跟随默认模型）": "The primary route row must select a provider and model explicitly (layer chains do not support following the default model)",
+		  "主路由行供应商与模型须成对（双空 = 跟随默认模型）": "Provider and model in the primary route row must be paired (both empty = follow the default model)",
+		  "注册": "Register",
+		  "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。": "The registry is empty. Register a Hall/Room above (e.g. dsh-plugin), or absorb a self-grown slug into the vocabulary — afterwards the candidate annotator prefers attaching related memories to these slugs.",
+		  "注册失败": "Registration failed",
+		  "注入": "Injection",
+		  "注入设置失败": "Failed to set injection",
+		  "注入设置失败：": "Failed to set injection:",
+		  "注意：部署配置已停用": "Note: deployment config is disabled",
+		  "状态:": "Status:",
+		  "准备中（归档旧数据 · 清空检索库）": "Preparing (archiving old data · clearing the retrieval store)",
+		  '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.5" - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。': 'The desktop build (DSH Desktop) cannot use `dsh plugin --profile desktop add` (the host manages it exclusively and will reject it), so do it manually: 1. Edit ~/.dsh/profiles/desktop/package.json - add "dsh-reference-session-collector": "^0.2.5" to dependencies - add "dsh-reference-session-collector" to dsh.profile.bundles 2. Run pnpm install in that directory 3. Restart DSH Desktop Note: enabling only Memory will not enable the reference session store — the memory plugin is only its consumer and has no right to mount it.',
+		  "字符": "characters",
+		  "自定义 ·": "Custom ·",
+		  "自定义本层链": "Customize this layer's chain",
+		  "自生长 slug(未注册)": "Self-grown slug (unregistered)",
+		  "自生长 slug(未注册)——按住拖到某个 hall 头上 = 收编并归为其子类": "Self-grown slug (unregistered) — hold and drag onto a hall = absorb it as its subclass",
+		  "自生长未注册 · 共": "Self-grown unregistered · total",
+		  "组织": "Organization",
+		  "最后同步：": "Last synced:",
+		  "最近 {p1} 条（{p2}）": "Latest {p1} entries ({p2})",
+		  "最近差异样本：": "Recent diff samples:",
+		  "最近一轮命中": "Latest round hits",
+		  "最近蒸馏": "Latest distillation",
+		  "左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录": "Left-drag to rotate · shift-drag to pan · scroll to zoom · click to focus as ego · double-click to open the record",
+		  "作用范围:": "Scope:",
+		  "作用范围：用户默认（global，任何工作区可见）": "Scope: user default (global, visible in any workspace)",
+		  "作用范围：指定工作区（仅归属工作区可见）": "Scope: specific workspace (visible only in its own workspace)",
+		  "Canvas 三维投影记忆海": "Canvas 3D projected memory sea",
+		  "direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。": "direct = plugin-native direct connection to OpenAI-compatible endpoints, decoupled from paid API; on failure it automatically falls back to the host route chain.",
+		  "direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。": "The direct channel uses plugin-native HTTP and does not depend on the host provider registry; if direct fails, it automatically falls back to the host route chain as a safety net.",
+		  "DRSC 投影库已过期": "DRSC projection store is outdated",
+		  "DRSC 已安装但未启用": "DRSC is installed but not enabled",
+		  "ego 壳层 ·": "ego shell ·",
+		  "G6 力导星图": "G6 force-directed star map",
+		  "Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关": 'Hall = Room category · up to 200 categories, subcategories ("category/subcategory") do not count toward the limit · unrelated to the Wing (domain) filter',
+		  "L0 今日消息": "L0 messages today",
+		  "L0 无消息，无可重建内容": "No L0 messages, nothing to rebuild",
+		  "L0：记录原始对话（关闭后蒸馏也无输入）": "L0: records raw conversations (when off, distillation has no input)",
+		  "L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。": "L0~L3 layered distilled memory: browse what has been remembered and control memory mode switches.",
+		  "L1 · 抽取 / 去重": "L1 · extraction / dedupe",
+		  "L1 抽取 + L2 场景 + L3 画像": "L1 extraction + L2 scenes + L3 persona",
+		  "L1 的抽取与去重是两次独立调用，输出限额各自设置（路由共用同一条链）。": "L1 extraction and dedupe are two separate calls with their own output limits (they share the same route chain).",
+		  "L1 累计抽取": "L1 cumulative extraction",
+		  "L1 原子记忆": "L1 atomic memories",
+		  "L1 蒸馏中": "L1 distilling",
+		  "L2 · 场景摘要": "L2 · scene summary",
+		  "L2 场景": "L2 scenes",
+		  "L2 场景块": "L2 scene block",
+		  "L2 场景整合中": "L2 scenes consolidating",
+		  "L2 输出": "L2 output",
+		  "L3 · 画像蒸馏": "L3 · persona distillation",
+		  "L3 画像": "L3 persona",
+		  "L3 画像更新中": "L3 persona updating",
+		  "L3 输出": "L3 output",
+		  "LLM 建议：败方": "LLM suggests: loser",
+		  "LLM 建议：胜方": "LLM suggests: winner",
+		  "md 反向同步": "md reverse sync",
+		  "ms，来自 llm.timeoutMs）。注：供应商网关侧固定掐断（如某些路由 60s）抬此值无效，须换路由": "ms, from llm.timeoutMs). Note: the provider gateway cuts off at a fixed limit (e.g. 60s on some routes), so raising this value has no effect — switch routes instead",
+		  "Room 标签/分类管理:见「Hall」「Room」标签页。": 'Room tag/category management: see the "Hall" and "Room" tabs.',
+		  "Room 管理工具": "Room management tools",
+		  "Room 级管理:存在(注册/收编/退役)· 名称(显示名/说明/改名)· 条目(展开浏览) · 归类到 hall 请到「Hall」页": 'Room-level management: existence (register/adopt/retire) · name (display name/description/rename) · entries (expand to browse) · to assign to a hall, use the "Hall" page',
+		  "RPC 错误": "RPC error",
+		  "s（约 100~200MB，视网络）": "s (approx. 100~200MB, depending on network)",
+		  "settings 服务不可用，记忆模式开关未启用（记忆保持全开）。": "settings service unavailable, memory mode switches disabled (memory stays fully on).",
+		  "slug(如 dsh-plugin 或 dsh-plugin/merge)": "slug (e.g. dsh-plugin or dsh-plugin/merge)",
+		  "wing 回填": "wing backfill"
+		};
+		
+		// client/src/locales/ru.ts
+		var ru = {
+		  "，本次未跑完、剩 {p1} 条待再点一次": ", прогон не завершён, осталось {p1}, нажмите ещё раз",
+		  "，补 wing": ", дополнить Wing",
+		  "，产出": ", произведено",
+		  "，超时跳过": ", таймаут, пропущено",
+		  "，打 tags": ", проставить теги",
+		  "，待补": ", к дополнению",
+		  "，来自 llm.maxInputChars）": ", из llm.maxInputChars)",
+		  "，让出": ", уступлено",
+		  "，失败 {p1} 条": ", сбоев: {p1}",
+		  "，退场": ", отозвано",
+		  "，未移除记录": ", записи не удалены",
+		  "，无待消化缓冲": ", нет буфера для обработки",
+		  "，已中止、剩 {p1} 条待再点一次": ", прервано, осталось {p1}, нажмите ещё раз",
+		  "，用时": ", затрачено",
+		  "，预计 ≥": ", ожидается ≥",
+		  "、失败": ", сбой",
+		  "；晚于此时刻的记忆会被原样保留、不重新蒸馏（不会丢）。": "; воспоминания позже этого момента сохраняются как есть, без повторной дистилляции (ничего не теряется).",
+		  ";最近尝试": ";последняя попытка",
+		  ";最近使用": ";последнее использование",
+		  "：新": ": новый",
+		  "。上方数据为最后一次成功读取的值，记忆功能当前未工作。": ". Данные выше — с последнего успешного чтения, функция памяти сейчас не работает.",
+		  "· 本次预算 {p1} 个文件": "· бюджет этого прогона: {p1} файлов",
+		  "· 陈旧根 {p1} 个文件未参与同步（交给孤儿归档）": "· {p1} файлов устаревших корней не синхронизированы (переданы в архив сирот)",
+		  "· 冲突 {p1}": "· конфликтов: {p1}",
+		  "· 当前起点": "· текущая точка старта",
+		  "· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条": "· режим:{p1}{p2} · охват {p3} сессий / свидетельств: {p4}",
+		  "· 对**下一次点击**生效（正在跑的那轮不会改道）": "· действует со **следующего нажатия** (текущий прогон не сменит маршрут)",
+		  "· 防护拦下 {p1} 个链接/越界条目（未读）": "· защита отсекла {p1} ссылок/записей за границей (не прочитано)",
+		  "· 共滚 {p1} 轮": "· прокручено раундов: {p1}",
+		  "· 构建中 {p1}/{p2}": "· сборка {p1}/{p2}",
+		  "· 关系": "· связи",
+		  "· 归档到 {p1}": "· в архив {p1}",
+		  "· 后缀对齐 改名 {p1}{p2} 改回 {p3}{p4}": "· выравнивание суффиксов: переименовано {p1}{p2} обратно в {p3}{p4}",
+		  "· 后缀还有 {p1} 个文件待对齐，再点一次继续": "· осталось {p1} файлов на выравнивание суффиксов, нажмите ещё раз, чтобы продолжить",
+		  "· 加载中…": "· загрузка…",
+		  "· 检索结果可能不完整": "· результаты поиска могут быть неполными",
+		  "· 近重复": "· почти дубликат",
+		  "· 老化 {p1}": "· старение {p1}",
+		  "· 老化 {p1}%": "· старение {p1}%",
+		  "· 两边都变 {p1} 条已挂账（两侧都没动）": "· {p1} изменено с обеих сторон, отложено (ни одна сторона не тронута)",
+		  "· 密钥未设置": "· ключ не задан",
+		  "· 密钥已配置": "· ключ настроен",
+		  "· 密钥已设置": "· ключ задан",
+		  "· 模型": "· модель",
+		  "· 起名失败 {p1} 条(下轮重试)": "· не удалось назвать: {p1} (повтор в следующем раунде)",
+		  "· 上次导入": "· последний импорт",
+		  "· 上次蒸馏": "· последняя дистилляция",
+		  "· 上次重建：处理": "· последняя перестройка: обработано",
+		  "· 剩余 {p1} 个文件，再点一次继续": "· осталось {p1} файлов, нажмите ещё раз, чтобы продолжить",
+		  "· 剩余 {p1} 条，再点一次继续": "· осталось {p1}, нажмите ещё раз, чтобы продолжить",
+		  "· 思考": "· размышление",
+		  "· 同记录多路径 {p1} 份未动（先跑孤儿归档再同步）": "· {p1} копий одной записи по разным путям не тронуты (сначала запустите архив сирот, потом синхронизацию)",
+		  "· 投影 完成{p1}/失败{p2}/排队{p3}": "· проекция готово {p1}/сбой {p2}/очередь {p3}",
+		  "· 未配置密钥": "· ключ не настроен",
+		  "· 未签名 {p1} 个（老投射文件无 hash，下轮导出补盖）": "· {p1} без подписи (у старых файлов проекции нет hash, следующая выгрузка проставит)",
+		  "· 新起名 {p1} 条": "· новых имён: {p1}",
+		  "· 新文件 {p1} 个未入库（导入须走写入内核）": "· {p1} новых файлов не в хранилище (импорт только через ядро записи)",
+		  "· 疑似冲突": "· возможный конфликт",
+		  "· 已达绘制上限,只画前 {p1} 个节点": "· достигнут предел отрисовки, нарисованы только первые {p1} узлов",
+		  "· 已达子图上限,另有 {p1} 个连通节点未画": "· достигнут предел подграфа, ещё {p1} связных узлов не нарисовано",
+		  "· 已固定": "· закреплено",
+		  "· 已停用": "· отключено",
+		  "· 已退役": "· отозвано",
+		  "· 已用": "· использовано",
+		  "· 因果边": "· причинные связи",
+		  "· 再展开也没有新节点了": "· дальнейшее раскрытие не даёт новых узлов",
+		  "· 直连": "· прямое",
+		  "· 重标定：补 cogHall": "· перекалибровка: дополнить cogHall",
+		  "· 重复": "· дубликат",
+		  "· 自校验不符 {p1} 个（文件被外部改动，已按文件侧处理）": "· {p1} несовпадений самопроверки (файлы изменены извне, обработано по стороне файла)",
+		  "· 总输出 token": "· всего выходных token",
+		  "· ego ≤3 跳（{p1} 节点）": "· ego ≤3 переходов ({p1} узлов)",
+		  "（保存后更新；当前显示已保存值）": "(обновляется после сохранения; сейчас показано сохранённое значение)",
+		  "（被取消）": "(отменено)",
+		  "（本次只扫了 {p1} 条，未扫全）": "(в этот раз просмотрено только {p1}, не полностью)",
+		  "（层链优先于全局）": "(цепочка слоёв важнее глобальной)",
+		  "（待补": "(к дополнению",
+		  "（档位跟随部署配置，选定模型后可单独设置）": "(режим наследуется из конфигурации развёртывания, после выбора модели можно задать отдельно)",
+		  "（点击重试）": "(нажмите, чтобы повторить)",
+		  "（点右上“刷新”重试）": "(нажмите «Обновить» справа вверху, чтобы повторить)",
+		  "（该记录正文不可得：已不在主表，或被更早的清理清掉了）": "(текст записи недоступен: её больше нет в основной таблице или её удалила более ранняя очистка)",
+		  "(进 topN 才算 used)": "(считается used только при попадании в topN)",
+		  "(空)": "(пусто)",
+		  "（空）": "(пусто)",
+		  "(起点)": "(начало)",
+		  "（请选择）": "(выберите)",
+		  "（去重合并次数": "(число слияний при дедупликации",
+		  "(人改过 {p1})": "(изменено вручную {p1})",
+		  "（未记录路径）": "(путь не записан)",
+		  "（未命名，投射回落 mem-": "(без имени, проекция откатывается к mem-",
+		  "（未配置）": "(не настроено)",
+		  "（未配置端点）": "(эндпоинт не настроен)",
+		  "（文件": "(файл",
+		  "（无）": "(нет)",
+		  "(无标题)": "(без названия)",
+		  "（写回 {p1}{p2}）": "(записано обратно {p1}{p2})",
+		  "（选择模型，可留空跟随默认）": "(выберите модель; оставьте пустым, чтобы следовать значению по умолчанию)",
+		  "（选择模型）": "(выбор модели)",
+		  "（已保存的嵌入源不变，重启后仍按原源运行）": "(сохранённый источник эмбеддингов не меняется; после перезапуска используется прежний источник)",
+		  "（已不在列表）": "(больше нет в списке)",
+		  "（已截断，仅画部分）": "(обрезано; нарисована только часть)",
+		  "（因果）": "(причинная)",
+		  "（运行时开关无法开启）": "(переключатель времени выполнения нельзя включить)",
+		  "（暂无 · 预留检索轴）": "(нет · зарезервированная ось извлечения)",
+		  "(暂无记录)": "(записей нет)",
+		  "（暂无可用路由）": "(нет доступного маршрута)",
+		  "(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)": "(появляется только в тегах, не в словаре — только после принятия в словарь аннотатор будет привязывать в первую очередь)",
+		  "（滞后约 {p1} 小时）": "(отстаёт примерно на {p1} ч)",
+		  "（重新切换嵌入源可重试）": "(переключите источник эмбеддингов заново, чтобы повторить)",
+		  "（注意：这里指的是「{p1}」开关，不是「{p2}」——后者只管模型能不能读图）": "(внимание: речь о переключателе «{p1}», а не «{p2}» — второй отвечает лишь за то, может ли модель читать изображения)",
+		  "(自生长未注册)": "(саморастущий, не зарегистрирован)",
+		  "）；思考档 high/xhigh/max 时实际限额自动 ×4": "); при уровне мышления high/xhigh/max фактический лимит автоматически ×4",
+		  "[已退场]": "[отозвано]",
+		  "{p1} · 本批之外 {p2} 条处于漂移（不影响本批）": "{p1} · {p2} записей вне этой партии дрейфуют (на эту партию не влияет)",
+		  "{p1} 等 {p2} 域": "{p1} и другие домены ({p2})",
+		  "{p1} 个技能 · 自动晋升{p2} · 需证据会话达阈": "{p1} навыков · автоматически повышено{p2} · нужно достичь порога сессий с доказательствами",
+		  "{p1} 路并发": "параллельно {p1}",
+		  "{p1} 条": "{p1} шт.",
+		  "{p1} 已在 {p2} 下。": "{p1} уже находится в {p2}.",
+		  "{p1}：成功 {p2} 条{p3}{p4}": "{p1}: успешно {p2}{p3}{p4}",
+		  "{p1}：写回 {p2} 条，留原文 {p3} 条{p4}{p5}": "{p1}: записано обратно {p2}, оставлен исходный текст {p3}{p4}{p5}",
+		  "{p1}：正在中止——先等在跑的那条收工，超时即强行中断（已写回的保留）…": "{p1}: прерывание — ждём завершения текущей; по таймауту она прерывается принудительно (записанное сохраняется)…",
+		  "{p1}{p2} · {p3} 跳 · 经由 {p4}": "{p1}{p2} · переходов: {p3} · через {p4}",
+		  "{p1}投影": "проекция {p1}",
+		  "{p1}中：扫描完成，没有需要{p2}的记录…": "{p1}: сканирование завершено, записей для {p2} нет…",
+		  "{p1}中：真目标 {p2} 条": "{p1}: реальных целей {p2}",
+		  "{p1}中：正在扫描存量 {p2}/{p3} 行，筛出需{p4}的记录…": "{p1}: сканируем {p2}/{p3} строк хранилища, отбираем записи для {p4}…",
+		  "{p1}中：正在扫描活跃存量（已扫 {p2} 行），筛出需{p3}的记录…": "{p1}: сканируем активные записи (просканировано {p2} строк), отбираем записи для {p3}…",
+		  "{p1}中…": "{p1}…",
+		  "「{p1}」{p2} 条 点按/拖动 = 以该角为主题（抑制其他角）": "«{p1}» {p2} шт., нажатие/перетаскивание = тема по этому углу (остальные углы подавляются)",
+		  "「已退场」（可恢复）": "«отозвано» (можно восстановить)",
+		  "」归入": "» отнесено к",
+		  "/ 留原文 {p1}": "/ оставлено как есть {p1}",
+		  "%(读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期)));越低越老": "%(коэффициент затухания на чтении max(0.5, 0.5^(Δдней/период полураспада))); чем ниже, тем старее",
+		  "••••••••（已配置；留空提交可覆盖）": "•••••••• (настроено; отправьте пустое значение, чтобы перезаписать)",
+		  "••••••••（已设置；输入新值提交可覆盖）": "•••••••• (задано; введите новое значение и отправьте, чтобы перезаписать)",
+		  "← 取代了旧记忆": "← заменило старую память",
+		  "→ 被新记忆取代": "→ заменено новой памятью",
+		  "+ 添加回退路由": "+ Добавить резервный маршрут",
+		  "+小类": "+ подкатегория",
+		  "×清除": "× Очистить",
+		  "⚠ 存储不可用，记忆功能已停用": "⚠ хранилище недоступно, память отключена",
+		  "⚠ 供应商": "⚠ провайдер",
+		  "⚠ direct 未配置完整：需同时有端点 URL 与模型（llm.model / 全局链主路由），否则会回退宿主路由。": "⚠ direct настроен не полностью: нужны и URL эндпоинта, и модель (llm.model / основной маршрут глобальной цепочки), иначе произойдёт откат на маршрут хоста.",
+		  "0·跟随配置（默认 1=串行）": "0·как в конфигурации (по умолчанию 1 = последовательно)",
+		  "1·串行逐条": "1·последовательно, по одной",
+		  "2D 图": "2D-график",
+		  "3D 图": "3D-график",
+		  "安装推理运行时中… 已耗时": "Установка среды вывода… затрачено",
+		  "按模型（累计）": "По модели (накопительно)",
+		  "按条目展示": "Показывать по элементам",
+		  "按账本基线比对库与磁盘，只出报告：什么都不写，因此不需要高权限": "Сравнить хранилище с диском по базовой линии журнала, только отчёт: ничего не записывается, поэтому повышенные права не нужны",
+		  "按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)": "Удерживайте и перетащите на нужный hall для классификации (major/minor; записи переносятся, старое имя уходит в псевдонимы)",
+		  "把“平”的存量记忆按类型重排成分节骨架，顺带产关键词/情景；只有严格更优才写回（需先开重蒸馏整形开关）": "Перестроить «плоские» существующие записи памяти по типам в скелет с разделами, попутно получив ключевые слова/сценарии; записывать обратно только если строго лучше (сначала нужен переключатель переформирования при повторной дистилляции)",
+		  "把当前全部记忆渲染为 <根>/<类型>/<名称>.memory.md，并记下内容指纹（只写文件，不改库）。一次点完：一轮预算不够时服务端自己续跑下几轮，进度看下方进度条": "Отобразить всю текущую память как <root>/<type>/<name>.memory.md и записать отпечаток содержимого (только файлы, хранилище не меняется). Один клик: если бюджета одного раунда не хватает, сервер сам продолжит следующие раунды; прогресс — в полосе ниже",
+		  "白底": "Белый фон",
+		  "版本: v": "Версия: v",
+		  "包 ·": "Пакет ·",
+		  "保存": "Сохранить",
+		  "被取代": "Заменено",
+		  "被用": "Использовано",
+		  "本层跟随全局链，暂无可用路由。": "Этот уровень следует глобальной цепочке, доступных маршрутов нет.",
+		  "本层链失败只在层内降级，绝不落到全局链；每行档位独立": "Сбой цепочки этого уровня даёт деградацию только внутри уровня и никогда не переходит на глобальную цепочку; режим в каждой строке независим",
+		  "本层未单独配置，走全局默认链": "Этот уровень не настроен отдельно, используется глобальная цепочка по умолчанию",
+		  "本层走部署 YAML 层链（UI 只读，自定义可覆盖）": "Этот уровень использует цепочку уровня из YAML развёртывания (в UI только чтение, пользовательская настройка может перекрыть)",
+		  "本层走设置页自定义链": "Этот уровень использует пользовательскую цепочку со страницы настроек",
+		  "本次计划：可重造": "Этот план: можно пересоздать",
+		  "本地": "Локально",
+		  "本地免 key 可留空": "Локально, без ключа — можно оставить пустым",
+		  "本地模型目录（下载后离线可用，不随插件分发）": "Локальный каталог моделей (доступен офлайн после загрузки; не поставляется с плагином)",
+		  "本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）": "Эта сессия невидима для системы памяти: без захвата, без дистилляции, без инъекции (данные сохраняются)",
+		  "本会话记忆": "Память этой сессии",
+		  "本会话记忆域与档位（点击切换）": "Домен и режим памяти этой сессии (нажмите, чтобы переключить)",
+		  "本会话强制注入记忆": "Принудительная инъекция памяти в этой сессии",
+		  "本会话尚未蒸馏": "Эта сессия ещё не дистиллирована",
+		  "本会话正常捕获/蒸馏/注入记忆": "Эта сессия нормально захватывает/дистиллирует/внедряет память",
+		  "本记录取代掉的旧行，点击查看": "Старые строки, заменённые этой записью; нажмите, чтобы посмотреть",
+		  "本条目：": "Эта запись:",
+		  "本月": "Этот месяц",
+		  "本周": "Эта неделя",
+		  "边": "Ребро",
+		  "编辑": "Изменить",
+		  "编辑为运行时链": "Изменить как цепочку выполнения",
+		  "编辑显示名/归类说明": "Изменить отображаемое имя/описание категории",
+		  "标签": "Тег",
+		  "标注校验/重标定中": "Идёт проверка меток/перекалибровка",
+		  "别名:": "Псевдоним:",
+		  "并行 {p1}": "Параллельно {p1}",
+		  "并行度写入失败": "Не удалось записать параллелизм",
+		  "并行度写入失败：": "Не удалось записать параллелизм:",
+		  "捕获": "Захват",
+		  "不含": "Не включает",
+		  "不可逆动作：需要先跑预览，再点两次确认；服务端那边还要高权限模式": "Необратимое действие: сначала запустить предпросмотр, затем подтвердить дважды; на стороне сервера также нужен режим высоких привилегий",
+		  "不删只搬：进 <数据目录>/memories-orphans/<批次时间戳>/；需要先跑预览，再点两次确认；服务端还要高权限模式": "Не удалять, только перенести: в <каталог данных>/memories-orphans/<метка времени пакета>/; сначала запустить предпросмотр, затем подтвердить дважды; серверу также нужен режим высоких привилегий",
+		  "步": "шагов",
+		  "部分失败：{p1}": "Частичная ошибка: {p1}",
+		  "部署 YAML ·": "YAML развёртывания ·",
+		  "部署 YAML 层链（只读）": "Цепочка слоёв YAML развёртывания (только чтение)",
+		  "部署基线：": "Базовая линия развёртывания:",
+		  "部署未配置远程嵌入（baseUrl/apiKey/model/dimensions）": "В развёртывании не настроены удалённые эмбеддинги (baseUrl/apiKey/model/dimensions)",
+		  "部署未启用": "Не включено в развёртывании",
+		  "部署已禁用本地嵌入模型": "Локальная модель эмбеддингов отключена в развёртывании",
+		  "部署已锁定路由（pin），调整请修改 cordis.patch.yml 中 llm 的配置。": "Маршрут закреплён в развёртывании (pin); чтобы изменить, правьте конфигурацию llm в cordis.patch.yml.",
+		  "财务": "Финансы",
+		  "裁决结论本身不可覆盖。": "Само решение переопределить нельзя.",
+		  "裁决失败": "Не удалось вынести решение",
+		  "裁决退场": "Отозвано по решению",
+		  "裁决这一对？ 将要退场的记忆： 「{p1}」": "Вынести решение по этой паре? Отзываемая запись: 「{p1}」",
+		  "裁决中…": "Вынесение решения…",
+		  "操作失败": "Операция не удалась",
+		  "侧栏「记忆库」入口": "Вход в «Хранилище памяти» на боковой панели",
+		  "层1 · 当前记录": "Слой 1 · Текущая запись",
+		  "层2 · 涉及实体": "Слой 2 · Связанные сущности",
+		  "层3 · 关系邻居": "Слой 3 · Соседи по связям",
+		  "层级": "Уровень",
+		  "层级成本（单次 avg）": "Стоимость уровня (avg за вызов)",
+		  "层级成本（单次 median）": "Стоимость уровня (median за вызов)",
+		  "层级成本（输出 token）": "Стоимость уровня (выходной token)",
+		  "插件版本": "Версия плагина",
+		  "插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦": "Плагин напрямую ходит по нативному HTTP к OpenAI-совместимым эндпоинтам, не завися от платного API",
+		  "查询": "Запрос",
+		  "查询（Enter）": "Запрос (Enter)",
+		  "查询失败：": "Ошибка запроса:",
+		  "产出": "Выпущено",
+		  "产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）": "id пакета дистилляции, породившего эту заморозку (через memory_receipts можно узнать, что было решено в этом прогоне)",
+		  "场景": "Сцена",
+		  "超时": "Таймаут",
+		  "成本": "Расходы",
+		  "成本读取失败：": "Не удалось прочитать расходы:",
+		  "成本趋势（按模型）": "Динамика расходов (по моделям)",
+		  "成熟": "Зрелый",
+		  "成熟·低": "Зрелость · низкая",
+		  "成熟·高": "Зрелость · высокая",
+		  "成熟·中": "Зрелость · средняя",
+		  "成熟度 ·": "Зрелость ·",
+		  "成熟度（优先级 + 被用次数 + 新鲜度合成）：": "Зрелость (приоритет + число использований + свежесть):",
+		  "持续性 {p1}": "Постоянство {p1}",
+		  "冲刷未蒸馏缓冲，跑一轮 L1→L2→L3 消化；不清库不改 L0": "Сбросить недистиллированный буфер и прогнать один цикл L1→L2→L3; хранилище не очищается, L0 не меняется",
+		  "冲突": "Конфликт",
+		  "冲突工具": "Инструменты конфликтов",
+		  "抽取": "Извлечение фактов",
+		  "抽取输出": "Результат извлечения фактов",
+		  "出处：": "Источник:",
+		  "出行": "Поездки",
+		  "串行": "Последовательно",
+		  "创建:": "Создано:",
+		  "创作娱乐": "Творчество и развлечения",
+		  "词表加载中": "Загрузка словаря",
+		  "次": "раз",
+		  "次 · 输出": "раз · вывод",
+		  "次调用": "вызовов",
+		  "次蒸馏调用。": "вызовов дистилляции.",
+		  "从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）": "Заново дистиллировать L1/L2/L3 из исходных диалогов L0; старые данные сначала архивируются (не удаляются)",
+		  "从存档同步回库": "Синхронизировать из архива в хранилище",
+		  "从起点向外展开几跳": "Сколько переходов раскрыть от стартовой точки",
+		  "从左侧选一条记忆，这里会列出它涉及的实体、这些实体的关系邻居、以及邻居们的来源记忆——可以一路跳下去。": "Выберите запись слева — здесь появятся её сущности, соседи этих сущностей по связям и исходные записи соседей — можно прыгать дальше по цепочке.",
+		  "存储处于降级状态，嵌入管理不可用。": "Хранилище в состоянии деградации, управление эмбеддингами недоступно.",
+		  "存量回填与整形": "Дозаполнение и нормализация существующих данных",
+		  "达到阈值后自动蒸馏（阈值随使用渐进爬坡到稳态）": "Автодистилляция после достижения порога (порог постепенно растёт с использованием до стабильного состояния)",
+		  "打开记忆库（查询 L1 记忆与关联图谱）": "Открыть хранилище памяти (поиск по L1-записям и графу связей)",
+		  "待 L2 新记忆": "Ожидают новые записи L2",
+		  "待 L3 新记忆": "Ожидают новые записи L3",
+		  "待裁决 {p1} 对": "{p1} пар в ожидании решения",
+		  "待删 {p1} 条（预览了前 {p2} 条）——未删除任何东西": "К удалению {p1} записей (просмотрены первые {p2}) — ничего не удалено",
+		  "待投影记忆": "Записи, ожидающие проекции",
+		  "待蒸馏": "Ожидает дистилляции",
+		  "待重试消息": "Сообщения в ожидании повтора",
+		  "单次输入": "Один ввод",
+		  "单次文件更新预算": "Бюджет на одно обновление файла",
+		  '单次蒸馏调用超时(ms)：治"慢但未被网关掐"的路由需更大超时窗；留空或 0 = 跟随配置（当前生效': "Таймаут вызова дистилляции (ms): маршрутам, которые «медленные, но не обрезаются шлюзом», нужно большее окно таймаута; пусто или 0 = следовать конфигурации (сейчас действует",
+		  "单次蒸馏调用超时(ms)（留空 = 跟随配置": "Таймаут вызова дистилляции (ms) (пусто = следовать конфигурации",
+		  "单次蒸馏调用的输入字符上限（≈token）：L1 抽取按此分块、L2/L3 超限截断；留空或 0 = 跟随配置（当前生效": "Лимит символов на входе вызова дистилляции (≈token): извлечение L1 делит по нему на блоки, L2/L3 обрезаются при превышении; пусто или 0 = следовать конфигурации (сейчас действует",
+		  "单次蒸馏输入字符上限（≈token，中文 1 字≈1 token；留空 = 跟随配置": "Лимит символов на входе дистилляции (≈token, 1 иероглиф ≈ 1 token; пусто = следовать конфигурации",
+		  "当前：": "Сейчас:",
+		  "当前：本地嵌入": "Сейчас: локальные эмбеддинги",
+		  "当前：关键词（BM25）检索，不做向量嵌入": "Сейчас: поиск по ключевым словам (BM25), без векторных эмбеддингов",
+		  "当前：远程嵌入（": "Сейчас: удалённые эмбеддинги (",
+		  "当前服务端未提供全图块（旧版本降级），邻域视图无法本地裁剪。请点刷新重试。": "Сервер не предоставил полный блок графа (деградация старой версии), поэтому окрестность нельзя обрезать локально. Нажмите «Обновить», чтобы повторить.",
+		  "当前复用宿主 ctx.llm（": "Сейчас используется ctx.llm хоста (",
+		  "当前将直连端点：": "Сейчас прямое подключение к эндпоинту:",
+		  "当前没有待投影的记忆，开启后新蒸馏的记忆会陆续进图。": "Сейчас нет памяти, ожидающей проекции; после включения новые дистиллированные записи будут постепенно попадать в граф.",
+		  "当前无层使用": "Сейчас не используется ни одним слоем",
+		  "当前状态:": "Текущее состояние:",
+		  "档位": "Режим",
+		  "档位读取失败：": "Не удалось прочитать режим:",
+		  "档位关闭": "Режим выкл.",
+		  "档位关闭：未蒸馏切片挂起，切回档位后继续": "Режим выкл.: недистиллированные срезы приостановлены и продолжатся после возврата режима",
+		  "档位写入失败": "Не удалось записать режим",
+		  "档位写入失败：": "Не удалось записать режим:",
+		  "导出": "Экспорт",
+		  "导出=库→文件；对账=只读比较；同步=文件→库；孤儿=搬走没人认领的残片；清理=物理删除（不可逆，需高权限模式）。": "Экспорт = хранилище → файл; сверка = сравнение только для чтения; синхронизация = файл → хранилище; сирота = вынести ничьи фрагменты; очистка = физическое удаление (необратимо, нужен режим высоких прав).",
+		  "导出词表": "Экспорт словаря",
+		  "导出分类数据 CSV(Room 词表+计数)": "Экспорт CSV данных классификации (словарь Room + счётчики)",
+		  "导出该 Room 的记录清单 CSV": "Экспорт CSV списка записей этого Room",
+		  "导出孤儿": "Экспорт сирот",
+		  "导出孤儿 ·": "Экспорт сирот ·",
+		  "导出为可携存档": "Экспорт в переносимый архив",
+		  "导出为空": "Экспорт пуст",
+		  "导出无 Room 绑定的孤儿清单 CSV(含候选)": "Экспорт CSV списка сирот без привязки к Room (с кандидатами)",
+		  "导出无 Room 绑定的孤儿清单(含候选)": "Экспорт списка сирот без привязки к Room (с кандидатами)",
+		  "地点": "Место",
+		  "登记来源": "Зарегистрировать источник",
+		  "登记来源需要 id 与绝对路径 path": "Для регистрации источника нужны id и абсолютный path",
+		  "登记外部 AI 工具的记忆来源（仅存路径指针，正文不复制入库）。扫描为只读预览；实际导入由「memport 导入」经 memory_import 完成。整面需在设置开启": "Регистрация источников памяти внешних AI-инструментов (хранится только указатель пути, текст в хранилище не копируется). Сканирование — предпросмотр только для чтения; фактический импорт выполняет «memport импорт» через memory_import. Вся панель должна быть включена в настройках",
+		  "等待 npm 输出…": "Ожидание вывода npm…",
+		  "低": "Низкий",
+		  "第 {p1}/{p2} 条": "Запись {p1}/{p2}",
+		  "第 1 行主路由；失败（报错/掐断/网络异常/空输出）按序降级；每行档位独立": "Строка 1 — основной маршрут; при сбое (ошибка/обрыв/сетевая ошибка/пустой вывод) деградация по порядку; режим каждой строки независим",
+		  "点": "Точка",
+		  "点击此 hall:把「": "Нажмите этот hall: добавить «",
+		  "点焦点/Esc 回全图 · 双击/Enter 打开记录": "Клик по фокусу / Esc — вернуться к полному графу · двойной клик / Enter — открыть запись",
+		  "读取失败：": "Не удалось прочитать:",
+		  "度 {p1} · 因果 {p2} · 点击在图上强调": "Степень {p1} · причинность {p2} · клик выделяет на графе",
+		  "度 {p1}(因果 {p2})——点击展开它的邻域": "Степень {p1} (причинность {p2}) — клик раскрывает его окрестность",
+		  "端点 URL": "URL эндпоинта",
+		  "端点无响应": "Эндпоинт не отвечает",
+		  "对存量未打标记忆批量补打 wing 标签 · 未打标 {p1} 条": "Массово проставить теги wing записям без тегов · без тегов {p1}",
+		  "对话时注入相关记忆与画像": "Инъекция релевантной памяти и профиля при разговоре",
+		  "反刍工具": "Инструменты руминации",
+		  "反刍整理": "Упорядочивание руминации",
+		  "范围：": "Область:",
+		  "分": "мин",
+		  "分块蒸馏中": "Идёт дистилляция блоками",
+		  "分钟前": "минут назад",
+		  "复用宿主": "Использовать хост",
+		  "复用宿主 ctx.llm（与付费供应商同路）": "Использовать ctx.llm хоста (тот же путь, что у платного провайдера)",
+		  "复制": "Копировать",
+		  "复制修复指引": "Копировать руководство по исправлению",
+		  "该 Room 暂无记录。": "В этом Room пока нет записей.",
+		  "该 Room 暂无记忆条目。": "В этом Room пока нет записей памяти.",
+		  "该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除": "Эта запись отозвана (мягкое удаление): убрана из поиска, но её можно восстановить; фактически не удалена",
+		  "该实体的其它来源记忆，点击查看": "Другие исходные записи этой сущности, нажмите для просмотра",
+		  "改名": "Переименовать",
+		  "改名(= merge 1:1 + 注册表改名)": "Переименовать (= merge 1:1 + переименование в реестре)",
+		  "改名(可两级 slug;记录随迁,旧名进别名)": "Переименовать (допустим двухуровневый slug; записи переносятся, старое имя уходит в псевдонимы)",
+		  "概览": "Обзор",
+		  "刚刚": "только что",
+		  "高": "Высокий",
+		  "高权限:关": "Высокие права: выкл.",
+		  "高权限：关": "Высокие права: выкл.",
+		  "高权限:开": "Высокие права: вкл.",
+		  "高权限：开": "Высокие права: вкл.",
+		  "高权限模式": "Режим высоких прав",
+		  "高权限模式未开启，删除不可用": "Режим высоких прав не включён, удаление недоступно",
+		  "高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。": "Режим высоких прав не включён: включите его через «Высокие права: выкл.» в правом верхнем углу или переключатель на странице обзора, затем отзовите запись.",
+		  "个场景块": "блоков сцен",
+		  "个候选的证据会话数已达阈，但自动晋升关闭——确认无误后可手动「晋升」。": "кандидатов набрали порог сессий с доказательствами, но автоповышение выключено — после проверки можно «Повысить» вручную.",
+		  "个会话 ·": "сессий ·",
+		  "个节点 /": "узлов /",
+		  "个节点未列出。": "узлов не показано.",
+		  "个来源": "источников",
+		  "个实体节点,但还没有可连出的关系边(或投影未完成)。": "узлов-сущностей, но связей для соединения пока нет (или проекция не завершена).",
+		  "个文件/次（0 = 默认 2000）": "файлов/запуск (0 = по умолчанию 2000)",
+		  "个作业；每个作业一次 LLM 抽取（单批约 2 分钟），预计总计": "заданий; по одному извлечению LLM на задание (~2 минуты на партию), всего ожидается",
+		  "各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。": "Они кажутся противоречивыми только из-за разных предпосылок (окружение/конфигурация/рабочая область); сначала проверьте, действуют ли ещё предпосылки.",
+		  "跟随": "Следовать",
+		  "跟随部署": "Следовать за развёртыванием",
+		  "跟随部署配置": "Следовать конфигурации развёртывания",
+		  "跟随默认模型": "Следовать модели по умолчанию",
+		  "跟随默认模型（": "Следовать модели по умолчанию (",
+		  "跟随全局": "Следовать глобальному",
+		  "更新": "Обновить",
+		  "更新失败": "Не удалось обновить",
+		  "工具": "Инструменты",
+		  "工具封印": "Блокировка инструментов",
+		  "工作": "Рабочий",
+		  "工作（团队）": "Рабочий (команда)",
+		  "工作区": "Рабочая область",
+		  "供应商": "Провайдер",
+		  "共": "Всего",
+		  "共 {p1} 条 ·": "Всего {p1} записей ·",
+		  "勾选以批量删除": "Отметьте для массового удаления",
+		  "构建中": "Сборка",
+		  "孤儿文件归档": "Архив файлов-сирот",
+		  "孤儿文件预览": "Предпросмотр файлов-сирот",
+		  "固定": "Закрепить",
+		  "挂起切片": "Приостановленные срезы",
+		  "关": "Выкл.",
+		  "关(人工审阅)": "Выкл. (ручная проверка)",
+		  "关闭": "Выкл.",
+		  "关闭高权限模式": "Отключить режим высоких прав",
+		  "关闭高权限模式(收回模型写删工具与管理操作)": "Отключить режим высоких прав (отзывает инструменты записи и удаления и управляющие действия)",
+		  "关闭高权限模式（收回模型写删工具与删除权限）": "Отключить режим высоких прав (отзывает инструменты записи и удаления и право удаления)",
+		  "关键词": "Ключевые слова",
+		  "关键词:": "Ключевые слова:",
+		  "关键词回填": "Заполнение ключевых слов",
+		  "关键词回填：没有缺关键词的记录，无需回填": "Заполнение ключевых слов: нет записей без ключевых слов, заполнять нечего",
+		  "关键词回填失败": "Не удалось заполнить ключевые слова",
+		  "关键词回填失败：": "Не удалось заполнить ключевые слова:",
+		  "关键词回填完成": "Заполнение ключевых слов завершено",
+		  "关键词回填未开启：请先在概览开关组打开关键词回填": "Заполнение ключевых слов выключено: сначала включите его в группе переключателей обзора",
+		  "关键词回填已中止": "Заполнение ключевых слов прервано",
+		  "关联查询失败：": "Не удалось выполнить запрос связей:",
+		  "关系清单（按跳数由近及远）": "Список связей (по числу переходов, от близких к дальним)",
+		  "管理操作需先开启高权限模式": "Для управляющих действий нужен режим высоких прав",
+		  "归": "Отнести",
+		  "归档": "Архив",
+		  "归类": "Классифицировать",
+		  "归类/改名": "Классифицировать/переименовать",
+		  "归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)": "Классифицировать в существующий hall: нажмите и выберите целевой hall (записи переносятся, старое имя становится псевдонимом)",
+		  "归类到已有 hall 下:点击后选目标 hall(收编+子类一步,记录随迁)": "Классифицировать в существующий hall: нажмите и выберите целевой hall (поглощение и подкатегория за один шаг, записи переносятся)",
+		  "归类说明(喂标注器)": "Описание категории (передаётся разметчику)",
+		  "归入 {p1} 下({p2}/{p3})": "Отнести к {p1} ({p2}/{p3})",
+		  "含跨域": "Включая кросс-доменные",
+		  "含未打标": "Включая без тегов",
+		  "合并": "Объединить",
+		  "合并到另一个 Room(dryRun 预览→确认实跑)": "Объединить с другим Room (предпросмотр dryRun → подтверждение запуска)",
+		  "合计 {p1} 条 · {p2} 个 room": "Итого {p1} записей · {p2} комнат",
+		  "候选": "Кандидат",
+		  "画像": "Профиль",
+		  "画像读取失败：": "Не удалось прочитать профиль:",
+		  "画像尚未生成；蒸馏若干记忆后 L3 会自动产出。": "Профиль ещё не создан; L3 создаст его автоматически после дистилляции нескольких записей памяти.",
+		  "恢复": "Восстановить",
+		  "恢复到检索面": "Восстановить в области поиска",
+		  "恢复该 Room 到词表": "Восстановить этот Room в словаре",
+		  "恢复该记忆到检索面（可撤销退场）": "Восстановить эту память в области поиска (отменяет отзыв)",
+		  "恢复失败": "Не удалось восстановить",
+		  "辉光": "Свечение",
+		  "回到全图": "Вернуться к полному графу",
+		  "回灌 {p1} · 重写文件 {p2} · 退场 {p3} · 一致 {p4}": "Повторно загружено {p1} · файлов перезаписано {p2} · отозвано {p3} · совпало {p4}",
+		  "回全图": "К полному графу",
+		  "回全图并清掉起点": "К полному графу и сбросить точку старта",
+		  "回全图看看。": "Взглянуть на полный граф.",
+		  "回填": "Заполнение",
+		  "回填：正在中止…": "Заполнение: прерывание…",
+		  "回填并行度": "Параллельность заполнения",
+		  "回填失败": "Не удалось заполнить",
+		  "回填失败：": "Не удалось заполнить:",
+		  "回退路由必须显式选择供应商与模型": "Для маршрута отката нужно явно выбрать провайдера и модель",
+		  "会话": "Сессия",
+		  "会话，产出": "сессия, создано",
+		  "会话，已蒸馏部分保留）": "сессия, дистиллированная часть сохранена)",
+		  "会话，已重建部分保留）": "сессия, перестроенная часть сохранена)",
+		  "会话（": "Сессия (",
+		  "会话消息": "Сообщения сессии",
+		  "会话只写": "Только запись сессии",
+		  "活跃": "Активные",
+		  "活跃时间:": "Время активности:",
+		  "活跃与已退场混排（已退场的带徽标）": "Активные и отозванные вперемешку (у отозванных есть метка)",
+		  "获取状态失败：": "Не удалось получить статус:",
+		  "记录随迁;与反刍并发会互相覆盖,请在反刍空闲时执行。": "Записи переносятся; параллельный запуск с руминацией взаимно перезаписывает данные, поэтому выполняйте, когда руминация простаивает.",
+		  "记忆": "Память",
+		  "记忆 ·": "Память ·",
+		  "记忆 (Memory)": "Память (Memory)",
+		  "记忆概况": "Обзор памяти",
+		  "记忆库": "Хранилище памяти",
+		  "记忆库入口": "Вход в хранилище памяти",
+		  "记忆模式": "Режим памяти",
+		  "记忆稳定区": "Стабильная зона памяти",
+		  "记忆占用": "Занято памятью",
+		  "技能": "Навыки",
+		  "技能（程序性记忆）": "Навыки (процедурная память)",
+		  "技能工具": "Инструменты навыков",
+		  "技能结晶": "Кристаллизация навыков",
+		  "技能结晶（程序性记忆）未启用。到「概览」页开启「技能」开关（或部署配置 skills.enabled）：开启后，跨会话重复出现的「工作方法」记忆会累积为技能候选，在此审阅并手动晋升。": "Кристаллизация навыков (процедурная память) отключена. Включите переключатель «Навыки» на странице «Обзор» (или конфигурацию развёртывания skills.enabled): после включения воспоминания о «рабочих методах», повторяющиеся между сессиями, накапливаются как кандидаты в навыки — здесь их можно просмотреть и повысить вручную.",
+		  "继续下载": "Продолжить загрузку",
+		  "加载更多": "Загрузить ещё",
+		  "加载模型列表…": "Загрузка списка моделей…",
+		  "加载嵌入模型中…（首次需数秒）": "Загрузка модели эмбеддингов… (в первый раз займёт несколько секунд)",
+		  "加载失败": "Не удалось загрузить",
+		  "加载失败：": "Не удалось загрузить:",
+		  "加载实体详情…": "Загрузка сведений о сущности…",
+		  "加载中…": "Загрузка…",
+		  "间接相连": "Связано косвенно",
+		  "检索不可用（FTS 与向量均失效）": "Поиск недоступен (FTS и векторы не работают)",
+		  "检索降级：纯关键词（向量不可用）": "Поиск в режиме деградации: только ключевые слова (вектор недоступен)",
+		  "健康": "Состояние",
+		  "将扫描未蒸馏缓冲，按会话逐个跑蒸馏管线，完成后强制 L2 场景整合与 L3 画像更新。": "Просканирует недистиллированный буфер, прогонит конвейер дистилляции по сессиям, а затем принудительно выполнит консолидацию сцен L2 и обновление профиля L3.",
+		  "将以 L0 原始对话为事实源重新蒸馏：": "Передистиллирует, используя исходные диалоги L0 как источник фактов:",
+		  "焦点": "Фокус",
+		  "节点 {p1} · 边 {p2} · 因果 {p3}": "узлы {p1} · связи {p2} · причинные связи {p3}",
+		  "节点 {p1}/{p2} · 边 {p3}/{p4} · 因果边 {p5}{p6}{p7}": "узлы {p1}/{p2} · связи {p3}/{p4} · причинные связи {p5}{p6}{p7}",
+		  "结论": "Вывод",
+		  "今日": "Сегодня",
+		  "仅活跃": "Только активные",
+		  "仅库变 {p1}": "только изменения хранилища {p1}",
+		  "仅退场": "Только отозванные",
+		  "仅文件变 {p1}": "только изменения файла {p1}",
+		  "近": "Недавние",
+		  "近N天": "За N дней",
+		  "进行中…": "Выполняется…",
+		  "晋升": "Повысить",
+		  "静态 · YAML": "Статический · YAML",
+		  "居家": "Дом",
+		  "绝对路径(目录或 .mem)": "Абсолютный путь (каталог или .mem)",
+		  "开": "Вкл.",
+		  "开关写入失败": "Не удалось записать переключатель",
+		  "开关写入失败：": "Не удалось записать переключатель:",
+		  "开启": "Включить",
+		  "开启{p1}投影？": "Включить проекцию {p1}?",
+		  "开启高权限模式:模型获得写入/删除记忆工具,并解锁 Hall 页的分类管理操作。确定开启?": "Включить режим высоких прав: модель получит инструменты записи и удаления воспоминаний, а также откроется управление категориями на странице Hall. Включить?",
+		  "开启高权限模式:模型获得写入/删除记忆工具,并解锁 Room 管理操作。确定开启?": "Включить режим высоких прав: модель получит инструменты записи и удаления воспоминаний, а также откроется управление Room. Включить?",
+		  "开启高权限模式：模型获得写入/删除记忆工具，记忆库可删除指定记忆。确定开启？": "Включить режим высоких прав: модель получит инструменты записи и удаления воспоминаний, а хранилище памяти сможет удалять указанные воспоминания. Включить?",
+		  "开启高权限模式以解锁 Room 管理操作": "Включить режим высоких прав, чтобы открыть управление Room",
+		  "开启高权限模式以解锁分类管理操作": "Включить режим высоких прав, чтобы открыть управление категориями",
+		  "开启高权限模式以写删记忆": "Включить режим высоких прав для записи и удаления воспоминаний",
+		  "开始重建": "Начать перестройку",
+		  "看过，暂不裁决": "Просмотрено, решение отложено",
+		  "看过但暂不裁决——该对仍在队列里，重置超时并累计复看次数": "Просмотрено, но решение отложено — пара остаётся в очереди, таймаут сбрасывается, число просмотров увеличивается",
+		  "看图": "Посмотреть изображение",
+		  "可从上方种子榜另选起点，或回全图单击任一星点。": "Можно выбрать другую точку старта в списке семян выше или вернуться к полному графу и щёлкнуть любую звезду.",
+		  "空角": "Пустой угол",
+		  "跨域（general）兜底记忆也参与召回": "Межпредметные (general) запасные воспоминания тоже участвуют в извлечении (recall)",
+		  "跨域与单主题相悖，默认不含": "Межпредметность противоречит одной теме — по умолчанию не включается",
+		  "来源": "Источник",
+		  "来源 id(小写-连字符)": "id источника (строчные через дефис)",
+		  "来源记录 (": "Исходные записи (",
+		  "来源锚点:": "якорь источника:",
+		  "来源锚点: -": "якорь источника: -",
+		  "老化": "Старение",
+		  "老化亮度": "Яркость старения",
+		  "老化权重": "Вес старения",
+		  "老化权重（读路径衰减系数）": "Вес старения (коэффициент затухания на пути чтения)",
+		  "老化权重效果口径:参与召回尝试的记忆中,进 topN(被注入上下文)的比例": "Метрика эффекта веса старения: доля воспоминаний, участвовавших в попытке извлечения, которые попали в topN (инъекция в контекст)",
+		  "类型 {p1} · 关系数 {p2}": "тип {p1} · связей {p2}",
+		  "类型 {p1} · 关系数 {p2}{p3}": "тип {p1} · связей {p2}{p3}",
+		  "类型筛选": "Фильтр по типу",
+		  "累计": "Накоплено",
+		  "立即检测历史": "Проверить историю сейчас",
+		  "两边都变 {p1}": "изменились оба {p1}",
+		  "两者都保留": "Оставить оба",
+		  "亮度=老化": "яркость=старение",
+		  "亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧": "яркость=вес старения (свежесть исходной записи); при приближении старое и новое всё равно различимы",
+		  "邻居或相关记忆过多，此处已截断（不是没有更多）。": "Слишком много соседних или связанных воспоминаний — здесь список усечён (это не значит, что больше нет).",
+		  "邻域": "Окрестность",
+		  "邻域子图：以起点按跳数裁剪的浮动小图": "Подграф окрестности: плавающий мини-граф, обрезанный по числу переходов от точки старта",
+		  "另有": "ещё",
+		  "另有 {p1} 条未打标": "ещё {p1} без тегов",
+		  "浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。": "Чтобы просмотреть содержимое памяти по уровням, переключите вкладку выше; исходные диалоги (L0) в браузер не попадают — их можно запросить инструментом conversation_search на стороне модели.",
+		  "留空或 0 = 跟随默认（当前生效": "пусто или 0 = следовать значению по умолчанию (сейчас действует",
+		  "路由链保存失败：": "Не удалось сохранить цепочку маршрутов:",
+		  "路由链最多 8 行（含主路由行），请删除多余行": "В цепочке маршрутов не более 8 строк (включая основную), удалите лишние строки",
+		  "矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。": "Заморозка конфликтов работает **opt-in**: она возвращает право решения человеку, ценой того, что конфликты будут ждать, пока вы ими не займётесь. Если готовы взять эти решения на себя, включите её в «Обзор» — уже приостановленные пары сразу появятся здесь.",
+		  "矛盾冻结未开启": "Заморозка конфликтов выключена",
+		  "矛盾冻结未开启。": "Заморозка конфликтов выключена.",
+		  "没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。": "Нет пар конфликтов, ожидающих решения. Если при приёме новая память противоречит старой и заморозка включена, эта пара попадёт сюда.",
+		  "没有符合条件的记忆。": "Нет памятей, соответствующих условиям.",
+		  "没有已退场的记忆。": "Нет отозванных памятей.",
+		  "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）": "Нет переопределения во время выполнения; используется llm.mode/baseURL из cordis.patch.yml (host по умолчанию)",
+		  "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读": "Фактическая цепочка на каждом уровне: пользовательская во время выполнения → цепочка слоёв YAML развёртывания → глобальная цепочка по умолчанию, с деградацией на каждом уровне; при pin развёртывания правки во время выполнения только для чтения",
+		  "门禁未通过": "Проверка шлюза не пройдена",
+		  "秒": "с",
+		  "名称": "Название",
+		  "名称:": "Название:",
+		  "名称(可中文)": "Название (можно по-китайски)",
+		  "名称（名称蒸馏产物；投射文件的命名取它）：": "Название (имя продукта дистилляции; из него берётся имя файла проекции):",
+		  "模型 id（该供应商未提供列表，输入后回车）…": "ID модели (провайдер не предоставил список; введите и нажмите Enter)…",
+		  "模型加载中…": "Загрузка моделей…",
+		  "模型名": "Имя модели",
+		  "默认档": "Режим по умолчанию",
+		  "默认关闭；风险高于导出（会写库），需先开 md 投射再开本项": "Выключено по умолчанию; рискованнее экспорта (пишет в хранилище); сначала включите md-проекцию, затем этот пункт",
+		  "默认关闭；开启后 memport 相关端点可用": "Выключено по умолчанию; после включения становятся доступны эндпоинты memport",
+		  "默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）": "Выключено по умолчанию; после включения можно запускать обратное заполнение ключевых слов (питает ось ключевых слов FTS)",
+		  "默认关闭；开启后才能跑重蒸馏整形（改正文会重算向量+覆盖 .memory.md）": "Выключено по умолчанию; после включения можно запускать переформатирование повторной дистилляцией (правка текста пересчитывает векторы и перезаписывает .memory.md)",
+		  "默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决": "Выключено по умолчанию; после включения конфликты, которые LLM закрыл бы автоматически по winner/loser, переходят в заморозку и требуют ручного решения",
+		  "默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除": "Выключено по умолчанию; после включения модель получает инструменты записи и удаления памятей, а панель разрешает удаление памятей",
+		  "默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）": "Выключено по умолчанию; после включения регистрирует инструменты memory_skill_* и инъекцию (переключатель действует сразу)",
+		  "默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时": "Выключено по умолчанию: граф знаний строится только после включения; этот шаг проходит по записям через LLM, а перед первым включением показывается оценка времени",
+		  "目标 slug": "Целевой slug",
+		  "目标 slug 不能为空": "Целевой slug не может быть пустым",
+		  "目标与源相同": "Цель совпадает с источником",
+		  "判 LLM 建议的胜方为真；败方从检索库退场": "Признать предложенного LLM победителя верным; проигравший отзывается из выдачи",
+		  "判败方为真": "Признать проигравшего верным",
+		  "判败方为真；胜方从检索库退场": "Признать проигравшего верным; победитель отзывается из выдачи",
+		  "判两者其实是各自独立的事实（LLM 判错了）；两条都保留，不删除": "Признать, что оба — независимые факты (LLM ошибся); сохранить обе записи, ничего не удалять",
+		  "判胜方为真": "Признать победителя верным",
+		  "皮肤": "Оформление",
+		  "皮肤：{p1}": "Оформление: {p1}",
+		  "匹配 {p1} room / {p2} hall": "Совпало: {p1} room / {p2} hall",
+		  "漂移": "Дрейф",
+		  "启动失败": "Ошибка запуска",
+		  "启动中…": "Запуск…",
+		  "启用": "Включить",
+		  "起点:": "Начало:",
+		  "起点不可见（可能已被取代或归档）。": "Начальная точка не видна (возможно, она заменена или заархивирована).",
+		  "浅色": "Светлая",
+		  "嵌入维度须为 {p1}~{p2} 的整数（留空 = 跟随部署配置）": "Размерность эмбеддингов должна быть целым числом в диапазоне {p1}~{p2} (пусто = как в конфигурации развёртывания)",
+		  "嵌入源切换进行中": "Переключение источника эмбеддингов",
+		  "嵌入源已关闭，请先启用": "Источник эмбеддингов отключён; сначала включите его",
+		  "嵌入状态读取失败：": "Не удалось прочитать статус эмбеддингов:",
+		  "嵌入状态读取中…": "Чтение статуса эмбеддингов…",
+		  "切到 2D 力导星图并 ego 聚焦首实体": "Переключиться на 2D-карту звёзд с силовой раскладкой и сфокусировать ego на первой сущности",
+		  "切到 3D 记忆海并 ego 聚焦首实体": "Переключиться на 3D-море памятей и сфокусировать ego на первой сущности",
+		  "切换高权限模式失败": "Не удалось переключить режим повышенных прав",
+		  "切换嵌入源后将按新模型重建向量索引（期间语义检索暂退化为关键词匹配，不影响对话）。确定切换？": "После смены источника эмбеддингов векторный индекс перестроится по новой модели (пока семантическое извлечение деградирует до совпадения по ключевым словам; на диалог это не влияет). Переключить?",
+		  "切换嵌入源中…": "Переключение источника эмбеддингов…",
+		  "切换失败：": "Не удалось переключить:",
+		  "切回查询视图并展开本条目（保留当前选点）": "Вернуться к виду запроса и развернуть эту запись (текущий выбор сохраняется)",
+		  "轻量刷新中": "Идёт лёгкое обновление",
+		  "清除": "Очистить",
+		  "清除 Room/孤儿筛选": "Сбросить фильтры Room/сирота",
+		  "清除本会话覆盖，跟随全局召回开关": "Сбросить переопределение этой сессии и следовать глобальному переключателю извлечения",
+		  "清除筛选": "Сбросить фильтры",
+		  "清除自定义 · 跟随全局": "Сбросить своё · следовать глобальному",
+		  "清空并跟随部署配置": "Очистить и следовать конфигурации развёртывания",
+		  "清空失败，请重试": "Не удалось очистить, повторите попытку",
+		  "清空失败：": "Не удалось очистить:",
+		  "清空选择": "Очистить выбор",
+		  "清理并归档": "Очистить и заархивировать",
+		  "清理失败": "Ошибка очистки",
+		  "清理已中止（未删任何记录）：{p1}": "Очистка прервана (ни одна запись не удалена): {p1}",
+		  "清理预览（干跑）": "Предпросмотр очистки (пробный прогон)",
+		  "情境:": "Контекст:",
+		  "情境：": "Контекст:",
+		  "请先在下方下载一个本地嵌入模型，再切换到本地档。": "Сначала скачайте локальную модель эмбеддингов ниже, затем переключитесь на локальный режим.",
+		  "取代本记录的新行，点击查看": "Новая строка, заменяющая эту запись; нажмите, чтобы открыть",
+		  "取代链": "Цепочка замен",
+		  "取消": "Отмена",
+		  "取消孤儿筛选": "Сбросить фильтр сирот",
+		  "取消固定": "Открепить",
+		  "取消整理": "Отменить упорядочивание",
+		  "取消中…": "Отмена…",
+		  "取消重建": "Отменить перестроение",
+		  "去重": "Дедупликация",
+		  "去重输出": "Вывод дедупликации",
+		  "全部": "Все",
+		  "全部 room": "Все Room",
+		  "全部 Wing": "Все Wing",
+		  "全部类型": "Все типы",
+		  "全部情境": "Все контексты",
+		  "全局": "Глобально",
+		  "全局开关关闭": "Глобальный переключатель выключен",
+		  "全局默认": "Глобальное значение по умолчанию",
+		  "全局默认链": "Глобальная цепочка по умолчанию",
+		  "全图": "Весь граф",
+		  "全图星图：所有可见实体与关系一张图": "Полная карта: все видимые сущности и связи на одном графе",
+		  "全文档": "Весь документ",
+		  "确认搬走孤儿文件": "Подтвердить перенос файлов-сирот",
+		  "确认反刍整理？": "Подтвердить руминацию?",
+		  "确认物理删除": "Подтвердить физическое удаление",
+		  "确认执行": "Подтвердить выполнение",
+		  "确认重建全部记忆？": "Подтвердить перестроение всей памяти?",
+		  "热度": "Популярность",
+		  "人": "Человек",
+		  "人工冲突裁决": "Ручное решение конфликтов",
+		  "人工退场": "Ручной отзыв",
+		  "人际": "Межличностное",
+		  "日": "День",
+		  "日常": "Повседневный",
+		  "日常（个人）": "Повседневный (личный)",
+		  "日志": "Журнал",
+		  "如 30": "напр. 30",
+		  "如 http://127.0.0.1:11434/v1 或 https://api.xxx/v1": "напр. http://127.0.0.1:11434/v1 или https://api.xxx/v1",
+		  "如 https://api.xxx/v1/embeddings 的服务基址": "напр. базовый адрес сервиса https://api.xxx/v1/embeddings",
+		  "如 text-embedding-3-small": "напр. text-embedding-3-small",
+		  "扫描全部来源": "Сканировать все источники",
+		  "扫描预览": "Предпросмотр сканирования",
+		  "扫描中…": "Сканирование…",
+		  "筛选中:": "Фильтрация:",
+		  "删除": "Удалить",
+		  "删除 {p1} 行历史失败记录(它们覆盖的记录已在排队中，不影响投影)": "Удалить {p1} строк исторических записей об ошибках (их покрытые записи уже в очереди, проекция не затронута)",
+		  "删除该记忆（高权限）": "Удалить эту память (высокие права)",
+		  "删除勾选的记忆（一次最多": "Удалить отмеченные воспоминания (за раз не более",
+		  "删除选中": "Удалить выбранные",
+		  "删除已下载的": "Удалить загруженные",
+		  "上次 L1 抽取": "Последнее извлечение фактов L1",
+		  "上次 L2 整合": "Последняя консолидация L2",
+		  "上次 L3 蒸馏": "Последняя дистилляция L3",
+		  "上次反刍整理：失败：": "Последняя руминация: ошибка:",
+		  "上次反刍整理：完成（": "Последняя руминация: завершено (",
+		  "上次反刍整理：已取消（完成": "Последняя руминация: отменено (завершено",
+		  "上次扫描": "Последнее сканирование",
+		  "上次重建：失败：": "Последнее перестроение: ошибка:",
+		  "上次重建：完成（": "Последнее перестроение: завершено (",
+		  "上次重建：已取消（完成": "Последнее перестроение: отменено (завершено",
+		  "上移": "Вверх",
+		  "上移（与主路由互换/顶替为主路由）": "Вверх (обмен с основным маршрутом или замена основного маршрута)",
+		  "尚未命名（名称蒸馏未产出）；投射回落 mem-": "Ещё без имени (дистилляция имени не дала результата); проекция откатывается к mem-",
+		  "尚未蒸馏": "Ещё не дистиллировано",
+		  "尚无 hall:先注册一个(如 dsh-plugin),再归类。": "Hall пока нет: сначала зарегистрируйте (напр. dsh-plugin), затем классифицируйте.",
+		  "深色": "Тёмная",
+		  "生效：": "Действует:",
+		  "生效端点": "Действующий эндпоинт",
+		  "声明过时": "Объявлено устаревшим",
+		  "失败 {p1} 条": "Ошибок: {p1}",
+		  "失败：{p1}": "Ошибка: {p1}",
+		  "时间窗口总览": "Обзор временного окна",
+		  "实际链": "Фактическая цепочка",
+		  "使用中": "Используется",
+		  "事实层面直接互斥——两边不可能同时为真，必须由人给出结论。": "Прямо взаимоисключающие на уровне фактов — оба не могут быть истинны одновременно, решение должен принять человек.",
+		  "事实源覆盖到：": "Источник фактов охватывает до:",
+		  "收编": "Принять в состав",
+		  "收编进注册表(source=grown,原地)": "Принять в реестр (source=grown, на месте)",
+		  "收编进注册表(source=grown)": "Принять в реестр (source=grown)",
+		  "收编失败": "Не удалось принять",
+		  "收编源失败": "Не удалось принять источник",
+		  "收起": "Свернуть",
+		  "收起记忆条目": "Свернуть записи памяти",
+		  "收起内容": "Свернуть содержимое",
+		  "收起全部": "Свернуть всё",
+		  "收起全部 hall(只留 hall 头)": "Свернуть все Hall (оставить только заголовки Hall)",
+		  "收起条目面板": "Свернуть панель записей",
+		  "收起未注册自生长 Room": "Свернуть незарегистрированные самовыращенные Room",
+		  "收起子 room": "Свернуть под-Room",
+		  "收尾（强制 L2 场景 + L3 画像）": "Завершить (принудительно L2 сцена + L3 профиль)",
+		  "首次 {p1}": "Первый {p1}",
+		  "首次启用本地嵌入时会自动安装推理运行时（约 100~200MB）。": "При первом включении локальных эмбеддингов автоматически устанавливается среда вывода (около 100–200 МБ).",
+		  "输出预算": "Бюджет вывода",
+		  "输出预算（token，留空 = 默认": "Бюджет вывода (token, пусто = по умолчанию",
+		  "输出预算须为 0~1000000 的整数（留空或 0 = 跟随默认）": "Бюджет вывода должен быть целым числом 0–1000000 (пусто или 0 = по умолчанию)",
+		  "输入": "Ввод",
+		  "输入按字符、输出/思考按 token 计；趋势图 Y 轴为输出 token，上方可切换层级与颗粒度。": "Ввод считается по символам, вывод/размышления — по token; по оси Y графика трендов — выходные token, уровень и детализацию можно переключить выше.",
+		  "输入预算": "Бюджет ввода",
+		  "输入预算须为 0 或 1000~256000 的整数（留空或 0 = 跟随配置）": "Бюджет ввода должен быть 0 или целым числом 1000–256000 (пусто или 0 = по конфигурации)",
+		  "数据目录": "Каталог данных",
+		  "刷新": "Обновить",
+		  "刷新图": "Обновить граф",
+		  "搜实体名…": "Поиск имени сущности…",
+		  "搜索": "Поиск",
+		  "搜索 hall/room(slug、显示名、别名)": "Поиск Hall/Room (slug, отображаемое имя, псевдоним)",
+		  "搜索 room(slug、显示名、别名)": "Поиск Room (slug, отображаемое имя, псевдоним)",
+		  "搜索分页已达检索上限（200 条），更早的结果未显示。请用更精确的关键词或类型/情境过滤。": "Постраничный поиск достиг предела выдачи (200 шт.), более ранние результаты не показаны. Уточните ключевые слова или используйте фильтры по типу/сцене.",
+		  "搜索记忆内容（关键词）…": "Поиск по содержимому памяти (ключевые слова)…",
+		  "搜索记忆内容（BM25 关键词）…": "Поиск по содержимому памяти (ключевые слова BM25)…",
+		  "锁定 Wing 时两类无角记忆是否参与召回": "Участвуют ли оба типа записей без угла в извлечении при блокировке Wing",
+		  "锁定 Wing 时排除未打标记忆": "Исключать записи без тегов при блокировке Wing",
+		  "它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。": "Она убирается из области поиска (больше не извлекается), но запись сохраняется — её можно восстановить в разделе «отозвано» на странице «Память».",
+		  "探针：": "Зонд:",
+		  "提示：登记/退役需先在面板开启「高权限模式」。": "Подсказка: для регистрации/вывода из эксплуатации сначала включите «Режим высоких прав» в панели.",
+		  "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。": "Подсказка: для повышения/архивации/закрепления/проверки истории нужно включить «Режим высоких прав» в панели.",
+		  "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。": "Подсказка: для удаления воспоминаний сначала нужен режим высоких прав (переключатель справа вверху или «Режим высоких прав» на странице обзора); пока он выключен, кнопка удаления недоступна.",
+		  "提示档": "Уровень подсказок",
+		  "天": "дн.",
+		  "天前": "дн. назад",
+		  "挑选中:点击目标 hall 头完成归类": "Выбор: щёлкните заголовок нужного hall, чтобы завершить классификацию",
+		  "条": "шт.",
+		  "条 · 原样保留": "шт. · сохранено как есть",
+		  "条，按每批 8 条约": "шт., примерно по 8 за партию, около",
+		  "条，此处显示": "шт., показано здесь",
+		  "条，耗时": "шт., затрачено",
+		  "条,仅显示前": "шт., показаны только первые",
+		  "条（当前勾选": "шт. (выбрано сейчас",
+		  "条（无来源或来源不在本次快照）": "шт. (нет источника или источник вне этого снимка)",
+		  "条）": "шт.)",
+		  "条），请分批操作。": "шт.); выполняйте партиями.",
+		  "条边": "связей",
+		  "条记录": "записей",
+		  "条记录）": "записей)",
+		  "条记忆？ 它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。": "воспоминаний? Они убираются из области поиска (больше не извлекаются), но записи сохраняются — их можно восстановить в разделе «отозвано» ниже.",
+		  "条件冲突（不占额度）": "условные конфликты (квота не расходуется)",
+		  "条可恢复": "шт. можно восстановить",
+		  "条内容不可嵌入，已跳过）": "шт. нельзя перевести в эмбеддинги, пропущено)",
+		  "条消息": "сообщений",
+		  "跳": "переход",
+		  "跳到这条邻居的来源记忆": "перейти к исходной записи этого соседа",
+		  "跳内": "переходов",
+		  "跳内没有其它可达节点（孤点，或关系还没投影出来）。": "В этих переходах нет других достижимых узлов (изолированный узел или связи ещё не спроецированы).",
+		  "停用": "Отключить",
+		  "统计未到": "Статистика ещё не поступила",
+		  "投射根：": "Корень проекции:",
+		  "投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。": "Проекция идёт последовательно в фоне и не блокирует диалог (записи новой дистилляции всегда приоритетнее дозаполнения существующих); прогресс виден на странице «Граф», переключатель можно выключить в любой момент, чтобы остановить.",
+		  "图": "Граф",
+		  "图加载中…": "Загрузка графа…",
+		  "图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。": "В графе пока нет узлов. Проекция графа по умолчанию выключена — включите переключатель в разделе «Обзор → Граф знаний» настроек, и существующие записи будут партиями спроецированы в сущности и связи.",
+		  "图里没有匹配的实体": "В графе нет подходящих сущностей",
+		  "图谱": "Граф",
+		  "图谱读工具": "Инструменты чтения графа",
+		  "图谱还没有内容。": "В графе пока нет содержимого.",
+		  "图谱投影进行中": "Проекция графа выполняется",
+		  "图谱投影预算": "Бюджет проекции графа",
+		  "图数据读取失败：": "Не удалось прочитать данные графа:",
+		  "推理运行时就绪（transformers.js v": "Среда вывода готова (transformers.js v",
+		  "退场": "Отозвать",
+		  "退场该 Room 下全部记忆(软删,可在「已退场」区恢复)": "Отозвать все записи этого Room (мягкое удаление; восстановимы в разделе «отозвано»)",
+		  "退场该条记忆？ 它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。": "Отозвать эту запись? Она убирается из области поиска (больше не извлекается), но запись сохраняется — её можно восстановить в разделе «отозвано» ниже.",
+		  "退场勾选的": "Отозвать выбранные",
+		  "退场筛查": "Отбор для отзыва",
+		  "退场筛选": "Фильтр отзыва",
+		  "退场失败": "Не удалось отозвать",
+		  "退出 ego 聚焦，重新渲染全图": "Выйти из фокуса ego и перерисовать весь граф",
+		  "退役": "Вывести из эксплуатации",
+		  "退役 Room:{p1} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)": "Вывести из эксплуатации Room {p1} и отозвать все его записи? (записи удаляются мягко; каждую можно восстановить в разделе «отозвано» на странице «Память»)",
+		  "退役 Room:{p1}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)": "Вывести из эксплуатации Room {p1}? (теги существующих записей не меняются, слово просто больше не предлагается; восстановить можно в любой момент)",
+		  "退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)": "Вывести из эксплуатации и отозвать все записи этого Room (мягкое удаление; восстановимы в разделе «отозвано»)",
+		  "退役该 Room(存量 tags 不动)": "Вывести Room из эксплуатации (существующие теги не меняются)",
+		  "拖动调整详情宽度": "Перетащите, чтобы изменить ширину панели деталей",
+		  "拖动空白平移 · 滚轮缩放 · 拖节点可钉住 · 悬停点亮邻域并在浮层里看全名 · 单击星点即以它为中心展开邻域": "Тяните пустое место для панорамирования · колесо — масштаб · перетащите узел, чтобы закрепить · наведите, чтобы подсветить окрестность и увидеть полные имена во всплывающем слое · щёлкните звёздную точку, чтобы раскрыть окрестность вокруг неё",
+		  "拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)": "Перетащите в room, чтобы отнести к этому hall (major/minor; записи переносятся, старое имя становится псевдонимом, подтвердите после предпросмотра)",
+		  "外部存档（markdown 投射）": "Внешний архив (проекция Markdown)",
+		  "外部记忆来源 Connect": "Источник внешней памяти Connect",
+		  "完成": "Готово",
+		  "维": "разм.",
+		  "维 · 上下文": "разм. · контекст",
+		  "维度": "Размерность",
+		  "维度跟随部署": "Размерность зависит от развёртывания",
+		  "为缺 dsh_keywords 的存量记忆补检索关键词，喂 FTS 关键词轴（需先开关键词回填开关）": "Дозаполнить ключевые слова для существующих записей без dsh_keywords, чтобы питать ключевую ось FTS (сначала включите переключатель дозаполнения ключевых слов)",
+		  "未安装参考会话库（DRSC）": "Эталонное хранилище сессий (DRSC) не установлено",
+		  "未打标": "Без тегов",
+		  "未打标计数加载中…": "Загрузка числа записей без тегов…",
+		  "未打标记忆默认包含": "Записи без тегов включены по умолчанию",
+		  "未单独配置的层走这条链（当前在用：": "Уровни без отдельной настройки идут по этой цепочке (сейчас используется:",
+		  "未命名": "Без названия",
+		  "未命中该实体": "Нет попадания по этой сущности",
+		  "未配置": "Не настроено",
+		  "未配置模型": "Модель не настроена",
+		  "未设置": "Не задано",
+		  "未生成": "Не создано",
+		  "未生成画像": "Профиль не создан",
+		  "未写": "не записано",
+		  "未知": "неизвестно",
+		  "未知错误": "неизвестная ошибка",
+		  "文件 → 库：只有文件变过的回灌入库，`.disable` 后缀的退场；两边都变的那些两侧都不动，只挂账。会写库，因此需要高权限模式": "файл → хранилище: в хранилище попадают только изменённые файлы, с суффиксом `.disable` отзываются; изменённые с обеих сторон не трогаются ни с одной стороны, только фиксируются. Пишет в хранилище, поэтому нужен режим с высокими правами",
+		  "文件缺失 {p1}": "файл отсутствует {p1}",
+		  "文字": "текст",
+		  "我已了解，仍要继续（不重蒸水位后的记录）": "Понимаю, продолжить (записи за отметкой не передистиллируются)",
+		  "无": "нет",
+		  "无。": "нет.",
+		  "无（本地 L0 没有任何正文）": "нет (в локальном L0 нет никакого текста)",
+		  "无（该记录没有抽出实体）。": "нет (из этой записи не извлечены сущности).",
+		  "无（这些实体目前没有 active 关系的邻居）。": "нет (у этих сущностей сейчас нет соседей с active-связями).",
+		  "无绑定": "без привязки",
+		  "无绑定 ·": "без привязки ·",
+		  "无法读取 DRSC 投影库": "не удаётся прочитать хранилище проекций DRSC",
+		  "无匹配的 hall/room。": "нет подходящих hall/room.",
+		  "无匹配的 Room。": "нет подходящих Room.",
+		  "无启用来源，或来源下未发现 .mem。": "нет включённых источников или в источнике не найден .mem.",
+		  "无选项": "нет вариантов",
+		  "系统日志": "системный журнал",
+		  "下(major/minor,预览后确认)": "ниже (major/minor, подтвердить после предпросмотра)",
+		  "下移": "вниз",
+		  "下载": "скачать",
+		  "下载失败：": "не удалось скачать:",
+		  "显示名(可选)": "отображаемое имя (необязательно)",
+		  "显示名(可中文)": "отображаемое имя (можно на китайском)",
+		  "现有 L1 记忆 / L2 场景 / L3 画像会整体归档（*.bak.时间戳，可手工找回），随后清空重建；重建期间可正常对话，新对话的蒸馏优先进行；中途可取消，已重建部分保留。": "Существующая память L1 / сцены L2 / профиль L3 целиком уходят в архив (*.bak.временная метка, можно найти вручную), затем очищаются и перестраиваются; во время перестройки можно нормально общаться, дистилляция новых диалогов идёт в первую очередь; можно отменить на полпути, перестроенная часть сохраняется.",
+		  "线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。": "признаки указывают, что новая запись достовернее и старая должна уступить, — но машина не решает автоматически, подтверждает человек.",
+		  "相关度": "релевантность",
+		  "相关记忆": "связанные воспоминания",
+		  "详情": "подробности",
+		  "向量能力不可用": "векторные возможности недоступны",
+		  "向量索引": "векторный индекс",
+		  "向量索引：宿主版本较旧，未上报计数": "векторный индекс: версия хоста старее, счётчик не передан",
+		  "向量索引不可用（sqlite-vec 扩展缺失或检索库降级），重建无从谈起": "векторный индекс недоступен (расширение sqlite-vec отсутствует или хранилище поиска деградировало), перестроить нечего",
+		  "向量维度（留空/0 = 跟随部署配置）": "размерность вектора (пусто/0 = как в конфигурации развёртывания)",
+		  "项目": "проект",
+		  "消化未蒸馏的记忆缓冲": "обработать буфер недистиллированной памяти",
+		  "小时量级。": "порядок — часы.",
+		  "小时前": "часов назад",
+		  "校验中": "проверка",
+		  "写入空串清除运行时密钥（部署 .yml 的密钥不受影响）": "запись пустой строки очищает ключ времени выполнения (ключ в .yml развёртывания не затрагивается)",
+		  "写入空串清除运行时密钥（部署 YAML 的密钥不受影响）": "запись пустой строки очищает ключ времени выполнения (ключ в YAML развёртывания не затрагивается)",
+		  "写入失败：预算未改": "не удалось записать: бюджет не изменён",
+		  "写删工具": "инструменты записи и удаления",
+		  "新 slug(可两级:hall/子类)": "новый slug (можно два уровня: hall/подкатегория)",
+		  "新旧取代（不占额度）": "замена старого новым (не расходует квоту)",
+		  "星空底": "звёздный фон",
+		  "行重复": "дубликат строки",
+		  "修复指引（可复制）": "инструкция по исправлению (можно скопировать)",
+		  "悬停星点 = 在浮层里看完整名称与类型 · 单击星点 = 改起点继续展开 · 拖拽钉位与全图一致": "наведение на звезду = полное имя и тип во всплывающем окне · клик по звезде = сменить точку отсчёта и продолжить раскрытие · перетаскивание закрепляет, как и на всём графе",
+		  "选 hall…": "выбрать hall…",
+		  "选定某个角（单 Wing）后，这两项才生效": "эти два параметра действуют только после выбора угла (одного Wing)",
+		  "学习": "обучение",
+		  "一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。": "сколько файлов проекций обновляется за один клик максимум (запись при экспорте и переименование по суффиксу расходуют квоту). «Не менявшиеся» квоту не расходуют. 0 = как в конфигурации развёртывания (2000); предел 10000.",
+		  "一次最多退场": "максимум отзывов за раз",
+		  "一致 {p1}": "совпадает {p1}",
+		  "已搬 {p1} · 失败 {p2} · 仍被认领 {p3}": "перенесено {p1} · ошибок {p2} · всё ещё занято {p3}",
+		  "已不在已注册路由中：该路由调用会失败并被链跳过（不阻止保存）。": "больше нет среди зарегистрированных маршрутов: вызов этого маршрута завершится ошибкой и будет пропущен цепочкой (сохранение не блокируется).",
+		  "已裁决 {p1}：{p2}{p3}": "решено {p1}: {p2}{p3}",
+		  "已达上限（8 条）": "достигнут предел (8 записей)",
+		  "已封印：冲突三件从模型工具列表移除": "запечатано: три инструмента конфликтов удалены из списка инструментов модели",
+		  "已封印：反刍三件从模型工具列表移除": "запечатано: три инструмента руминации удалены из списка инструментов модели",
+		  "已封印：技能四件从模型工具列表移除（技能功能关闭时本就零表面积）": "запечатано: четыре инструмента навыков удалены из списка инструментов модели (при выключенных навыках у них и так нулевая площадь)",
+		  "已封印：两个工具从模型工具列表移除": "запечатано: два инструмента удалены из списка инструментов модели",
+		  "已封印：图谱读工具从模型工具列表移除": "запечатано: инструмент чтения графа удалён из списка инструментов модели",
+		  "已封印：L1 写删工具从模型工具列表移除（槽位三件不受此开关影响）": "запечатано: инструменты записи и удаления L1 удалены из списка инструментов модели (три инструмента слотов этим переключателем не затрагиваются)",
+		  "已复看 {p1} 次": "просмотрено повторно {p1} раз",
+		  "已复制": "скопировано",
+		  "已改为跟随部署默认": "теперь как в конфигурации развёртывания",
+		  "已更新": "обновлено",
+		  "已关闭：不捕获、不蒸馏、不注入（数据保留）": "выкл.: не захватывать, не дистиллировать, не инжектировать (данные сохраняются)",
+		  "已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启": "выкл.: пункт «хранилище памяти» в боковой панели убран; включение возвращает его сразу, перезапуск не нужен",
+		  "已归档": "в архиве",
+		  "已就绪": "готово",
+		  "已开启：捕获对话并蒸馏记忆": "вкл.: диалоги захватываются, память дистиллируется",
+		  "已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）": "вкл.: «плоскую» существующую память можно переразложить в секционную структуру по типам (затрагиваются только строго лучшие)",
+		  "已开启：可登记/扫描外部记忆源并导入": "вкл.: можно регистрировать/сканировать внешние источники памяти и импортировать их",
+		  "已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）": "вкл.: можно массово дописать ключевые слова поиска к существующей памяти (нажмите кнопку в разделе «дозаполнение и выравнивание существующего» ниже)",
+		  "已开启：可将 .memory.md 文件侧修改回灌入库（需先开 md 投射 + 高权限）": "вкл.: правки в файлах .memory.md можно вернуть в хранилище (нужны проекция md и режим с высокими правами)",
+		  "已开启：模型获得记忆写入/删除工具，记忆 Tab 可删除指定记忆": "вкл.: модель получает инструменты записи и удаления памяти, на вкладке памяти можно удалять отдельные записи",
+		  '已开启：去重判定"两边都像对的"时冻结冲突对，停放到待人工裁决区': "вкл.: если при дедупликации «обе стороны выглядят верными», пара конфликтов замораживается и попадает в зону ручного решения",
+		  "已开启：重复工作方法会结晶为技能候选，注入活跃技能，可在「技能」页审阅晋升": "вкл.: повторяющиеся рабочие приёмы кристаллизуются в кандидатов навыков, инжектируются в активные навыки и доступны для повышения на странице «навыки»",
+		  "已开启：左侧栏显示「记忆库」（L1 查询 + 关联跳转 + 2D/3D 记忆图）；关闭即时隐藏，无需重启": "вкл.: в левой панели показывается «хранилище памяти» (запросы L1 + переходы по связям + граф памяти 2D/3D); выключение скрывает его сразу, перезапуск не нужен",
+		  "已开启：L1 记忆会投影成实体与关系，存量在启动/开启后逐批补齐（可与「图谱读工具」独立开关）": "вкл.: память L1 проецируется в сущности и связи, существующая дозаполняется партиями после запуска/включения (переключается независимо от «инструмента чтения графа»)",
+		  "已列": "в списке",
+		  "已配置": "настроено",
+		  "已嵌入 L1": "Встроено в L1",
+		  "已删 {p1} 条 · 归档正文 {p2} · 文件搬家 {p3}(失败 {p4}) · 图索引 {p5}": "Удалено {p1} · текстов в архиве {p2} · файлов перемещено {p3} (сбоев {p4}) · индекс графа {p5}",
+		  "已设为每次最多 {p1} 个文件，下一次点击生效": "Установлено: не более {p1} файлов за раз, вступит в силу при следующем нажатии",
+		  "已设置": "Установлено",
+		  "已收编:{p1}(source=grown)": "Принято: {p1} (source=grown)",
+		  "已停用 · 显示现存残留": "Отключено · показаны оставшиеся следы",
+		  "已退场": "Отозвано",
+		  "已退场（软删，可恢复）": "Отозвано (мягкое удаление, можно восстановить)",
+		  "已退场列表加载失败": "Не удалось загрузить список отозванных",
+		  "已退役": "Отозвано",
+		  "已完成 {p1} 条": "Завершено: {p1}",
+		  "已写": "Записано",
+		  "已写 {p1} · 未变 {p2} · 跳过 {p3}": "Записано {p1} · без изменений {p2} · пропущено {p3}",
+		  "已有": "Уже есть",
+		  "已注册:{p1}": "Зарегистрировано: {p1}",
+		  "已注册：memory_add / memory_import / memory_delete（仍需高权限模式）": "Зарегистрировано: memory_add / memory_import / memory_delete (по-прежнему нужен режим высоких прав)",
+		  "已注册：memory_conflicts / _rejected / resolve_conflict": "Зарегистрировано: memory_conflicts / _rejected / resolve_conflict",
+		  "已注册：memory_room_admin / memory_room_review（目录治理）": "Зарегистрировано: memory_room_admin / memory_room_review (управление каталогом)",
+		  "已注册：memory_ruminate / _cancel / _status": "Зарегистрировано: memory_ruminate / _cancel / _status",
+		  "已注册：memory_search_graph / memory_expand_graph_node": "Зарегистрировано: memory_search_graph / memory_expand_graph_node",
+		  "已注册：memory_skill_list / _read / _pin / _archive（需先开启「技能结晶」）": "Зарегистрировано: memory_skill_list / _read / _pin / _archive (сначала включите «Кристаллизацию навыков»)",
+		  "以此为新起点": "Сделать новой точкой отсчёта",
+		  "影响：蒸馏背景参考与跨会话检索会为空（记忆本身仍可捕获与检索本库）。": "Влияние: фоновая справка для дистилляции и межсессионное извлечение (recall) будут пустыми (саму память по-прежнему можно захватывать и искать в этом хранилище).",
+		  "硬冲突（占额度）": "Жёсткий конфликт (занимает квоту)",
+		  "用": "Использовать",
+		  "用户默认": "По умолчанию (пользователь)",
+		  "用户默认 (global)": "По умолчанию (пользователь, global)",
+		  "用户默认（global，任何工作区可见）": "По умолчанию (пользователь, global, видно в любой рабочей области)",
+		  "优先级": "Приоритет",
+		  "有效期起 {p1}": "Действует с {p1}",
+		  "有效期止 {p1}": "Действует до {p1}",
+		  "有新记录（样本省略）。": "Есть новые записи (образцы опущены).",
+		  "与存档对账": "Сверить с архивом",
+		  "与第": "с №",
+		  "与反刍并发会互相覆盖,请在反刍空闲时执行。": "Параллельный запуск с руминацией взаимно перезаписывает данные, поэтому выполняйте, когда руминация простаивает.",
+		  "与重建不同：不清空 L1 检索库、不归档旧产物、不改 L0；仅消化攒而未蒸馏的切片，无缓冲时做轻量 L2/L3 刷新。": "В отличие от перестроения: не очищает поисковое хранилище L1, не архивирует старые артефакты, не меняет L0; только перерабатывает накопленные недистиллированные срезы, а при пустом буфере делает лёгкое обновление L2/L3.",
+		  "与主路由完全相同（运行时会跳过，请去重）": "Полностью совпадает с основным маршрутом (во время выполнения пропускается, уберите дубликат)",
+		  "语义检索（嵌入）": "Семантический поиск (эмбеддинги)",
+		  "语义检索（嵌入源）": "Семантический поиск (источник эмбеддингов)",
+		  "预览": "Предпросмотр",
+		  "预览失败": "Не удалось показать предпросмотр",
+		  "预算写入失败": "Не удалось записать бюджет",
+		  "预算写入失败：": "Не удалось записать бюджет:",
+		  "预算要 0~10000 的整数（0 = 跟随部署默认）": "Бюджет должен быть целым числом 0~10000 (0 = как в развёртывании по умолчанию)",
+		  "预填注册表单为 {p1}/…(注册该 hall 下的小类)": "Заполняет форму регистрации как {p1}/… (регистрация подкатегории в этом hall)",
+		  "域{p1}": "Домен {p1}",
+		  "域设置失败": "Не удалось сохранить настройки домена",
+		  "域设置失败：": "Не удалось сохранить настройки домена:",
+		  "远程": "Удалённое",
+		  "远程服务需要密钥时填写": "Заполните, если удалённому сервису нужен ключ",
+		  "远程连接（生效值；运行时覆盖优先于部署 YAML）": "Удалённое подключение (действующее значение; переопределение во время выполнения важнее YAML развёртывания)",
+		  "远程连接保存失败": "Не удалось сохранить удалённое подключение",
+		  "远程连接保存失败：": "Не удалось сохранить удалённое подключение:",
+		  "月": "месяцев",
+		  "运行时 · 可编辑": "Время выполнения · можно изменить",
+		  "运行时安装失败：": "Не удалось установить среду выполнения:",
+		  "运行时宿主": "Хост времени выполнения",
+		  "运行时锁定": "Заблокировано во время выполнения",
+		  "运行时直连": "Прямое подключение во время выполнения",
+		  "运行时自定义": "Своё во время выполнения",
+		  "运行状态": "Состояние работы",
+		  "再点一次就真的搬——文件会被移出投射目录（不删，进归档目录，可手动搬回）": "Нажмите ещё раз, чтобы действительно переместить — файлы уйдут из каталога проекции (не удаляются, попадают в архивный каталог, можно вернуть вручную)",
+		  "再点一次就真的删——物理删除不可逆（但会先落快照与归档正文）": "Нажмите ещё раз, чтобы действительно удалить — физическое удаление необратимо (сначала сохраняются снимок и тексты в архиве)",
+		  "再点一次取消挑选;然后点击目标 hall 头完成归类": "Нажмите ещё раз, чтобы отменить выбор; затем нажмите заголовок целевого hall, чтобы завершить классификацию",
+		  "再改改": "Изменить ещё",
+		  "在第 0 层，第 k 跳在第 k 层": "На уровне 0, k-й переход на уровне k",
+		  "在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。": "После включения переключателя в настройках «Обзор → {p1}» существующая память партиями проецируется в сущности и связи.",
+		  "在图上强调该节点": "Выделить этот узел на графе",
+		  "在图中定位本条目的实体：": "Найти сущность этой записи на графе:",
+		  "在用：": "Используется:",
+		  "攒批 · 挂起": "Накопление · приостановлено",
+		  "攒批进度": "Прогресс накопления",
+		  "暂无 Room:对话/反刍会从标签涌现,或在上方注册。": "Room пока нет: они появляются из тегов при разговоре или руминации, либо зарегистрируйте выше.",
+		  "暂无场景块。累计 5 条新记忆后 L2 会自动整合出第一个场景。": "Блоков сцен пока нет. После накопления 5 новых воспоминаний L2 автоматически соберёт первую сцену.",
+		  "暂无成本数据（触发一次蒸馏后这里会出现趋势）。": "Данных о расходах пока нет (после запуска дистилляции здесь появится динамика).",
+		  "暂无记忆。对话几轮后，蒸馏管线会自动抽取记忆。": "Воспоминаний пока нет. После нескольких реплик конвейер дистилляции автоматически извлечёт память.",
+		  "暂无技能：池中已有 {p1} 条「工作方法」，但还没重复到成候选的程度（需跨 ≥{p2} 个不同会话）。存量可点「立即检测历史」回灌。": "Навыков пока нет: в пуле уже есть записи «рабочий метод» ({p1}), но повторов недостаточно для статуса кандидата (нужно ≥{p2} разных сессий). Для накопленных данных нажмите «Проверить историю сейчас», чтобы загрузить их.",
+		  "暂无技能：记忆池里还没有「工作方法」类记录。技能是从重复出现的工作方法结晶来的，请先到概览页确认蒸馏在正常产出记忆。": "Навыков пока нет: в пуле памяти нет записей типа «рабочий метод». Навыки кристаллизуются из повторяющихся рабочих методов, поэтому сначала на странице «Обзор» проверьте, что дистилляция производит память.",
+		  '暂无技能。技能从重复出现的"工作方法"记忆结晶而来。': "Навыков пока нет. Навыки кристаллизуются из повторяющихся воспоминаний «рабочий метод».",
+		  "暂无可筛 Hall": "Нет Hall для фильтра",
+		  "暂无来源": "Нет источника",
+		  "摘录档": "Архив выдержек",
+		  "展开": "Развернуть",
+		  "展开/收起右侧详情": "Развернуть/свернуть панель деталей",
+		  "展开查看该 Room 的记录内容(默认收起)": "Разверните, чтобы увидеть записи этого Room (по умолчанию свёрнуто)",
+		  "展开查看该 Room 的记忆条目(默认收起)": "Разверните, чтобы увидеть воспоминания этого Room (по умолчанию свёрнуто)",
+		  "展开到 {p1} 跳": "Развернуть до {p1} переходов",
+		  "展开全部": "Развернуть всё",
+		  "展开全部 hall 的子 room": "Развернуть дочерние Room всех hall",
+		  "展开未注册自生长 Room": "Развернуть незарегистрированные самовыросшие Room",
+		  "展开子 room(默认折叠)": "Развернуть под-room (по умолчанию свёрнуты)",
+		  "展示近 N 天（正整数，清空=默认窗口；超出保留期后端自动回退）": "Показать последние N дней (положительное целое, пусто = окно по умолчанию; за пределами срока хранения бэкенд откатывается автоматически)",
+		  "账本共 {p1} 条 · 仍被认领 {p2} · 无人认领 {p3}（未搬任何东西）": "В журнале {p1} записей · всё ещё заявлено {p2} · без заявки {p3} (ничего не перемещено)",
+		  "召回": "Извлечение (recall)",
+		  "召回命中": "Попадания извлечения",
+		  "召回命中 ·": "Попадания извлечения ·",
+		  "召回片段": "Фрагменты извлечения",
+		  "召回使用": "Использование извлечения",
+		  "召回已停用（": "Извлечение отключено (",
+		  "召回已停用（开关关闭 / 档位关闭 / 部署未启用）": "Извлечение отключено (переключатель выкл. / режим выкл. / развёртывание не включено)",
+		  "召回追踪": "Трассировка извлечения",
+		  "这个起点在": "Эта отправная точка в",
+		  "这条记忆还没有被投影进图（图谱未开启，或投影尚未跑到）——所以暂时查不到它的关联。": "Эта память ещё не спроецирована в граф (граф не включён или проекция ещё не отработала) — поэтому её связи пока не находятся.",
+		  "蒸馏": "Дистилляция",
+		  "蒸馏参数": "Параметры дистилляции",
+		  "蒸馏超时": "Таймаут дистилляции",
+		  "蒸馏超时须为 0 或 1000~600000 的整数（留空或 0 = 跟随配置）": "Таймаут дистилляции должен быть 0 или целым от 1000 до 600000 (пусто или 0 = следовать конфигурации)",
+		  "蒸馏跟随默认模型，未配置回退链。": "Дистилляция следует модели по умолчанию, цепочка деградации не настроена.",
+		  "蒸馏通道": "Канал дистилляции",
+		  "蒸馏追踪": "Трассировка дистилляции",
+		  "整形": "Переформирование",
+		  "整形完成": "Переформирование завершено",
+		  "整形已中止": "Переформирование прервано",
+		  "正在读取记忆状态…": "Чтение состояния памяти…",
+		  "知识图谱": "Граф знаний",
+		  "执行失败": "Ошибка выполнения",
+		  "直连端点": "Прямой эндпоинт",
+		  "只补缺失向量；已有向量不动。零向量内容会被跳过（重试无意义）": "Заполняет только отсутствующие векторы; существующие не трогает. Контент с нулевым вектором пропускается (повтор бессмыслен)",
+		  "只读预览：列出将被物理删除的退场记忆（前 50 条）与总数，不删任何东西": "Только просмотр: перечисляет отозванные памяти, которые будут физически удалены (первые 50), и общее число; ничего не удаляет",
+		  "只读预览：扫账本，找出“我们写过但现在没记录认领它”的投射文件（改名/消歧留下的残片）。来路不明的文件一律不动，也不搬任何东西": "Только просмотр: сканирует журнал и находит файлы проекций, которые мы писали, но записи их больше не заявляют (остатки от переименований/устранения неоднозначности). Файлы неизвестного происхождения не трогаются, и ничего не перемещается",
+		  "只看词表未退役的 room": "Только не отозванные в словаре room",
+		  "只看没有任何 Room 绑定的记忆": "Только памяти без привязки к Room",
+		  "只看未退场的记忆": "Только не отозванные памяти",
+		  "只看已退场（软删）的记忆，可在此恢复": "Только отозванные (мягко удалённые) памяти; здесь их можно восстановить",
+		  "只看已退役的 room": "Только отозванные room",
+		  "只写": "Только запись",
+		  "只写：记忆照常沉淀，但不注入本会话": "Только запись: памяти сохраняются как обычно, но не инъектируются в эту сессию",
+		  "指定工作区": "Указать рабочую область",
+		  "智能": "Умный",
+		  "智能（双族）": "Умный (два семейства)",
+		  "智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）": "Умный режим: автоматически определяет домены извлечения (клик по центру / перетаскивание от угла внутрь = все домены)",
+		  "置信度:": "Уверенность:",
+		  "中": "Средний",
+		  "中止": "Прервать",
+		  "中止请求失败：": "Ошибка запроса на прерывание:",
+		  "中止中…": "Прерывание…",
+		  "重建记忆": "Перестроить память",
+		  "重建索引": "Перестроить индекс",
+		  "重建已在进行中": "Перестроение уже выполняется",
+		  "重拉注册表与计数": "Перечитать реестр и счётчики",
+		  "重嵌入中 L1": "Повторное встраивание L1",
+		  "重试": "Повторить",
+		  "重新拉取图与统计": "Перечитать граф и статистику",
+		  "重新蒸馏全部记忆": "Передистиллировать все памяти",
+		  "重蒸馏整形": "Переформирование при передистилляции",
+		  "重蒸馏整形：没有需要整形的记录（骨架都已齐备），无需处理": "Переформирование при передистилляции: нет записей, требующих переформирования (все скелеты на месте), обрабатывать нечего",
+		  "重蒸馏整形失败": "Ошибка переформирования при передистилляции",
+		  "重蒸馏整形失败：": "Ошибка переформирования при передистилляции:",
+		  "重蒸馏整形未开启：请先在概览开关组打开重蒸馏整形": "Переформирование при передистилляции отключено: сначала включите его в группе переключателей обзора",
+		  "重置为跟随默认": "Сбросить на следование по умолчанию",
+		  "周": "Неделя",
+		  "主": "Основной",
+		  "主路由失败，按序降级": "Основной маршрут не удался, деградация по порядку",
+		  "主路由失败，只降级到本层回退": "Основной маршрут не удался, деградация только к резерву этого уровня",
+		  "主路由行必须显式选择供应商与模型（层链不支持跟随默认模型）": "В строке основного маршрута нужно явно выбрать провайдера и модель (цепочки уровней не поддерживают следование модели по умолчанию)",
+		  "主路由行供应商与模型须成对（双空 = 跟随默认模型）": "Провайдер и модель в строке основного маршрута задаются парой (оба пусты = следовать модели по умолчанию)",
+		  "注册": "Зарегистрировать",
+		  "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。": "Реестр пуст. Зарегистрируйте Hall/Room выше (например, dsh-plugin) или включите самовыращенный slug в словарь — после этого аннотатор кандидатов будет предпочитать привязывать связанные памяти к этим slug.",
+		  "注册失败": "Ошибка регистрации",
+		  "注入": "Инъекция",
+		  "注入设置失败": "Не удалось настроить инъекцию",
+		  "注入设置失败：": "Не удалось настроить инъекцию:",
+		  "注意：部署配置已停用": "Внимание: конфигурация развёртывания отключена",
+		  "状态:": "Состояние:",
+		  "准备中（归档旧数据 · 清空检索库）": "Подготовка (архивация старых данных · очистка хранилища поиска)",
+		  '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.5" - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。': 'Настольная версия (DSH Desktop) не может использовать `dsh plugin --profile desktop add` (хост управляет этим единолично и отклонит запрос), поэтому только вручную: 1. Откройте ~/.dsh/profiles/desktop/package.json - добавьте в dependencies "dsh-reference-session-collector": "^0.2.5" - добавьте "dsh-reference-session-collector" в dsh.profile.bundles 2. Выполните pnpm install в этом каталоге 3. Перезапустите DSH Desktop Внимание: включение только «Памяти» не включит хранилище референсных сессий — плагин памяти лишь его потребитель и не вправе его подключать.',
+		  "字符": "символов",
+		  "自定义 ·": "Своё ·",
+		  "自定义本层链": "Настроить цепочку этого уровня",
+		  "自生长 slug(未注册)": "Самовыращенный slug (не зарегистрирован)",
+		  "自生长 slug(未注册)——按住拖到某个 hall 头上 = 收编并归为其子类": "Самовыращенный slug (не зарегистрирован) — зажмите и перетащите на hall = включить в него как подкласс",
+		  "自生长未注册 · 共": "Самовыращенных незарегистрированных · всего",
+		  "组织": "Организация",
+		  "最后同步：": "Последняя синхронизация:",
+		  "最近 {p1} 条（{p2}）": "Последние {p1} записей ({p2})",
+		  "最近差异样本：": "Последние образцы расхождений:",
+		  "最近一轮命中": "Попадания последнего раунда",
+		  "最近蒸馏": "Последняя дистилляция",
+		  "左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录": "Перетаскивание мышью — вращение · shift + перетаскивание — панорама · колесо — масштаб · клик — фокус на ego · двойной клик — открыть запись",
+		  "作用范围:": "Область:",
+		  "作用范围：用户默认（global，任何工作区可见）": "Область: по умолчанию (global, видно в любой рабочей области)",
+		  "作用范围：指定工作区（仅归属工作区可见）": "Область: указанная рабочая область (видно только в ней)",
+		  "Canvas 三维投影记忆海": "Трёхмерное море памяти в Canvas",
+		  "direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。": "direct = нативное прямое подключение плагина к OpenAI-совместимым эндпоинтам, не связано с платным API; при сбое автоматически переходит на цепочку маршрутов хоста.",
+		  "direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。": "Канал direct работает по нативному HTTP плагина и не зависит от реестра провайдеров хоста; при сбое direct автоматически переходит на цепочку маршрутов хоста как страховка.",
+		  "DRSC 投影库已过期": "Библиотека проекций DRSC устарела",
+		  "DRSC 已安装但未启用": "DRSC установлен, но не включён",
+		  "ego 壳层 ·": "оболочка ego ·",
+		  "G6 力导星图": "Звёздная карта G6 с силовой раскладкой",
+		  "Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关": "Hall = категория Room · лимит 200 категорий, подкатегории («категория/подкатегория») не расходуют квоту · не связано с фильтром Wing (домен)",
+		  "L0 今日消息": "L0 сообщения за сегодня",
+		  "L0 无消息，无可重建内容": "В L0 нет сообщений, нечего перестраивать",
+		  "L0：记录原始对话（关闭后蒸馏也无输入）": "L0: записывает исходные диалоги (при выключении у дистилляции нет входа)",
+		  "L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。": "L0~L3 послойная дистиллированная память: просмотр запомненного и управление переключателями режимов памяти.",
+		  "L1 · 抽取 / 去重": "L1 · извлечение фактов / дедупликация",
+		  "L1 抽取 + L2 场景 + L3 画像": "Извлечение L1 + сцены L2 + профиль L3",
+		  "L1 的抽取与去重是两次独立调用，输出限额各自设置（路由共用同一条链）。": "Извлечение и дедупликация L1 — два отдельных вызова со своими лимитами вывода (используют одну цепочку маршрутов).",
+		  "L1 累计抽取": "Суммарное извлечение L1",
+		  "L1 原子记忆": "Атомарные памяти L1",
+		  "L1 蒸馏中": "Дистилляция L1",
+		  "L2 · 场景摘要": "L2 · сводка сцены",
+		  "L2 场景": "Сцены L2",
+		  "L2 场景块": "Блок сцены L2",
+		  "L2 场景整合中": "Консолидация сцен L2",
+		  "L2 输出": "Вывод L2",
+		  "L3 · 画像蒸馏": "L3 · дистилляция профиля",
+		  "L3 画像": "Профиль L3",
+		  "L3 画像更新中": "Обновление профиля L3",
+		  "L3 输出": "Вывод L3",
+		  "LLM 建议：败方": "LLM предлагает: проигравшая сторона",
+		  "LLM 建议：胜方": "LLM предлагает: победившая сторона",
+		  "md 反向同步": "Обратная синхронизация md",
+		  "ms，来自 llm.timeoutMs）。注：供应商网关侧固定掐断（如某些路由 60s）抬此值无效，须换路由": "мс, из llm.timeoutMs). Примечание: шлюз провайдера жёстко обрывает по фиксированному лимиту (например, 60 с на некоторых маршрутах), поэтому увеличивать это значение бесполезно — нужно менять маршрут",
+		  "Room 标签/分类管理:见「Hall」「Room」标签页。": "Управление тегами и категориями Room: см. вкладки «Hall» и «Room».",
+		  "Room 管理工具": "Инструменты управления Room",
+		  "Room 级管理:存在(注册/收编/退役)· 名称(显示名/说明/改名)· 条目(展开浏览) · 归类到 hall 请到「Hall」页": "Управление на уровне Room: наличие (регистрация/приём/отзыв) · название (отображаемое имя/описание/переименование) · записи (развернуть для просмотра) · для отнесения к hall используйте страницу «Hall»",
+		  "RPC 错误": "Ошибка RPC",
+		  "s（约 100~200MB，视网络）": "с (примерно 100~200MB, зависит от сети)",
+		  "settings 服务不可用，记忆模式开关未启用（记忆保持全开）。": "Сервис settings недоступен, переключатели режимов памяти отключены (память остаётся полностью включённой).",
+		  "slug(如 dsh-plugin 或 dsh-plugin/merge)": "slug (например, dsh-plugin или dsh-plugin/merge)",
+		  "wing 回填": "Заполнение wing"
+		};
+		
+		// client/src/i18n.ts
+		var service = null;
+		var translate = null;
+		var attempted = false;
+		function installLocale(ctx) {
+		  if (attempted) return;
+		  attempted = true;
+		  const found = readService(ctx);
+		  if (found) {
+		    adopt(found);
+		    return;
+		  }
+		  for (const delay of [200, 1e3, 3e3]) {
+		    setTimeout(() => {
+		      if (service) return;
+		      const late = readService(ctx);
+		      if (late) adopt(late);
+		    }, delay);
+		  }
+		}
+		function readService(ctx) {
+		  try {
+		    const svc = ctx.get("locale");
+		    if (svc && typeof svc.register === "function" && typeof svc.bind === "function") return svc;
+		  } catch {
+		  }
+		  return null;
+		}
+		function getLocaleService() {
+		  return service;
+		}
+		function adopt(svc) {
+		  try {
+		    registerDictionaries(svc, { en, ru });
+		    translate = makeTr(svc);
+		    service = svc;
+		    console.info(`[dsh-prime-memory] locale 就绪：当前 ${svc.getSnapshot().active}`);
+		  } catch (err) {
+		    console.warn("[dsh-prime-memory] locale 注册失败，界面保持中文:", err);
+		  }
+		}
+		function tr(key, params) {
+		  if (translate) return translate(key, params);
+		  return params ? fill(key, params) : key;
+		}
+		
+		// client/src/i18n-react.ts
+		var import_react = require("react");
+		function subscribe(onChange) {
+		  const svc = getLocaleService();
+		  return svc ? svc.subscribe(onChange) : () => {
+		  };
+		}
+		function snapshot() {
+		  const svc = getLocaleService();
+		  return svc ? svc.getSnapshot().revision : 0;
+		}
+		function useLocaleRevision() {
+		  return (0, import_react.useSyncExternalStore)(subscribe, snapshot, snapshot);
+		}
+		
 		// client/src/panel.tsx
-		var import_react27 = require("react");
+		var import_react28 = require("react");
 		
 		// client/src/sidebar-icon.ts
 		var BOOK_ICON_SVG = '<svg data-mem-icon="1" viewBox="0 0 16 16" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0"><path d="M8 3.4C6.6 2.5 4.6 2.4 2.9 3.1v9.3c1.7-.7 3.7-.6 5.1.3 1.4-.9 3.4-1 5.1-.3V3.1C11.4 2.4 9.4 2.5 8 3.4Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 3.4v9.3" stroke="currentColor" stroke-width="1.2"/></svg>';
@@ -36167,7 +38473,7 @@ var __create = Object.create;
 		};
 		
 		// client/src/components/DrscHealthBanner.tsx
-		var import_react = require("react");
+		var import_react2 = require("react");
 		
 		// client/src/format.ts
 		var typeLabels = {};
@@ -36201,10 +38507,10 @@ var __create = Object.create;
 		    if (!t) return null;
 		    let s = Math.floor((Date.now() - t) / 1e3);
 		    if (s < 0) s = 0;
-		    if (s < 45) return "刚刚";
-		    if (s < 3600) return Math.floor(s / 60) + " 分钟前";
-		    if (s < 86400) return Math.floor(s / 3600) + " 小时前";
-		    return Math.floor(s / 86400) + " 天前";
+		    if (s < 45) return tr("刚刚");
+		    if (s < 3600) return Math.floor(s / 60) + tr("分钟前");
+		    if (s < 86400) return Math.floor(s / 3600) + tr("小时前");
+		    return Math.floor(s / 86400) + tr("天前");
 		  } catch {
 		    return null;
 		  }
@@ -36218,32 +38524,25 @@ var __create = Object.create;
 		// client/src/components/DrscHealthBanner.tsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var POLL_MS = 6e4;
-		var GUIDE = `桌面版（DSH Desktop）不能用 \`dsh plugin --profile desktop add\`（宿主独占管理，会被拒绝），只能手工：
-		1. 编辑 ~/.dsh/profiles/desktop/package.json
-		   - dependencies 追加 "dsh-reference-session-collector": "^0.2.5"
-		   - dsh.profile.bundles 追加 "dsh-reference-session-collector"
-		2. 在该目录执行 pnpm install
-		3. 重启 DSH Desktop
-		
-		注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。`;
+		var GUIDE = tr('桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.5" - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。');
 		function toneOf(h) {
 		  switch (h.state) {
 		    case "missing":
-		      return { title: "未安装参考会话库（DRSC）", style: "bannerError" };
+		      return { title: tr("未安装参考会话库（DRSC）"), style: "bannerError" };
 		    case "not-running":
-		      return { title: "DRSC 已安装但未启用", style: "bannerWarn" };
+		      return { title: tr("DRSC 已安装但未启用"), style: "bannerWarn" };
 		    case "stale":
-		      return { title: "DRSC 投影库已过期", style: "bannerWarn" };
+		      return { title: tr("DRSC 投影库已过期"), style: "bannerWarn" };
 		    default:
-		      return { title: "无法读取 DRSC 投影库", style: "bannerNeutral" };
+		      return { title: tr("无法读取 DRSC 投影库"), style: "bannerNeutral" };
 		  }
 		}
 		function DrscHealthBanner({ rpc }) {
-		  const [health, setHealth] = (0, import_react.useState)(null);
-		  const [copied, setCopied] = (0, import_react.useState)(false);
-		  const codeRef = (0, import_react.useRef)(null);
-		  const aliveRef = (0, import_react.useRef)(true);
-		  (0, import_react.useEffect)(() => {
+		  const [health, setHealth] = (0, import_react2.useState)(null);
+		  const [copied, setCopied] = (0, import_react2.useState)(false);
+		  const codeRef = (0, import_react2.useRef)(null);
+		  const aliveRef = (0, import_react2.useRef)(true);
+		  (0, import_react2.useEffect)(() => {
 		    aliveRef.current = true;
 		    const tick = async () => {
 		      try {
@@ -36260,7 +38559,7 @@ var __create = Object.create;
 		      clearInterval(timer);
 		    };
 		  }, [rpc]);
-		  const copy = (0, import_react.useCallback)(async () => {
+		  const copy = (0, import_react2.useCallback)(async () => {
 		    try {
 		      await navigator.clipboard.writeText(GUIDE);
 		      setCopied(true);
@@ -36282,19 +38581,22 @@ var __create = Object.create;
 		  const lagHours = health.lagMs === null ? null : Math.round(health.lagMs / 36e5 * 10) / 10;
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { ...S.bannerBase, ...toneStyle }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontWeight: 600, marginBottom: 4 }, children: tone.title }),
-		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { color: "var(--dsh-mem-text-3)" }, children: "影响：蒸馏背景参考与跨会话检索会为空（记忆本身仍可捕获与检索本库）。" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { color: "var(--dsh-mem-text-3)" }, children: [
+		      tr("影响：蒸馏背景参考与跨会话检索会为空（记忆本身仍可捕获与检索本库）。"),
+		      " "
+		    ] }),
 		    health.state === "stale" && health.lastSyncAt !== null ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { color: "var(--dsh-mem-text-3)", marginTop: 2 }, children: [
-		      "最后同步：",
+		      tr("最后同步："),
 		      fmtTime(new Date(health.lastSyncAt).toISOString()),
-		      lagHours === null ? "" : `（滞后约 ${lagHours} 小时）`
+		      lagHours === null ? "" : tr("（滞后约 {p1} 小时）", { p1: lagHours })
 		    ] }) : null,
 		    health.state === "unknown" && health.error ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { color: "var(--dsh-mem-text-3)", marginTop: 2 }, children: [
-		      "探针：",
+		      tr("探针："),
 		      health.error
 		    ] }) : null,
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "修复指引（可复制）" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { className: "dsh-mem-tab", onClick: () => void copy(), title: "复制修复指引", children: copied ? "已复制" : "复制" })
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("修复指引（可复制）") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { className: "dsh-mem-tab", onClick: () => void copy(), title: tr("复制修复指引"), children: copied ? tr("已复制") : tr("复制") })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", { ref: codeRef, style: S.bannerCode, children: GUIDE })
 		  ] });
@@ -36710,10 +39012,10 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/ConflictsTab.tsx
-		var import_react3 = require("react");
+		var import_react4 = require("react");
 		
 		// client/src/ui/primitives.tsx
-		var import_react2 = require("react");
+		var import_react3 = require("react");
 		
 		// client/src/env.ts
 		function hostRequire(id) {
@@ -36728,28 +39030,28 @@ var __create = Object.create;
 		  P = null;
 		}
 		function NButton(props) {
-		  if (P && P.Button) return (0, import_react2.createElement)(P.Button, { size: "sm", ...props });
+		  if (P && P.Button) return (0, import_react3.createElement)(P.Button, { size: "sm", ...props });
 		  const rest = { ...props };
 		  delete rest.variant;
 		  delete rest.icon;
 		  rest.className = "dsh-mem-btn" + (rest.className ? " " + rest.className : "");
-		  return (0, import_react2.createElement)("button", rest);
+		  return (0, import_react3.createElement)("button", rest);
 		}
 		function NInput(props) {
 		  if (P && P.Input) {
 		    const inner = { ...props };
 		    const layoutStyle = inner.style;
 		    delete inner.style;
-		    return (0, import_react2.createElement)("span", { style: layoutStyle }, (0, import_react2.createElement)(P.Input, inner));
+		    return (0, import_react3.createElement)("span", { style: layoutStyle }, (0, import_react3.createElement)(P.Input, inner));
 		  }
 		  const rest = { ...props };
 		  rest.className = "dsh-mem-input" + (rest.className ? " " + rest.className : "");
-		  return (0, import_react2.createElement)("input", rest);
+		  return (0, import_react3.createElement)("input", rest);
 		}
 		function NModal(props) {
 		  if (props.open === false) return null;
-		  if (P && P.Modal) return (0, import_react2.createElement)(P.Modal, { closeLabel: "关闭", ...props });
-		  return (0, import_react2.createElement)(
+		  if (P && P.Modal) return (0, import_react3.createElement)(P.Modal, { closeLabel: tr("关闭"), ...props });
+		  return (0, import_react3.createElement)(
 		    "div",
 		    {
 		      className: "dsh-mem-rb-overlay",
@@ -36757,12 +39059,12 @@ var __create = Object.create;
 		        if (e.target === e.currentTarget && props.onClose) props.onClose();
 		      }
 		    },
-		    (0, import_react2.createElement)(
+		    (0, import_react3.createElement)(
 		      "div",
 		      { className: "dsh-mem-rb-modal" },
-		      props.title ? (0, import_react2.createElement)("div", { style: { fontSize: 15, fontWeight: 600, marginBottom: 10 } }, props.title) : null,
+		      props.title ? (0, import_react3.createElement)("div", { style: { fontSize: 15, fontWeight: 600, marginBottom: 10 } }, props.title) : null,
 		      props.children,
-		      props.footer ? (0, import_react2.createElement)(
+		      props.footer ? (0, import_react3.createElement)(
 		        "div",
 		        { style: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 } },
 		        props.footer
@@ -36775,18 +39077,18 @@ var __create = Object.create;
 		var CONFLICT_TYPE_SECTIONS = [
 		  {
 		    type: "hard",
-		    label: "硬冲突（占额度）",
-		    hint: "事实层面直接互斥——两边不可能同时为真，必须由人给出结论。"
+		    label: tr("硬冲突（占额度）"),
+		    hint: tr("事实层面直接互斥——两边不可能同时为真，必须由人给出结论。")
 		  },
 		  {
 		    type: "conditional",
-		    label: "条件冲突（不占额度）",
-		    hint: "各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。"
+		    label: tr("条件冲突（不占额度）"),
+		    hint: tr("各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。")
 		  },
 		  {
 		    type: "supersession",
-		    label: "新旧取代（不占额度）",
-		    hint: "线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。"
+		    label: tr("新旧取代（不占额度）"),
+		    hint: tr("线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。")
 		  }
 		];
 		function conflictTypeOf(p) {
@@ -36814,7 +39116,7 @@ var __create = Object.create;
 		}
 		function reviewLabel(p) {
 		  if ((p.review_state ?? "unseen") === "unseen") return "";
-		  return `已复看 ${String(p.defer_count ?? 0)} 次`;
+		  return tr("已复看 {p1} 次", { p1: String(p.defer_count ?? 0) });
 		}
 		function isDeferred(p) {
 		  return (p.review_state ?? "unseen") === "deferred";
@@ -36827,9 +39129,9 @@ var __create = Object.create;
 		  const parts = [];
 		  const vfS = D(vf);
 		  const vtS = D(vt);
-		  if (vfS) parts.push(`有效期起 ${vfS}`);
-		  if (vtS) parts.push(`有效期止 ${vtS}`);
-		  if (ps) parts.push(`持续性 ${ps}`);
+		  if (vfS) parts.push(tr("有效期起 {p1}", { p1: vfS }));
+		  if (vtS) parts.push(tr("有效期止 {p1}", { p1: vtS }));
+		  if (ps) parts.push(tr("持续性 {p1}", { p1: ps }));
 		  return parts.join(" / ");
 		}
 		function claimLabel(p) {
@@ -36840,14 +39142,14 @@ var __create = Object.create;
 		// client/src/tabs/ConflictsTab.tsx
 		var import_jsx_runtime2 = require("react/jsx-runtime");
 		var POLL_MS2 = 1e4;
-		var GONE = "（该记录正文不可得：已不在主表，或被更早的清理清掉了）";
+		var GONE = tr("（该记录正文不可得：已不在主表，或被更早的清理清掉了）");
 		function ConflictsTab(props) {
 		  const rpc = props.rpc;
-		  const [view, setView] = (0, import_react3.useState)(null);
-		  const [error, setError] = (0, import_react3.useState)(null);
-		  const [note, setNote] = (0, import_react3.useState)(null);
-		  const [busy, setBusy] = (0, import_react3.useState)(null);
-		  const load = (0, import_react3.useCallback)(() => {
+		  const [view, setView] = (0, import_react4.useState)(null);
+		  const [error, setError] = (0, import_react4.useState)(null);
+		  const [note, setNote] = (0, import_react4.useState)(null);
+		  const [busy, setBusy] = (0, import_react4.useState)(null);
+		  const load = (0, import_react4.useCallback)(() => {
 		    rpc("dsh-memory/conflicts", {}).then((r) => {
 		      if (r && r.ok) {
 		        setView(r.value);
@@ -36857,7 +39159,7 @@ var __create = Object.create;
 		      setError(String(e && e.message || e));
 		    });
 		  }, [rpc]);
-		  (0, import_react3.useEffect)(() => {
+		  (0, import_react4.useEffect)(() => {
 		    load();
 		    const timer = setInterval(load, POLL_MS2);
 		    return () => {
@@ -36869,12 +39171,7 @@ var __create = Object.create;
 		      const doomed = outcome === "winner" ? pair.loser_content || GONE : outcome === "loser" ? pair.winner_content || GONE : null;
 		      if (doomed !== null) {
 		        const ok = window.confirm(
-		          `裁决这一对？
-		
-		将要退场的记忆：
-		「${doomed}」
-		
-		它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。裁决结论本身不可覆盖。`
+		          tr("裁决这一对？ 将要退场的记忆： 「{p1}」", { p1: doomed }) + tr("它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。") + tr("裁决结论本身不可覆盖。")
 		        );
 		        if (!ok) return;
 		      }
@@ -36884,10 +39181,10 @@ var __create = Object.create;
 		    rpc("dsh-memory/conflict-resolve", { pairId: pair.pair_id, outcome }).then((r) => {
 		      if (r && r.ok) {
 		        const v = r.value;
-		        setNote(v.notice ?? `已裁决 ${v.pair_id}：${v.outcome}${v.removed_record_id ? "，退场 " + v.removed_record_id : "，未移除记录"}`);
+		        setNote(v.notice ?? tr("已裁决 {p1}：{p2}{p3}", { p1: v.pair_id, p2: v.outcome, p3: v.removed_record_id ? "，退场 " + v.removed_record_id : "，未移除记录" }));
 		        load();
 		      } else {
-		        setError(r && r.error ? r.error.message : "裁决失败");
+		        setError(r && r.error ? r.error.message : tr("裁决失败"));
 		      }
 		    }).catch((e) => {
 		      setError(String(e && e.message || e));
@@ -36899,24 +39196,26 @@ var __create = Object.create;
 		  const sections = groupConflictsByType(items);
 		  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: S.muted, children: view === null ? "加载中…" : view.enabled ? `待裁决 ${view.total} 对` : "矛盾冻结未开启" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: S.muted, children: view === null ? tr("加载中…") : view.enabled ? tr("待裁决 {p1} 对", { p1: view.total }) : tr("矛盾冻结未开启") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(NButton, { onClick: load, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(NButton, { onClick: load, children: tr("刷新") })
 		    ] }),
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: S.error, children: error }) : null,
 		    note ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: S.hint, children: note }) : null,
 		    view !== null && !view.enabled ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("p", { style: S.intro, children: [
-		      view.notice ?? "矛盾冻结未开启。",
+		      view.notice ?? tr("矛盾冻结未开启。"),
 		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("br", {}),
-		      "矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。"
+		      tr("矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。"),
+		      " "
 		    ] }) : null,
-		    view !== null && view.enabled && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: S.intro, children: "没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。" }) : null,
+		    view !== null && view.enabled && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: S.intro, children: tr("没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。") }) : null,
 		    sections.map((sec) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { marginBottom: 12 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: S.cardHead, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: { ...S.muted, fontWeight: 600 }, children: sec.label }),
 		        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { style: S.muted, children: [
 		          sec.items.length,
-		          " 条"
+		          " ",
+		          tr("条")
 		        ] })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, fontSize: 11, marginBottom: 6 }, children: sec.hint }),
@@ -36935,12 +39234,12 @@ var __create = Object.create;
 		      rl ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: { ...S.muted, color: isDeferred(p) ? "var(--dsh-mem-accent-fill)" : void 0 }, children: rl }) : null,
 		      cl ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: S.muted, children: cl }) : null,
 		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: S.muted, title: "产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）", children: "run " + p.run_id.slice(0, 12) })
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: S.muted, title: tr("产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）"), children: "run " + p.run_id.slice(0, 12) })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
 		      Side,
 		      {
-		        label: "LLM 建议：胜方",
+		        label: tr("LLM 建议：胜方"),
 		        accent: true,
 		        id: p.winner_id,
 		        content: p.winner_content,
@@ -36948,50 +39247,59 @@ var __create = Object.create;
 		        side: "winner"
 		      }
 		    ),
-		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Side, { label: "LLM 建议：败方", id: p.loser_id, content: p.loser_content, pair: p, side: "loser" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Side, { label: tr("LLM 建议：败方"), id: p.loser_id, content: p.loser_content, pair: p, side: "loser" }),
 		    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { ...S.flexRow, marginTop: 8 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
 		        NButton,
 		        {
 		          disabled: props.busy,
-		          title: "判 LLM 建议的胜方为真；败方从检索库退场",
+		          title: tr("判 LLM 建议的胜方为真；败方从检索库退场"),
 		          onClick: () => {
 		            props.onResolve(p, "winner");
 		          },
-		          children: props.busy ? "裁决中…" : "判胜方为真"
+		          children: props.busy ? tr("裁决中…") : tr("判胜方为真")
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
 		        NButton,
 		        {
 		          disabled: props.busy,
-		          title: "判败方为真；胜方从检索库退场",
+		          title: tr("判败方为真；胜方从检索库退场"),
 		          onClick: () => {
 		            props.onResolve(p, "loser");
 		          },
-		          children: "判败方为真"
+		          children: [
+		            tr("判败方为真"),
+		            " "
+		          ]
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
 		        NButton,
 		        {
 		          disabled: props.busy,
-		          title: "判两者其实是各自独立的事实（LLM 判错了）；两条都保留，不删除",
+		          title: tr("判两者其实是各自独立的事实（LLM 判错了）；两条都保留，不删除"),
 		          onClick: () => {
 		            props.onResolve(p, "both");
 		          },
-		          children: "两者都保留"
+		          children: [
+		            tr("两者都保留"),
+		            " "
+		          ]
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
 		        NButton,
 		        {
 		          disabled: props.busy,
-		          title: "看过但暂不裁决——该对仍在队列里，重置超时并累计复看次数",
+		          title: tr("看过但暂不裁决——该对仍在队列里，重置超时并累计复看次数"),
 		          onClick: () => {
 		            props.onResolve(p, "defer");
 		          },
-		          children: "看过，暂不裁决"
+		          children: [
+		            tr("看过，暂不裁决"),
+		            " "
+		          ]
 		        }
 		      )
 		    ] })
@@ -37005,15 +39313,15 @@ var __create = Object.create;
 		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: S.content, children: props.content || GONE }),
 		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, fontFamily: "ui-monospace, Consolas, monospace" }, children: props.id }),
 		    axis ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, marginTop: 2, fontSize: 11 }, children: axis }) : null,
-		    mt ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, marginTop: 2, fontSize: 11 }, children: "成熟度 · " + (mt === "high" ? "高" : mt === "mid" ? "中" : "低") }) : null
+		    mt ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, marginTop: 2, fontSize: 11 }, children: tr("成熟度 ·") + (mt === "high" ? tr("高") : mt === "mid" ? tr("中") : tr("低")) }) : null
 		  ] });
 		}
 		
 		// client/src/tabs/ConnectTab.tsx
-		var import_react4 = require("react");
+		var import_react5 = require("react");
 		var import_jsx_runtime3 = require("react/jsx-runtime");
 		function errMsg(r) {
-		  return r && r.error && r.error.message ? r.error.message : "RPC 错误";
+		  return r && r.error && r.error.message ? r.error.message : tr("RPC 错误");
 		}
 		function SourceCard(props) {
 		  const { src, rpc, onChanged, onErr } = props;
@@ -37027,22 +39335,22 @@ var __create = Object.create;
 		  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: S.cardHead, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("strong", { children: src.label || src.id }),
-		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: "· " + src.kind + (retired ? " · 已退役" : src.disabled ? " · 已停用" : "") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: "· " + src.kind + (retired ? tr("· 已退役") : src.disabled ? tr("· 已停用") : "") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: () => retire(!retired), children: retired ? "恢复" : "退役" })
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: () => retire(!retired), children: retired ? tr("恢复") : tr("退役") })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { ...S.detail }, children: src.path }),
-		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { ...S.muted, marginTop: 4 }, children: "上次扫描 " + (src.lastScanAt || "—") + " · 上次导入 " + (src.lastImportAt || "—") })
+		    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { ...S.muted, marginTop: 4 }, children: tr("上次扫描") + (src.lastScanAt || "—") + tr("· 上次导入") + (src.lastImportAt || "—") })
 		  ] });
 		}
 		function ConnectTab(props) {
 		  const rpc = props.rpc;
-		  const [data, setData] = (0, import_react4.useState)(null);
-		  const [scan, setScan] = (0, import_react4.useState)(null);
-		  const [error, setError] = (0, import_react4.useState)(null);
-		  const [busy, setBusy] = (0, import_react4.useState)(false);
-		  const [form, setForm] = (0, import_react4.useState)({ id: "", kind: "file", path: "", label: "" });
-		  const load = (0, import_react4.useCallback)(() => {
+		  const [data, setData] = (0, import_react5.useState)(null);
+		  const [scan, setScan] = (0, import_react5.useState)(null);
+		  const [error, setError] = (0, import_react5.useState)(null);
+		  const [busy, setBusy] = (0, import_react5.useState)(false);
+		  const [form, setForm] = (0, import_react5.useState)({ id: "", kind: "file", path: "", label: "" });
+		  const load = (0, import_react5.useCallback)(() => {
 		    rpc("dsh-memory/memory-sources-list", {}).then((r) => {
 		      if (r && r.ok) {
 		        setData(r.value);
@@ -37050,12 +39358,12 @@ var __create = Object.create;
 		      } else setError(errMsg(r));
 		    }).catch((e) => setError(String(e?.message || e)));
 		  }, [rpc]);
-		  (0, import_react4.useEffect)(() => {
+		  (0, import_react5.useEffect)(() => {
 		    load();
 		  }, [load]);
 		  const add = () => {
 		    if (!form.id.trim() || !form.path.trim()) {
-		      setError("登记来源需要 id 与绝对路径 path");
+		      setError(tr("登记来源需要 id 与绝对路径 path"));
 		      return;
 		    }
 		    rpc("dsh-memory/memory-sources-add", { id: form.id.trim(), kind: form.kind, path: form.path.trim(), label: form.label.trim() || void 0 }).then((r) => {
@@ -37088,68 +39396,69 @@ var __create = Object.create;
 		  );
 		  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("p", { style: S.intro, children: [
-		      "登记外部 AI 工具的记忆来源（仅存路径指针，正文不复制入库）。扫描为只读预览；实际导入由「memport 导入」经 memory_import 完成。整面需在设置开启",
+		      tr("登记外部 AI 工具的记忆来源（仅存路径指针，正文不复制入库）。扫描为只读预览；实际导入由「memport 导入」经 memory_import 完成。整面需在设置开启"),
+		      " ",
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("code", { children: " memport.enabled" }),
 		      "。"
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: S.toolbar, children: [
-		      input("id", "来源 id(小写-连字符)"),
+		      input("id", tr("来源 id(小写-连字符)")),
 		      input("kind", "kind: claude/codex/workbuddy/file…"),
-		      input("path", "绝对路径(目录或 .mem)"),
-		      input("label", "显示名(可选)"),
-		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: add, children: "登记来源" })
+		      input("path", tr("绝对路径(目录或 .mem)")),
+		      input("label", tr("显示名(可选)")),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: add, children: tr("登记来源") })
 		    ] }),
-		    !data?.memoryMutate ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.hint, children: "提示：登记/退役需先在面板开启「高权限模式」。" }) : null,
+		    !data?.memoryMutate ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.hint, children: tr("提示：登记/退役需先在面板开启「高权限模式」。") }) : null,
 		    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { ...S.flexRow, margin: "8px 0 12px" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: data ? data.sources.length ? data.sources.length + " 个来源" : "暂无来源" : "加载中…" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: data ? data.sources.length ? data.sources.length + tr("个来源") : tr("暂无来源") : tr("加载中…") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: runScan, disabled: busy, children: busy ? "扫描中…" : "扫描全部来源" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: load, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: runScan, disabled: busy, children: busy ? tr("扫描中…") : tr("扫描全部来源") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(NButton, { onClick: load, children: tr("刷新") })
 		    ] }),
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.error, children: error }) : null,
 		    (data?.sources || []).map((src) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(SourceCard, { rpc, src, onChanged: load, onErr: setError }, src.id)),
 		    scan ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginTop: 12 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: S.heading, children: [
-		        "扫描预览",
+		        tr("扫描预览"),
 		        scan.notice ? `（${scan.notice}）` : ""
 		      ] }),
 		      scan.sources.map((s) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: S.cardHead, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("strong", { children: s.label || s.sourceId }),
-		          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: "：新 " + s.counts.new + " · 近重复 " + s.counts["near-dup"] + " · 疑似冲突 " + s.counts["conflict-candidate"] + " · 重复 " + s.counts.dup }),
+		          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: tr("：新") + s.counts.new + tr("· 近重复") + s.counts["near-dup"] + tr("· 疑似冲突") + s.counts["conflict-candidate"] + tr("· 重复") + s.counts.dup }),
 		          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.grow }),
-		          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: s.files + " 包 · " + s.total + " 条" })
+		          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: S.muted, children: s.files + tr("包 ·") + s.total + tr("条") })
 		        ] }),
 		        s.errors.length ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { ...S.error, whiteSpace: "pre-wrap" }, children: s.errors.join("\n") }) : null,
-		        s.sampleNew.length ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { ...S.detail }, children: s.sampleNew.map((n) => `[${n.type}] ${n.content}`).join("\n") }) : s.counts.new > 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.muted, children: "有新记录（样本省略）。" }) : null
+		        s.sampleNew.length ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { ...S.detail }, children: s.sampleNew.map((n) => `[${n.type}] ${n.content}`).join("\n") }) : s.counts.new > 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.muted, children: tr("有新记录（样本省略）。") }) : null
 		      ] }, s.sourceId)),
-		      scan.enabled && scan.sources.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.muted, children: "无启用来源，或来源下未发现 .mem。" }) : null
+		      scan.enabled && scan.sources.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: S.muted, children: tr("无启用来源，或来源下未发现 .mem。") }) : null
 		    ] }) : null
 		  ] });
 		}
 		
 		// client/src/tabs/SkillsTab.tsx
-		var import_react5 = require("react");
+		var import_react6 = require("react");
 		var import_jsx_runtime4 = require("react/jsx-runtime");
 		function errMsg2(r) {
-		  return r && r.error && r.error.message ? r.error.message : "RPC 错误";
+		  return r && r.error && r.error.message ? r.error.message : tr("RPC 错误");
 		}
-		var TITLES = { candidate: "候选", active: "活跃", archived: "已归档" };
+		var TITLES = { candidate: tr("候选"), active: tr("活跃"), archived: tr("已归档") };
 		function emptyHint(data) {
 		  const p = data.producer;
-		  if (!p) return '暂无技能。技能从重复出现的"工作方法"记忆结晶而来。';
+		  if (!p) return tr('暂无技能。技能从重复出现的"工作方法"记忆结晶而来。');
 		  if (p.workMethodCount === 0) {
-		    return "暂无技能：记忆池里还没有「工作方法」类记录。技能是从重复出现的工作方法结晶来的，请先到概览页确认蒸馏在正常产出记忆。";
+		    return tr("暂无技能：记忆池里还没有「工作方法」类记录。技能是从重复出现的工作方法结晶来的，请先到概览页确认蒸馏在正常产出记忆。");
 		  }
-		  return `暂无技能：池中已有 ${p.workMethodCount} 条「工作方法」，但还没重复到成候选的程度（需跨 ≥${p.minSessions} 个不同会话）。存量可点「立即检测历史」回灌。`;
+		  return tr("暂无技能：池中已有 {p1} 条「工作方法」，但还没重复到成候选的程度（需跨 ≥{p2} 个不同会话）。存量可点「立即检测历史」回灌。", { p1: p.workMethodCount, p2: p.minSessions });
 		}
 		function SkillsTab(props) {
 		  const rpc = props.rpc;
-		  const [data, setData] = (0, import_react5.useState)(null);
-		  const [error, setError] = (0, import_react5.useState)(null);
-		  const [notice, setNotice] = (0, import_react5.useState)(null);
-		  const [busy, setBusy] = (0, import_react5.useState)(false);
-		  const load = (0, import_react5.useCallback)(() => {
+		  const [data, setData] = (0, import_react6.useState)(null);
+		  const [error, setError] = (0, import_react6.useState)(null);
+		  const [notice, setNotice] = (0, import_react6.useState)(null);
+		  const [busy, setBusy] = (0, import_react6.useState)(false);
+		  const load = (0, import_react6.useCallback)(() => {
 		    rpc("dsh-memory/skills-list", {}).then((r) => {
 		      if (r && r.ok) {
 		        setData(r.value);
@@ -37157,7 +39466,7 @@ var __create = Object.create;
 		      } else setError(errMsg2(r));
 		    }).catch((e) => setError(String(e?.message || e)));
 		  }, [rpc]);
-		  (0, import_react5.useEffect)(() => {
+		  (0, import_react6.useEffect)(() => {
 		    load();
 		  }, [load]);
 		  const act = (id, action, tier) => {
@@ -37176,41 +39485,42 @@ var __create = Object.create;
 		    setNotice(null);
 		    rpc("dsh-memory/skills-detect", {}).then((r) => {
 		      if (r && r.ok) {
-		        setError(r.value.error ? `部分失败：${r.value.error}` : null);
+		        setError(r.value.error ? tr("部分失败：{p1}", { p1: r.value.error }) : null);
 		        setNotice(r.value.notice || null);
 		        load();
 		      } else setError(errMsg2(r));
 		    }).catch((e) => setError(String(e?.message || e))).finally(() => setBusy(false));
 		  };
 		  if (data && !data.enabled) {
-		    return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { style: S.intro, children: "技能结晶（程序性记忆）未启用。到「概览」页开启「技能」开关（或部署配置 skills.enabled）：开启后，跨会话重复出现的「工作方法」记忆会累积为技能候选，在此审阅并手动晋升。" });
+		    return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { style: S.intro, children: tr("技能结晶（程序性记忆）未启用。到「概览」页开启「技能」开关（或部署配置 skills.enabled）：开启后，跨会话重复出现的「工作方法」记忆会累积为技能候选，在此审阅并手动晋升。") });
 		  }
-		  const mutateHint = data && !data.memoryMutate ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.hint, children: "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。" }) : null;
+		  const mutateHint = data && !data.memoryMutate ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.hint, children: tr("提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。") }) : null;
 		  const promotable = data && data.producer ? data.skills.filter((s) => s.status === "candidate" && s.sessionCount >= data.producer.minSessions).length : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: data ? `${data.skills.length} 个技能 · 自动晋升${data.allowPromote ? "开" : "关(人工审阅)"} · 需证据会话达阈` : "加载中…" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: data ? tr("{p1} 个技能 · 自动晋升{p2} · 需证据会话达阈", { p1: data.skills.length, p2: data.allowPromote ? "开" : "关(人工审阅)" }) : tr("加载中…") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: detect, disabled: busy || !data?.memoryMutate, children: "立即检测历史" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: load, style: { marginLeft: 6 }, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: detect, disabled: busy || !data?.memoryMutate, children: tr("立即检测历史") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: load, style: { marginLeft: 6 }, children: tr("刷新") })
 		    ] }),
 		    mutateHint,
 		    notice ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.hint, children: notice }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.error, children: error }) : null,
 		    data && promotable > 0 && !data.allowPromote ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: S.hint, children: [
 		      promotable,
-		      " 个候选的证据会话数已达阈，但自动晋升关闭——确认无误后可手动「晋升」。"
+		      " ",
+		      tr("个候选的证据会话数已达阈，但自动晋升关闭——确认无误后可手动「晋升」。")
 		    ] }) : null,
 		    data && data.skills.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { style: S.intro, children: emptyHint(data) }) : null,
 		    (data?.skills || []).map((s) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: S.cardHead, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("strong", { children: s.title }),
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dsh-mem-tag", style: { marginLeft: 6 }, children: TITLES[s.status] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: ` · 档:${s.tier}${s.pinned ? " · 已固定" : ""} · 覆盖 ${s.sessionCount} 会话 / 证据 ${s.evidenceCount} 条` }),
+		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: tr("· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条", { p1: s.tier, p2: s.pinned ? " · 已固定" : "", p3: s.sessionCount, p4: s.evidenceCount }) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.grow })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }, children: [
-		        s.status === "candidate" ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: () => act(s.id, "promote"), disabled: busy, children: "晋升" }) : null,
+		        s.status === "candidate" ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: () => act(s.id, "promote"), disabled: busy, children: tr("晋升") }) : null,
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
 		          "select",
 		          {
@@ -37219,21 +39529,21 @@ var __create = Object.create;
 		            value: s.tier,
 		            onChange: (e) => act(s.id, "set-tier", e.target.value),
 		            children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "full", children: "全文档" }),
-		              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "excerpt", children: "摘录档" }),
-		              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "hint", children: "提示档" })
+		              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "full", children: tr("全文档") }),
+		              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "excerpt", children: tr("摘录档") }),
+		              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "hint", children: tr("提示档") })
 		            ]
 		          }
 		        ),
-		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: () => act(s.id, s.pinned ? "unpin" : "pin"), disabled: busy, children: s.pinned ? "取消固定" : "固定" }),
-		        s.status !== "archived" ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: () => act(s.id, "archive"), disabled: busy, children: "归档" }) : null
+		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: () => act(s.id, s.pinned ? "unpin" : "pin"), disabled: busy, children: s.pinned ? tr("取消固定") : tr("固定") }),
+		        s.status !== "archived" ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: () => act(s.id, "archive"), disabled: busy, children: tr("归档") }) : null
 		      ] })
 		    ] }, s.id))
 		  ] });
 		}
 		
 		// client/src/tabs/CostTab.tsx
-		var import_react6 = require("react");
+		var import_react7 = require("react");
 		
 		// client/src/ui/controls.tsx
 		var import_jsx_runtime5 = require("react/jsx-runtime");
@@ -37328,17 +39638,17 @@ var __create = Object.create;
 		    })
 		  ] });
 		}
-		var RANGE_LABELS = { day: "今日", week: "本周", month: "本月", all: "累计" };
+		var RANGE_LABELS = { day: tr("今日"), week: tr("本周"), month: tr("本月"), all: tr("累计") };
 		var LAYER_OPTS = [
-		  { key: "", label: "全部" },
+		  { key: "", label: tr("全部") },
 		  { key: "l1", label: "L1" },
 		  { key: "l2", label: "L2" },
 		  { key: "l3", label: "L3" }
 		];
 		var GRAN_OPTS = [
-		  { key: "day", label: "日" },
-		  { key: "week", label: "周" },
-		  { key: "month", label: "月" }
+		  { key: "day", label: tr("日") },
+		  { key: "week", label: tr("周") },
+		  { key: "month", label: tr("月") }
 		];
 		var PALETTE = [
 		  "var(--dsh-mem-chart-1)",
@@ -37357,13 +39667,13 @@ var __create = Object.create;
 		var tdStyle = { fontSize: 12.5, color: "var(--dsh-mem-text-1)", textAlign: "right", padding: "4px 10px", fontFamily: "ui-monospace, Consolas, monospace" };
 		function CostTab(props) {
 		  const rpc = props.rpc;
-		  const [data, setData] = (0, import_react6.useState)(null);
-		  const [error, setError] = (0, import_react6.useState)(null);
-		  const [granularity, setGranularity] = (0, import_react6.useState)("day");
-		  const [layer, setLayer] = (0, import_react6.useState)("");
-		  const [rangeDays, setRangeDays] = (0, import_react6.useState)(0);
-		  const [rangeOpen, setRangeOpen] = (0, import_react6.useState)(false);
-		  const load = (0, import_react6.useCallback)(() => {
+		  const [data, setData] = (0, import_react7.useState)(null);
+		  const [error, setError] = (0, import_react7.useState)(null);
+		  const [granularity, setGranularity] = (0, import_react7.useState)("day");
+		  const [layer, setLayer] = (0, import_react7.useState)("");
+		  const [rangeDays, setRangeDays] = (0, import_react7.useState)(0);
+		  const [rangeOpen, setRangeOpen] = (0, import_react7.useState)(false);
+		  const load = (0, import_react7.useCallback)(() => {
 		    setError(null);
 		    rpc("dsh-memory/token-cost", {
 		      granularity,
@@ -37375,7 +39685,7 @@ var __create = Object.create;
 		      setError(String(e && e.message || e));
 		    });
 		  }, [rpc, granularity, rangeDays]);
-		  (0, import_react6.useEffect)(() => {
+		  (0, import_react7.useEffect)(() => {
 		    load();
 		    const timer = setInterval(load, 5e3);
 		    return () => {
@@ -37388,7 +39698,7 @@ var __create = Object.create;
 		    try {
 		      const d = new Date(ts);
 		      const g = data && data.trend ? data.trend.granularity : granularity;
-		      if (g === "month") return d.getMonth() + 1 + "月";
+		      if (g === "month") return d.getMonth() + 1 + tr("月");
 		      return d.getMonth() + 1 + "/" + d.getDate();
 		    } catch {
 		      return "";
@@ -37460,19 +39770,19 @@ var __create = Object.create;
 		          onClick: () => {
 		            setRangeOpen(!rangeOpen);
 		          },
-		          children: rangeDays > 0 ? "近 " + rangeDays + " 天" : "近N天"
+		          children: rangeDays > 0 ? tr("近") + rangeDays + tr("天") : tr("近N天")
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NButton, { onClick: load, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NButton, { onClick: load, children: tr("刷新") })
 		    ] }),
 		    rangeOpen ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: S.muted, children: "展示近 N 天（正整数，清空=默认窗口；超出保留期后端自动回退）" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: S.muted, children: tr("展示近 N 天（正整数，清空=默认窗口；超出保留期后端自动回退）") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
 		        NInput,
 		        {
 		          value: rangeDays === 0 ? "" : String(rangeDays),
-		          placeholder: "如 30",
+		          placeholder: tr("如 30"),
 		          style: { width: 90 },
 		          onChange: (e) => {
 		            const v = String(e.target.value || "").trim();
@@ -37486,8 +39796,8 @@ var __create = Object.create;
 		        }
 		      )
 		    ] }) : null,
-		    error ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.error, children: "成本读取失败：" + error }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: "成本趋势（按模型）" }),
+		    error ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.error, children: tr("成本读取失败：") + error }) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: tr("成本趋势（按模型）") }),
 		    buckets.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
 		      renderCostChart(buckets, models, maxY, fmtDate, fmtInt, PALETTE),
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: "4px 12px", margin: "6px 0 14px" }, children: models.map((m, mi) => {
@@ -37503,11 +39813,11 @@ var __create = Object.create;
 		          "lg" + m
 		        );
 		      }) })
-		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: S.muted, children: data ? "暂无成本数据（触发一次蒸馏后这里会出现趋势）。" : "加载中…" }),
-		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: "层级成本（输出 token）" }),
+		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: S.muted, children: data ? tr("暂无成本数据（触发一次蒸馏后这里会出现趋势）。") : tr("加载中…") }),
+		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: tr("层级成本（输出 token）") }),
 		    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("table", { style: { width: "100%", borderCollapse: "collapse", marginBottom: 14 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("tr", { children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: "层级" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: tr("层级") }),
 		        RANGES.map((r) => {
 		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: RANGE_LABELS[r] }, r);
 		        })
@@ -37519,10 +39829,10 @@ var __create = Object.create;
 		        ] }, lc.layer);
 		      }) })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: "层级成本（单次 avg）" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: tr("层级成本（单次 avg）") }),
 		    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("table", { style: { width: "100%", borderCollapse: "collapse", marginBottom: 14 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("tr", { children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: "层级" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: tr("层级") }),
 		        RANGES.map((r) => {
 		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: RANGE_LABELS[r] + "-avg" }, r);
 		        })
@@ -37534,10 +39844,10 @@ var __create = Object.create;
 		        ] }, lc.layer);
 		      }) })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: "层级成本（单次 median）" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: tr("层级成本（单次 median）") }),
 		    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("table", { style: { width: "100%", borderCollapse: "collapse", marginBottom: 14 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("tr", { children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: "层级" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: tr("层级") }),
 		        RANGES.map((r) => {
 		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: RANGE_LABELS[r] + "-median" }, r);
 		        })
@@ -37549,35 +39859,35 @@ var __create = Object.create;
 		        ] }, lc.layer);
 		      }) })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: "时间窗口总览" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: tr("时间窗口总览") }),
 		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.statGrid, children: windows.map((w) => {
 		      return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "dsh-mem-card", style: S.statTile, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.statNum, children: fmtInt(w.outputTokens + w.reasoningTokens) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.statLabel, children: RANGE_LABELS[w.range] + " · 总输出 token" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.muted, children: "文字 " + fmtInt(w.outputTokens) + " · 思考 " + fmtInt(w.reasoningTokens) + " · " + w.calls + " 次调用" })
+		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.statLabel, children: RANGE_LABELS[w.range] + tr("· 总输出 token") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.muted, children: tr("文字") + fmtInt(w.outputTokens) + tr("· 思考") + fmtInt(w.reasoningTokens) + " · " + w.calls + tr("次调用") })
 		      ] }, w.range);
 		    }) }),
 		    byModel.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: "按模型（累计）" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.panelLabel, children: tr("按模型（累计）") }),
 		      byModel.map((m) => {
 		        const label = fmtModel(m.provider, m.model);
 		        return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { style: S.infoRow, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: S.infoKey, children: label }),
-		          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: S.infoVal, children: m.calls + " 次 · 输出 " + fmtInt(m.outputTokens) + " · 思考 " + fmtInt(m.reasoningTokens) })
+		          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: S.infoVal, children: m.calls + tr("次 · 输出") + fmtInt(m.outputTokens) + tr("· 思考") + fmtInt(m.reasoningTokens) })
 		        ] }, "m-" + label);
 		      })
 		    ] }) : null,
-		    data ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: S.hint, children: "输入按字符、输出/思考按 token 计；趋势图 Y 轴为输出 token，上方可切换层级与颗粒度。" }) : null
+		    data ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: S.hint, children: tr("输入按字符、输出/思考按 token 计；趋势图 Y 轴为输出 token，上方可切换层级与颗粒度。") }) : null
 		  ] });
 		}
 		
 		// client/src/tabs/LogTab.tsx
-		var import_react7 = require("react");
+		var import_react8 = require("react");
 		var import_jsx_runtime7 = require("react/jsx-runtime");
 		var SOURCES = [
-		  { id: "", label: "系统日志" },
-		  { id: "recall_turn", label: "召回追踪" },
-		  { id: "distill_run", label: "蒸馏追踪" }
+		  { id: "", label: tr("系统日志") },
+		  { id: "recall_turn", label: tr("召回追踪") },
+		  { id: "distill_run", label: tr("蒸馏追踪") }
 		];
 		function fmtEvent(ev) {
 		  if (ev.kind === "recall_turn") {
@@ -37596,11 +39906,11 @@ var __create = Object.create;
 		}
 		function LogTab(props) {
 		  const rpc = props.rpc;
-		  const [source, setSource] = (0, import_react7.useState)("");
-		  const [lines, setLines] = (0, import_react7.useState)(null);
-		  const [error, setError] = (0, import_react7.useState)(null);
-		  const preRef = (0, import_react7.useRef)(null);
-		  const load = (0, import_react7.useCallback)(() => {
+		  const [source, setSource] = (0, import_react8.useState)("");
+		  const [lines, setLines] = (0, import_react8.useState)(null);
+		  const [error, setError] = (0, import_react8.useState)(null);
+		  const preRef = (0, import_react8.useRef)(null);
+		  const load = (0, import_react8.useCallback)(() => {
 		    setError(null);
 		    if (source === "") {
 		      rpc("dsh-memory/log-tail", { lines: 200 }).then((r) => {
@@ -37614,56 +39924,56 @@ var __create = Object.create;
 		      else setError(r && r.error ? r.error.message : "RPC error");
 		    }).catch((e) => setError(String(e && e.message || e)));
 		  }, [rpc, source]);
-		  (0, import_react7.useEffect)(() => {
+		  (0, import_react8.useEffect)(() => {
 		    load();
 		  }, [load]);
-		  (0, import_react7.useEffect)(() => {
+		  (0, import_react8.useEffect)(() => {
 		    if (lines && preRef.current) preRef.current.scrollTop = preRef.current.scrollHeight;
 		  }, [lines]);
 		  return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10, gap: 8 }, children: [
 		      SOURCES.map((s) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(NButton, { onClick: () => setSource(s.id), children: source === s.id ? "● " + s.label : s.label }, s.id)),
 		      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(NButton, { onClick: load, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(NButton, { onClick: load, children: tr("刷新") })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: error ? "加载失败" : lines === null ? "加载中…" : `最近 ${lines.length} 条（${SOURCES.find((s) => s.id === source)?.label}）` }),
-		    error ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: "读取失败：" + error + "（点右上“刷新”重试）" }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("pre", { style: S.pre, ref: preRef, children: (lines || []).join("\n") || "(暂无记录)" })
+		    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: SOURCES.find((s) => s.id === source)?.label }) }),
+		    error ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: tr("读取失败：") + error + tr("（点右上“刷新”重试）") }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("pre", { style: S.pre, ref: preRef, children: (lines || []).join("\n") || tr("(暂无记录)") })
 		  ] });
 		}
 		
 		// client/src/tabs/OverviewTab.tsx
-		var import_react18 = require("react");
+		var import_react19 = require("react");
 		
 		// client/src/pill/modes.ts
 		var MODES = [
-		  { key: "chat", label: "日常", color: "var(--dsh-mem-mode-chat)" },
-		  { key: "auto", label: "智能", color: "var(--dsh-mem-mode-auto)" },
-		  { key: "work", label: "工作", color: "var(--dsh-mem-mode-work)" }
+		  { key: "chat", label: tr("日常"), color: "var(--dsh-mem-mode-chat)" },
+		  { key: "auto", label: tr("智能"), color: "var(--dsh-mem-mode-auto)" },
+		  { key: "work", label: tr("工作"), color: "var(--dsh-mem-mode-work)" }
 		];
 		function modeInfo(key) {
 		  for (let i = 0; i < MODES.length; i++) if (MODES[i].key === key) return MODES[i];
 		  return MODES[1];
 		}
 		function modeLabel(key) {
-		  if (key === "auto") return "智能（双族）";
-		  if (key === "chat") return "日常（个人）";
-		  if (key === "work") return "工作（团队）";
-		  return "关闭";
+		  if (key === "auto") return tr("智能（双族）");
+		  if (key === "chat") return tr("日常（个人）");
+		  if (key === "work") return tr("工作（团队）");
+		  return tr("关闭");
 		}
 		
 		// client/src/copy.ts
-		var GRAPH_FEATURE_LABEL = "知识图谱";
-		var GRAPH_TOOL_LABEL = "图谱读工具";
-		var GRAPH_BUDGET_LABEL = "图谱投影预算";
+		var GRAPH_FEATURE_LABEL = tr("知识图谱");
+		var GRAPH_TOOL_LABEL = tr("图谱读工具");
+		var GRAPH_BUDGET_LABEL = tr("图谱投影预算");
 		function graphEnableHint() {
-		  return `在设置页「概览 → ${GRAPH_FEATURE_LABEL}」打开开关后，存量记忆会逐批投影成实体与关系。`;
+		  return tr("在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。", { p1: GRAPH_FEATURE_LABEL });
 		}
 		function graphSwitchDesc(on) {
-		  return on ? "已开启：L1 记忆会投影成实体与关系，存量在启动/开启后逐批补齐（可与「图谱读工具」独立开关）" : "默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时";
+		  return on ? tr("已开启：L1 记忆会投影成实体与关系，存量在启动/开启后逐批补齐（可与「图谱读工具」独立开关）") : tr("默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时");
 		}
 		
 		// client/src/tabs/ArchiveSection.tsx
-		var import_react8 = require("react");
+		var import_react9 = require("react");
 		var import_jsx_runtime8 = require("react/jsx-runtime");
 		var HINT_STYLE = { fontSize: 12, color: "var(--dsh-mem-text-3)", lineHeight: "18px" };
 		var ROOT_STYLE = { fontSize: 11, color: "var(--dsh-mem-text-3)", wordBreak: "break-all" };
@@ -37672,71 +39982,71 @@ var __create = Object.create;
 		    const r = await rpc(method, payload);
 		    if (r && r.ok && r.value !== void 0) return { report: r.value };
 		    const msg = r && !r.ok ? r.error?.message : void 0;
-		    return { error: typeof msg === "string" && msg.length > 0 ? msg : "端点无响应" };
+		    return { error: typeof msg === "string" && msg.length > 0 ? msg : tr("端点无响应") };
 		  } catch (err) {
 		    return { error: err instanceof Error ? err.message : String(err) };
 		  }
 		}
 		function lineOf(rep) {
-		  const head = `已写 ${rep.written} · 未变 ${rep.unchanged} · 跳过 ${rep.skipped}`;
-		  const named = rep.named > 0 ? ` · 新起名 ${rep.named} 条` : "";
-		  const nameBad = rep.nameFailed > 0 ? ` · 起名失败 ${rep.nameFailed} 条(下轮重试)` : "";
+		  const head = tr("已写 {p1} · 未变 {p2} · 跳过 {p3}", { p1: rep.written, p2: rep.unchanged, p3: rep.skipped });
+		  const named = rep.named > 0 ? tr("· 新起名 {p1} 条", { p1: rep.named }) : "";
+		  const nameBad = rep.nameFailed > 0 ? tr("· 起名失败 {p1} 条(下轮重试)", { p1: rep.nameFailed }) : "";
 		  const s = rep.suffix;
-		  const suffix = s && s.renamed + s.revived + s.both + s.edited > 0 ? ` · 后缀对齐 改名 ${s.renamed}${s.edited > 0 ? `(人改过 ${s.edited})` : ""} 改回 ${s.revived}${s.both > 0 ? ` · 冲突 ${s.both}` : ""}` : "";
-		  const suffixMore = s && s.capped && s.remaining > 0 ? ` · 后缀还有 ${s.remaining} 个文件待对齐，再点一次继续` : "";
-		  const tail = rep.remaining > 0 ? ` · 剩余 ${rep.remaining} 个文件，再点一次继续` : "";
-		  const budget = typeof rep.appliedMaxRecords === "number" && rep.appliedMaxRecords > 0 ? ` · 本次预算 ${rep.appliedMaxRecords} 个文件` : "";
-		  const passes = typeof rep.passes === "number" && rep.passes > 1 ? ` · 共滚 ${rep.passes} 轮` : "";
+		  const suffix = s && s.renamed + s.revived + s.both + s.edited > 0 ? tr("· 后缀对齐 改名 {p1}{p2} 改回 {p3}{p4}", { p1: s.renamed, p2: s.edited > 0 ? `(人改过 ${s.edited})` : "", p3: s.revived, p4: s.both > 0 ? ` · 冲突 ${s.both}` : "" }) : "";
+		  const suffixMore = s && s.capped && s.remaining > 0 ? tr("· 后缀还有 {p1} 个文件待对齐，再点一次继续", { p1: s.remaining }) : "";
+		  const tail = rep.remaining > 0 ? tr("· 剩余 {p1} 个文件，再点一次继续", { p1: rep.remaining }) : "";
+		  const budget = typeof rep.appliedMaxRecords === "number" && rep.appliedMaxRecords > 0 ? tr("· 本次预算 {p1} 个文件", { p1: rep.appliedMaxRecords }) : "";
+		  const passes = typeof rep.passes === "number" && rep.passes > 1 ? tr("· 共滚 {p1} 轮", { p1: rep.passes }) : "";
 		  return head + named + nameBad + suffix + suffixMore + budget + passes + tail;
 		}
 		function lineOfReconcile(rep) {
 		  const parts = [
-		    `首次 ${rep.firstTime}`,
-		    `一致 ${rep.same}`,
-		    `仅库变 ${rep.dbOnly}`,
-		    `仅文件变 ${rep.fileOnly}`,
-		    `两边都变 ${rep.both}`,
-		    `文件缺失 ${rep.missingFile}`
+		    tr("首次 {p1}", { p1: rep.firstTime }),
+		    tr("一致 {p1}", { p1: rep.same }),
+		    tr("仅库变 {p1}", { p1: rep.dbOnly }),
+		    tr("仅文件变 {p1}", { p1: rep.fileOnly }),
+		    tr("两边都变 {p1}", { p1: rep.both }),
+		    tr("文件缺失 {p1}", { p1: rep.missingFile })
 		  ];
-		  return parts.join(" · ") + (rep.capped ? `（本次只扫了 ${rep.scanned} 条，未扫全）` : "");
+		  return parts.join(" · ") + (rep.capped ? tr("（本次只扫了 {p1} 条，未扫全）", { p1: rep.scanned }) : "");
 		}
 		function lineOfSync(rep) {
-		  const head = `回灌 ${rep.imported} · 重写文件 ${rep.rendered} · 退场 ${rep.retired} · 一致 ${rep.same}`;
-		  const tail = rep.pending > 0 ? ` · 两边都变 ${rep.pending} 条已挂账（两侧都没动）` : "";
-		  const extra = rep.newFiles > 0 ? ` · 新文件 ${rep.newFiles} 个未入库（导入须走写入内核）` : "";
-		  const links = rep.skippedLinks > 0 ? ` · 防护拦下 ${rep.skippedLinks} 个链接/越界条目（未读）` : "";
-		  const stale = rep.staleRootFiles > 0 ? ` · 陈旧根 ${rep.staleRootFiles} 个文件未参与同步（交给孤儿归档）` : "";
-		  const multi = rep.multiPath > 0 ? ` · 同记录多路径 ${rep.multiPath} 份未动（先跑孤儿归档再同步）` : "";
-		  const hashBad = rep.hashMismatch > 0 ? ` · 自校验不符 ${rep.hashMismatch} 个（文件被外部改动，已按文件侧处理）` : "";
-		  const unsigned = rep.unsigned > 0 ? ` · 未签名 ${rep.unsigned} 个（老投射文件无 hash，下轮导出补盖）` : "";
-		  return head + tail + extra + links + stale + multi + hashBad + unsigned + (rep.remaining > 0 ? ` · 剩余 ${rep.remaining} 个文件，再点一次继续` : "");
+		  const head = tr("回灌 {p1} · 重写文件 {p2} · 退场 {p3} · 一致 {p4}", { p1: rep.imported, p2: rep.rendered, p3: rep.retired, p4: rep.same });
+		  const tail = rep.pending > 0 ? tr("· 两边都变 {p1} 条已挂账（两侧都没动）", { p1: rep.pending }) : "";
+		  const extra = rep.newFiles > 0 ? tr("· 新文件 {p1} 个未入库（导入须走写入内核）", { p1: rep.newFiles }) : "";
+		  const links = rep.skippedLinks > 0 ? tr("· 防护拦下 {p1} 个链接/越界条目（未读）", { p1: rep.skippedLinks }) : "";
+		  const stale = rep.staleRootFiles > 0 ? tr("· 陈旧根 {p1} 个文件未参与同步（交给孤儿归档）", { p1: rep.staleRootFiles }) : "";
+		  const multi = rep.multiPath > 0 ? tr("· 同记录多路径 {p1} 份未动（先跑孤儿归档再同步）", { p1: rep.multiPath }) : "";
+		  const hashBad = rep.hashMismatch > 0 ? tr("· 自校验不符 {p1} 个（文件被外部改动，已按文件侧处理）", { p1: rep.hashMismatch }) : "";
+		  const unsigned = rep.unsigned > 0 ? tr("· 未签名 {p1} 个（老投射文件无 hash，下轮导出补盖）", { p1: rep.unsigned }) : "";
+		  return head + tail + extra + links + stale + multi + hashBad + unsigned + (rep.remaining > 0 ? tr("· 剩余 {p1} 个文件，再点一次继续", { p1: rep.remaining }) : "");
 		}
 		function lineOfOrphans(rep) {
-		  const head = rep.dryRun ? `账本共 ${rep.scanned} 条 · 仍被认领 ${rep.claimed} · 无人认领 ${rep.orphans}（未搬任何东西）` : `已搬 ${rep.moved} · 失败 ${rep.failed} · 仍被认领 ${rep.claimed}`;
-		  const tail = rep.remaining > 0 ? ` · 剩余 ${rep.remaining} 条，再点一次继续` : "";
-		  return head + tail + (rep.dir.length > 0 ? ` · 归档到 ${rep.dir}` : "");
+		  const head = rep.dryRun ? tr("账本共 {p1} 条 · 仍被认领 {p2} · 无人认领 {p3}（未搬任何东西）", { p1: rep.scanned, p2: rep.claimed, p3: rep.orphans }) : tr("已搬 {p1} · 失败 {p2} · 仍被认领 {p3}", { p1: rep.moved, p2: rep.failed, p3: rep.claimed });
+		  const tail = rep.remaining > 0 ? tr("· 剩余 {p1} 条，再点一次继续", { p1: rep.remaining }) : "";
+		  return head + tail + (rep.dir.length > 0 ? tr("· 归档到 {p1}", { p1: rep.dir }) : "");
 		}
 		function lineOfCleanup(rep) {
-		  if (rep.aborted) return `清理已中止（未删任何记录）：${rep.diffs.join("；") || "门禁未通过"}`;
-		  if (rep.dryRun) return `待删 ${rep.targets} 条（预览了前 ${rep.items?.length ?? 0} 条）——未删除任何东西`;
+		  if (rep.aborted) return tr("清理已中止（未删任何记录）：{p1}", { p1: rep.diffs.join("；") || "门禁未通过" });
+		  if (rep.dryRun) return tr("待删 {p1} 条（预览了前 {p2} 条）——未删除任何东西", { p1: rep.targets, p2: rep.items?.length ?? 0 });
 		  const f = rep.files ?? { moved: 0, failed: 0, absent: 0 };
-		  const head = `已删 ${rep.purged} 条 · 归档正文 ${rep.archiveMd === void 0 || rep.archiveMd === "" ? "未写" : "已写"} · 文件搬家 ${f.moved}(失败 ${f.failed}) · 图索引 ${rep.graphForgotten ?? 0}`;
-		  return rep.otherChanged && rep.otherChanged > 0 ? `${head} · 本批之外 ${rep.otherChanged} 条处于漂移（不影响本批）` : head;
+		  const head = tr("已删 {p1} 条 · 归档正文 {p2} · 文件搬家 {p3}(失败 {p4}) · 图索引 {p5}", { p1: rep.purged, p2: rep.archiveMd === void 0 || rep.archiveMd === "" ? "未写" : "已写", p3: f.moved, p4: f.failed, p5: rep.graphForgotten ?? 0 });
+		  return rep.otherChanged && rep.otherChanged > 0 ? tr("{p1} · 本批之外 {p2} 条处于漂移（不影响本批）", { p1: head, p2: rep.otherChanged }) : head;
 		}
 		function ArchiveSection(props) {
 		  const rpc = props.rpc;
-		  const [busy, setBusy] = (0, import_react8.useState)(false);
-		  const [exported, setExported] = (0, import_react8.useState)(void 0);
-		  const [recon, setRecon] = (0, import_react8.useState)(void 0);
-		  const [synced, setSynced] = (0, import_react8.useState)(void 0);
-		  const [orphans, setOrphans] = (0, import_react8.useState)(void 0);
-		  const [cleanup, setCleanup] = (0, import_react8.useState)(void 0);
-		  const [orphanArmed, setOrphanArmed] = (0, import_react8.useState)(false);
-		  const [armed, setArmed] = (0, import_react8.useState)(false);
-		  const [error, setError] = (0, import_react8.useState)(void 0);
-		  const [budgetDraft, setBudgetDraft] = (0, import_react8.useState)("");
-		  const [budgetNote, setBudgetNote] = (0, import_react8.useState)("");
-		  const [prog, setProg] = (0, import_react8.useState)(void 0);
+		  const [busy, setBusy] = (0, import_react9.useState)(false);
+		  const [exported, setExported] = (0, import_react9.useState)(void 0);
+		  const [recon, setRecon] = (0, import_react9.useState)(void 0);
+		  const [synced, setSynced] = (0, import_react9.useState)(void 0);
+		  const [orphans, setOrphans] = (0, import_react9.useState)(void 0);
+		  const [cleanup, setCleanup] = (0, import_react9.useState)(void 0);
+		  const [orphanArmed, setOrphanArmed] = (0, import_react9.useState)(false);
+		  const [armed, setArmed] = (0, import_react9.useState)(false);
+		  const [error, setError] = (0, import_react9.useState)(void 0);
+		  const [budgetDraft, setBudgetDraft] = (0, import_react9.useState)("");
+		  const [budgetNote, setBudgetNote] = (0, import_react9.useState)("");
+		  const [prog, setProg] = (0, import_react9.useState)(void 0);
 		  const pullProgress = () => {
 		    void rpc("dsh-memory/mem-run-status", {}).then((r) => {
 		      const v = r && r.ok ? r.value : void 0;
@@ -37760,7 +40070,7 @@ var __create = Object.create;
 		      if (out.error !== void 0) setError(out.error);
 		    });
 		  };
-		  (0, import_react8.useEffect)(() => {
+		  (0, import_react9.useEffect)(() => {
 		    void rpc("dsh-memory/settings-get", {}).then((r) => {
 		      const v = r && r.ok ? r.value : void 0;
 		      const n = v?.settings?.mdExportMaxRecords;
@@ -37773,13 +40083,13 @@ var __create = Object.create;
 		    if (raw === "") return;
 		    const n = Math.floor(Number(raw));
 		    if (!Number.isFinite(n) || n < 0 || n > 1e4) {
-		      setBudgetNote("预算要 0~10000 的整数（0 = 跟随部署默认）");
+		      setBudgetNote(tr("预算要 0~10000 的整数（0 = 跟随部署默认）"));
 		      return;
 		    }
 		    void rpc("dsh-memory/settings-set", { mdExportMaxRecords: n }).then((r) => {
-		      setBudgetNote(r && r.ok ? n === 0 ? "已改为跟随部署默认" : `已设为每次最多 ${n} 个文件，下一次点击生效` : "写入失败：预算未改");
+		      setBudgetNote(r && r.ok ? n === 0 ? tr("已改为跟随部署默认") : tr("已设为每次最多 {p1} 个文件，下一次点击生效", { p1: n }) : tr("写入失败：预算未改"));
 		    }).catch(() => {
-		      setBudgetNote("写入失败：预算未改");
+		      setBudgetNote(tr("写入失败：预算未改"));
 		    });
 		  };
 		  const run = (method, sink, payload) => {
@@ -37795,56 +40105,71 @@ var __create = Object.create;
 		  const root = exported?.root ?? recon?.root;
 		  const pct = prog !== void 0 && prog.total > 0 ? Math.min(100, Math.round(prog.done / (prog.total * 2) * 100)) : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--dsh-mem-border)" }, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { style: { fontSize: 12, fontWeight: 600, color: "var(--dsh-mem-text-2)", marginBottom: 6 }, children: "外部存档（markdown 投射）" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { fontSize: 12, fontWeight: 600, color: "var(--dsh-mem-text-2)", marginBottom: 6 }, children: [
+		      tr("外部存档（markdown 投射）"),
+		      " "
+		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: S.flexRow, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
 		        NButton,
 		        {
 		          disabled: busy,
-		          title: "把当前全部记忆渲染为 <根>/<类型>/<名称>.memory.md，并记下内容指纹（只写文件，不改库）。一次点完：一轮预算不够时服务端自己续跑下几轮，进度看下方进度条",
+		          title: tr("把当前全部记忆渲染为 <根>/<类型>/<名称>.memory.md，并记下内容指纹（只写文件，不改库）。一次点完：一轮预算不够时服务端自己续跑下几轮，进度看下方进度条"),
 		          onClick: runExport,
-		          children: "导出为可携存档"
+		          children: [
+		            tr("导出为可携存档"),
+		            " "
+		          ]
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
 		        NButton,
 		        {
 		          disabled: busy,
-		          title: "按账本基线比对库与磁盘，只出报告：什么都不写，因此不需要高权限",
+		          title: tr("按账本基线比对库与磁盘，只出报告：什么都不写，因此不需要高权限"),
 		          onClick: () => {
 		            run("dsh-memory/mem-reconcile", setRecon, {});
 		          },
-		          children: "与存档对账"
+		          children: [
+		            tr("与存档对账"),
+		            " "
+		          ]
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
 		        NButton,
 		        {
 		          disabled: busy,
-		          title: "文件 → 库：只有文件变过的回灌入库，`.disable` 后缀的退场；两边都变的那些两侧都不动，只挂账。会写库，因此需要高权限模式",
+		          title: tr("文件 → 库：只有文件变过的回灌入库，`.disable` 后缀的退场；两边都变的那些两侧都不动，只挂账。会写库，因此需要高权限模式"),
 		          onClick: () => {
 		            run("dsh-memory/mem-sync", setSynced, {});
 		          },
-		          children: "从存档同步回库"
+		          children: [
+		            tr("从存档同步回库"),
+		            " "
+		          ]
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
 		        NButton,
 		        {
 		          disabled: busy,
-		          title: "只读预览：扫账本，找出“我们写过但现在没记录认领它”的投射文件（改名/消歧留下的残片）。来路不明的文件一律不动，也不搬任何东西",
+		          title: tr("只读预览：扫账本，找出“我们写过但现在没记录认领它”的投射文件（改名/消歧留下的残片）。来路不明的文件一律不动，也不搬任何东西"),
 		          onClick: () => {
 		            setOrphanArmed(false);
 		            run("dsh-memory/mem-orphans", setOrphans, { dryRun: true });
 		          },
-		          children: "孤儿文件预览"
+		          children: [
+		            tr("孤儿文件预览"),
+		            " "
+		          ]
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
 		        NButton,
 		        {
 		          disabled: busy || orphans === void 0 || !orphans.dryRun || orphans.orphans === 0,
-		          title: orphanArmed ? "再点一次就真的搬——文件会被移出投射目录（不删，进归档目录，可手动搬回）" : "不删只搬：进 <数据目录>/memories-orphans/<批次时间戳>/；需要先跑预览，再点两次确认；服务端还要高权限模式",
+		          title: orphanArmed ? tr("再点一次就真的搬——文件会被移出投射目录（不删，进归档目录，可手动搬回）") : tr("不删只搬：进 <数据目录>/memories-orphans/<批次时间戳>/；需要先跑预览，再点两次确认；服务端还要高权限模式"),
 		          onClick: () => {
 		            if (!orphanArmed) {
 		              setOrphanArmed(true);
@@ -37853,26 +40178,29 @@ var __create = Object.create;
 		            setOrphanArmed(false);
 		            run("dsh-memory/mem-orphans", setOrphans, { dryRun: false });
 		          },
-		          children: orphanArmed ? "确认搬走孤儿文件" : "孤儿文件归档"
+		          children: orphanArmed ? tr("确认搬走孤儿文件") : tr("孤儿文件归档")
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
 		        NButton,
 		        {
 		          disabled: busy,
-		          title: "只读预览：列出将被物理删除的退场记忆（前 50 条）与总数，不删任何东西",
+		          title: tr("只读预览：列出将被物理删除的退场记忆（前 50 条）与总数，不删任何东西"),
 		          onClick: () => {
 		            setArmed(false);
 		            run("dsh-memory/cleanup-retired", setCleanup, { dryRun: true });
 		          },
-		          children: "清理预览（干跑）"
+		          children: [
+		            tr("清理预览（干跑）"),
+		            " "
+		          ]
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
 		        NButton,
 		        {
 		          disabled: busy || cleanup === void 0 || !cleanup.dryRun || cleanup.targets === 0,
-		          title: armed ? "再点一次就真的删——物理删除不可逆（但会先落快照与归档正文）" : "不可逆动作：需要先跑预览，再点两次确认；服务端那边还要高权限模式",
+		          title: armed ? tr("再点一次就真的删——物理删除不可逆（但会先落快照与归档正文）") : tr("不可逆动作：需要先跑预览，再点两次确认；服务端那边还要高权限模式"),
 		          onClick: () => {
 		            if (!armed) {
 		              setArmed(true);
@@ -37881,7 +40209,7 @@ var __create = Object.create;
 		            setArmed(false);
 		            run("dsh-memory/cleanup-retired", setCleanup, { dryRun: false });
 		          },
-		          children: armed ? "确认物理删除" : "清理并归档"
+		          children: armed ? tr("确认物理删除") : tr("清理并归档")
 		        }
 		      )
 		    ] }),
@@ -37893,7 +40221,7 @@ var __create = Object.create;
 		      ] })
 		    ] }) : null,
 		    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { ...S.flexRow, marginTop: 8, alignItems: "center" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "单次文件更新预算" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("单次文件更新预算") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
 		        NInput,
 		        {
@@ -37901,7 +40229,7 @@ var __create = Object.create;
 		          min: 0,
 		          max: 1e4,
 		          style: { width: 96 },
-		          title: "一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。",
+		          title: tr("一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。"),
 		          placeholder: "0",
 		          value: budgetDraft,
 		          onChange: (e) => {
@@ -37916,32 +40244,32 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "个文件/次（0 = 默认 2000）" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("个文件/次（0 = 默认 2000）") }),
 		      budgetNote !== "" ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: budgetNote }) : null
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { style: { ...HINT_STYLE, marginTop: 6 }, children: error !== void 0 ? `失败：${error}` : cleanup !== void 0 ? lineOfCleanup(cleanup) : orphans !== void 0 ? lineOfOrphans(orphans) : synced !== void 0 ? lineOfSync(synced) : exported !== void 0 ? lineOf(exported) : recon !== void 0 ? lineOfReconcile(recon) : "导出=库→文件；对账=只读比较；同步=文件→库；孤儿=搬走没人认领的残片；清理=物理删除（不可逆，需高权限模式）。" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { style: { ...HINT_STYLE, marginTop: 6 }, children: error !== void 0 ? tr("失败：{p1}", { p1: error }) : cleanup !== void 0 ? lineOfCleanup(cleanup) : orphans !== void 0 ? lineOfOrphans(orphans) : synced !== void 0 ? lineOfSync(synced) : exported !== void 0 ? lineOf(exported) : recon !== void 0 ? lineOfReconcile(recon) : tr("导出=库→文件；对账=只读比较；同步=文件→库；孤儿=搬走没人认领的残片；清理=物理删除（不可逆，需高权限模式）。") }),
 		    recon !== void 0 && error === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: HINT_STYLE, children: [
-		      "最近差异样本：",
-		      recon.samples.map((s) => `${s.state}:${s.relPath}`).join("，") || "（无）"
+		      tr("最近差异样本："),
+		      recon.samples.map((s) => `${s.state}:${s.relPath}`).join("，") || tr("（无）")
 		    ] }) : null,
 		    root !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: ROOT_STYLE, children: [
-		      "投射根：",
+		      tr("投射根："),
 		      root
 		    ] }) : null
 		  ] });
 		}
 		
 		// client/src/tabs/DistillSettings.tsx
-		var import_react13 = require("react");
+		var import_react14 = require("react");
 		
 		// client/src/tabs/BudgetInputs.tsx
-		var import_react9 = require("react");
+		var import_react10 = require("react");
 		var import_jsx_runtime9 = require("react/jsx-runtime");
 		var LAYERS = [
-		  ["extract", "抽取"],
-		  ["dedup", "去重"],
-		  ["l2", "L2 场景"],
-		  ["l3", "L3 画像"],
+		  ["extract", tr("抽取")],
+		  ["dedup", tr("去重")],
+		  ["l2", tr("L2 场景")],
+		  ["l3", tr("L3 画像")],
 		  // 这不是“投影开关”，是投影这一步的**输出预算**（issue #16：旧标签就叫“图谱投影”，
 		  // 与概览页那个功能开关撞名，用户点了以为开了投影，实际只是改了 token 预算）。
 		  ["graph", GRAPH_BUDGET_LABEL]
@@ -37959,7 +40287,7 @@ var __create = Object.create;
 		  const onError = props.onError;
 		  const scope = props.scope ?? "all";
 		  const layers = scope === "all" || scope === "input" ? LAYERS : LAYERS.filter((l) => SCOPE_KEYS[scope].includes(l[0]));
-		  const [draft, setDraft] = (0, import_react9.useState)(null);
+		  const [draft, setDraft] = (0, import_react10.useState)(null);
 		  if (!data || !data.budgets) return null;
 		  const cur = data.budgets.current || {};
 		  const def = data.budgets.defaults || {};
@@ -37986,7 +40314,7 @@ var __create = Object.create;
 		      const min = key === "input" || key === "timeout" ? raw === "" ? 0 : 1e3 : 0;
 		      if (!Number.isInteger(n) || n < min || n > max) {
 		        onError(
-		          key === "input" ? "输入预算须为 0 或 1000~256000 的整数（留空或 0 = 跟随配置）" : key === "timeout" ? "蒸馏超时须为 0 或 1000~600000 的整数（留空或 0 = 跟随配置）" : "输出预算须为 0~1000000 的整数（留空或 0 = 跟随默认）"
+		          key === "input" ? tr("输入预算须为 0 或 1000~256000 的整数（留空或 0 = 跟随配置）") : key === "timeout" ? tr("蒸馏超时须为 0 或 1000~600000 的整数（留空或 0 = 跟随配置）") : tr("输出预算须为 0~1000000 的整数（留空或 0 = 跟随默认）")
 		        );
 		        setDraft(null);
 		        return;
@@ -37999,13 +40327,13 @@ var __create = Object.create;
 		    rpc("dsh-memory/settings-set", buildPayload(values)).then((r) => {
 		      if (!r || !r.ok) {
 		        setData(prev);
-		        onError(r && r.error ? "预算写入失败：" + r.error.message : "预算写入失败");
+		        onError(r && r.error ? tr("预算写入失败：") + r.error.message : tr("预算写入失败"));
 		      } else {
 		        onError(null);
 		      }
 		    }).catch((e) => {
 		      setData(prev);
-		      onError("预算写入失败：" + String(e && e.message || e));
+		      onError(tr("预算写入失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const commitOutputs = () => {
@@ -38103,16 +40431,19 @@ var __create = Object.create;
 		  const showOutputs = scope !== "input";
 		  const showInput = scope === "all" || scope === "input";
 		  const effNote = layers.map((l) => eff[l[0]] || "?").join(" / ");
-		  const rowLabel = (key) => key === "extract" ? "抽取输出" : key === "dedup" ? "去重输出" : key === "l2" ? "L2 输出" : "L3 输出";
+		  const rowLabel = (key) => key === "extract" ? tr("抽取输出") : key === "dedup" ? tr("去重输出") : key === "l2" ? tr("L2 输出") : tr("L3 输出");
 		  const rowStyle = { display: "flex", alignItems: "center", gap: 8 };
 		  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { children: [
 		    showOutputs ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: { marginTop: 12 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
 		        "div",
 		        {
 		          style: S.switchLabel,
-		          title: (scope === "l1" ? "L1 的抽取与去重是两次独立调用，输出限额各自设置（路由共用同一条链）。" : "") + "留空或 0 = 跟随默认（当前生效 " + effNote + "）；思考档 high/xhigh/max 时实际限额自动 ×4",
-		          children: "输出预算"
+		          title: (scope === "l1" ? tr("L1 的抽取与去重是两次独立调用，输出限额各自设置（路由共用同一条链）。") : "") + tr("留空或 0 = 跟随默认（当前生效") + effNote + tr("）；思考档 high/xhigh/max 时实际限额自动 ×4"),
+		          children: [
+		            tr("输出预算"),
+		            " "
+		          ]
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }, children: layers.map((l) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: rowStyle, children: [
@@ -38120,7 +40451,7 @@ var __create = Object.create;
 		        inputBox(
 		          l[0],
 		          l[1],
-		          l[1] + " 输出预算（token，留空 = 默认 " + (def[l[0]] || "?") + "）",
+		          l[1] + tr("输出预算（token，留空 = 默认") + (def[l[0]] || "?") + "）",
 		          110,
 		          def[l[0]],
 		          commitOutputs
@@ -38129,42 +40460,48 @@ var __create = Object.create;
 		      ] }, l[0])) })
 		    ] }) : null,
 		    showInput ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: { marginTop: 12 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
 		        "div",
 		        {
 		          style: S.switchLabel,
-		          title: "单次蒸馏调用的输入字符上限（≈token）：L1 抽取按此分块、L2/L3 超限截断；留空或 0 = 跟随配置（当前生效 " + (effIn || "?") + "，来自 llm.maxInputChars）",
-		          children: "输入预算"
+		          title: tr("单次蒸馏调用的输入字符上限（≈token）：L1 抽取按此分块、L2/L3 超限截断；留空或 0 = 跟随配置（当前生效") + (effIn || "?") + tr("，来自 llm.maxInputChars）"),
+		          children: [
+		            tr("输入预算"),
+		            " "
+		          ]
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: rowStyle, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { width: 68, flexShrink: 0, fontSize: 12, color: "var(--dsh-mem-text-2)" }, children: "单次输入" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { width: 68, flexShrink: 0, fontSize: 12, color: "var(--dsh-mem-text-2)" }, children: tr("单次输入") }),
 		        inputBox(
 		          "input",
-		          "输入",
-		          "单次蒸馏输入字符上限（≈token，中文 1 字≈1 token；留空 = 跟随配置 " + (ib.fallback || "?") + "）",
+		          tr("输入"),
+		          tr("单次蒸馏输入字符上限（≈token，中文 1 字≈1 token；留空 = 跟随配置") + (ib.fallback || "?") + "）",
 		          110,
 		          ib.fallback,
 		          commitInput
 		        ),
-		        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: "字符" })
+		        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: tr("字符") })
 		      ] }) })
 		    ] }) : null,
 		    showInput ? /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: { marginTop: 12 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
 		        "div",
 		        {
 		          style: S.switchLabel,
-		          title: '单次蒸馏调用超时(ms)：治"慢但未被网关掐"的路由需更大超时窗；留空或 0 = 跟随配置（当前生效 ' + (effTo || "?") + "ms，来自 llm.timeoutMs）。注：供应商网关侧固定掐断（如某些路由 60s）抬此值无效，须换路由",
-		          children: "蒸馏超时"
+		          title: tr('单次蒸馏调用超时(ms)：治"慢但未被网关掐"的路由需更大超时窗；留空或 0 = 跟随配置（当前生效') + (effTo || "?") + tr("ms，来自 llm.timeoutMs）。注：供应商网关侧固定掐断（如某些路由 60s）抬此值无效，须换路由"),
+		          children: [
+		            tr("蒸馏超时"),
+		            " "
+		          ]
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { style: rowStyle, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { width: 68, flexShrink: 0, fontSize: 12, color: "var(--dsh-mem-text-2)" }, children: "超时" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { width: 68, flexShrink: 0, fontSize: 12, color: "var(--dsh-mem-text-2)" }, children: tr("超时") }),
 		        inputBox(
 		          "timeout",
-		          "超时",
-		          "单次蒸馏调用超时(ms)（留空 = 跟随配置 " + (tb.fallback || "?") + "）",
+		          tr("超时"),
+		          tr("单次蒸馏调用超时(ms)（留空 = 跟随配置") + (tb.fallback || "?") + "）",
 		          110,
 		          tb.fallback,
 		          commitTimeout
@@ -38176,7 +40513,7 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/ChannelEditor.tsx
-		var import_react10 = require("react");
+		var import_react11 = require("react");
 		var import_jsx_runtime10 = require("react/jsx-runtime");
 		var STY = {
 		  block: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--dsh-mem-border)" },
@@ -38202,20 +40539,20 @@ var __create = Object.create;
 		  preview: { fontSize: 12, color: "var(--dsh-mem-text-2)", marginTop: 8, wordBreak: "break-all", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace" }
 		};
 		var MODE_OPTIONS = [
-		  { key: "", label: "跟随部署配置", title: "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）" },
-		  { key: "host", label: "复用宿主", title: "复用宿主 ctx.llm（与付费供应商同路）" },
-		  { key: "direct", label: "直连端点", title: "插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦" }
+		  { key: "", label: tr("跟随部署配置"), title: tr("没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）") },
+		  { key: "host", label: tr("复用宿主"), title: tr("复用宿主 ctx.llm（与付费供应商同路）") },
+		  { key: "direct", label: tr("直连端点"), title: tr("插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦") }
 		];
 		function ChannelEditor(props) {
 		  const { channel, rpc, disabled } = props;
-		  const [baseText, setBaseText] = (0, import_react10.useState)(channel.runtimeBaseURL);
-		  const [keyText, setKeyText] = (0, import_react10.useState)("");
-		  const baseTimer = (0, import_react10.useRef)(void 0);
-		  const dirty = (0, import_react10.useRef)(false);
-		  (0, import_react10.useEffect)(() => {
+		  const [baseText, setBaseText] = (0, import_react11.useState)(channel.runtimeBaseURL);
+		  const [keyText, setKeyText] = (0, import_react11.useState)("");
+		  const baseTimer = (0, import_react11.useRef)(void 0);
+		  const dirty = (0, import_react11.useRef)(false);
+		  (0, import_react11.useEffect)(() => {
 		    if (!dirty.current) setBaseText(channel.runtimeBaseURL);
 		  }, [channel.runtimeBaseURL]);
-		  (0, import_react10.useEffect)(() => () => clearTimeout(baseTimer.current), []);
+		  (0, import_react11.useEffect)(() => () => clearTimeout(baseTimer.current), []);
 		  const commit2 = (patch) => {
 		    rpc("dsh-memory/settings-set", patch).catch(() => {
 		    });
@@ -38246,14 +40583,17 @@ var __create = Object.create;
 		  const showWarn = isDirect && !channel.directReady;
 		  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { style: STY.block, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { style: STY.head, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: STY.title, children: "蒸馏通道" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: isDirect ? STY.chipAccent : STY.chipMuted, children: isDirect ? "直连端点" : "复用宿主" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { title: "direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。", style: { marginLeft: "auto", fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
-		        "生效：",
-		        runtime ? runtime === "direct" ? "运行时直连" : "运行时宿主" : "跟随部署配置"
+		      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: STY.title, children: tr("蒸馏通道") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: isDirect ? STY.chipAccent : STY.chipMuted, children: isDirect ? tr("直连端点") : tr("复用宿主") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { title: tr("direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。"), style: { marginLeft: "auto", fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
+		        tr("生效："),
+		        runtime ? runtime === "direct" ? tr("运行时直连") : tr("运行时宿主") : tr("跟随部署配置")
 		      ] })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { style: STY.desc, children: "direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { style: STY.desc, children: [
+		      tr("direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。"),
+		      " "
+		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
 		      Segmented,
 		      {
@@ -38265,12 +40605,12 @@ var __create = Object.create;
 		    ),
 		    editing ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { style: STY.fieldRow, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: STY.fieldLabel, children: "端点 URL" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: STY.fieldLabel, children: tr("端点 URL") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
 		          NInput,
 		          {
 		            style: STY.input,
-		            placeholder: "如 http://127.0.0.1:11434/v1 或 https://api.xxx/v1",
+		            placeholder: tr("如 http://127.0.0.1:11434/v1 或 https://api.xxx/v1"),
 		            value: baseText,
 		            disabled,
 		            onChange: (e) => onBaseChange(e.target.value),
@@ -38284,8 +40624,8 @@ var __create = Object.create;
 		          }
 		        ),
 		        deployedDirect && !channel.runtimeBaseURL ? /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
-		          "部署基线：",
-		          channel.deployedBaseURL || "（空）"
+		          tr("部署基线："),
+		          channel.deployedBaseURL || tr("（空）")
 		        ] }) : null
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { style: STY.fieldRow, children: [
@@ -38295,7 +40635,7 @@ var __create = Object.create;
 		          {
 		            style: STY.input,
 		            type: "password",
-		            placeholder: apiKeySet ? "••••••••（已配置；留空提交可覆盖）" : "本地免 key 可留空",
+		            placeholder: apiKeySet ? tr("••••••••（已配置；留空提交可覆盖）") : tr("本地免 key 可留空"),
 		            value: keyText,
 		            disabled,
 		            autoComplete: "new-password",
@@ -38306,41 +40646,44 @@ var __create = Object.create;
 		            onBlur: commitKey
 		          }
 		        ),
-		        apiKeySet ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: STY.chipAccent, children: "已配置" }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: STY.chipMuted, children: "未配置" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+		        apiKeySet ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: STY.chipAccent, children: tr("已配置") }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { style: STY.chipMuted, children: tr("未配置") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
 		          NButton,
 		          {
 		            disabled,
-		            title: "写入空串清除运行时密钥（部署 .yml 的密钥不受影响）",
+		            title: tr("写入空串清除运行时密钥（部署 .yml 的密钥不受影响）"),
 		            onClick: () => commit2({ directApiKey: "" }),
-		            children: "清除"
+		            children: [
+		              tr("清除"),
+		              " "
+		            ]
 		          }
 		        )
 		      ] }),
-		      showWarn ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { style: STY.warn, children: "⚠ direct 未配置完整：需同时有端点 URL 与模型（llm.model / 全局链主路由），否则会回退宿主路由。" }) : null
-		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { style: STY.preview, children: isDirect ? "当前将直连端点：" + (channel.runtimeBaseURL || channel.deployedBaseURL || "（未配置端点）") + (apiKeySet ? " · 密钥已配置" : " · 未配置密钥") : "当前复用宿主 ctx.llm（" + (runtime === "host" ? "运行时锁定" : "跟随部署配置") + "）" })
+		      showWarn ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { style: STY.warn, children: tr("⚠ direct 未配置完整：需同时有端点 URL 与模型（llm.model / 全局链主路由），否则会回退宿主路由。") }) : null
+		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { style: STY.preview, children: isDirect ? tr("当前将直连端点：") + (channel.runtimeBaseURL || channel.deployedBaseURL || tr("（未配置端点）")) + (apiKeySet ? tr("· 密钥已配置") : tr("· 未配置密钥")) : tr("当前复用宿主 ctx.llm（") + (runtime === "host" ? tr("运行时锁定") : tr("跟随部署配置")) + "）" })
 		  ] });
 		}
 		
 		// client/src/tabs/RouteChainEditor.tsx
-		var import_react12 = require("react");
+		var import_react13 = require("react");
 		
 		// client/src/ui/NSel.tsx
-		var import_react11 = require("react");
+		var import_react12 = require("react");
 		var import_jsx_runtime11 = require("react/jsx-runtime");
 		function NSel(props) {
 		  const options = props.options || [];
 		  const value = props.value || "";
 		  const disabled = !!props.disabled;
-		  const [open, setOpen] = (0, import_react11.useState)(false);
-		  const [idx, setIdx] = (0, import_react11.useState)(-1);
-		  const wrapRef = (0, import_react11.useRef)(null);
-		  const listRef = (0, import_react11.useRef)(null);
+		  const [open, setOpen] = (0, import_react12.useState)(false);
+		  const [idx, setIdx] = (0, import_react12.useState)(-1);
+		  const wrapRef = (0, import_react12.useRef)(null);
+		  const listRef = (0, import_react12.useRef)(null);
 		  let selectedLabel = "";
 		  for (let si = 0; si < options.length; si++) {
 		    if (options[si].id === value) selectedLabel = options[si].label;
 		  }
-		  (0, import_react11.useEffect)(() => {
+		  (0, import_react12.useEffect)(() => {
 		    if (!open) return void 0;
 		    const onDown = (e) => {
 		      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
@@ -38350,7 +40693,7 @@ var __create = Object.create;
 		      document.removeEventListener("mousedown", onDown);
 		    };
 		  }, [open]);
-		  (0, import_react11.useEffect)(() => {
+		  (0, import_react12.useEffect)(() => {
 		    if (!open || !listRef.current) return;
 		    const el = listRef.current.querySelector('[data-active="1"]');
 		    if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
@@ -38430,12 +40773,12 @@ var __create = Object.create;
 		          }
 		        },
 		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "dsh-mem-select-label", children: selectedLabel || props.placeholder || "（请选择）" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "dsh-mem-select-label", children: selectedLabel || props.placeholder || tr("（请选择）") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "dsh-mem-sel-chev" + (open ? " dsh-mem-sel-chev-open" : ""), "aria-hidden": true })
 		        ]
 		      }
 		    ),
-		    open && !disabled ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "dsh-mem-pop", ref: listRef, role: "listbox", children: options.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "dsh-mem-pop-empty", children: "无选项" }) : options.map((o, i) => {
+		    open && !disabled ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "dsh-mem-pop", ref: listRef, role: "listbox", children: options.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "dsh-mem-pop-empty", children: tr("无选项") }) : options.map((o, i) => {
 		      return /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
 		        "button",
 		        {
@@ -38494,26 +40837,26 @@ var __create = Object.create;
 		  const disabled = !!props.disabled;
 		  const scope = props.scope ?? "global";
 		  const isLayer = scope !== "global";
-		  const [info, setInfo] = (0, import_react12.useState)(null);
-		  const [rows, setRows] = (0, import_react12.useState)(null);
-		  const [rowErrs, setRowErrs] = (0, import_react12.useState)({});
-		  const [err, setErr] = (0, import_react12.useState)(null);
-		  const [manual, setManual] = (0, import_react12.useState)({ idx: -1, text: "" });
-		  const pendingWrites = (0, import_react12.useRef)(0);
+		  const [info, setInfo] = (0, import_react13.useState)(null);
+		  const [rows, setRows] = (0, import_react13.useState)(null);
+		  const [rowErrs, setRowErrs] = (0, import_react13.useState)({});
+		  const [err, setErr] = (0, import_react13.useState)(null);
+		  const [manual, setManual] = (0, import_react13.useState)({ idx: -1, text: "" });
+		  const pendingWrites = (0, import_react13.useRef)(0);
 		  function refreshInfo() {
 		    rpc("dsh-memory/llm-providers", {}).then((r) => {
 		      if (r && r.ok && pendingWrites.current === 0) setInfo(r.value);
 		    }).catch(() => {
 		    });
 		  }
-		  (0, import_react12.useEffect)(() => {
+		  (0, import_react13.useEffect)(() => {
 		    refreshInfo();
 		    const timer = setInterval(refreshInfo, 5e3);
 		    return () => {
 		      clearInterval(timer);
 		    };
 		  }, [rpc]);
-		  (0, import_react12.useEffect)(() => {
+		  (0, import_react13.useEffect)(() => {
 		    if (!info || !info.providers) return;
 		    info.providers.forEach((p) => {
 		      if (!p.id || modelsCache[p.id]) return;
@@ -38525,7 +40868,7 @@ var __create = Object.create;
 		  }, [rpc, info]);
 		  const layerView = isLayer && info && info.layerChains ? info.layerChains[scope] : null;
 		  const savedRows = isLayer ? layerView?.runtime ?? [] : info && info.chain ? info.chain.current : [];
-		  (0, import_react12.useEffect)(() => {
+		  (0, import_react13.useEffect)(() => {
 		    if (rows === null && info && savedRows.length) {
 		      setRows(savedRows.map(copyRow));
 		    }
@@ -38589,26 +40932,26 @@ var __create = Object.create;
 		    const errs = {};
 		    const seen = {};
 		    if (isLayer && (!rows[0].provider || !rows[0].model)) {
-		      errs[0] = "主路由行必须显式选择供应商与模型（层链不支持跟随默认模型）";
+		      errs[0] = tr("主路由行必须显式选择供应商与模型（层链不支持跟随默认模型）");
 		    } else if (rows[0].provider && !rows[0].model || !rows[0].provider && rows[0].model) {
-		      errs[0] = "主路由行供应商与模型须成对（双空 = 跟随默认模型）";
+		      errs[0] = tr("主路由行供应商与模型须成对（双空 = 跟随默认模型）");
 		    }
 		    if (rows[0].provider && rows[0].model) seen[rows[0].provider + "::" + rows[0].model] = 0;
 		    for (let i = 1; i < rows.length; i++) {
 		      if (!rows[i].provider || !rows[i].model) {
-		        errs[i] = "回退路由必须显式选择供应商与模型";
+		        errs[i] = tr("回退路由必须显式选择供应商与模型");
 		        continue;
 		      }
 		      const key = rows[i].provider + "::" + rows[i].model;
 		      if (seen[key] !== void 0) {
-		        errs[i] = seen[key] === 0 ? "与主路由完全相同（运行时会跳过，请去重）" : "与第 " + (seen[key] + 1) + " 行重复";
+		        errs[i] = seen[key] === 0 ? tr("与主路由完全相同（运行时会跳过，请去重）") : tr("与第") + (seen[key] + 1) + tr("行重复");
 		      } else {
 		        seen[key] = i;
 		      }
 		    }
 		    setRowErrs(errs);
 		    if (rows.length > 8) {
-		      setErr("路由链最多 8 行（含主路由行），请删除多余行");
+		      setErr(tr("路由链最多 8 行（含主路由行），请删除多余行"));
 		      return;
 		    }
 		    if (Object.keys(errs).length) return;
@@ -38630,11 +40973,11 @@ var __create = Object.create;
 		    const payload = isLayer ? { distillLayerChains: { [scope]: rows } } : { distillChain: rows };
 		    rpc("dsh-memory/settings-set", payload).then((r) => {
 		      pendingWrites.current -= 1;
-		      setErr(!r || r.ok ? null : "路由链保存失败：" + (r && r.error && r.error.message || "未知错误"));
+		      setErr(!r || r.ok ? null : tr("路由链保存失败：") + (r && r.error && r.error.message || tr("未知错误")));
 		      refreshInfo();
 		    }).catch((e) => {
 		      pendingWrites.current -= 1;
-		      setErr("路由链保存失败：" + String(e && e.message || e));
+		      setErr(tr("路由链保存失败：") + String(e && e.message || e));
 		      refreshInfo();
 		    });
 		  }
@@ -38645,11 +40988,11 @@ var __create = Object.create;
 		        pendingWrites.current -= 1;
 		        setRows(null);
 		        setRowErrs({});
-		        setErr(!r || r.ok ? null : "清空失败，请重试");
+		        setErr(!r || r.ok ? null : tr("清空失败，请重试"));
 		        refreshInfo();
 		      }).catch((e) => {
 		        pendingWrites.current -= 1;
-		        setErr("清空失败：" + String(e && e.message || e));
+		        setErr(tr("清空失败：") + String(e && e.message || e));
 		        refreshInfo();
 		      });
 		      return;
@@ -38658,11 +41001,11 @@ var __create = Object.create;
 		      pendingWrites.current -= 1;
 		      setRows(null);
 		      setRowErrs({});
-		      setErr(!r || r.ok ? null : "清空失败，请重试");
+		      setErr(!r || r.ok ? null : tr("清空失败，请重试"));
 		      refreshInfo();
 		    }).catch((e) => {
 		      pendingWrites.current -= 1;
-		      setErr("清空失败：" + String(e && e.message || e));
+		      setErr(tr("清空失败：") + String(e && e.message || e));
 		      refreshInfo();
 		    });
 		  }
@@ -38674,16 +41017,16 @@ var __create = Object.create;
 		  });
 		  function roRow(e, i) {
 		    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: STY2.roRow, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: STY2.badge, children: i === 0 ? "主" : String(i + 1) }),
+		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: STY2.badge, children: i === 0 ? tr("主") : String(i + 1) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: { ...STY2.mono, color: "var(--dsh-mem-text-2)" }, children: e.provider + " / " + e.model }),
-		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: { marginLeft: "auto", flexShrink: 0, fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: e.effort ? "档位 " + e.effort : "跟随部署配置" })
+		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: { marginLeft: "auto", flexShrink: 0, fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: e.effort ? tr("档位") + e.effort : tr("跟随部署配置") })
 		    ] }, "ro" + i);
 		  }
 		  if (info.pinned) {
 		    const effPin = isLayer ? layerView?.effectiveChain ?? [] : info.chain && info.chain.effectiveChain || [];
 		    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: STY2.wrap, children: [
 		      effPin.map(roRow),
-		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: STY2.note, children: "部署已锁定路由（pin），调整请修改 cordis.patch.yml 中 llm 的配置。" })
+		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: STY2.note, children: tr("部署已锁定路由（pin），调整请修改 cordis.patch.yml 中 llm 的配置。") })
 		    ] });
 		  }
 		  if (rows === null) {
@@ -38693,19 +41036,28 @@ var __create = Object.create;
 		      if (src === "static" && lv) {
 		        return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: STY2.wrap, children: [
 		          lv.static.map((e, i) => roRow({ provider: e.provider, model: e.model, effort: e.reasoningEffort || "" }, i)),
-		          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(NButton, { onClick: forkStatic, disabled, children: "自定义本层链" }) })
+		          /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(NButton, { onClick: forkStatic, disabled, children: [
+		            tr("自定义本层链"),
+		            " "
+		          ] }) })
 		        ] });
 		      }
 		      const previewRows = lv?.effectiveChain ?? [];
 		      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: STY2.wrap, children: [
-		        previewRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: S.switchDesc, children: "本层跟随全局链，暂无可用路由。" }) : previewRows.map(roRow),
-		        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(NButton, { onClick: forkStatic, disabled, children: "自定义本层链" }) })
+		        previewRows.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: S.switchDesc, children: tr("本层跟随全局链，暂无可用路由。") }) : previewRows.map(roRow),
+		        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(NButton, { onClick: forkStatic, disabled, children: [
+		          tr("自定义本层链"),
+		          " "
+		        ] }) })
 		      ] });
 		    }
 		    const effFollow = info.chain && info.chain.effectiveChain || [];
 		    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: STY2.wrap, children: [
-		      effFollow.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: S.switchDesc, children: "蒸馏跟随默认模型，未配置回退链。" }) : effFollow.map(roRow),
-		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(NButton, { onClick: forkStatic, disabled, children: "编辑为运行时链" }) })
+		      effFollow.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: S.switchDesc, children: tr("蒸馏跟随默认模型，未配置回退链。") }) : effFollow.map(roRow),
+		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(NButton, { onClick: forkStatic, disabled, children: [
+		        tr("编辑为运行时链"),
+		        " "
+		      ] }) })
 		    ] });
 		  }
 		  const capped = rows.length >= 8;
@@ -38730,25 +41082,25 @@ var __create = Object.create;
 		      providerOptions = [
 		        {
 		          id: "",
-		          label: info.default ? "跟随默认模型（" + info.default.provider + " / " + info.default.model + "）" : "跟随默认模型"
+		          label: info.default ? tr("跟随默认模型（") + info.default.provider + " / " + info.default.model + "）" : tr("跟随默认模型")
 		        }
 		      ].concat(providerOptions);
 		    }
 		    if (row2.provider && !providersById[row2.provider]) {
-		      providerOptions.push({ id: row2.provider, label: row2.provider + "（已不在列表）" });
+		      providerOptions.push({ id: row2.provider, label: row2.provider + tr("（已不在列表）") });
 		    }
 		    const modelOptions = modelList.map((m) => {
 		      return { id: m.id, label: m.name !== m.id ? m.name + "（" + m.id + "）" : m.id };
 		    });
 		    if (row2.model && !modelList.some((m) => m.id === row2.model)) {
-		      modelOptions.push({ id: row2.model, label: row2.model + "（已不在列表）" });
+		      modelOptions.push({ id: row2.model, label: row2.model + tr("（已不在列表）") });
 		    }
-		    const effortOptions = [{ id: "", label: "跟随部署配置" }].concat(
+		    const effortOptions = [{ id: "", label: tr("跟随部署配置") }].concat(
 		      curEfforts.filter((k) => EFFORT_VOCAB.indexOf(k) >= 0).map((k) => ({ id: k, label: k }))
 		    );
 		    return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: { ...STY2.row, ...rowErrs[i] ? STY2.rowErr : null }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: STY2.line, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: STY2.badge, children: isPrimary ? "主" : String(i + 1) }),
+		        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { style: STY2.badge, children: isPrimary ? tr("主") : String(i + 1) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
 		          NSel,
 		          {
@@ -38756,7 +41108,7 @@ var __create = Object.create;
 		            options: providerOptions,
 		            value: row2.provider,
 		            disabled,
-		            placeholder: isPrimary ? "跟随默认模型" : "供应商",
+		            placeholder: isPrimary ? tr("跟随默认模型") : tr("供应商"),
 		            onChange: (v) => {
 		              updateRow(i, { provider: v, model: "", reasoningEffort: "" });
 		            }
@@ -38766,7 +41118,7 @@ var __create = Object.create;
 		          NInput,
 		          {
 		            style: { flex: 1, minWidth: 150 },
-		            placeholder: "模型 id（该供应商未提供列表，输入后回车）…",
+		            placeholder: tr("模型 id（该供应商未提供列表，输入后回车）…"),
 		            value: manual.idx === i ? manual.text : row2.model,
 		            onChange: (e) => {
 		              setManual({ idx: i, text: e.target.value });
@@ -38788,7 +41140,7 @@ var __create = Object.create;
 		            options: modelOptions,
 		            value: row2.model,
 		            disabled: disabled || !modelsLoaded,
-		            placeholder: modelsLoaded ? isPrimary ? "（选择模型，可留空跟随默认）" : "（选择模型）" : "加载模型列表…",
+		            placeholder: modelsLoaded ? isPrimary ? tr("（选择模型，可留空跟随默认）") : tr("（选择模型）") : tr("加载模型列表…"),
 		            onChange: (v) => {
 		              updateRow(i, { model: v });
 		            }
@@ -38801,7 +41153,7 @@ var __create = Object.create;
 		            options: effortOptions,
 		            value: row2.reasoningEffort,
 		            disabled: disabled || !(row2.provider && row2.model),
-		            placeholder: "跟随部署配置",
+		            placeholder: tr("跟随部署配置"),
 		            onChange: (v) => {
 		              updateRow(i, { reasoningEffort: v });
 		            }
@@ -38814,7 +41166,7 @@ var __create = Object.create;
 		          {
 		            style: STY2.ico,
 		            disabled: disabled || i === 0,
-		            title: i === 1 ? "上移（与主路由互换/顶替为主路由）" : "上移",
+		            title: i === 1 ? tr("上移（与主路由互换/顶替为主路由）") : tr("上移"),
 		            onClick: () => {
 		              moveRow(i, -1);
 		            },
@@ -38826,7 +41178,7 @@ var __create = Object.create;
 		          {
 		            style: STY2.ico,
 		            disabled: disabled || i === rows.length - 1 || i === 0 && !row2.provider,
-		            title: "下移",
+		            title: tr("下移"),
 		            onClick: () => {
 		              moveRow(i, 1);
 		            },
@@ -38838,7 +41190,7 @@ var __create = Object.create;
 		          {
 		            style: STY2.ico,
 		            disabled,
-		            title: isPrimary ? "重置为跟随默认" : "删除",
+		            title: isPrimary ? tr("重置为跟随默认") : tr("删除"),
 		            onClick: () => {
 		              removeRow(i);
 		            },
@@ -38846,8 +41198,8 @@ var __create = Object.create;
 		          }
 		        )
 		      ] }),
-		      isPrimary && !row2.provider ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: STY2.note, children: "跟随默认模型" + (info.default ? "：" + info.default.provider + " / " + info.default.model : "") + "（档位跟随部署配置，选定模型后可单独设置）" }) : null,
-		      !known ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: STY2.warn, children: "⚠ 供应商 " + row2.provider + " 已不在已注册路由中：该路由调用会失败并被链跳过（不阻止保存）。" }) : null,
+		      isPrimary && !row2.provider ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: STY2.note, children: tr("跟随默认模型") + (info.default ? "：" + info.default.provider + " / " + info.default.model : "") + tr("（档位跟随部署配置，选定模型后可单独设置）") }) : null,
+		      !known ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: STY2.warn, children: tr("⚠ 供应商") + row2.provider + tr("已不在已注册路由中：该路由调用会失败并被链跳过（不阻止保存）。") }) : null,
 		      rowErrs[i] ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: STY2.warn, children: "✕ " + rowErrs[i] }) : null
 		    ] }, "row" + i);
 		  });
@@ -38857,12 +41209,12 @@ var __create = Object.create;
 		      "div",
 		      {
 		        style: { ...S.switchDesc, marginBottom: 8 },
-		        title: isLayer ? "本层链失败只在层内降级，绝不落到全局链；每行档位独立" : "第 1 行主路由；失败（报错/掐断/网络异常/空输出）按序降级；每行档位独立",
-		        children: isLayer ? "主路由失败，只降级到本层回退" : "主路由失败，按序降级"
+		        title: isLayer ? tr("本层链失败只在层内降级，绝不落到全局链；每行档位独立") : tr("第 1 行主路由；失败（报错/掐断/网络异常/空输出）按序降级；每行档位独立"),
+		        children: isLayer ? tr("主路由失败，只降级到本层回退") : tr("主路由失败，按序降级")
 		      }
 		    ),
 		    rowEls,
-		    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(NButton, { style: STY2.add, disabled: disabled || capped, onClick: addRow, children: capped ? "已达上限（8 条）" : "+ 添加回退路由" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(NButton, { style: STY2.add, disabled: disabled || capped, onClick: addRow, children: capped ? tr("已达上限（8 条）") : tr("+ 添加回退路由") }),
 		    /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, marginTop: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
 		        NButton,
@@ -38870,20 +41222,23 @@ var __create = Object.create;
 		          style: isLayer ? { ...STY2.ghost, color: "var(--dsh-mem-danger)", border: "1px solid var(--dsh-mem-danger)" } : STY2.ghost,
 		          disabled,
 		          onClick: clearToFollow,
-		          children: isLayer ? "清除自定义 · 跟随全局" : "清空并跟随部署配置"
+		          children: isLayer ? tr("清除自定义 · 跟随全局") : tr("清空并跟随部署配置")
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(NButton, { variant: "primary", disabled, onClick: save, children: "保存" })
+		      /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(NButton, { variant: "primary", disabled, onClick: save, children: [
+		        tr("保存"),
+		        " "
+		      ] })
 		    ] }),
 		    err ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { ...STY2.warn, marginTop: 8 }, children: "✕ " + err }) : null,
 		    /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { style: { marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--dsh-mem-border)" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)", marginBottom: 4 }, children: "实际链" + (dirty ? "（保存后更新；当前显示已保存值）" : "") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)", marginBottom: 4 }, children: tr("实际链") + (dirty ? tr("（保存后更新；当前显示已保存值）") : "") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
 		        "div",
 		        {
 		          style: { fontSize: 12, color: "var(--dsh-mem-text-2)", wordBreak: "break-all", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace" },
-		          children: effChain.map((e) => e.provider + "/" + e.model + (e.effort ? "（" + e.effort + "）" : "")).join(" → ") || "（暂无可用路由）"
+		          children: effChain.map((e) => e.provider + "/" + e.model + (e.effort ? "（" + e.effort + "）" : "")).join(" → ") || tr("（暂无可用路由）")
 		        }
 		      )
 		    ] })
@@ -38925,16 +41280,16 @@ var __create = Object.create;
 		  return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...base, background: "var(--dsh-mem-track)" } });
 		}
 		var LAYER_META = {
-		  l1: { seg: "L1", title: "L1 · 抽取 / 去重" },
-		  l2: { seg: "L2", title: "L2 · 场景摘要" },
-		  l3: { seg: "L3", title: "L3 · 画像蒸馏" }
+		  l1: { seg: "L1", title: tr("L1 · 抽取 / 去重") },
+		  l2: { seg: "L2", title: tr("L2 · 场景摘要") },
+		  l3: { seg: "L3", title: tr("L3 · 画像蒸馏") }
 		};
 		function DistillSettings(props) {
 		  const rpc = props.rpc;
 		  const disabled = !!props.disabled;
-		  const [info, setInfo] = (0, import_react13.useState)(null);
-		  const [tab, setTab] = (0, import_react13.useState)("g");
-		  (0, import_react13.useEffect)(() => {
+		  const [info, setInfo] = (0, import_react14.useState)(null);
+		  const [tab, setTab] = (0, import_react14.useState)("g");
+		  (0, import_react14.useEffect)(() => {
 		    let alive = true;
 		    const refresh = () => {
 		      rpc("dsh-memory/llm-providers", {}).then((r) => {
@@ -38953,33 +41308,39 @@ var __create = Object.create;
 		  const dotOf = (k) => layers?.[k]?.source ?? "global";
 		  const users = ["l1", "l2", "l3"].filter((k) => dotOf(k) === "global");
 		  const segOptions = [
-		    { key: "g", label: "全局默认", title: "未单独配置的层走这条链（当前在用：" + (users.length ? users.map((k) => LAYER_META[k].seg).join("、") : "无") + "）" },
+		    { key: "g", label: tr("全局默认"), title: tr("未单独配置的层走这条链（当前在用：") + (users.length ? users.map((k) => LAYER_META[k].seg).join("、") : tr("无")) + "）" },
 		    ...["l1", "l2", "l3"].map((k) => ({
 		      key: k,
-		      title: LAYER_META[k].title + " · " + (dotOf(k) === "runtime" ? "运行时自定义" : dotOf(k) === "static" ? "部署 YAML 层链（只读）" : "跟随全局"),
+		      title: LAYER_META[k].title + " · " + (dotOf(k) === "runtime" ? tr("运行时自定义") : dotOf(k) === "static" ? tr("部署 YAML 层链（只读）") : tr("跟随全局")),
 		      label: /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Dot, { kind: dotOf(k) }),
 		        LAYER_META[k].seg
 		      ] })
 		    }))
 		  ];
-		  const chipTitle = (k) => dotOf(k) === "runtime" ? "本层走设置页自定义链" : dotOf(k) === "static" ? "本层走部署 YAML 层链（UI 只读，自定义可覆盖）" : "本层未单独配置，走全局默认链";
+		  const chipTitle = (k) => dotOf(k) === "runtime" ? tr("本层走设置页自定义链") : dotOf(k) === "static" ? tr("本层走部署 YAML 层链（UI 只读，自定义可覆盖）") : tr("本层未单独配置，走全局默认链");
 		  return /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Segmented, { value: tab, options: segOptions, onChange: (k) => setTab(k) }),
 		    /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { style: STY3.hint, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Dot, { kind: "runtime" }),
-		      " 自定义 · ",
+		      " ",
+		      tr("自定义 ·"),
+		      " ",
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Dot, { kind: "static" }),
-		      " 部署 YAML · ",
+		      " ",
+		      tr("部署 YAML ·"),
+		      " ",
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Dot, { kind: "global" }),
-		      " 跟随全局",
-		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { title: "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读", children: "（层链优先于全局）" })
+		      " ",
+		      tr("跟随全局"),
+		      " ",
+		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { title: tr("每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读"), children: tr("（层链优先于全局）") })
 		    ] }),
 		    tab === "g" ? /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { style: STY3.panelHead, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: STY3.panelTitle, children: "全局默认链" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.chip, ...STY3.chipAccent }, children: "运行时 · 可编辑" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.inUse, marginLeft: "auto" }, children: users.length ? "在用：" + users.map((k) => LAYER_META[k].seg).join("、") : "当前无层使用" })
+		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: STY3.panelTitle, children: tr("全局默认链") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.chip, ...STY3.chipAccent }, children: tr("运行时 · 可编辑") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.inUse, marginLeft: "auto" }, children: users.length ? tr("在用：") + users.map((k) => LAYER_META[k].seg).join("、") : tr("当前无层使用") })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(RouteChainEditor, { rpc, disabled }, "g"),
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(BudgetInputs, { rpc, disabled, data: props.data, setData: props.setData, onError: props.onError, scope: "input" }, "g-budget"),
@@ -38987,7 +41348,7 @@ var __create = Object.create;
 		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { style: STY3.panelHead, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: STY3.panelTitle, children: LAYER_META[tab].title }),
-		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.chip, ...dotOf(tab) === "runtime" ? STY3.chipAccent : STY3.chipMuted }, title: chipTitle(tab), children: dotOf(tab) === "runtime" ? "运行时自定义" : dotOf(tab) === "static" ? "静态 · YAML" : "跟随全局" })
+		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.chip, ...dotOf(tab) === "runtime" ? STY3.chipAccent : STY3.chipMuted }, title: chipTitle(tab), children: dotOf(tab) === "runtime" ? tr("运行时自定义") : dotOf(tab) === "static" ? tr("静态 · YAML") : tr("跟随全局") })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(RouteChainEditor, { rpc, disabled, scope: tab }, tab),
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(BudgetInputs, { rpc, disabled, data: props.data, setData: props.setData, onError: props.onError, scope: tab }, tab + "-budget")
@@ -38996,13 +41357,13 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/EmbeddingSection.tsx
-		var import_react14 = require("react");
+		var import_react15 = require("react");
 		
 		// client/src/dimensions.ts
 		var DIMS_MIN = 1;
 		var DIMS_MAX = 1e5;
 		function dimsRangeMessage() {
-		  return `嵌入维度须为 ${DIMS_MIN}~${DIMS_MAX} 的整数（留空 = 跟随部署配置）`;
+		  return tr("嵌入维度须为 {p1}~{p2} 的整数（留空 = 跟随部署配置）", { p1: DIMS_MIN, p2: DIMS_MAX });
 		}
 		function commitDimensions(raw, deps) {
 		  deps.clearDirty();
@@ -39068,17 +41429,17 @@ var __create = Object.create;
 		function EmbeddingSection(props) {
 		  const rpc = props.rpc;
 		  const loose = asLoose(rpc);
-		  const [st, setSt] = (0, import_react14.useState)(null);
-		  const [err, setErr] = (0, import_react14.useState)(null);
-		  const busyPollRef = (0, import_react14.useRef)(null);
-		  const [rBase, setRBase] = (0, import_react14.useState)("");
-		  const [rModel, setRModel] = (0, import_react14.useState)("");
-		  const [rDims, setRDims] = (0, import_react14.useState)("");
-		  const [rKey, setRKey] = (0, import_react14.useState)("");
-		  const remoteDirty = (0, import_react14.useRef)({ base: false, model: false, dims: false });
-		  const baseTimer = (0, import_react14.useRef)(void 0);
-		  const modelTimer = (0, import_react14.useRef)(void 0);
-		  const load = (0, import_react14.useCallback)(() => {
+		  const [st, setSt] = (0, import_react15.useState)(null);
+		  const [err, setErr] = (0, import_react15.useState)(null);
+		  const busyPollRef = (0, import_react15.useRef)(null);
+		  const [rBase, setRBase] = (0, import_react15.useState)("");
+		  const [rModel, setRModel] = (0, import_react15.useState)("");
+		  const [rDims, setRDims] = (0, import_react15.useState)("");
+		  const [rKey, setRKey] = (0, import_react15.useState)("");
+		  const remoteDirty = (0, import_react15.useRef)({ base: false, model: false, dims: false });
+		  const baseTimer = (0, import_react15.useRef)(void 0);
+		  const modelTimer = (0, import_react15.useRef)(void 0);
+		  const load = (0, import_react15.useCallback)(() => {
 		    rpc("dsh-memory/embedding-state-get", {}).then((r) => {
 		      if (r && r.ok && r.value && r.value.supported !== false) {
 		        const v = r.value;
@@ -39097,10 +41458,10 @@ var __create = Object.create;
 		      setErr(String(e && e.message || e));
 		    });
 		  }, [rpc]);
-		  (0, import_react14.useEffect)(() => {
+		  (0, import_react15.useEffect)(() => {
 		    load();
 		  }, [load]);
-		  (0, import_react14.useEffect)(() => {
+		  (0, import_react15.useEffect)(() => {
 		    let stopped = false;
 		    const busyFlag = { v: false };
 		    busyPollRef.current = busyFlag;
@@ -39116,11 +41477,11 @@ var __create = Object.create;
 		      busyPollRef.current = null;
 		    };
 		  }, [load]);
-		  (0, import_react14.useEffect)(() => () => {
+		  (0, import_react15.useEffect)(() => () => {
 		    clearTimeout(baseTimer.current);
 		    clearTimeout(modelTimer.current);
 		  }, []);
-		  (0, import_react14.useEffect)(() => {
+		  (0, import_react15.useEffect)(() => {
 		    if (!st || !st.remote) return;
 		    if (!remoteDirty.current.base) setRBase(st.remote.baseURL || "");
 		    if (!remoteDirty.current.model) setRModel(st.remote.model || "");
@@ -39128,12 +41489,12 @@ var __create = Object.create;
 		  }, [st]);
 		  const commitRemote = (patch) => {
 		    rpc("dsh-memory/settings-set", patch).then((r) => {
-		      if (!r || !r.ok) setErr(r && r.error ? "远程连接保存失败：" + r.error.message : "远程连接保存失败");
+		      if (!r || !r.ok) setErr(r && r.error ? tr("远程连接保存失败：") + r.error.message : tr("远程连接保存失败"));
 		      else {
 		        setErr(null);
 		        load();
 		      }
-		    }).catch((e) => setErr("远程连接保存失败：" + String(e && e.message || e)));
+		    }).catch((e) => setErr(tr("远程连接保存失败：") + String(e && e.message || e)));
 		  };
 		  const onRemoteBase = (v) => {
 		    remoteDirty.current.base = true;
@@ -39171,7 +41532,7 @@ var __create = Object.create;
 		  const call2 = (endpoint, payload, confirmText) => {
 		    if (confirmText && !window.confirm(confirmText)) return;
 		    loose(endpoint, payload).then((r) => {
-		      if (!r || !r.ok) setErr(r && r.error ? r.error.message : "操作失败");
+		      if (!r || !r.ok) setErr(r && r.error ? r.error.message : tr("操作失败"));
 		      else {
 		        setErr(null);
 		        load();
@@ -39182,23 +41543,23 @@ var __create = Object.create;
 		  };
 		  if (err === "__unsupported__") {
 		    return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "dsh-mem-rb-card", children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { fontWeight: 600, marginBottom: 4 }, children: "语义检索（嵌入）" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", children: "存储处于降级状态，嵌入管理不可用。" })
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { fontWeight: 600, marginBottom: 4 }, children: tr("语义检索（嵌入）") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", children: tr("存储处于降级状态，嵌入管理不可用。") })
 		    ] });
 		  }
 		  if (!st) {
 		    return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "dsh-mem-rb-card", children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", children: err ? "嵌入状态读取失败：" + err : "嵌入状态读取中…" }),
-		      err ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { style: { marginTop: 8 }, onClick: load, children: "重试" }) : null
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", children: err ? tr("嵌入状态读取失败：") + err : tr("嵌入状态读取中…") }),
+		      err ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { style: { marginTop: 8 }, onClick: load, children: tr("重试") }) : null
 		    ] });
 		  }
-		  const switchConfirm = "切换嵌入源后将按新模型重建向量索引（期间语义检索暂退化为关键词匹配，不影响对话）。确定切换？";
+		  const switchConfirm = tr("切换嵌入源后将按新模型重建向量索引（期间语义检索暂退化为关键词匹配，不影响对话）。确定切换？");
 		  const onSource = (key) => {
 		    if (key === "local") {
 		      const ready = [];
 		      for (let i = 0; i < st.models.length; i++) if (st.models[i].state === "downloaded") ready.push(st.models[i].id);
 		      if (ready.length === 0) {
-		        setErr("请先在下方下载一个本地嵌入模型，再切换到本地档。");
+		        setErr(tr("请先在下方下载一个本地嵌入模型，再切换到本地档。"));
 		        return;
 		      }
 		      const current = st.activeModel && ready.indexOf(st.activeModel) >= 0 ? st.activeModel : ready[0];
@@ -39217,26 +41578,29 @@ var __create = Object.create;
 		  if (rt.phase === "installing") {
 		    runtimeRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: { marginTop: 8, fontSize: 12 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: S.flexRow, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: "安装推理运行时中… 已耗时 " + Math.round(rt.elapsedMs / 1e3) + "s（约 100~200MB，视网络）" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { children: tr("安装推理运行时中… 已耗时") + Math.round(rt.elapsedMs / 1e3) + tr("s（约 100~200MB，视网络）") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.grow }),
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { onClick: () => call2("dsh-memory/embedding-runtime-cancel", {}), children: "取消" })
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { onClick: () => call2("dsh-memory/embedding-runtime-cancel", {}), children: tr("取消") })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("pre", { style: { ...S.pre, maxHeight: 68, marginTop: 6, fontSize: 11, opacity: 0.85 }, children: (rt.lastLines || []).join("\n") || "等待 npm 输出…" })
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("pre", { style: { ...S.pre, maxHeight: 68, marginTop: 6, fontSize: 11, opacity: 0.85 }, children: (rt.lastLines || []).join("\n") || tr("等待 npm 输出…") })
 		    ] });
 		  } else if (rt.phase === "error") {
-		    runtimeRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 8, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: "运行时安装失败：" + (rt.error || "未知") + "（重新切换嵌入源可重试）" });
+		    runtimeRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 8, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: tr("运行时安装失败：") + (rt.error || tr("未知")) + tr("（重新切换嵌入源可重试）") });
 		  } else if (rt.phase === "ready") {
-		    runtimeRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: "推理运行时就绪（transformers.js v" + rt.installedVersion + "）" });
+		    runtimeRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: tr("推理运行时就绪（transformers.js v") + rt.installedVersion + "）" });
 		  } else if (st.source === "local") {
-		    runtimeRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: "首次启用本地嵌入时会自动安装推理运行时（约 100~200MB）。" });
+		    runtimeRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: [
+		      tr("首次启用本地嵌入时会自动安装推理运行时（约 100~200MB）。"),
+		      " "
+		    ] });
 		  }
 		  let applyRow = null;
 		  if (ap.phase === "warming") {
-		    applyRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: "加载嵌入模型中…（首次需数秒）" });
+		    applyRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: tr("加载嵌入模型中…（首次需数秒）") });
 		  } else if (ap.phase === "switching") {
-		    applyRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: "切换嵌入源中…" });
+		    applyRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: tr("切换嵌入源中…") });
 		  } else if (ap.phase === "error") {
-		    applyRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 8, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: "切换失败：" + ap.message + "（已保存的嵌入源不变，重启后仍按原源运行）" });
+		    applyRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 8, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: tr("切换失败：") + ap.message + tr("（已保存的嵌入源不变，重启后仍按原源运行）") });
 		  } else if (st.reindex && st.reindex.running) {
 		    const rj = st.reindex;
 		    const rDone = rj.l1Done + rj.l0Done;
@@ -39244,9 +41608,9 @@ var __create = Object.create;
 		    const rPct = rTotal > 0 ? Math.round(rDone / rTotal * 100) : 0;
 		    applyRow = /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: { marginTop: 8 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: S.flexRow, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", children: "重嵌入中 L1 " + rj.l1Done + "/" + rj.l1Total + " · L0 " + rj.l0Done + "/" + rj.l0Total + "（" + rPct + "%）" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", children: tr("重嵌入中 L1") + rj.l1Done + "/" + rj.l1Total + " · L0 " + rj.l0Done + "/" + rj.l0Total + "（" + rPct + "%）" }),
 		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.grow }),
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { onClick: () => call2("dsh-memory/embedding-reindex-cancel", {}), children: "取消" })
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { onClick: () => call2("dsh-memory/embedding-reindex-cancel", {}), children: tr("取消") })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { ...S.flexRow, marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-bar", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-fill", style: { width: rPct + "%" } }) }) })
 		    ] });
@@ -39259,35 +41623,41 @@ var __create = Object.create;
 		    if (mDl) {
 		      action = /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: { flex: 1, minWidth: 200 }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: S.flexRow, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: (dl.phase === "verifying" ? "校验中 " : "") + fmtMB(dl.overallReceived) + " / " + fmtMB(dl.overallTotal) + "（文件 " + dl.fileIndex + "/" + dl.fileCount + "，" + pct + "%" + (dl.speedBps > 0 && dl.phase === "downloading" ? "，" + fmtMB(dl.speedBps) + "/s" : "") + "）" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: (dl.phase === "verifying" ? tr("校验中") : "") + fmtMB(dl.overallReceived) + " / " + fmtMB(dl.overallTotal) + tr("（文件") + dl.fileIndex + "/" + dl.fileCount + "，" + pct + "%" + (dl.speedBps > 0 && dl.phase === "downloading" ? "，" + fmtMB(dl.speedBps) + "/s" : "") + "）" }),
 		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.grow }),
-		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { onClick: () => call2("dsh-memory/embedding-download-cancel", {}), children: "取消" })
+		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(NButton, { onClick: () => call2("dsh-memory/embedding-download-cancel", {}), children: tr("取消") })
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { ...S.flexRow, marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-bar", children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-fill", style: { width: pct + "%" } }) }) })
 		      ] });
 		    } else if (isActive) {
 		      action = /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: S.flexRow, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-task", children: "使用中" }),
-		        localInfo && localInfo.state === "loading" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", children: "模型加载中…" }) : null,
-		        localInfo && localInfo.state === "failed" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-danger)" }, children: "加载失败：" + (localInfo.error || "") }) : null,
-		        localInfo && localInfo.state === "ready" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", children: "已就绪" }) : null
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-tag dsh-mem-tag-work-task", children: tr("使用中") }),
+		        localInfo && localInfo.state === "loading" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", children: tr("模型加载中…") }) : null,
+		        localInfo && localInfo.state === "failed" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-danger)" }, children: tr("加载失败：") + (localInfo.error || "") }) : null,
+		        localInfo && localInfo.state === "ready" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { className: "dsh-mem-rb-muted", children: tr("已就绪") }) : null
 		      ] });
 		    } else if (m.state === "downloaded") {
 		      action = /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: S.flexRow, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
 		          NButton,
 		          {
 		            disabled: ap.busy,
 		            onClick: () => call2("dsh-memory/embedding-source-set", { source: "local", activeModel: m.id }, switchConfirm),
-		            children: "启用"
+		            children: [
+		              tr("启用"),
+		              " "
+		            ]
 		          }
 		        ),
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
 		          NButton,
 		          {
 		            disabled: dlActive,
-		            onClick: () => call2("dsh-memory/embedding-model-delete", { modelId: m.id }, "删除已下载的 " + m.name + "（" + fmtMB(m.totalBytes) + "）？"),
-		            children: "删除"
+		            onClick: () => call2("dsh-memory/embedding-model-delete", { modelId: m.id }, tr("删除已下载的") + m.name + "（" + fmtMB(m.totalBytes) + "）？"),
+		            children: [
+		              tr("删除"),
+		              " "
+		            ]
 		          }
 		        )
 		      ] });
@@ -39296,9 +41666,9 @@ var __create = Object.create;
 		        NButton,
 		        {
 		          disabled: dlActive || !st.ceilings.local,
-		          title: !st.ceilings.local ? "部署已禁用本地嵌入模型" : "",
+		          title: !st.ceilings.local ? tr("部署已禁用本地嵌入模型") : "",
 		          onClick: () => call2("dsh-memory/embedding-download-start", { modelId: m.id }),
-		          children: (m.state === "partial" ? "继续下载 " : "下载 ") + fmtMB(m.totalBytes)
+		          children: (m.state === "partial" ? tr("继续下载") : tr("下载")) + fmtMB(m.totalBytes)
 		        }
 		      );
 		    }
@@ -39309,7 +41679,7 @@ var __create = Object.create;
 		        children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: { minWidth: 150 }, children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { fontWeight: 600 }, children: m.name }),
-		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", children: m.tags.join(" · ") + " · " + m.dims + " 维 · 上下文 " + m.contextTokens })
+		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", children: m.tags.join(" · ") + " · " + m.dims + tr("维 · 上下文") + m.contextTokens })
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { flex: 1, minWidth: 180, fontSize: 12, color: "var(--dsh-mem-text-2)" }, children: m.description }),
 		          action
@@ -39321,44 +41691,44 @@ var __create = Object.create;
 		  const vec = st.vectors;
 		  const vecOk = !!vec && vec.l1.embedded >= 0 && vec.l0.embedded >= 0;
 		  const lastRun = st.reindex ? st.reindex.last : void 0;
-		  const lastNote = !lastRun ? "" : " · 上次重建：处理 " + lastRun.processed + "/" + lastRun.planned + " 条" + (lastRun.failed > 0 ? "、失败 " + lastRun.failed : "") + (lastRun.cancelled ? "（被取消）" : "") + "，待补 " + (lastRun.missingBefore.l1 + lastRun.missingBefore.l0) + " → " + (lastRun.missingAfter.l1 + lastRun.missingAfter.l0) + "，用时 " + (lastRun.durationMs / 1e3).toFixed(1) + "s";
-		  const vecNote = !vec ? "向量索引：宿主版本较旧，未上报计数" : !vecOk ? "向量索引不可用（sqlite-vec 扩展缺失或检索库降级），重建无从谈起" : "已嵌入 L1 " + vec.l1.embedded + "/" + vec.l1.total + " · L0 " + vec.l0.embedded + "/" + vec.l0.total + (vec.l1.missing + vec.l0.missing > 0 ? "（待补 " + (vec.l1.missing + vec.l0.missing) + " 条）" : "") + (vec.l1.skipped + vec.l0.skipped > 0 ? "（" + (vec.l1.skipped + vec.l0.skipped) + " 条内容不可嵌入，已跳过）" : "") + lastNote;
+		  const lastNote = !lastRun ? "" : tr("· 上次重建：处理") + lastRun.processed + "/" + lastRun.planned + tr("条") + (lastRun.failed > 0 ? tr("、失败") + lastRun.failed : "") + (lastRun.cancelled ? tr("（被取消）") : "") + tr("，待补") + (lastRun.missingBefore.l1 + lastRun.missingBefore.l0) + " → " + (lastRun.missingAfter.l1 + lastRun.missingAfter.l0) + tr("，用时") + (lastRun.durationMs / 1e3).toFixed(1) + "s";
+		  const vecNote = !vec ? tr("向量索引：宿主版本较旧，未上报计数") : !vecOk ? tr("向量索引不可用（sqlite-vec 扩展缺失或检索库降级），重建无从谈起") : tr("已嵌入 L1") + vec.l1.embedded + "/" + vec.l1.total + " · L0 " + vec.l0.embedded + "/" + vec.l0.total + (vec.l1.missing + vec.l0.missing > 0 ? tr("（待补") + (vec.l1.missing + vec.l0.missing) + tr("条）") : "") + (vec.l1.skipped + vec.l0.skipped > 0 ? "（" + (vec.l1.skipped + vec.l0.skipped) + tr("条内容不可嵌入，已跳过）") : "") + lastNote;
 		  const reindexRunning = !!(st.reindex && st.reindex.running);
 		  const canRebuild = vecOk && st.source !== "off" && !reindexRunning && !st.apply.busy;
-		  const rebuildHint = !vecOk ? "向量能力不可用" : st.source === "off" ? "嵌入源已关闭，请先启用" : reindexRunning ? "重建已在进行中" : st.apply.busy ? "嵌入源切换进行中" : "只补缺失向量；已有向量不动。零向量内容会被跳过（重试无意义）";
+		  const rebuildHint = !vecOk ? tr("向量能力不可用") : st.source === "off" ? tr("嵌入源已关闭，请先启用") : reindexRunning ? tr("重建已在进行中") : st.apply.busy ? tr("嵌入源切换进行中") : tr("只补缺失向量；已有向量不动。零向量内容会被跳过（重试无意义）");
 		  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { className: "dsh-mem-rb-card", children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: S.flexRow, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: "语义检索（嵌入源）" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: tr("语义检索（嵌入源）") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
 		        Segmented,
 		        {
 		          value: st.source,
 		          options: [
-		            { key: "off", label: "关闭" },
-		            { key: "local", label: "本地", disabled: !st.ceilings.local, disabledTitle: "部署已禁用本地嵌入模型" },
-		            { key: "remote", label: "远程", disabled: !st.ceilings.remote, disabledTitle: "部署未配置远程嵌入（baseUrl/apiKey/model/dimensions）" }
+		            { key: "off", label: tr("关闭") },
+		            { key: "local", label: tr("本地"), disabled: !st.ceilings.local, disabledTitle: tr("部署已禁用本地嵌入模型") },
+		            { key: "remote", label: tr("远程"), disabled: !st.ceilings.remote, disabledTitle: tr("部署未配置远程嵌入（baseUrl/apiKey/model/dimensions）") }
 		          ],
 		          onChange: onSource
 		        }
 		      )
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 4 }, children: st.source === "off" ? "当前：关键词（BM25）检索，不做向量嵌入" : st.source === "remote" ? "当前：远程嵌入（" + (remote.model || "未配置模型") + (remote.baseURL ? " · " + remote.baseURL : "") + "）" : "当前：本地嵌入" + (st.activeModel ? "（" + st.activeModel + "）" : "") }),
+		    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 4 }, children: st.source === "off" ? tr("当前：关键词（BM25）检索，不做向量嵌入") : st.source === "remote" ? tr("当前：远程嵌入（") + (remote.model || tr("未配置模型")) + (remote.baseURL ? " · " + remote.baseURL : "") + "）" : tr("当前：本地嵌入") + (st.activeModel ? "（" + st.activeModel + "）" : "") }),
 		    st.activeNote ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 4, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: st.activeNote }) : null,
 		    err && err !== "__unsupported__" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 6, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: err }) : null,
-		    dl && dl.phase === "error" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 6, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: "下载失败：" + (dl.error || "") }) : null,
+		    dl && dl.phase === "error" ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { marginTop: 6, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: tr("下载失败：") + (dl.error || "") }) : null,
 		    runtimeRow,
 		    applyRow,
 		    /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: RSTY.block, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.title, children: "远程连接（生效值；运行时覆盖优先于部署 YAML）" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.note, children: "生效端点 " + (remote.baseURL || "（未配置）") + " · 模型 " + (remote.model || "（未配置）") + " · " + (remote.dimensions > 0 ? remote.dimensions + " 维" : "维度跟随部署") + (remote.apiKeySet ? " · 密钥已设置" : " · 密钥未设置") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.title, children: tr("远程连接（生效值；运行时覆盖优先于部署 YAML）") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.note, children: tr("生效端点") + (remote.baseURL || tr("（未配置）")) + tr("· 模型") + (remote.model || tr("（未配置）")) + " · " + (remote.dimensions > 0 ? remote.dimensions + tr("维") : tr("维度跟随部署")) + (remote.apiKeySet ? tr("· 密钥已设置") : tr("· 密钥未设置")) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: RSTY.row, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.label, children: "端点 URL" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.label, children: tr("端点 URL") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
 		          NInput,
 		          {
 		            style: RSTY.input,
-		            placeholder: "如 https://api.xxx/v1/embeddings 的服务基址",
+		            placeholder: tr("如 https://api.xxx/v1/embeddings 的服务基址"),
 		            value: rBase,
 		            onChange: (e) => onRemoteBase(e.target.value),
 		            onKeyDown: (e) => {
@@ -39372,12 +41742,12 @@ var __create = Object.create;
 		        )
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: RSTY.row, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.label, children: "模型名" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.label, children: tr("模型名") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
 		          NInput,
 		          {
 		            style: RSTY.input,
-		            placeholder: "如 text-embedding-3-small",
+		            placeholder: tr("如 text-embedding-3-small"),
 		            value: rModel,
 		            onChange: (e) => onRemoteModel(e.target.value),
 		            onKeyDown: (e) => {
@@ -39389,15 +41759,15 @@ var __create = Object.create;
 		            }
 		          }
 		        ),
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.label, children: "维度" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.label, children: tr("维度") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
 		          NInput,
 		          {
 		            style: { width: 90, minWidth: 0, flex: "0 1 90px" },
 		            type: "number",
 		            min: 0,
-		            placeholder: "跟随部署",
-		            title: "向量维度（留空/0 = 跟随部署配置）",
+		            placeholder: tr("跟随部署"),
+		            title: tr("向量维度（留空/0 = 跟随部署配置）"),
 		            value: rDims,
 		            onChange: (e) => {
 		              remoteDirty.current.dims = true;
@@ -39418,7 +41788,7 @@ var __create = Object.create;
 		            style: RSTY.input,
 		            type: "password",
 		            autoComplete: "new-password",
-		            placeholder: remote.apiKeySet ? "••••••••（已设置；输入新值提交可覆盖）" : "远程服务需要密钥时填写",
+		            placeholder: remote.apiKeySet ? tr("••••••••（已设置；输入新值提交可覆盖）") : tr("远程服务需要密钥时填写"),
 		            value: rKey,
 		            onChange: (e) => setRKey(e.target.value),
 		            onKeyDown: (e) => {
@@ -39427,29 +41797,35 @@ var __create = Object.create;
 		            onBlur: commitRemoteKey
 		          }
 		        ),
-		        remote.apiKeySet ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.chipAccent, children: "已设置" }) : /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.chipMuted, children: "未设置" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+		        remote.apiKeySet ? /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.chipAccent, children: tr("已设置") }) : /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("span", { style: RSTY.chipMuted, children: tr("未设置") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
 		          NButton,
 		          {
-		            title: "写入空串清除运行时密钥（部署 YAML 的密钥不受影响）",
+		            title: tr("写入空串清除运行时密钥（部署 YAML 的密钥不受影响）"),
 		            onClick: () => commitRemote({ embedRemoteApiKey: "" }),
-		            children: "清除"
+		            children: [
+		              tr("清除"),
+		              " "
+		            ]
 		          }
 		        )
 		      ] })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.panelLabel, children: "本地模型目录（下载后离线可用，不随插件分发）" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: S.panelLabel, children: tr("本地模型目录（下载后离线可用，不随插件分发）") }),
 		    modelCards,
 		    /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: RSTY.block, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.title, children: "向量索引" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.title, children: tr("向量索引") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.note, children: vecNote }),
-		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.row, children: /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: RSTY.row, children: /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)(
 		        NButton,
 		        {
 		          disabled: !canRebuild,
 		          title: rebuildHint,
 		          onClick: () => call2("dsh-memory/embedding-reindex", {}),
-		          children: "重建索引"
+		          children: [
+		            tr("重建索引"),
+		            " "
+		          ]
 		        }
 		      ) })
 		    ] })
@@ -39457,31 +41833,31 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/RebuildPanel.tsx
-		var import_react15 = require("react");
+		var import_react16 = require("react");
 		var import_jsx_runtime15 = require("react/jsx-runtime");
 		var RB_PHASE_LABEL = {
-		  preparing: "准备中（归档旧数据 · 清空检索库）",
-		  distilling: "分块蒸馏中",
-		  finalizing: "收尾（强制 L2 场景 + L3 画像）"
+		  preparing: tr("准备中（归档旧数据 · 清空检索库）"),
+		  distilling: tr("分块蒸馏中"),
+		  finalizing: tr("收尾（强制 L2 场景 + L3 画像）")
 		};
 		function RebuildPanel(props) {
 		  const rpc = props.rpc;
-		  const [rbRaw, setRb] = (0, import_react15.useState)(null);
-		  const [confirmOpen, setConfirmOpen] = (0, import_react15.useState)(false);
-		  const [busy, setBusy] = (0, import_react15.useState)(false);
-		  const [rbError, setRbError] = (0, import_react15.useState)(null);
-		  const [canForce, setCanForce] = (0, import_react15.useState)(false);
-		  const refresh = (0, import_react15.useCallback)(() => {
+		  const [rbRaw, setRb] = (0, import_react16.useState)(null);
+		  const [confirmOpen, setConfirmOpen] = (0, import_react16.useState)(false);
+		  const [busy, setBusy] = (0, import_react16.useState)(false);
+		  const [rbError, setRbError] = (0, import_react16.useState)(null);
+		  const [canForce, setCanForce] = (0, import_react16.useState)(false);
+		  const refresh = (0, import_react16.useCallback)(() => {
 		    rpc("dsh-memory/rebuild-status", {}).then((r) => {
 		      if (r && r.ok) setRb(r.value);
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
-		  (0, import_react15.useEffect)(() => {
+		  (0, import_react16.useEffect)(() => {
 		    refresh();
 		  }, [refresh]);
 		  const running = !!(rbRaw && rbRaw.running);
-		  (0, import_react15.useEffect)(() => {
+		  (0, import_react16.useEffect)(() => {
 		    if (!running) return;
 		    const timer = setInterval(refresh, 1500);
 		    return () => {
@@ -39501,7 +41877,7 @@ var __create = Object.create;
 		        setConfirmOpen(false);
 		        setRb(r.value);
 		      } else {
-		        const msg = r && r.error ? r.error.message : "启动失败";
+		        const msg = r && r.error ? r.error.message : tr("启动失败");
 		        setRbError(msg);
 		        setCanForce(/force/.test(msg));
 		      }
@@ -39525,40 +41901,40 @@ var __create = Object.create;
 		  const pct = rb.total > 0 ? Math.round(rb.done / rb.total * 100) : 0;
 		  let lastNote = null;
 		  if (!running && rb.phase === "done") {
-		    lastNote = "上次重建：完成（" + rb.done + "/" + rb.total + " 会话，产出 " + rb.recordsBuilt + " 条记录）" + (rb.finishedAt ? " · " + fmtTime(new Date(rb.finishedAt).toISOString()) : "");
+		    lastNote = tr("上次重建：完成（") + rb.done + "/" + rb.total + tr("会话，产出") + rb.recordsBuilt + tr("条记录）") + (rb.finishedAt ? " · " + fmtTime(new Date(rb.finishedAt).toISOString()) : "");
 		  } else if (!running && rb.phase === "cancelled") {
-		    lastNote = "上次重建：已取消（完成 " + rb.done + "/" + rb.total + " 会话，已重建部分保留）";
+		    lastNote = tr("上次重建：已取消（完成") + rb.done + "/" + rb.total + tr("会话，已重建部分保留）");
 		  } else if (!running && rb.phase === "failed") {
-		    lastNote = "上次重建：失败：" + (rb.error || "未知错误");
+		    lastNote = tr("上次重建：失败：") + (rb.error || tr("未知错误"));
 		  }
 		  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dsh-mem-rb-card", children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: "重建记忆" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-muted", style: { flex: 1, minWidth: 180 }, children: running ? (RB_PHASE_LABEL[rb.phase] || rb.phase) + " · " + rb.done + "/" + rb.total + " 会话（" + pct + "%）" : "从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）" }),
-		      running ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(NButton, { disabled: busy || rb.cancelRequested, onClick: cancel, children: rb.cancelRequested ? "取消中…" : "取消重建" }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: tr("重建记忆") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-muted", style: { flex: 1, minWidth: 180 }, children: running ? (RB_PHASE_LABEL[rb.phase] || rb.phase) + " · " + rb.done + "/" + rb.total + tr("会话（") + pct + "%）" : tr("从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）") }),
+		      running ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(NButton, { disabled: busy || rb.cancelRequested, onClick: cancel, children: rb.cancelRequested ? tr("取消中…") : tr("取消重建") }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
 		        NButton,
 		        {
 		          disabled: busy || empty,
-		          title: empty ? "L0 无消息，无可重建内容" : "重新蒸馏全部记忆",
+		          title: empty ? tr("L0 无消息，无可重建内容") : tr("重新蒸馏全部记忆"),
 		          style: { color: "var(--dsh-mem-danger)" },
 		          onClick: () => {
 		            setConfirmOpen(true);
 		          },
-		          children: busy ? "…" : "开始重建"
+		          children: busy ? "…" : tr("开始重建")
 		        }
 		      )
 		    ] }),
 		    running ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, marginTop: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-bar", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-fill", style: { width: pct + "%" } }) }),
-		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: "产出 " + rb.recordsBuilt + " 条" })
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: tr("产出") + rb.recordsBuilt + tr("条") })
 		    ] }) : null,
 		    lastNote ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: lastNote }) : null,
-		    rb.rederivableCount !== null || rb.preserveCount !== null ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 6 }, children: "本次计划：可重造 " + (rb.rederivableCount ?? 0) + " 条 · 原样保留 " + (rb.preserveCount ?? 0) + " 条（无来源或来源不在本次快照）" }) : null,
+		    rb.rederivableCount !== null || rb.preserveCount !== null ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 6 }, children: tr("本次计划：可重造") + (rb.rederivableCount ?? 0) + tr("条 · 原样保留") + (rb.preserveCount ?? 0) + tr("条（无来源或来源不在本次快照）") }) : null,
 		    rbError ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { marginTop: 8, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: [
 		      rbError,
 		      canForce ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { marginTop: 6 }, children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(NButton, { disabled: busy, onClick: () => {
 		        start(true);
-		      }, children: busy ? "启动中…" : "我已了解，仍要继续（不重蒸水位后的记录）" }) }) : null
+		      }, children: busy ? tr("启动中…") : tr("我已了解，仍要继续（不重蒸水位后的记录）") }) }) : null
 		    ] }) : null,
 		    confirmOpen ? /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
 		      NModal,
@@ -39567,34 +41943,41 @@ var __create = Object.create;
 		        onClose: () => {
 		          setConfirmOpen(false);
 		        },
-		        title: "确认重建全部记忆？",
+		        title: tr("确认重建全部记忆？"),
 		        footer: [
-		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)(
 		            NButton,
 		            {
 		              onClick: () => {
 		                setConfirmOpen(false);
 		              },
-		              children: "取消"
+		              children: [
+		                tr("取消"),
+		                " "
+		              ]
 		            },
 		            "cancel"
 		          ),
 		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(NButton, { variant: "primary", disabled: busy, onClick: () => {
 		            start();
-		          }, children: busy ? "启动中…" : "开始重建" }, "confirm")
+		          }, children: busy ? tr("启动中…") : tr("开始重建") }, "confirm")
 		        ],
 		        children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { children: [
-		            "将以 L0 原始对话为事实源重新蒸馏：",
-		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("b", { children: rb.sessionCount + " 个会话 · " + rb.messageCount + " 条消息" }),
-		            "，预计 ≥" + rb.estCalls + " 次蒸馏调用。"
+		            tr("将以 L0 原始对话为事实源重新蒸馏："),
+		            " ",
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("b", { children: rb.sessionCount + tr("个会话 ·") + rb.messageCount + tr("条消息") }),
+		            tr("，预计 ≥") + rb.estCalls + tr("次蒸馏调用。")
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { marginTop: 8 }, children: [
-		            "事实源覆盖到：",
-		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("b", { children: rb.factWatermark ? fmtTime(rb.factWatermark) : "无（本地 L0 没有任何正文）" }),
-		            rb.factWatermark ? "；晚于此时刻的记忆会被原样保留、不重新蒸馏（不会丢）。" : "。"
+		            tr("事实源覆盖到："),
+		            /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("b", { children: rb.factWatermark ? fmtTime(rb.factWatermark) : tr("无（本地 L0 没有任何正文）") }),
+		            rb.factWatermark ? tr("；晚于此时刻的记忆会被原样保留、不重新蒸馏（不会丢）。") : "。"
 		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { marginTop: 8 }, children: "现有 L1 记忆 / L2 场景 / L3 画像会整体归档（*.bak.时间戳，可手工找回），随后清空重建；重建期间可正常对话，新对话的蒸馏优先进行；中途可取消，已重建部分保留。" })
+		          /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { marginTop: 8 }, children: [
+		            tr("现有 L1 记忆 / L2 场景 / L3 画像会整体归档（*.bak.时间戳，可手工找回），随后清空重建；重建期间可正常对话，新对话的蒸馏优先进行；中途可取消，已重建部分保留。"),
+		            " "
+		          ] })
 		        ]
 		      }
 		    ) : null
@@ -39602,14 +41985,14 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/RuminatePanel.tsx
-		var import_react16 = require("react");
+		var import_react17 = require("react");
 		var import_jsx_runtime16 = require("react/jsx-runtime");
 		var RM_PHASE_LABEL = {
-		  refreshing: "轻量刷新中",
-		  distilling: "L1 蒸馏中",
-		  consolidating: "L2 场景整合中",
-		  updating: "L3 画像更新中",
-		  relabeling: "标注校验/重标定中"
+		  refreshing: tr("轻量刷新中"),
+		  distilling: tr("L1 蒸馏中"),
+		  consolidating: tr("L2 场景整合中"),
+		  updating: tr("L3 画像更新中"),
+		  relabeling: tr("标注校验/重标定中")
 		};
 		var RM_RUNNING_PHASES = ["refreshing", "distilling", "consolidating", "updating", "relabeling"];
 		var RM_PHASE_INTERVAL = {
@@ -39624,11 +42007,11 @@ var __create = Object.create;
 		var RM_IDLE_INTERVAL = 3e4;
 		function RuminatePanel(props) {
 		  const rpc = props.rpc;
-		  const [rmRaw, setRm] = (0, import_react16.useState)(null);
-		  const [confirmOpen, setConfirmOpen] = (0, import_react16.useState)(false);
-		  const [busy, setBusy] = (0, import_react16.useState)(false);
-		  const [rmError, setRmError] = (0, import_react16.useState)(null);
-		  const refresh = (0, import_react16.useCallback)(() => {
+		  const [rmRaw, setRm] = (0, import_react17.useState)(null);
+		  const [confirmOpen, setConfirmOpen] = (0, import_react17.useState)(false);
+		  const [busy, setBusy] = (0, import_react17.useState)(false);
+		  const [rmError, setRmError] = (0, import_react17.useState)(null);
+		  const refresh = (0, import_react17.useCallback)(() => {
 		    return rpc("dsh-memory/ruminate-status", {}).then((r) => {
 		      if (r && r.ok) {
 		        const st = r.value;
@@ -39643,14 +42026,14 @@ var __create = Object.create;
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
-		  const pollRef = (0, import_react16.useRef)(1500);
-		  const backoffRef = (0, import_react16.useRef)(1);
-		  const lastDetailRef = (0, import_react16.useRef)(null);
-		  (0, import_react16.useEffect)(() => {
+		  const pollRef = (0, import_react17.useRef)(1500);
+		  const backoffRef = (0, import_react17.useRef)(1);
+		  const lastDetailRef = (0, import_react17.useRef)(null);
+		  (0, import_react17.useEffect)(() => {
 		    refresh();
 		  }, [refresh]);
 		  const running = !!(rmRaw && (rmRaw.running || RM_RUNNING_PHASES.indexOf(rmRaw.phase) >= 0));
-		  (0, import_react16.useEffect)(() => {
+		  (0, import_react17.useEffect)(() => {
 		    if (!running) return;
 		    let alive = true;
 		    let timer;
@@ -39669,13 +42052,13 @@ var __create = Object.create;
 		      lastDetailRef.current = null;
 		    };
 		  }, [running, refresh]);
-		  (0, import_react16.useEffect)(() => {
+		  (0, import_react17.useEffect)(() => {
 		    if (running) return;
 		    const timer = setInterval(refresh, RM_IDLE_INTERVAL);
 		    return () => clearInterval(timer);
 		  }, [running, refresh]);
-		  const [, setTick] = (0, import_react16.useState)(0);
-		  (0, import_react16.useEffect)(() => {
+		  const [, setTick] = (0, import_react17.useState)(0);
+		  (0, import_react17.useEffect)(() => {
 		    if (!running) return;
 		    const timer = setInterval(() => setTick((n) => n + 1), 1e3);
 		    return () => clearInterval(timer);
@@ -39692,7 +42075,7 @@ var __create = Object.create;
 		        setConfirmOpen(false);
 		        setRm(r.value);
 		      } else {
-		        setRmError(r && r.error ? r.error.message : "启动失败");
+		        setRmError(r && r.error ? r.error.message : tr("启动失败"));
 		      }
 		    }).catch((e) => {
 		      setBusy(false);
@@ -39714,32 +42097,32 @@ var __create = Object.create;
 		  const indet = running && !sub && (rm.phase === "consolidating" || rm.phase === "updating" || rm.phase === "relabeling");
 		  const idleLike = !running;
 		  const elapsed = running && rm.startedAt ? Math.max(0, Date.now() - rm.startedAt) : 0;
-		  const elapsedText = elapsed > 0 ? elapsed >= 6e4 ? Math.floor(elapsed / 6e4) + "分" + Math.floor(elapsed % 6e4 / 1e3) + "秒" : Math.floor(elapsed / 1e3) + "秒" : "";
+		  const elapsedText = elapsed > 0 ? elapsed >= 6e4 ? Math.floor(elapsed / 6e4) + tr("分") + Math.floor(elapsed % 6e4 / 1e3) + tr("秒") : Math.floor(elapsed / 1e3) + tr("秒") : "";
 		  let lastNote = null;
 		  if (idleLike && rm.phase === "done") {
 		    const rl = rm.relabel;
-		    lastNote = "上次反刍整理：完成（" + rm.done + "/" + rm.total + " 步" + (rm.recordsBuilt > 0 ? "，产出 " + rm.recordsBuilt + " 条记录" : "，无待消化缓冲") + "）" + (rl ? " · 重标定：补 cogHall " + rl.cogHallFixed + "，补 wing " + rl.wingLabeled + "，打 tags " + rl.tagged + (rl.deferred > 0 ? "，让出 " + rl.deferred : "") : "") + (rm.finishedAt ? " · " + fmtTime(new Date(rm.finishedAt).toISOString()) : "");
+		    lastNote = tr("上次反刍整理：完成（") + rm.done + "/" + rm.total + tr("步") + (rm.recordsBuilt > 0 ? tr("，产出") + rm.recordsBuilt + tr("条记录") : tr("，无待消化缓冲")) + "）" + (rl ? tr("· 重标定：补 cogHall") + rl.cogHallFixed + tr("，补 wing") + rl.wingLabeled + tr("，打 tags") + rl.tagged + (rl.deferred > 0 ? tr("，让出") + rl.deferred : "") : "") + (rm.finishedAt ? " · " + fmtTime(new Date(rm.finishedAt).toISOString()) : "");
 		  } else if (idleLike && rm.phase === "cancelled") {
-		    lastNote = "上次反刍整理：已取消（完成 " + rm.done + "/" + rm.total + " 会话，已蒸馏部分保留）";
+		    lastNote = tr("上次反刍整理：已取消（完成") + rm.done + "/" + rm.total + tr("会话，已蒸馏部分保留）");
 		  } else if (idleLike && rm.phase === "failed") {
-		    lastNote = "上次反刍整理：失败：" + (rm.error || "未知错误");
+		    lastNote = tr("上次反刍整理：失败：") + (rm.error || tr("未知错误"));
 		  }
-		  const unit2 = rm.phase === "refreshing" || rm.phase === "relabeling" ? "步" : "会话";
-		  const progressText = sub ? sub.label + " " + sub.done + "/" + sub.total + "（" + Math.round(sub.done / sub.total * 100) + "%）" : rm.total > 0 ? rm.done + "/" + rm.total + " " + unit2 + "（" + pct + "%）" : "进行中…";
+		  const unit2 = rm.phase === "refreshing" || rm.phase === "relabeling" ? tr("步") : tr("会话");
+		  const progressText = sub ? sub.label + " " + sub.done + "/" + sub.total + "（" + Math.round(sub.done / sub.total * 100) + "%）" : rm.total > 0 ? rm.done + "/" + rm.total + " " + unit2 + "（" + pct + "%）" : tr("进行中…");
 		  return /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { className: "dsh-mem-rb-card", children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: "反刍整理" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "dsh-mem-rb-muted", style: { flex: 1, minWidth: 180 }, children: running ? (RM_PHASE_LABEL[rm.phase] || rm.phase) + " · " + progressText + (elapsedText ? " · 已用 " + elapsedText : "") : "冲刷未蒸馏缓冲，跑一轮 L1→L2→L3 消化；不清库不改 L0" }),
-		      running ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(NButton, { disabled: busy || rm.cancelRequested, onClick: cancel, children: rm.cancelRequested ? "取消中…" : "取消整理" }) : /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: tr("反刍整理") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "dsh-mem-rb-muted", style: { flex: 1, minWidth: 180 }, children: running ? (RM_PHASE_LABEL[rm.phase] || rm.phase) + " · " + progressText + (elapsedText ? tr("· 已用") + elapsedText : "") : tr("冲刷未蒸馏缓冲，跑一轮 L1→L2→L3 消化；不清库不改 L0") }),
+		      running ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(NButton, { disabled: busy || rm.cancelRequested, onClick: cancel, children: rm.cancelRequested ? tr("取消中…") : tr("取消整理") }) : /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
 		        NButton,
 		        {
 		          disabled: busy,
-		          title: "消化未蒸馏的记忆缓冲",
+		          title: tr("消化未蒸馏的记忆缓冲"),
 		          style: { color: "var(--dsh-mem-accent)" },
 		          onClick: () => {
 		            setConfirmOpen(true);
 		          },
-		          children: busy ? "…" : "反刍整理"
+		          children: busy ? "…" : tr("反刍整理")
 		        }
 		      )
 		    ] }),
@@ -39751,9 +42134,9 @@ var __create = Object.create;
 		          style: { width: indet ? "100%" : barPct + "%" }
 		        }
 		      ) }),
-		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: sub ? sub.label + " " + sub.done + "/" + sub.total : "产出 " + rm.recordsBuilt + " 条" })
+		      /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("span", { className: "dsh-mem-rb-muted", style: { whiteSpace: "nowrap" }, children: sub ? sub.label + " " + sub.done + "/" + sub.total : tr("产出") + rm.recordsBuilt + tr("条") })
 		    ] }) : null,
-		    running && rm.detail ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 6, whiteSpace: "normal" }, children: "当前：" + rm.detail }) : null,
+		    running && rm.detail ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 6, whiteSpace: "normal" }, children: tr("当前：") + rm.detail }) : null,
 		    lastNote ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { className: "dsh-mem-rb-muted", style: { marginTop: 8 }, children: lastNote }) : null,
 		    rmError ? /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { marginTop: 8, fontSize: 12, color: "var(--dsh-mem-danger)" }, children: rmError }) : null,
 		    confirmOpen ? /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
@@ -39761,21 +42144,30 @@ var __create = Object.create;
 		      {
 		        open: true,
 		        onClose: () => setConfirmOpen(false),
-		        title: "确认反刍整理？",
+		        title: tr("确认反刍整理？"),
 		        footer: [
-		          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(
+		          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)(
 		            NButton,
 		            {
 		              onClick: () => setConfirmOpen(false),
-		              children: "取消"
+		              children: [
+		                tr("取消"),
+		                " "
+		              ]
 		            },
 		            "cancel"
 		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(NButton, { variant: "primary", disabled: busy, onClick: start, children: busy ? "启动中…" : "反刍整理" }, "confirm")
+		          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)(NButton, { variant: "primary", disabled: busy, onClick: start, children: busy ? tr("启动中…") : tr("反刍整理") }, "confirm")
 		        ],
 		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { children: "将扫描未蒸馏缓冲，按会话逐个跑蒸馏管线，完成后强制 L2 场景整合与 L3 画像更新。" }),
-		          /* @__PURE__ */ (0, import_jsx_runtime16.jsx)("div", { style: { marginTop: 8 }, children: "与重建不同：不清空 L1 检索库、不归档旧产物、不改 L0；仅消化攒而未蒸馏的切片，无缓冲时做轻量 L2/L3 刷新。" })
+		          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { children: [
+		            tr("将扫描未蒸馏缓冲，按会话逐个跑蒸馏管线，完成后强制 L2 场景整合与 L3 画像更新。"),
+		            " "
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime16.jsxs)("div", { style: { marginTop: 8 }, children: [
+		            tr("与重建不同：不清空 L1 检索库、不归档旧产物、不改 L0；仅消化攒而未蒸馏的切片，无缓冲时做轻量 L2/L3 刷新。"),
+		            " "
+		          ] })
 		        ]
 		      }
 		    ) : null
@@ -39783,61 +42175,61 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/BackfillSection.tsx
-		var import_react17 = require("react");
+		var import_react18 = require("react");
 		var import_jsx_runtime17 = require("react/jsx-runtime");
 		function BackfillSection(props) {
 		  const rpc = props.rpc;
-		  const [overview, setOverview] = (0, import_react17.useState)(null);
-		  const [wingBusy, setWingBusy] = (0, import_react17.useState)(false);
-		  const [kwBusy, setKwBusy] = (0, import_react17.useState)(false);
-		  const [kwSummary, setKwSummary] = (0, import_react17.useState)(null);
-		  const [kwProgress, setKwProgress] = (0, import_react17.useState)(null);
-		  const [kwCounts, setKwCounts] = (0, import_react17.useState)(null);
-		  const [rdBusy, setRdBusy] = (0, import_react17.useState)(false);
-		  const [rdSummary, setRdSummary] = (0, import_react17.useState)(null);
-		  const [rdProgress, setRdProgress] = (0, import_react17.useState)(null);
-		  const [rdCounts, setRdCounts] = (0, import_react17.useState)(null);
-		  const [err, setErr] = (0, import_react17.useState)(null);
-		  const [wingAborting, setWingAborting] = (0, import_react17.useState)(false);
-		  const [kwAborting, setKwAborting] = (0, import_react17.useState)(false);
-		  const [rdAborting, setRdAborting] = (0, import_react17.useState)(false);
-		  const wingStopRef = (0, import_react17.useRef)(false);
-		  const timersRef = (0, import_react17.useRef)([]);
-		  (0, import_react17.useEffect)(
+		  const [overview, setOverview] = (0, import_react18.useState)(null);
+		  const [wingBusy, setWingBusy] = (0, import_react18.useState)(false);
+		  const [kwBusy, setKwBusy] = (0, import_react18.useState)(false);
+		  const [kwSummary, setKwSummary] = (0, import_react18.useState)(null);
+		  const [kwProgress, setKwProgress] = (0, import_react18.useState)(null);
+		  const [kwCounts, setKwCounts] = (0, import_react18.useState)(null);
+		  const [rdBusy, setRdBusy] = (0, import_react18.useState)(false);
+		  const [rdSummary, setRdSummary] = (0, import_react18.useState)(null);
+		  const [rdProgress, setRdProgress] = (0, import_react18.useState)(null);
+		  const [rdCounts, setRdCounts] = (0, import_react18.useState)(null);
+		  const [err, setErr] = (0, import_react18.useState)(null);
+		  const [wingAborting, setWingAborting] = (0, import_react18.useState)(false);
+		  const [kwAborting, setKwAborting] = (0, import_react18.useState)(false);
+		  const [rdAborting, setRdAborting] = (0, import_react18.useState)(false);
+		  const wingStopRef = (0, import_react18.useRef)(false);
+		  const timersRef = (0, import_react18.useRef)([]);
+		  (0, import_react18.useEffect)(
 		    () => () => {
 		      for (const t of timersRef.current) window.clearTimeout(t);
 		    },
 		    []
 		  );
-		  const refreshOverview = (0, import_react17.useCallback)(() => {
+		  const refreshOverview = (0, import_react18.useCallback)(() => {
 		    rpc("dsh-memory/wing-overview", {}).then((r) => {
 		      if (r && r.ok) setOverview(r.value);
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
-		  (0, import_react17.useEffect)(() => {
+		  (0, import_react18.useEffect)(() => {
 		    refreshOverview();
 		  }, [refreshOverview]);
 		  ensureThemeStyle();
 		  const POLL_CAP = 400;
 		  const fmtProgress = (p, verb, counts, aborting = false) => {
-		    if (aborting) return `${verb}：正在中止——先等在跑的那条收工，超时即强行中断（已写回的保留）…`;
-		    if (!p) return `${verb}中…`;
+		    if (aborting) return tr("{p1}：正在中止——先等在跑的那条收工，超时即强行中断（已写回的保留）…", { p1: verb });
+		    if (!p) return tr("{p1}中…", { p1: verb });
 		    if (p.scanning) {
-		      return p.scanTotal > 0 ? `${verb}中：正在扫描存量 ${p.scanned}/${p.scanTotal} 行，筛出需${verb}的记录…` : `${verb}中：正在扫描活跃存量（已扫 ${p.scanned} 行），筛出需${verb}的记录…`;
+		      return p.scanTotal > 0 ? tr("{p1}中：正在扫描存量 {p2}/{p3} 行，筛出需{p4}的记录…", { p1: verb, p2: p.scanned, p3: p.scanTotal, p4: verb }) : tr("{p1}中：正在扫描活跃存量（已扫 {p2} 行），筛出需{p3}的记录…", { p1: verb, p2: p.scanned, p3: verb });
 		    }
-		    if (p.candidates === 0) return `${verb}中：扫描完成，没有需要${verb}的记录…`;
+		    if (p.candidates === 0) return tr("{p1}中：扫描完成，没有需要{p2}的记录…", { p1: verb, p2: verb });
 		    const parts = [
-		      `${verb}中：真目标 ${p.candidates} 条`,
-		      `已完成 ${p.processed} 条`,
-		      p.batchTotal > 0 ? `第 ${Math.min(p.batchesDone + 1, p.batchTotal)}/${p.batchTotal} 条` : "",
-		      p.concurrency > 1 ? `并行 ${p.concurrency}` : "串行",
-		      (counts?.failed ?? 0) > 0 ? `失败 ${counts.failed} 条` : ""
+		      tr("{p1}中：真目标 {p2} 条", { p1: verb, p2: p.candidates }),
+		      tr("已完成 {p1} 条", { p1: p.processed }),
+		      p.batchTotal > 0 ? tr("第 {p1}/{p2} 条", { p1: Math.min(p.batchesDone + 1, p.batchTotal), p2: p.batchTotal }) : "",
+		      p.concurrency > 1 ? tr("并行 {p1}", { p1: p.concurrency }) : tr("串行"),
+		      (counts?.failed ?? 0) > 0 ? tr("失败 {p1} 条", { p1: counts.failed }) : ""
 		    ].filter(Boolean);
-		    const outcome = counts ? `（写回 ${counts.updated ?? 0}${counts.skipped !== void 0 ? ` / 留原文 ${counts.skipped}` : ""}）` : "";
+		    const outcome = counts ? tr("（写回 {p1}{p2}）", { p1: counts.updated ?? 0, p2: counts.skipped !== void 0 ? ` / 留原文 ${counts.skipped}` : "" }) : "";
 		    return parts.join(" · ") + outcome;
 		  };
-		  const tail = (p) => p && p.cancelled ? `，已中止、剩 ${p.deferred} 条待再点一次` : p && p.deferred > 0 ? `，本次未跑完、剩 ${p.deferred} 条待再点一次` : "";
+		  const tail = (p) => p && p.cancelled ? tr("，已中止、剩 {p1} 条待再点一次", { p1: p.deferred }) : p && p.deferred > 0 ? tr("，本次未跑完、剩 {p1} 条待再点一次", { p1: p.deferred }) : "";
 		  const wingBackfill = (mode = "start") => {
 		    if (wingBusy) return;
 		    if (mode === "start" && (!overview || overview.unlabeled === 0)) return;
@@ -39860,7 +42252,7 @@ var __create = Object.create;
 		    rpc("dsh-memory/wing-backfill", mode === "resume" ? { probe: true } : {}).then((r) => {
 		      if (!r || !r.ok) {
 		        if (mode === "resume") return finish();
-		        setErr(r && r.error ? "回填失败：" + r.error.message : "回填失败");
+		        setErr(r && r.error ? tr("回填失败：") + r.error.message : tr("回填失败"));
 		        finish();
 		        return;
 		      }
@@ -39871,7 +42263,7 @@ var __create = Object.create;
 		      timersRef.current.push(window.setTimeout(tick, 3e3));
 		    }).catch((e) => {
 		      if (mode === "resume") return finish();
-		      setErr("回填失败：" + String(e && e.message || e));
+		      setErr(tr("回填失败：") + String(e && e.message || e));
 		      finish();
 		    });
 		  };
@@ -39891,11 +42283,11 @@ var __create = Object.create;
 		    const showResult = (v) => {
 		      const fail = v.failed ?? 0;
 		      if (last && !last.cancelled && last.candidates === 0) {
-		        setKwSummary("关键词回填：没有缺关键词的记录，无需回填");
+		        setKwSummary(tr("关键词回填：没有缺关键词的记录，无需回填"));
 		        return;
 		      }
-		      const head = last?.cancelled ? "关键词回填已中止" : "关键词回填完成";
-		      setKwSummary(`${head}：成功 ${v.updated ?? 0} 条${fail > 0 ? `，失败 ${fail} 条` : ""}${tail(last)}`);
+		      const head = last?.cancelled ? tr("关键词回填已中止") : tr("关键词回填完成");
+		      setKwSummary(tr("{p1}：成功 {p2} 条{p3}{p4}", { p1: head, p2: v.updated ?? 0, p3: fail > 0 ? `，失败 ${fail} 条` : "", p4: tail(last) }));
 		    };
 		    const failMsg = (m) => {
 		      setErr(m);
@@ -39905,7 +42297,7 @@ var __create = Object.create;
 		      polls++;
 		      rpc("dsh-memory/keyword-backfill", { probe: true }).then((r) => {
 		        const v = r && r.ok ? r.value : null;
-		        if (!v) return failMsg("关键词回填失败");
+		        if (!v) return failMsg(tr("关键词回填失败"));
 		        if (v.progress) {
 		          last = v.progress;
 		          setKwProgress(v.progress);
@@ -39921,17 +42313,17 @@ var __create = Object.create;
 		        }
 		        if (v.enabled) showResult(v);
 		        finish();
-		      }).catch(() => failMsg("关键词回填失败"));
+		      }).catch(() => failMsg(tr("关键词回填失败")));
 		    };
 		    rpc("dsh-memory/keyword-backfill", mode === "resume" ? { probe: true } : {}).then((r) => {
 		      if (!r || !r.ok) {
 		        if (mode === "resume") return;
-		        return failMsg(r && r.error ? "关键词回填失败：" + r.error.message : "关键词回填失败");
+		        return failMsg(r && r.error ? tr("关键词回填失败：") + r.error.message : tr("关键词回填失败"));
 		      }
 		      const v = r.value;
 		      if (!v) {
 		        if (mode === "resume") return;
-		        return failMsg("关键词回填失败");
+		        return failMsg(tr("关键词回填失败"));
 		      }
 		      if (mode === "resume") {
 		        if (!v.running) return;
@@ -39944,7 +42336,7 @@ var __create = Object.create;
 		        timersRef.current.push(window.setTimeout(tick, 3e3));
 		        return;
 		      }
-		      if (!v.enabled) return failMsg("关键词回填未开启：请先在概览开关组打开关键词回填");
+		      if (!v.enabled) return failMsg(tr("关键词回填未开启：请先在概览开关组打开关键词回填"));
 		      if (v.progress) {
 		        last = v.progress;
 		        setKwProgress(v.progress);
@@ -39953,7 +42345,7 @@ var __create = Object.create;
 		      timersRef.current.push(window.setTimeout(tick, 3e3));
 		    }).catch((e) => {
 		      if (mode === "resume") return;
-		      failMsg("关键词回填失败：" + String(e && e.message || e));
+		      failMsg(tr("关键词回填失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const redistillBackfill = (mode = "start") => {
@@ -39971,11 +42363,11 @@ var __create = Object.create;
 		    const finish = () => setRdBusy(false);
 		    const showResult = (v) => {
 		      if (last && !last.cancelled && last.candidates === 0) {
-		        setRdSummary("重蒸馏整形：没有需要整形的记录（骨架都已齐备），无需处理");
+		        setRdSummary(tr("重蒸馏整形：没有需要整形的记录（骨架都已齐备），无需处理"));
 		        return;
 		      }
-		      const head = last?.cancelled ? "整形已中止" : "整形完成";
-		      setRdSummary(`${head}：写回 ${v.updated ?? 0} 条，留原文 ${v.skipped ?? 0} 条${(v.failed ?? 0) > 0 ? `，失败 ${v.failed} 条` : ""}${tail(last)}`);
+		      const head = last?.cancelled ? tr("整形已中止") : tr("整形完成");
+		      setRdSummary(tr("{p1}：写回 {p2} 条，留原文 {p3} 条{p4}{p5}", { p1: head, p2: v.updated ?? 0, p3: v.skipped ?? 0, p4: (v.failed ?? 0) > 0 ? `，失败 ${v.failed} 条` : "", p5: tail(last) }));
 		    };
 		    const failMsg = (m) => {
 		      setErr(m);
@@ -39985,7 +42377,7 @@ var __create = Object.create;
 		      polls++;
 		      rpc("dsh-memory/redistill-backfill", { probe: true }).then((r) => {
 		        const v = r && r.ok ? r.value : null;
-		        if (!v) return failMsg("重蒸馏整形失败");
+		        if (!v) return failMsg(tr("重蒸馏整形失败"));
 		        if (v.progress) {
 		          last = v.progress;
 		          setRdProgress(v.progress);
@@ -40001,17 +42393,17 @@ var __create = Object.create;
 		        }
 		        if (v.enabled) showResult(v);
 		        finish();
-		      }).catch(() => failMsg("重蒸馏整形失败"));
+		      }).catch(() => failMsg(tr("重蒸馏整形失败")));
 		    };
 		    rpc("dsh-memory/redistill-backfill", mode === "resume" ? { probe: true } : {}).then((r) => {
 		      if (!r || !r.ok) {
 		        if (mode === "resume") return;
-		        return failMsg(r && r.error ? "重蒸馏整形失败：" + r.error.message : "重蒸馏整形失败");
+		        return failMsg(r && r.error ? tr("重蒸馏整形失败：") + r.error.message : tr("重蒸馏整形失败"));
 		      }
 		      const v = r.value;
 		      if (!v) {
 		        if (mode === "resume") return;
-		        return failMsg("重蒸馏整形失败");
+		        return failMsg(tr("重蒸馏整形失败"));
 		      }
 		      if (mode === "resume") {
 		        if (!v.running) return;
@@ -40024,7 +42416,7 @@ var __create = Object.create;
 		        timersRef.current.push(window.setTimeout(tick, 3e3));
 		        return;
 		      }
-		      if (!v.enabled) return failMsg("重蒸馏整形未开启：请先在概览开关组打开重蒸馏整形");
+		      if (!v.enabled) return failMsg(tr("重蒸馏整形未开启：请先在概览开关组打开重蒸馏整形"));
 		      if (v.progress) {
 		        last = v.progress;
 		        setRdProgress(v.progress);
@@ -40033,7 +42425,7 @@ var __create = Object.create;
 		      timersRef.current.push(window.setTimeout(tick, 3e3));
 		    }).catch((e) => {
 		      if (mode === "resume") return;
-		      failMsg("重蒸馏整形失败：" + String(e && e.message || e));
+		      failMsg(tr("重蒸馏整形失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const cancelWing = () => {
@@ -40041,24 +42433,24 @@ var __create = Object.create;
 		    setWingAborting(true);
 		    setWingBusy(false);
 		    rpc("dsh-memory/wing-backfill", { cancel: true }).catch((e) => {
-		      setErr("中止请求失败：" + String(e && e.message || e));
+		      setErr(tr("中止请求失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const cancelKw = () => {
 		    setKwAborting(true);
 		    rpc("dsh-memory/keyword-backfill", { cancel: true }).catch((e) => {
 		      setKwAborting(false);
-		      setErr("中止请求失败：" + String(e && e.message || e));
+		      setErr(tr("中止请求失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const cancelRd = () => {
 		    setRdAborting(true);
 		    rpc("dsh-memory/redistill-backfill", { cancel: true }).catch((e) => {
 		      setRdAborting(false);
-		      setErr("中止请求失败：" + String(e && e.message || e));
+		      setErr(tr("中止请求失败：") + String(e && e.message || e));
 		    });
 		  };
-		  (0, import_react17.useEffect)(() => {
+		  (0, import_react18.useEffect)(() => {
 		    keywordBackfill("resume");
 		    redistillBackfill("resume");
 		    wingBackfill("resume");
@@ -40072,26 +42464,26 @@ var __create = Object.create;
 		  };
 		  const hintStyle = { flex: 1, minWidth: 180, fontSize: 12, color: "var(--dsh-mem-text-3)" };
 		  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "dsh-mem-rb-card", style: { padding: "4px 14px", marginTop: 12 }, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: { fontWeight: 600, padding: "8px 0 2px" }, children: "存量回填与整形" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: { fontWeight: 600, padding: "8px 0 2px" }, children: tr("存量回填与整形") }),
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: rowStyle, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: hintStyle, children: wingAborting ? "回填：正在中止…" : overview ? `对存量未打标记忆批量补打 wing 标签 · 未打标 ${overview.unlabeled} 条` : "未打标计数加载中…" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: hintStyle, children: wingAborting ? tr("回填：正在中止…") : overview ? tr("对存量未打标记忆批量补打 wing 标签 · 未打标 {p1} 条", { p1: overview.unlabeled }) : tr("未打标计数加载中…") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
 		        NButton,
 		        {
 		          disabled: !wingBusy && (!overview || overview.unlabeled === 0),
 		          style: { color: "var(--dsh-mem-accent)" },
 		          onClick: () => wingBusy ? cancelWing() : wingBackfill(),
-		          children: wingBusy ? "中止" : "wing 回填"
+		          children: wingBusy ? tr("中止") : tr("wing 回填")
 		        }
 		      )
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: rowStyle, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: hintStyle, children: kwBusy ? fmtProgress(kwProgress, "回填", kwCounts ?? void 0, kwAborting) : kwSummary || "为缺 dsh_keywords 的存量记忆补检索关键词，喂 FTS 关键词轴（需先开关键词回填开关）" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(NButton, { disabled: kwAborting, style: { color: "var(--dsh-mem-accent)" }, onClick: () => kwBusy ? cancelKw() : keywordBackfill(), children: kwBusy ? kwAborting ? "中止中…" : "中止" : "关键词回填" })
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: hintStyle, children: kwBusy ? fmtProgress(kwProgress, tr("回填"), kwCounts ?? void 0, kwAborting) : kwSummary || tr("为缺 dsh_keywords 的存量记忆补检索关键词，喂 FTS 关键词轴（需先开关键词回填开关）") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(NButton, { disabled: kwAborting, style: { color: "var(--dsh-mem-accent)" }, onClick: () => kwBusy ? cancelKw() : keywordBackfill(), children: kwBusy ? kwAborting ? tr("中止中…") : tr("中止") : tr("关键词回填") })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: rowStyle, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: hintStyle, children: rdBusy ? fmtProgress(rdProgress, "整形", rdCounts ?? void 0, rdAborting) : rdSummary || "把“平”的存量记忆按类型重排成分节骨架，顺带产关键词/情景；只有严格更优才写回（需先开重蒸馏整形开关）" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(NButton, { disabled: rdAborting, style: { color: "var(--dsh-mem-accent)" }, onClick: () => rdBusy ? cancelRd() : redistillBackfill(), children: rdBusy ? rdAborting ? "中止中…" : "中止" : "重蒸馏整形" })
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: hintStyle, children: rdBusy ? fmtProgress(rdProgress, tr("整形"), rdCounts ?? void 0, rdAborting) : rdSummary || tr("把“平”的存量记忆按类型重排成分节骨架，顺带产关键词/情景；只有严格更优才写回（需先开重蒸馏整形开关）") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(NButton, { disabled: rdAborting, style: { color: "var(--dsh-mem-accent)" }, onClick: () => rdBusy ? cancelRd() : redistillBackfill(), children: rdBusy ? rdAborting ? tr("中止中…") : tr("中止") : tr("重蒸馏整形") })
 		    ] }),
 		    err ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: { padding: "6px 0", fontSize: 12, color: "var(--dsh-mem-danger)" }, children: err }) : null
 		  ] });
@@ -40136,11 +42528,11 @@ var __create = Object.create;
 		var import_jsx_runtime18 = require("react/jsx-runtime");
 		function OverviewTab(props) {
 		  const rpc = props.rpc;
-		  const [stats, setStats] = (0, import_react18.useState)(null);
-		  const [settingsData, setSettingsData] = (0, import_react18.useState)(null);
-		  const [error, setError] = (0, import_react18.useState)(null);
-		  const [graphConfirm, setGraphConfirm] = (0, import_react18.useState)(null);
-		  const load = (0, import_react18.useCallback)(() => {
+		  const [stats, setStats] = (0, import_react19.useState)(null);
+		  const [settingsData, setSettingsData] = (0, import_react19.useState)(null);
+		  const [error, setError] = (0, import_react19.useState)(null);
+		  const [graphConfirm, setGraphConfirm] = (0, import_react19.useState)(null);
+		  const load = (0, import_react19.useCallback)(() => {
 		    rpc("dsh-memory/stats", {}).then((r) => {
 		      if (r && r.ok) setStats(r.value);
 		      else setError(r && r.error ? r.error.message : "RPC error");
@@ -40152,7 +42544,7 @@ var __create = Object.create;
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
-		  (0, import_react18.useEffect)(() => {
+		  (0, import_react19.useEffect)(() => {
 		    load();
 		    const timer = setInterval(load, 5e3);
 		    return () => {
@@ -40168,7 +42560,7 @@ var __create = Object.create;
 		    rpc("dsh-memory/settings-set", patch).then((r) => {
 		      if (!r || !r.ok) {
 		        setSettingsData(prev);
-		        setError(r && r.error ? "开关写入失败：" + r.error.message : "开关写入失败");
+		        setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
 		        if (key === "explorerEnabled") explorerEntryState.set(prev.settings.explorerEnabled !== false);
 		      } else {
 		        setError(null);
@@ -40176,7 +42568,7 @@ var __create = Object.create;
 		      }
 		    }).catch((e) => {
 		      setSettingsData(prev);
-		      setError("开关写入失败：" + String(e && e.message || e));
+		      setError(tr("开关写入失败：") + String(e && e.message || e));
 		      if (key === "explorerEnabled") explorerEntryState.set(prev.settings.explorerEnabled !== false);
 		    });
 		  };
@@ -40196,43 +42588,43 @@ var __create = Object.create;
 		    rpc("dsh-memory/settings-set", { [key]: value }).then((r) => {
 		      if (!r || !r.ok) {
 		        setSettingsData(prev);
-		        setError(r && r.error ? "并行度写入失败：" + r.error.message : "并行度写入失败");
+		        setError(r && r.error ? tr("并行度写入失败：") + r.error.message : tr("并行度写入失败"));
 		      } else {
 		        setError(null);
 		      }
 		    }).catch((e) => {
 		      setSettingsData(prev);
-		      setError("并行度写入失败：" + String(e && e.message || e));
+		      setError(tr("并行度写入失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const tiles = [];
 		  const infos = [];
 		  if (stats) {
 		    const th = stats.thresholds || { l2MinNewMemories: 5, l3Interval: 20 };
-		    tiles.push({ num: String(stats.l0Today), label: "L0 今日消息" });
-		    tiles.push({ num: String(stats.l1Count), label: "L1 原子记忆" });
-		    tiles.push({ num: String(stats.sceneCount), label: "L2 场景块" });
-		    tiles.push({ num: String(stats.pendingExtract), label: "待重试消息" });
-		    infos.push(["数据目录", stats.dataDir]);
-		    infos.push(["插件版本", "v" + stats.version]);
-		    infos.push(["默认档", modeLabel(stats.family)]);
-		    infos.push(["L1 累计抽取", String(stats.l1TotalExtracted)]);
-		    infos.push(["L3 画像", stats.personaChars > 0 ? stats.personaChars + " 字符" : "未生成"]);
-		    infos.push(["上次 L1 抽取", fmtTime(stats.lastExtractAt)]);
-		    infos.push(["上次 L2 整合", fmtTime(stats.lastL2At)]);
-		    infos.push(["上次 L3 蒸馏", fmtTime(stats.lastL3At)]);
-		    infos.push(["待 L2 新记忆", stats.memoriesSinceL2 + " / " + (th.l2MinNewMemories != null ? th.l2MinNewMemories : 5)]);
-		    infos.push(["待 L3 新记忆", stats.memoriesSinceL3 + " / " + (th.l3Interval != null ? th.l3Interval : 20)]);
+		    tiles.push({ num: String(stats.l0Today), label: tr("L0 今日消息") });
+		    tiles.push({ num: String(stats.l1Count), label: tr("L1 原子记忆") });
+		    tiles.push({ num: String(stats.sceneCount), label: tr("L2 场景块") });
+		    tiles.push({ num: String(stats.pendingExtract), label: tr("待重试消息") });
+		    infos.push([tr("数据目录"), stats.dataDir]);
+		    infos.push([tr("插件版本"), "v" + stats.version]);
+		    infos.push([tr("默认档"), modeLabel(stats.family)]);
+		    infos.push([tr("L1 累计抽取"), String(stats.l1TotalExtracted)]);
+		    infos.push([tr("L3 画像"), stats.personaChars > 0 ? stats.personaChars + tr("字符") : tr("未生成")]);
+		    infos.push([tr("上次 L1 抽取"), fmtTime(stats.lastExtractAt)]);
+		    infos.push([tr("上次 L2 整合"), fmtTime(stats.lastL2At)]);
+		    infos.push([tr("上次 L3 蒸馏"), fmtTime(stats.lastL3At)]);
+		    infos.push([tr("待 L2 新记忆"), stats.memoriesSinceL2 + " / " + (th.l2MinNewMemories != null ? th.l2MinNewMemories : 5)]);
+		    infos.push([tr("待 L3 新记忆"), stats.memoriesSinceL3 + " / " + (th.l3Interval != null ? th.l3Interval : 20)]);
 		  }
 		  const degraded = stats && stats.message && stats.message !== "running";
 		  const master = settingsData && settingsData.settings ? settingsData.settings.enabled : true;
 		  let ceilingNote = "";
 		  if (settingsData && settingsData.ceilings) {
 		    const off = [];
-		    if (!settingsData.ceilings.capture) off.push("捕获");
-		    if (!settingsData.ceilings.distill) off.push("蒸馏");
-		    if (!settingsData.ceilings.recall) off.push("召回");
-		    if (off.length > 0) ceilingNote = "注意：部署配置已停用 " + off.join("、") + "（运行时开关无法开启）";
+		    if (!settingsData.ceilings.capture) off.push(tr("捕获"));
+		    if (!settingsData.ceilings.distill) off.push(tr("蒸馏"));
+		    if (!settingsData.ceilings.recall) off.push(tr("召回"));
+		    if (off.length > 0) ceilingNote = tr("注意：部署配置已停用") + off.join("、") + tr("（运行时开关无法开启）");
 		  }
 		  const mutate = settingsData && settingsData.settings ? !!settingsData.settings.memoryMutate : false;
 		  const cfEnabled = settingsData && settingsData.settings ? !!settingsData.settings.conflictFreeze : false;
@@ -40251,13 +42643,13 @@ var __create = Object.create;
 		  const explorerEnabled = settingsData && settingsData.settings ? settingsData.settings.explorerEnabled !== false : true;
 		  const bfConcurrency = settingsData && settingsData.settings ? settingsData.settings.backfillConcurrency ?? 0 : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-		    settingsData && settingsData.supported === false ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { style: S.hint, children: "settings 服务不可用，记忆模式开关未启用（记忆保持全开）。" }) : settingsData ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { style: S.switchPanel, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "记忆模式" }),
+		    settingsData && settingsData.supported === false ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { style: S.hint, children: tr("settings 服务不可用，记忆模式开关未启用（记忆保持全开）。") }) : settingsData ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { style: S.switchPanel, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("记忆模式") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "记忆模式",
-		          desc: master ? "已开启：捕获对话并蒸馏记忆" : "已关闭：不捕获、不蒸馏、不注入（数据保留）",
+		          label: tr("记忆模式"),
+		          desc: master ? tr("已开启：捕获对话并蒸馏记忆") : tr("已关闭：不捕获、不蒸馏、不注入（数据保留）"),
 		          checked: master,
 		          onChange: (v) => {
 		            toggle("enabled", v);
@@ -40267,8 +42659,8 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "捕获",
-		          desc: "L0：记录原始对话（关闭后蒸馏也无输入）",
+		          label: tr("捕获"),
+		          desc: tr("L0：记录原始对话（关闭后蒸馏也无输入）"),
 		          checked: settingsData.settings.capture,
 		          disabled: !master,
 		          onChange: (v) => {
@@ -40279,8 +42671,8 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "蒸馏",
-		          desc: "L1 抽取 + L2 场景 + L3 画像",
+		          label: tr("蒸馏"),
+		          desc: tr("L1 抽取 + L2 场景 + L3 画像"),
 		          checked: settingsData.settings.distill,
 		          disabled: !master,
 		          onChange: (v) => {
@@ -40291,8 +42683,8 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "召回",
-		          desc: "对话时注入相关记忆与画像",
+		          label: tr("召回"),
+		          desc: tr("对话时注入相关记忆与画像"),
 		          checked: settingsData.settings.recall,
 		          disabled: !master,
 		          onChange: (v) => {
@@ -40300,24 +42692,24 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "高权限模式" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("高权限模式") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "高权限模式",
-		          desc: mutate ? "已开启：模型获得记忆写入/删除工具，记忆 Tab 可删除指定记忆" : "默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除",
+		          label: tr("高权限模式"),
+		          desc: mutate ? tr("已开启：模型获得记忆写入/删除工具，记忆 Tab 可删除指定记忆") : tr("默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除"),
 		          checked: mutate,
 		          onChange: (v) => {
 		            toggle("memoryMutate", v);
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "技能结晶" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("技能结晶") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "技能（程序性记忆）",
-		          desc: skillsEnabled ? "已开启：重复工作方法会结晶为技能候选，注入活跃技能，可在「技能」页审阅晋升" : "默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）",
+		          label: tr("技能（程序性记忆）"),
+		          desc: skillsEnabled ? tr("已开启：重复工作方法会结晶为技能候选，注入活跃技能，可在「技能」页审阅晋升") : tr("默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）"),
 		          checked: skillsEnabled,
 		          onChange: (v) => {
 		            toggle("skillsEnabled", v);
@@ -40328,7 +42720,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: `${GRAPH_FEATURE_LABEL}投影`,
+		          label: tr("{p1}投影", { p1: GRAPH_FEATURE_LABEL }),
 		          desc: graphSwitchDesc(graphEnabled),
 		          checked: graphEnabled,
 		          disabled: !master,
@@ -40341,24 +42733,24 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "记忆库入口" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("记忆库入口") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "侧栏「记忆库」入口",
-		          desc: explorerEnabled ? "已开启：左侧栏显示「记忆库」（L1 查询 + 关联跳转 + 2D/3D 记忆图）；关闭即时隐藏，无需重启" : "已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启",
+		          label: tr("侧栏「记忆库」入口"),
+		          desc: explorerEnabled ? tr("已开启：左侧栏显示「记忆库」（L1 查询 + 关联跳转 + 2D/3D 记忆图）；关闭即时隐藏，无需重启") : tr("已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启"),
 		          checked: explorerEnabled,
 		          onChange: (v) => {
 		            toggle("explorerEnabled", v);
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "工具封印" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("工具封印") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "Room 管理工具",
-		          desc: toolRoom ? "已注册：memory_room_admin / memory_room_review（目录治理）" : "已封印：两个工具从模型工具列表移除",
+		          label: tr("Room 管理工具"),
+		          desc: toolRoom ? tr("已注册：memory_room_admin / memory_room_review（目录治理）") : tr("已封印：两个工具从模型工具列表移除"),
 		          checked: toolRoom,
 		          onChange: (v) => {
 		            toggle("toolRoom", v);
@@ -40369,7 +42761,7 @@ var __create = Object.create;
 		        SwitchRow,
 		        {
 		          label: GRAPH_TOOL_LABEL,
-		          desc: toolGraph ? "已注册：memory_search_graph / memory_expand_graph_node" : "已封印：图谱读工具从模型工具列表移除",
+		          desc: toolGraph ? tr("已注册：memory_search_graph / memory_expand_graph_node") : tr("已封印：图谱读工具从模型工具列表移除"),
 		          checked: toolGraph,
 		          onChange: (v) => {
 		            toggle("toolGraph", v);
@@ -40379,8 +42771,8 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "反刍工具",
-		          desc: toolRuminate ? "已注册：memory_ruminate / _cancel / _status" : "已封印：反刍三件从模型工具列表移除",
+		          label: tr("反刍工具"),
+		          desc: toolRuminate ? tr("已注册：memory_ruminate / _cancel / _status") : tr("已封印：反刍三件从模型工具列表移除"),
 		          checked: toolRuminate,
 		          onChange: (v) => {
 		            toggle("toolRuminate", v);
@@ -40390,8 +42782,8 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "冲突工具",
-		          desc: toolConflict ? "已注册：memory_conflicts / _rejected / resolve_conflict" : "已封印：冲突三件从模型工具列表移除",
+		          label: tr("冲突工具"),
+		          desc: toolConflict ? tr("已注册：memory_conflicts / _rejected / resolve_conflict") : tr("已封印：冲突三件从模型工具列表移除"),
 		          checked: toolConflict,
 		          onChange: (v) => {
 		            toggle("toolConflict", v);
@@ -40401,8 +42793,8 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "写删工具",
-		          desc: toolMutate ? "已注册：memory_add / memory_import / memory_delete（仍需高权限模式）" : "已封印：L1 写删工具从模型工具列表移除（槽位三件不受此开关影响）",
+		          label: tr("写删工具"),
+		          desc: toolMutate ? tr("已注册：memory_add / memory_import / memory_delete（仍需高权限模式）") : tr("已封印：L1 写删工具从模型工具列表移除（槽位三件不受此开关影响）"),
 		          checked: toolMutate,
 		          onChange: (v) => {
 		            toggle("toolMutate", v);
@@ -40412,32 +42804,32 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "技能工具",
-		          desc: toolSkills ? "已注册：memory_skill_list / _read / _pin / _archive（需先开启「技能结晶」）" : "已封印：技能四件从模型工具列表移除（技能功能关闭时本就零表面积）",
+		          label: tr("技能工具"),
+		          desc: toolSkills ? tr("已注册：memory_skill_list / _read / _pin / _archive（需先开启「技能结晶」）") : tr("已封印：技能四件从模型工具列表移除（技能功能关闭时本就零表面积）"),
 		          checked: toolSkills,
 		          onChange: (v) => {
 		            toggle("toolSkills", v);
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "人工冲突裁决" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("人工冲突裁决") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "人工冲突裁决",
-		          desc: cfEnabled ? '已开启：去重判定"两边都像对的"时冻结冲突对，停放到待人工裁决区' : "默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决",
+		          label: tr("人工冲突裁决"),
+		          desc: cfEnabled ? tr('已开启：去重判定"两边都像对的"时冻结冲突对，停放到待人工裁决区') : tr("默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决"),
 		          checked: cfEnabled,
 		          onChange: (v) => {
 		            toggle("conflictFreeze", v);
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "存量回填与整形" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("存量回填与整形") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "关键词回填",
-		          desc: keywordEnabled ? "已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）" : "默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）",
+		          label: tr("关键词回填"),
+		          desc: keywordEnabled ? tr("已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）") : tr("默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）"),
 		          checked: keywordEnabled,
 		          onChange: (v) => {
 		            toggle("keywordEnabled", v);
@@ -40447,8 +42839,8 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "重蒸馏整形",
-		          desc: redistillEnabled ? "已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）" : "默认关闭；开启后才能跑重蒸馏整形（改正文会重算向量+覆盖 .memory.md）",
+		          label: tr("重蒸馏整形"),
+		          desc: redistillEnabled ? tr("已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）") : tr("默认关闭；开启后才能跑重蒸馏整形（改正文会重算向量+覆盖 .memory.md）"),
 		          checked: redistillEnabled,
 		          onChange: (v) => {
 		            toggle("redistillEnabled", v);
@@ -40456,7 +42848,7 @@ var __create = Object.create;
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "6px 0", flexWrap: "wrap" }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { style: { fontSize: 13 }, children: "回填并行度" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { style: { fontSize: 13 }, children: tr("回填并行度") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		          "input",
 		          {
@@ -40472,15 +42864,16 @@ var __create = Object.create;
 		          }
 		        ),
 		        /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: [
-		          bfConcurrency === 0 ? "0·跟随配置（默认 1=串行）" : bfConcurrency === 1 ? "1·串行逐条" : `${bfConcurrency} 路并发`,
-		          "· 对**下一次点击**生效（正在跑的那轮不会改道）"
+		          bfConcurrency === 0 ? tr("0·跟随配置（默认 1=串行）") : bfConcurrency === 1 ? tr("1·串行逐条") : tr("{p1} 路并发", { p1: bfConcurrency }),
+		          tr("· 对**下一次点击**生效（正在跑的那轮不会改道）"),
+		          " "
 		        ] })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "md 反向同步",
-		          desc: mdSyncEnabled ? "已开启：可将 .memory.md 文件侧修改回灌入库（需先开 md 投射 + 高权限）" : "默认关闭；风险高于导出（会写库），需先开 md 投射再开本项",
+		          label: tr("md 反向同步"),
+		          desc: mdSyncEnabled ? tr("已开启：可将 .memory.md 文件侧修改回灌入库（需先开 md 投射 + 高权限）") : tr("默认关闭；风险高于导出（会写库），需先开 md 投射再开本项"),
 		          checked: mdSyncEnabled,
 		          onChange: (v) => {
 		            toggle("mdSyncEnabled", v);
@@ -40490,15 +42883,15 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: "外部记忆来源 Connect",
-		          desc: memportEnabled ? "已开启：可登记/扫描外部记忆源并导入" : "默认关闭；开启后 memport 相关端点可用",
+		          label: tr("外部记忆来源 Connect"),
+		          desc: memportEnabled ? tr("已开启：可登记/扫描外部记忆源并导入") : tr("默认关闭；开启后 memport 相关端点可用"),
 		          checked: memportEnabled,
 		          onChange: (v) => {
 		            toggle("memportEnabled", v);
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "蒸馏参数" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("蒸馏参数") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(DistillSettings, { rpc, disabled: !master, data: settingsData, setData: setSettingsData, onError: setError }),
 		      ceilingNote ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { style: S.hint, children: ceilingNote }) : null
 		    ] }) : null,
@@ -40506,16 +42899,16 @@ var __create = Object.create;
 		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(RebuildPanel, { rpc }),
 		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(RuminatePanel, { rpc }),
 		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(BackfillSection, { rpc }),
-		    degraded ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: "⚠ " + stats.message + "。上方数据为最后一次成功读取的值，记忆功能当前未工作。" }) : null,
-		    error ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.error, children: "获取状态失败：" + error }) : !stats ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { style: S.intro, children: "正在读取记忆状态…" }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "记忆概况" }),
+		    degraded ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: "⚠ " + stats.message + tr("。上方数据为最后一次成功读取的值，记忆功能当前未工作。") }) : null,
+		    error ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.error, children: tr("获取状态失败：") + error }) : !stats ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { style: S.intro, children: tr("正在读取记忆状态…") }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("记忆概况") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.statGrid, children: tiles.map((t) => {
 		        return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dsh-mem-card", style: S.statTile, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.statNum, children: t.num }),
 		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.statLabel, children: t.label })
 		        ] }, t.label);
 		      }) }),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "运行状态" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("运行状态") }),
 		      infos.map((row2) => {
 		        return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { style: S.infoRow, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { style: S.infoKey, children: row2[0] }),
@@ -40524,7 +42917,7 @@ var __create = Object.create;
 		      })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(ArchiveSection, { rpc }),
-		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { style: S.hint, children: "浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { style: S.hint, children: tr("浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。") }),
 		    graphConfirm ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
 		      NModal,
 		      {
@@ -40532,19 +42925,22 @@ var __create = Object.create;
 		        onClose: () => {
 		          setGraphConfirm(null);
 		        },
-		        title: `开启${GRAPH_FEATURE_LABEL}投影？`,
+		        title: tr("开启{p1}投影？", { p1: GRAPH_FEATURE_LABEL }),
 		        footer: [
-		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+		          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
 		            NButton,
 		            {
 		              onClick: () => {
 		                setGraphConfirm(null);
 		              },
-		              children: "取消"
+		              children: [
+		                tr("取消"),
+		                " "
+		              ]
 		            },
 		            "cancel"
 		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+		          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
 		            NButton,
 		            {
 		              variant: "primary",
@@ -40552,22 +42948,25 @@ var __create = Object.create;
 		                setGraphConfirm(null);
 		                toggle("graphEnabled", true);
 		              },
-		              children: "开启"
+		              children: [
+		                tr("开启"),
+		                " "
+		              ]
 		            },
 		            "confirm"
 		          )
 		        ],
 		        children: [
 		          graphConfirm.missing > 0 ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
-		            "待投影记忆 ",
+		            tr("待投影记忆"),
 		            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("b", { children: graphConfirm.missing }),
-		            " 条，按每批 8 条约 ",
+		            tr("条，按每批 8 条约"),
 		            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("b", { children: Math.ceil(graphConfirm.missing / 8) }),
-		            " 个作业；每个作业一次 LLM 抽取（单批约 2 分钟），预计总计 ",
+		            tr("个作业；每个作业一次 LLM 抽取（单批约 2 分钟），预计总计"),
 		            /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("b", { children: Math.max(1, Math.round(Math.ceil(graphConfirm.missing / 8) * 2 / 60)) }),
-		            " 小时量级。"
-		          ] }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { children: "当前没有待投影的记忆，开启后新蒸馏的记忆会陆续进图。" }),
-		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: { marginTop: 8 }, children: "投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。" })
+		            tr("小时量级。")
+		          ] }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { children: tr("当前没有待投影的记忆，开启后新蒸馏的记忆会陆续进图。") }),
+		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: { marginTop: 8 }, children: tr("投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。") })
 		        ]
 		      }
 		    ) : null
@@ -40575,13 +42974,13 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/PersonaTab.tsx
-		var import_react19 = require("react");
+		var import_react20 = require("react");
 		var import_jsx_runtime19 = require("react/jsx-runtime");
 		function PersonaTab(props) {
 		  const rpc = props.rpc;
-		  const [content, setContent] = (0, import_react19.useState)(null);
-		  const [error, setError] = (0, import_react19.useState)(null);
-		  const load = (0, import_react19.useCallback)(() => {
+		  const [content, setContent] = (0, import_react20.useState)(null);
+		  const [error, setError] = (0, import_react20.useState)(null);
+		  const load = (0, import_react20.useCallback)(() => {
 		    setError(null);
 		    rpc("dsh-memory/persona", {}).then((r) => {
 		      if (r && r.ok) setContent(r.value.content);
@@ -40590,25 +42989,25 @@ var __create = Object.create;
 		      setError(String(e && e.message || e));
 		    });
 		  }, [rpc]);
-		  (0, import_react19.useEffect)(() => {
+		  (0, import_react20.useEffect)(() => {
 		    load();
 		  }, [load]);
 		  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: S.muted, children: error ? "加载失败" : content === null ? "加载中…" : content ? content.length + " 字符" : "未生成画像" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { style: S.muted, children: error ? tr("加载失败") : content === null ? tr("加载中…") : content ? content.length + tr("字符") : tr("未生成画像") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(NButton, { onClick: load, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(NButton, { onClick: load, children: tr("刷新") })
 		    ] }),
-		    error ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: "画像读取失败：" + error + "（点右上“刷新”重试）" }) : null,
-		    content ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("pre", { style: S.pre, children: content }) : content === null ? null : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { style: S.intro, children: "画像尚未生成；蒸馏若干记忆后 L3 会自动产出。" })
+		    error ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: tr("画像读取失败：") + error + tr("（点右上“刷新”重试）") }) : null,
+		    content ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("pre", { style: S.pre, children: content }) : content === null ? null : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { style: S.intro, children: tr("画像尚未生成；蒸馏若干记忆后 L3 会自动产出。") })
 		  ] });
 		}
 		
 		// client/src/tabs/RecordsTab.tsx
-		var import_react21 = require("react");
+		var import_react22 = require("react");
 		
 		// client/src/ui/MarkdownBody.tsx
-		var import_react20 = require("react");
+		var import_react21 = require("react");
 		var H_STYLES = [
 		  { fontSize: 15, fontWeight: 700, margin: "8px 0 4px", color: "var(--dsh-mem-text-1)" },
 		  { fontSize: 14, fontWeight: 600, margin: "6px 0 3px", color: "var(--dsh-mem-text-1)" },
@@ -40639,9 +43038,9 @@ var __create = Object.create;
 		    }
 		    if (m.index > 0) nodes.push(rest.slice(0, m.index));
 		    if (m[1] !== void 0) {
-		      nodes.push((0, import_react20.createElement)("strong", { key: `${key}-b${i++}` }, m[1]));
+		      nodes.push((0, import_react21.createElement)("strong", { key: `${key}-b${i++}` }, m[1]));
 		    } else {
-		      nodes.push((0, import_react20.createElement)("code", { key: `${key}-c${i++}`, style: CODE }, m[2]));
+		      nodes.push((0, import_react21.createElement)("code", { key: `${key}-c${i++}`, style: CODE }, m[2]));
 		    }
 		    rest = rest.slice(m.index + m[0].length);
 		  }
@@ -40657,26 +43056,26 @@ var __create = Object.create;
 		    const h = /^(#{1,6})\s+(.+)/.exec(t);
 		    if (h) {
 		      const lv = h[1].length;
-		      out.push((0, import_react20.createElement)(`h${lv}`, { key: `h${idx}`, style: H_STYLES[lv - 1] }, ...inline(h[2], `h${idx}`)));
+		      out.push((0, import_react21.createElement)(`h${lv}`, { key: `h${idx}`, style: H_STYLES[lv - 1] }, ...inline(h[2], `h${idx}`)));
 		      idx++;
 		      continue;
 		    }
 		    const ul = /^[-*]\s+(.+)/.exec(t);
 		    if (ul) {
-		      out.push((0, import_react20.createElement)("div", { key: `li${idx}`, style: LI }, "• ", ...inline(ul[1], `li${idx}`)));
+		      out.push((0, import_react21.createElement)("div", { key: `li${idx}`, style: LI }, "• ", ...inline(ul[1], `li${idx}`)));
 		      idx++;
 		      continue;
 		    }
 		    const ol = /^\d+\.\s+(.+)/.exec(t);
 		    if (ol) {
-		      out.push((0, import_react20.createElement)("div", { key: `li${idx}`, style: LI }, t.slice(0, t.indexOf(".") + 2), ...inline(ol[1], `li${idx}`)));
+		      out.push((0, import_react21.createElement)("div", { key: `li${idx}`, style: LI }, t.slice(0, t.indexOf(".") + 2), ...inline(ol[1], `li${idx}`)));
 		      idx++;
 		      continue;
 		    }
-		    out.push((0, import_react20.createElement)("div", { key: `p${idx}`, style: P2 }, ...inline(t, `p${idx}`)));
+		    out.push((0, import_react21.createElement)("div", { key: `p${idx}`, style: P2 }, ...inline(t, `p${idx}`)));
 		    idx++;
 		  }
-		  return (0, import_react20.createElement)(import_react20.Fragment, null, ...out);
+		  return (0, import_react21.createElement)(import_react21.Fragment, null, ...out);
 		}
 		
 		// client/src/tabs/RecordsTab.tsx
@@ -40690,29 +43089,29 @@ var __create = Object.create;
 		function RecordsTab(props) {
 		  const rpc = props.rpc;
 		  const limit = 50;
-		  const [items, setItems] = (0, import_react21.useState)([]);
-		  const [hasMore, setHasMore] = (0, import_react21.useState)(false);
-		  const [total, setTotal] = (0, import_react21.useState)(null);
-		  const [sceneOptions, setSceneOptions] = (0, import_react21.useState)([]);
-		  const [loading, setLoading] = (0, import_react21.useState)(false);
-		  const [truncated, setTruncated] = (0, import_react21.useState)(false);
-		  const [error, setError] = (0, import_react21.useState)(null);
-		  const [expandedId, setExpandedId] = (0, import_react21.useState)(null);
-		  const [sel, setSel] = (0, import_react21.useState)(/* @__PURE__ */ new Set());
-		  const [hiPriv, setHiPriv] = (0, import_react21.useState)(false);
-		  const [hiPrivBusy, setHiPrivBusy] = (0, import_react21.useState)(false);
-		  const [query, setQuery] = (0, import_react21.useState)("");
-		  const [typeFilter, setTypeFilter] = (0, import_react21.useState)("");
-		  const [sceneFilter, setSceneFilter] = (0, import_react21.useState)("");
-		  const [hallFilter, setHallFilter] = (0, import_react21.useState)([]);
-		  const [tagFilter, setTagFilter] = (0, import_react21.useState)("");
-		  const [untaggedOnly, setUntaggedOnly] = (0, import_react21.useState)(false);
-		  const [orphanCount, setOrphanCount] = (0, import_react21.useState)(0);
-		  const [retiredFilter, setRetiredFilter] = (0, import_react21.useState)("");
-		  const [wingCatalog, setHallCatalog] = (0, import_react21.useState)(null);
-		  const [last, setLast] = (0, import_react21.useState)({ query: "", type: "", scene: "", halls: [], tag: "", untagged: false, retired: "" });
-		  const seqRef = (0, import_react21.useRef)(0);
-		  const fetchPage = (0, import_react21.useCallback)(
+		  const [items, setItems] = (0, import_react22.useState)([]);
+		  const [hasMore, setHasMore] = (0, import_react22.useState)(false);
+		  const [total, setTotal] = (0, import_react22.useState)(null);
+		  const [sceneOptions, setSceneOptions] = (0, import_react22.useState)([]);
+		  const [loading, setLoading] = (0, import_react22.useState)(false);
+		  const [truncated, setTruncated] = (0, import_react22.useState)(false);
+		  const [error, setError] = (0, import_react22.useState)(null);
+		  const [expandedId, setExpandedId] = (0, import_react22.useState)(null);
+		  const [sel, setSel] = (0, import_react22.useState)(/* @__PURE__ */ new Set());
+		  const [hiPriv, setHiPriv] = (0, import_react22.useState)(false);
+		  const [hiPrivBusy, setHiPrivBusy] = (0, import_react22.useState)(false);
+		  const [query, setQuery] = (0, import_react22.useState)("");
+		  const [typeFilter, setTypeFilter] = (0, import_react22.useState)("");
+		  const [sceneFilter, setSceneFilter] = (0, import_react22.useState)("");
+		  const [hallFilter, setHallFilter] = (0, import_react22.useState)([]);
+		  const [tagFilter, setTagFilter] = (0, import_react22.useState)("");
+		  const [untaggedOnly, setUntaggedOnly] = (0, import_react22.useState)(false);
+		  const [orphanCount, setOrphanCount] = (0, import_react22.useState)(0);
+		  const [retiredFilter, setRetiredFilter] = (0, import_react22.useState)("");
+		  const [wingCatalog, setHallCatalog] = (0, import_react22.useState)(null);
+		  const [last, setLast] = (0, import_react22.useState)({ query: "", type: "", scene: "", halls: [], tag: "", untagged: false, retired: "" });
+		  const seqRef = (0, import_react22.useRef)(0);
+		  const fetchPage = (0, import_react22.useCallback)(
 		    (conds, offset, append) => {
 		      setLoading(true);
 		      setError(null);
@@ -40762,32 +43161,32 @@ var __create = Object.create;
 		    setLast(conds);
 		    fetchPage(conds, 0, false);
 		  };
-		  const loadRooms = (0, import_react21.useCallback)(() => {
+		  const loadRooms = (0, import_react22.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
 		      if (r && r.ok) setOrphanCount(r.value.orphanCount ?? 0);
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
-		  (0, import_react21.useEffect)(() => {
+		  (0, import_react22.useEffect)(() => {
 		    fetchPage({ query: "", type: "", scene: "", halls: [], tag: "", untagged: false, retired: "" }, 0, false);
 		    loadRooms();
 		  }, [fetchPage, loadRooms]);
-		  const loadHiPriv = (0, import_react21.useCallback)(() => {
+		  const loadHiPriv = (0, import_react22.useCallback)(() => {
 		    rpc("dsh-memory/settings-get", {}).then((r) => {
 		      if (r && r.ok && r.value) setHiPriv(!!r.value.settings.memoryMutate);
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
-		  (0, import_react21.useEffect)(() => {
+		  (0, import_react22.useEffect)(() => {
 		    loadHiPriv();
 		  }, [loadHiPriv]);
 		  const toggleHiPriv = () => {
 		    const next = !hiPriv;
-		    if (next && !window.confirm("开启高权限模式：模型获得写入/删除记忆工具，记忆库可删除指定记忆。确定开启？")) return;
+		    if (next && !window.confirm(tr("开启高权限模式：模型获得写入/删除记忆工具，记忆库可删除指定记忆。确定开启？"))) return;
 		    setHiPrivBusy(true);
 		    rpc("dsh-memory/settings-set", { memoryMutate: next }).then((r) => {
 		      if (r && r.ok) setHiPriv(next);
-		      else if (r) setError(r.error ? r.error.message : "切换高权限模式失败");
+		      else if (r) setError(r.error ? r.error.message : tr("切换高权限模式失败"));
 		      setHiPrivBusy(false);
 		      loadHiPriv();
 		    }).catch((e) => {
@@ -40807,14 +43206,14 @@ var __create = Object.create;
 		    const ids = Array.from(sel);
 		    if (ids.length === 0) return;
 		    if (!hiPriv) {
-		      setError("高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。");
+		      setError(tr("高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。"));
 		      return;
 		    }
 		    if (ids.length > DELETE_LIMIT) {
-		      setError("一次最多退场 " + DELETE_LIMIT + " 条（当前勾选 " + ids.length + " 条），请分批操作。");
+		      setError(tr("一次最多退场") + DELETE_LIMIT + tr("条（当前勾选") + ids.length + tr("条），请分批操作。"));
 		      return;
 		    }
-		    if (!window.confirm("退场勾选的 " + ids.length + " 条记忆？\n\n它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。")) return;
+		    if (!window.confirm(tr("退场勾选的") + ids.length + tr("条记忆？ 它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。"))) return;
 		    rpc("dsh-memory/records-delete", { ids }).then((r) => {
 		      if (r && r.ok) {
 		        setSel(/* @__PURE__ */ new Set());
@@ -40823,11 +43222,11 @@ var __create = Object.create;
 		        setItems((prev) => prev.filter((m) => !ids.includes(m.id)));
 		        setTotal((t) => t === null ? null : Math.max(0, t - removed));
 		        if (showRetired) loadRetired();
-		      } else if (r) setError(r.error ? r.error.message : "退场失败");
+		      } else if (r) setError(r.error ? r.error.message : tr("退场失败"));
 		    }).catch((e) => setError(String(e && e.message || e)));
 		  };
 		  const deleteRecord = (id) => {
-		    if (!window.confirm("退场该条记忆？\n\n它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。")) return;
+		    if (!window.confirm(tr("退场该条记忆？ 它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。"))) return;
 		    rpc("dsh-memory/records-delete", { ids: [id] }).then((r) => {
 		      if (r && r.ok) {
 		        setSel((prev) => {
@@ -40839,23 +43238,23 @@ var __create = Object.create;
 		        setItems((prev) => prev.filter((m) => m.id !== id));
 		        setTotal((t) => t === null ? null : Math.max(0, t - 1));
 		        if (showRetired) loadRetired();
-		      } else if (r) setError(r.error ? r.error.message : "退场失败");
+		      } else if (r) setError(r.error ? r.error.message : tr("退场失败"));
 		    }).catch((e) => setError(String(e && e.message || e)));
 		  };
-		  const [retired, setRetired] = (0, import_react21.useState)([]);
-		  const [retiredTotal, setRetiredTotal] = (0, import_react21.useState)(0);
-		  const [showRetired, setShowRetired] = (0, import_react21.useState)(false);
-		  const [retiredBusy, setRetiredBusy] = (0, import_react21.useState)(false);
-		  const loadRetired = (0, import_react21.useCallback)(() => {
+		  const [retired, setRetired] = (0, import_react22.useState)([]);
+		  const [retiredTotal, setRetiredTotal] = (0, import_react22.useState)(0);
+		  const [showRetired, setShowRetired] = (0, import_react22.useState)(false);
+		  const [retiredBusy, setRetiredBusy] = (0, import_react22.useState)(false);
+		  const loadRetired = (0, import_react22.useCallback)(() => {
 		    setRetiredBusy(true);
 		    rpc("dsh-memory/records-retired", { limit: 100, offset: 0 }).then((r) => {
 		      if (r && r.ok) {
 		        setRetired(r.value.items);
 		        setRetiredTotal(r.value.total);
-		      } else if (r) setError(r.error ? r.error.message : "已退场列表加载失败");
+		      } else if (r) setError(r.error ? r.error.message : tr("已退场列表加载失败"));
 		    }).catch((e) => setError(String(e && e.message || e))).finally(() => setRetiredBusy(false));
 		  }, [rpc]);
-		  (0, import_react21.useEffect)(() => {
+		  (0, import_react22.useEffect)(() => {
 		    if (showRetired) loadRetired();
 		  }, [showRetired, loadRetired]);
 		  const restoreRecords = (ids) => {
@@ -40868,18 +43267,18 @@ var __create = Object.create;
 		        setItems(
 		          (prev) => prev.map((m) => restored.has(m.id) ? { ...m, retired: false, retiredReason: void 0 } : m)
 		        );
-		      } else if (r) setError(r.error ? r.error.message : "恢复失败");
+		      } else if (r) setError(r.error ? r.error.message : tr("恢复失败"));
 		    }).catch((e) => setError(String(e && e.message || e))).finally(() => setRetiredBusy(false));
 		  };
 		  const RETIRE_REASON_LABEL = {
-		    conflict: "裁决退场",
-		    superseded: "被取代",
-		    manual: "人工退场",
-		    obsolete: "声明过时",
-		    unknown: "已退场"
+		    conflict: tr("裁决退场"),
+		    superseded: tr("被取代"),
+		    manual: tr("人工退场"),
+		    obsolete: tr("声明过时"),
+		    unknown: tr("已退场")
 		  };
-		  const countText = total !== null ? "共 " + total + " 条" : items.length + " 条" + (hasMore ? "+" : "");
-		  const [usageSummary, setUsageSummary] = (0, import_react21.useState)(null);
+		  const countText = total !== null ? tr("共") + total + tr("条") : items.length + tr("条") + (hasMore ? "+" : "");
+		  const [usageSummary, setUsageSummary] = (0, import_react22.useState)(null);
 		  const selCount = sel.size;
 		  return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: S.toolbar, children: [
@@ -40887,7 +43286,7 @@ var __create = Object.create;
 		        NInput,
 		        {
 		          style: { flex: 1, minWidth: 160 },
-		          placeholder: "搜索记忆内容（BM25 关键词）…",
+		          placeholder: tr("搜索记忆内容（BM25 关键词）…"),
 		          value: query,
 		          onChange: (e) => {
 		            setQuery(e.target.value);
@@ -40910,7 +43309,7 @@ var __create = Object.create;
 		        NSel,
 		        {
 		          style: { maxWidth: 200 },
-		          options: [{ id: "", label: "全部类型" }].concat(
+		          options: [{ id: "", label: tr("全部类型") }].concat(
 		            (typeCatalogIds().length > 0 ? typeCatalogIds() : [...new Set(items.map((m) => m.type))]).map((t) => {
 		              return { id: t, label: typeLabel(t) };
 		            })
@@ -40923,7 +43322,7 @@ var __create = Object.create;
 		        NSel,
 		        {
 		          style: { maxWidth: 220 },
-		          options: [{ id: "", label: "全部情境" }].concat(
+		          options: [{ id: "", label: tr("全部情境") }].concat(
 		            sceneOptions.map((s) => {
 		              return { id: s, label: s.length > 24 ? s.slice(0, 24) + "…" : s };
 		            })
@@ -40940,7 +43339,7 @@ var __create = Object.create;
 		          onChange: setHallFilter
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(NButton, { onClick: search, children: "搜索" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(NButton, { onClick: search, children: tr("搜索") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		        NButton,
 		        {
@@ -40949,9 +43348,9 @@ var __create = Object.create;
 		            border: hiPriv ? "1px solid var(--dsh-mem-danger)" : void 0
 		          },
 		          disabled: hiPrivBusy,
-		          title: hiPriv ? "关闭高权限模式（收回模型写删工具与删除权限）" : "开启高权限模式以写删记忆",
+		          title: hiPriv ? tr("关闭高权限模式（收回模型写删工具与删除权限）") : tr("开启高权限模式以写删记忆"),
 		          onClick: toggleHiPriv,
-		          children: hiPriv ? "高权限：开" : "高权限：关"
+		          children: hiPriv ? tr("高权限：开") : tr("高权限：关")
 		        }
 		      )
 		    ] }),
@@ -40960,7 +43359,7 @@ var __create = Object.create;
 		        "button",
 		        {
 		          type: "button",
-		          title: untaggedOnly ? "取消孤儿筛选" : "只看没有任何 Room 绑定的记忆",
+		          title: untaggedOnly ? tr("取消孤儿筛选") : tr("只看没有任何 Room 绑定的记忆"),
 		          onClick: () => {
 		            const next = !untaggedOnly;
 		            setUntaggedOnly(next);
@@ -40978,17 +43377,17 @@ var __create = Object.create;
 		            background: untaggedOnly ? "var(--dsh-mem-bg-inset)" : "transparent",
 		            color: untaggedOnly ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-2)"
 		          },
-		          children: "无绑定 · " + orphanCount
+		          children: tr("无绑定 ·") + orphanCount
 		        }
 		      ),
 		      (tagFilter || untaggedOnly) && /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("span", { style: S.muted, children: [
-		        "筛选中:",
-		        untaggedOnly ? "无绑定" : tagFilter,
-		        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		        tr("筛选中:"),
+		        untaggedOnly ? tr("无绑定") : tagFilter,
+		        /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
 		          "button",
 		          {
 		            type: "button",
-		            title: "清除 Room/孤儿筛选",
+		            title: tr("清除 Room/孤儿筛选"),
 		            onClick: () => {
 		              setTagFilter("");
 		              setUntaggedOnly(false);
@@ -40997,15 +43396,18 @@ var __create = Object.create;
 		              fetchPage(conds, 0, false);
 		            },
 		            style: { cursor: "pointer", marginLeft: 6, background: "transparent", border: "none", color: "var(--dsh-mem-accent)", fontSize: 12 },
-		            children: "×清除"
+		            children: [
+		              tr("×清除"),
+		              " "
+		            ]
 		          }
 		        )
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
 		        "button",
 		        {
 		          type: "button",
-		          title: "导出无 Room 绑定的孤儿清单 CSV(含候选)",
+		          title: tr("导出无 Room 绑定的孤儿清单 CSV(含候选)"),
 		          onClick: () => {
 		            rpc("dsh-memory/rooms-export", { kind: "orphans" }).then((r) => {
 		              if (!r || !r.ok || !r.value?.csv) return;
@@ -41027,22 +43429,25 @@ var __create = Object.create;
 		            background: "transparent",
 		            color: "var(--dsh-mem-text-2)"
 		          },
-		          children: "导出孤儿"
+		          children: [
+		            tr("导出孤儿"),
+		            " "
+		          ]
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: "Room 标签/分类管理:见「Hall」「Room」标签页。" })
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: tr("Room 标签/分类管理:见「Hall」「Room」标签页。") })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: loading ? "加载中…" : countText }),
-		      usageSummary ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, title: "老化权重效果口径:参与召回尝试的记忆中,进 topN(被注入上下文)的比例", children: "召回使用 " + usageSummary.used + "/" + usageSummary.attempted + "(" + usageSummary.rate + "%)" }) : null,
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: "退场筛查" }),
-		      [["", "全部"], ["active", "仅活跃"], ["retired", "仅退场"]].map(([val, label]) => {
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: loading ? tr("加载中…") : countText }),
+		      usageSummary ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, title: tr("老化权重效果口径:参与召回尝试的记忆中,进 topN(被注入上下文)的比例"), children: tr("召回使用") + usageSummary.used + "/" + usageSummary.attempted + "(" + usageSummary.rate + "%)" }) : null,
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: tr("退场筛查") }),
+		      [["", tr("全部")], ["active", tr("仅活跃")], ["retired", tr("仅退场")]].map(([val, label]) => {
 		        const on = retiredFilter === val;
 		        return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		          "button",
 		          {
 		            type: "button",
-		            title: val === "" ? "活跃与已退场混排（已退场的带徽标）" : val === "active" ? "只看未退场的记忆" : "只看已退场（软删）的记忆，可在此恢复",
+		            title: val === "" ? tr("活跃与已退场混排（已退场的带徽标）") : val === "active" ? tr("只看未退场的记忆") : tr("只看已退场（软删）的记忆，可在此恢复"),
 		            onClick: () => applyRetiredFilter(val),
 		            style: {
 		              cursor: "pointer",
@@ -41063,36 +43468,42 @@ var __create = Object.create;
 		        {
 		          style: selCount > 0 ? { color: "var(--dsh-mem-danger)" } : void 0,
 		          disabled: selCount === 0,
-		          title: hiPriv ? "删除勾选的记忆（一次最多 " + DELETE_LIMIT + " 条）" : "高权限模式未开启，删除不可用",
+		          title: hiPriv ? tr("删除勾选的记忆（一次最多") + DELETE_LIMIT + tr("条）") : tr("高权限模式未开启，删除不可用"),
 		          onClick: deleteSelected,
-		          children: "删除选中" + (selCount > 0 ? "（" + selCount + "）" : "")
+		          children: tr("删除选中") + (selCount > 0 ? "（" + selCount + "）" : "")
 		        }
 		      ),
-		      selCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		      selCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
 		        NButton,
 		        {
 		          onClick: () => {
 		            setSel(/* @__PURE__ */ new Set());
 		          },
-		          children: "清空选择"
+		          children: [
+		            tr("清空选择"),
+		            " "
+		          ]
 		        }
 		      ) : null,
 		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
 		        NButton,
 		        {
 		          onClick: () => {
 		            fetchPage(last, 0, false);
 		            loadRooms();
 		          },
-		          children: "刷新"
+		          children: [
+		            tr("刷新"),
+		            " "
+		          ]
 		        }
 		      )
 		    ] }),
-		    !hiPriv ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.hint, children: "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。" }) : null,
+		    !hiPriv ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.hint, children: tr("提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。") }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.error, children: error }) : null,
-		    truncated ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.hint, children: "搜索分页已达检索上限（200 条），更早的结果未显示。请用更精确的关键词或类型/情境过滤。" }) : null,
-		    items.length === 0 && !loading && !error ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { style: S.intro, children: "暂无记忆。对话几轮后，蒸馏管线会自动抽取记忆。" }) : items.map((m) => {
+		    truncated ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.hint, children: tr("搜索分页已达检索上限（200 条），更早的结果未显示。请用更精确的关键词或类型/情境过滤。") }) : null,
+		    items.length === 0 && !loading && !error ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { style: S.intro, children: tr("暂无记忆。对话几轮后，蒸馏管线会自动抽取记忆。") }) : items.map((m) => {
 		      const open = expandedId === m.id;
 		      const checked = sel.has(m.id);
 		      return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
@@ -41111,7 +43522,7 @@ var __create = Object.create;
 		                  type: "checkbox",
 		                  checked,
 		                  style: { margin: 0, cursor: "pointer", flexShrink: 0 },
-		                  title: "勾选以批量删除",
+		                  title: tr("勾选以批量删除"),
 		                  onClick: (e) => {
 		                    e.stopPropagation();
 		                  },
@@ -41125,7 +43536,7 @@ var __create = Object.create;
 		              m.retired ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		                "span",
 		                {
-		                  title: "该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除",
+		                  title: tr("该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除"),
 		                  style: {
 		                    fontSize: 11,
 		                    padding: "1px 6px",
@@ -41134,14 +43545,14 @@ var __create = Object.create;
 		                    color: "var(--dsh-mem-danger)",
 		                    whiteSpace: "nowrap"
 		                  },
-		                  children: "已退场" + (m.retiredReason ? " · " + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : "")
+		                  children: tr("已退场") + (m.retiredReason ? " · " + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : "")
 		                }
 		              ) : null,
-		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: "优先级 " + m.priority }),
+		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: tr("优先级") + m.priority }),
 		              m.maturity ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		                "span",
 		                {
-		                  title: "成熟度（优先级 + 被用次数 + 新鲜度合成）：" + m.maturity,
+		                  title: tr("成熟度（优先级 + 被用次数 + 新鲜度合成）：") + m.maturity,
 		                  style: {
 		                    fontSize: 11,
 		                    padding: "1px 6px",
@@ -41150,7 +43561,7 @@ var __create = Object.create;
 		                    border: "1px solid var(--dsh-mem-border)",
 		                    color: "var(--dsh-mem-text-2)"
 		                  },
-		                  children: m.maturity === "high" ? "成熟·高" : m.maturity === "mid" ? "成熟·中" : "成熟·低"
+		                  children: m.maturity === "high" ? tr("成熟·高") : m.maturity === "mid" ? tr("成熟·中") : tr("成熟·低")
 		                }
 		              ) : null,
 		              m.agingWeight != null ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
@@ -41164,22 +43575,22 @@ var __create = Object.create;
 		                    border: "1px solid " + (m.agingWeight <= 0.6 ? "var(--dsh-mem-danger)" : "var(--dsh-mem-border)"),
 		                    color: m.agingWeight <= 0.6 ? "var(--dsh-mem-danger)" : "var(--dsh-mem-text-2)"
 		                  },
-		                  title: "老化权重 " + Math.round(m.agingWeight * 100) + "%(读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期)));越低越老",
-		                  children: "老化 " + Math.round(m.agingWeight * 100) + "%"
+		                  title: tr("老化权重") + Math.round(m.agingWeight * 100) + tr("%(读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期)));越低越老"),
+		                  children: tr("老化") + Math.round(m.agingWeight * 100) + "%"
 		                }
 		              ) : null,
 		              m.usage ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		                "span",
 		                {
 		                  style: S.muted,
-		                  title: "召回使用 " + m.usage.used + "/" + m.usage.attempts + "(进 topN 才算 used)" + (m.usage.lastUsedAt ? ";最近使用 " + fmtTime(new Date(m.usage.lastUsedAt).toISOString()) : "") + (m.usage.lastAttemptAt ? ";最近尝试 " + fmtTime(new Date(m.usage.lastAttemptAt).toISOString()) : ""),
-		                  children: "用 " + m.usage.used + "/" + m.usage.attempts
+		                  title: tr("召回使用") + m.usage.used + "/" + m.usage.attempts + tr("(进 topN 才算 used)") + (m.usage.lastUsedAt ? tr(";最近使用") + fmtTime(new Date(m.usage.lastUsedAt).toISOString()) : "") + (m.usage.lastAttemptAt ? tr(";最近尝试") + fmtTime(new Date(m.usage.lastAttemptAt).toISOString()) : ""),
+		                  children: tr("用") + m.usage.used + "/" + m.usage.attempts
 		                }
 		              ) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		                "span",
 		                {
-		                  title: m.name && m.name.length > 0 ? "名称（名称蒸馏产物；投射文件的命名取它）：" + m.name : "尚未命名（名称蒸馏未产出）；投射回落 mem-" + m.id.slice(-8),
+		                  title: m.name && m.name.length > 0 ? tr("名称（名称蒸馏产物；投射文件的命名取它）：") + m.name : tr("尚未命名（名称蒸馏未产出）；投射回落 mem-") + m.id.slice(-8),
 		                  style: {
 		                    fontSize: 11,
 		                    padding: "1px 6px",
@@ -41191,13 +43602,13 @@ var __create = Object.create;
 		                    border: "1px solid " + (m.name && m.name.length > 0 ? "var(--dsh-mem-border)" : "var(--dsh-mem-danger)"),
 		                    color: m.name && m.name.length > 0 ? "var(--dsh-mem-text-2)" : "var(--dsh-mem-danger)"
 		                  },
-		                  children: "名称 " + (m.name && m.name.length > 0 ? m.name : "未命名")
+		                  children: tr("名称") + (m.name && m.name.length > 0 ? m.name : tr("未命名"))
 		                }
 		              ),
 		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		                "span",
 		                {
-		                  title: m.scope === "workspace" ? "作用范围：指定工作区（仅归属工作区可见）" + (m.workspaceId ? "：" + m.workspaceId : "") : "作用范围：用户默认（global，任何工作区可见）",
+		                  title: m.scope === "workspace" ? tr("作用范围：指定工作区（仅归属工作区可见）") + (m.workspaceId ? "：" + m.workspaceId : "") : tr("作用范围：用户默认（global，任何工作区可见）"),
 		                  style: {
 		                    fontSize: 11,
 		                    padding: "1px 6px",
@@ -41206,28 +43617,31 @@ var __create = Object.create;
 		                    border: "1px solid var(--dsh-mem-border)",
 		                    color: "var(--dsh-mem-text-2)"
 		                  },
-		                  children: m.scope === "workspace" ? "工作区" : "用户默认"
+		                  children: m.scope === "workspace" ? tr("工作区") : tr("用户默认")
 		                }
 		              ),
-		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: "相关度 " + Number(m.score).toFixed(2) }) : null,
+		              m.score !== null && m.score !== void 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: tr("相关度") + Number(m.score).toFixed(2) }) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.grow }),
 		              /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: fmtTime(m.updatedAt) }),
-		              m.retired ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+		              m.retired ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
 		                NButton,
 		                {
 		                  style: { padding: "0 7px", minWidth: 26, height: 26, fontSize: 12, color: "var(--dsh-mem-accent)" },
-		                  title: "恢复该记忆到检索面（可撤销退场）",
+		                  title: tr("恢复该记忆到检索面（可撤销退场）"),
 		                  onClick: (e) => {
 		                    e.stopPropagation();
 		                    restoreRecords([m.id]);
 		                  },
-		                  children: "恢复"
+		                  children: [
+		                    tr("恢复"),
+		                    " "
+		                  ]
 		                }
 		              ) : hiPriv ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		                NButton,
 		                {
 		                  style: { padding: "0 7px", minWidth: 26, height: 26, fontSize: 12, color: "var(--dsh-mem-danger)" },
-		                  title: "删除该记忆（高权限）",
+		                  title: tr("删除该记忆（高权限）"),
 		                  onClick: (e) => {
 		                    e.stopPropagation();
 		                    deleteRecord(m.id);
@@ -41237,29 +43651,34 @@ var __create = Object.create;
 		              ) : null
 		            ] }),
 		            /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.content, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MarkdownBody, { text: m.content }) }),
-		            open ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.detail, children: "id: " + m.id + "\n名称: " + (m.name && m.name.length > 0 ? m.name : "（未命名，投射回落 mem-" + m.id.slice(-8) + "）") + "\n情境: " + (m.scene || "-") + "\n关键词: " + (m.keywords && m.keywords.length > 0 ? m.keywords.join("，") : "（暂无 · 预留检索轴）") + "\n作用范围: " + (m.scope === "workspace" ? "指定工作区" + (m.workspaceId ? "：" + m.workspaceId : "（未记录路径）") : "用户默认（global，任何工作区可见）") + "\n版本: v" + m.version + "（去重合并次数 " + m.version + "）\n创建: " + fmtTime(m.createdAt) + "\n活跃时间: " + (m.timestamps && m.timestamps.length > 0 ? m.timestamps.map(fmtTime).join(" → ") : "-") + "\n" + (m.sourceAnchors && m.sourceAnchors.length > 0 ? "来源锚点: " + m.sourceAnchors.join(", ") : "来源锚点: -") }) : null
+		            open ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.detail, children: "id: " + m.id + "\n" + tr("名称:") + (m.name && m.name.length > 0 ? m.name : tr("（未命名，投射回落 mem-") + m.id.slice(-8) + "）") + "\n" + tr("情境:") + (m.scene || "-") + "\n" + // 关键词：预留的检索轴（待关键词蒸馏上线）。当前无产出方 ⇒ 通常为空；
+		            // “空白字段”本身就是如实陈述，所以照显示，不做隐藏。
+		            tr("关键词:") + (m.keywords && m.keywords.length > 0 ? m.keywords.join("，") : tr("（暂无 · 预留检索轴）")) + "\n" + tr("作用范围:") + (m.scope === "workspace" ? tr("指定工作区") + (m.workspaceId ? "：" + m.workspaceId : tr("（未记录路径）")) : tr("用户默认（global，任何工作区可见）")) + "\n" + tr("版本: v") + m.version + tr("（去重合并次数") + m.version + "）\n" + tr("创建:") + fmtTime(m.createdAt) + "\n" + tr("活跃时间:") + (m.timestamps && m.timestamps.length > 0 ? m.timestamps.map(fmtTime).join(" → ") : "-") + "\n" + (m.sourceAnchors && m.sourceAnchors.length > 0 ? tr("来源锚点:") + m.sourceAnchors.join(", ") : tr("来源锚点: -")) }) : null
 		          ]
 		        },
 		        m.id
 		      );
 		    }),
 		    /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: { ...S.flexRow, marginTop: 12 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(NButton, { onClick: () => setShowRetired((v) => !v), children: (showRetired ? "收起" : "展开") + "「已退场」（可恢复）" }),
-		      showRetired && retiredBusy ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: "加载中…" }) : null,
-		      showRetired && !retiredBusy && retiredTotal > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: "共 " + retiredTotal + " 条可恢复" }) : null
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(NButton, { onClick: () => setShowRetired((v) => !v), children: (showRetired ? tr("收起") : tr("展开")) + tr("「已退场」（可恢复）") }),
+		      showRetired && retiredBusy ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: tr("加载中…") }) : null,
+		      showRetired && !retiredBusy && retiredTotal > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: tr("共") + retiredTotal + tr("条可恢复") }) : null
 		    ] }),
-		    showRetired ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: { marginTop: 8 }, children: retired.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { style: S.hint, children: retiredBusy ? " " : "没有已退场的记忆。" }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { children: [
+		    showRetired ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: { marginTop: 8 }, children: retired.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { style: S.hint, children: retiredBusy ? " " : tr("没有已退场的记忆。") }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { children: [
 		      retired.map((m) => /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: S.cardHead, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason }),
-		          m.verdict ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: "结论 " + m.verdict }) : null,
+		          m.verdict ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: tr("结论") + m.verdict }) : null,
 		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.grow }),
 		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { style: S.muted, children: fmtTime(m.retiredAt) }),
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(NButton, { disabled: retiredBusy, title: "恢复到检索面", onClick: () => restoreRecords([m.id]), children: "恢复" })
+		          /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(NButton, { disabled: retiredBusy, title: tr("恢复到检索面"), onClick: () => restoreRecords([m.id]), children: [
+		            tr("恢复"),
+		            " "
+		          ] })
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.content, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MarkdownBody, { text: m.content }) })
 		      ] }, m.id)),
-		      retiredTotal > retired.length ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { style: S.hint, children: "共 " + retiredTotal + " 条，此处显示 " + retired.length + " 条" }) : null
+		      retiredTotal > retired.length ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("p", { style: S.hint, children: tr("共") + retiredTotal + tr("条，此处显示") + retired.length + tr("条") }) : null
 		    ] }) }) : null,
 		    hasMore ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { style: S.flexRow, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.grow }),
@@ -41270,16 +43689,16 @@ var __create = Object.create;
 		          onClick: () => {
 		            if (!loading) fetchPage(last, items.length, true);
 		          },
-		          children: loading ? "加载中…" : "加载更多"
+		          children: loading ? tr("加载中…") : tr("加载更多")
 		        }
 		      )
 		    ] }) : null
 		  ] });
 		}
 		function WingMultiSelect(props) {
-		  const [open, setOpen] = (0, import_react21.useState)(false);
-		  const wrapRef = (0, import_react21.useRef)(null);
-		  (0, import_react21.useEffect)(() => {
+		  const [open, setOpen] = (0, import_react22.useState)(false);
+		  const wrapRef = (0, import_react22.useRef)(null);
+		  (0, import_react22.useEffect)(() => {
 		    if (!open) return;
 		    const onDown = (e) => {
 		      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
@@ -41295,7 +43714,7 @@ var __create = Object.create;
 		    };
 		  }, [open]);
 		  const labelOf = (id) => props.options.find((o) => o.id === id)?.label ?? id;
-		  const summary = props.selected.length === 0 ? "全部 Wing" : props.selected.length <= 2 ? props.selected.map(labelOf).join(" + ") : `${labelOf(props.selected[0])} 等 ${props.selected.length} 域`;
+		  const summary = props.selected.length === 0 ? tr("全部 Wing") : props.selected.length <= 2 ? props.selected.map(labelOf).join(" + ") : tr("{p1} 等 {p2} 域", { p1: labelOf(props.selected[0]), p2: props.selected.length });
 		  const toggle = (id) => {
 		    props.onChange(props.selected.includes(id) ? props.selected.filter((x) => x !== id) : [...props.selected, id]);
 		  };
@@ -41315,7 +43734,7 @@ var __create = Object.create;
 		      }
 		    ),
 		    open ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "dsh-mem-pop", role: "listbox", style: { left: 0, right: "auto", minWidth: 150 }, children: [
-		      props.options.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "dsh-mem-pop-empty", children: "暂无可筛 Hall" }) : null,
+		      props.options.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "dsh-mem-pop-empty", children: tr("暂无可筛 Hall") }) : null,
 		      props.options.map((o) => {
 		        const active = props.selected.includes(o.id);
 		        return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("button", { type: "button", className: "dsh-mem-pop-opt", onClick: () => toggle(o.id), "aria-selected": active, children: [
@@ -41325,14 +43744,14 @@ var __create = Object.create;
 		      }),
 		      props.selected.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("button", { type: "button", className: "dsh-mem-pop-opt", onClick: () => props.onChange([]), children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "dsh-mem-pop-check" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "dsh-mem-pop-label", children: "清除筛选" })
+		        /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "dsh-mem-pop-label", children: tr("清除筛选") })
 		      ] }) : null
 		    ] }) : null
 		  ] });
 		}
 		
 		// client/src/tabs/RoomsTab.tsx
-		var import_react22 = require("react");
+		var import_react23 = require("react");
 		var import_jsx_runtime21 = require("react/jsx-runtime");
 		function majorOf(slug) {
 		  const i = slug.indexOf("/");
@@ -41362,26 +43781,26 @@ var __create = Object.create;
 		};
 		function RoomsTab(props) {
 		  const rpc = props.rpc;
-		  const [registry, setRegistry] = (0, import_react22.useState)([]);
-		  const [rooms, setRooms] = (0, import_react22.useState)([]);
-		  const [orphanCount, setOrphanCount] = (0, import_react22.useState)(0);
-		  const [busy, setBusy] = (0, import_react22.useState)(false);
-		  const [msg, setMsg] = (0, import_react22.useState)(null);
-		  const [error, setError] = (0, import_react22.useState)(null);
-		  const [hiPriv, setHiPriv] = (0, import_react22.useState)(false);
-		  const [hiPrivBusy, setHiPrivBusy] = (0, import_react22.useState)(false);
-		  const [regSlug, setRegSlug] = (0, import_react22.useState)("");
-		  const [regLabel, setRegLabel] = (0, import_react22.useState)("");
-		  const [regDesc, setRegDesc] = (0, import_react22.useState)("");
-		  const [form, setForm] = (0, import_react22.useState)(null);
-		  const [preview, setPreview] = (0, import_react22.useState)(null);
-		  const [grownOpen, setGrownOpen] = (0, import_react22.useState)(false);
-		  const [dragOverHall, setDragOverHall] = (0, import_react22.useState)(null);
-		  const [picking, setPicking] = (0, import_react22.useState)(null);
-		  const [editing, setEditing] = (0, import_react22.useState)(null);
-		  const [expandedRooms, setExpandedRooms] = (0, import_react22.useState)(/* @__PURE__ */ new Set());
-		  const [roomRecords, setRoomRecords] = (0, import_react22.useState)({});
-		  const [expandedHalls, setExpandedHalls] = (0, import_react22.useState)(() => {
+		  const [registry, setRegistry] = (0, import_react23.useState)([]);
+		  const [rooms, setRooms] = (0, import_react23.useState)([]);
+		  const [orphanCount, setOrphanCount] = (0, import_react23.useState)(0);
+		  const [busy, setBusy] = (0, import_react23.useState)(false);
+		  const [msg, setMsg] = (0, import_react23.useState)(null);
+		  const [error, setError] = (0, import_react23.useState)(null);
+		  const [hiPriv, setHiPriv] = (0, import_react23.useState)(false);
+		  const [hiPrivBusy, setHiPrivBusy] = (0, import_react23.useState)(false);
+		  const [regSlug, setRegSlug] = (0, import_react23.useState)("");
+		  const [regLabel, setRegLabel] = (0, import_react23.useState)("");
+		  const [regDesc, setRegDesc] = (0, import_react23.useState)("");
+		  const [form, setForm] = (0, import_react23.useState)(null);
+		  const [preview, setPreview] = (0, import_react23.useState)(null);
+		  const [grownOpen, setGrownOpen] = (0, import_react23.useState)(false);
+		  const [dragOverHall, setDragOverHall] = (0, import_react23.useState)(null);
+		  const [picking, setPicking] = (0, import_react23.useState)(null);
+		  const [editing, setEditing] = (0, import_react23.useState)(null);
+		  const [expandedRooms, setExpandedRooms] = (0, import_react23.useState)(/* @__PURE__ */ new Set());
+		  const [roomRecords, setRoomRecords] = (0, import_react23.useState)({});
+		  const [expandedHalls, setExpandedHalls] = (0, import_react23.useState)(() => {
 		    try {
 		      const v = window.localStorage.getItem("dsh.memory.halls.open");
 		      return v ? new Set(JSON.parse(v)) : /* @__PURE__ */ new Set();
@@ -41389,9 +43808,9 @@ var __create = Object.create;
 		      return /* @__PURE__ */ new Set();
 		    }
 		  });
-		  const [filter, setFilter] = (0, import_react22.useState)("");
-		  const dragRef = (0, import_react22.useRef)(null);
-		  const [ghost, setGhost] = (0, import_react22.useState)(null);
+		  const [filter, setFilter] = (0, import_react23.useState)("");
+		  const dragRef = (0, import_react23.useRef)(null);
+		  const [ghost, setGhost] = (0, import_react23.useState)(null);
 		  const onDragLabelDown = (ev, slug) => {
 		    if (!hiPriv || busy || ev.button !== 0) return;
 		    ev.currentTarget.setPointerCapture(ev.pointerId);
@@ -41416,7 +43835,7 @@ var __create = Object.create;
 		    setDragOverHall(null);
 		    if (hall) beginReclass(d.from, hall);
 		  };
-		  const loadAll = (0, import_react22.useCallback)(() => {
+		  const loadAll = (0, import_react23.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
 		      if (r && r.ok) {
 		        setRooms(r.value.rooms ?? []);
@@ -41425,23 +43844,23 @@ var __create = Object.create;
 		      }
 		    }).catch(() => void 0);
 		  }, [rpc]);
-		  const loadHiPriv = (0, import_react22.useCallback)(() => {
+		  const loadHiPriv = (0, import_react23.useCallback)(() => {
 		    rpc("dsh-memory/settings-get", {}).then((r) => {
 		      if (r && r.ok && r.value) setHiPriv(!!r.value.settings.memoryMutate);
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
-		  (0, import_react22.useEffect)(() => {
+		  (0, import_react23.useEffect)(() => {
 		    loadAll();
 		    loadHiPriv();
 		  }, [loadAll, loadHiPriv]);
 		  const toggleHiPriv = () => {
 		    const next = !hiPriv;
-		    if (next && !window.confirm("开启高权限模式:模型获得写入/删除记忆工具,并解锁 Hall 页的分类管理操作。确定开启?")) return;
+		    if (next && !window.confirm(tr("开启高权限模式:模型获得写入/删除记忆工具,并解锁 Hall 页的分类管理操作。确定开启?"))) return;
 		    setHiPrivBusy(true);
 		    rpc("dsh-memory/settings-set", { memoryMutate: next }).then((r) => {
 		      if (r && r.ok) setHiPriv(next);
-		      else if (r) setError(r.error ? r.error.message : "切换高权限模式失败");
+		      else if (r) setError(r.error ? r.error.message : tr("切换高权限模式失败"));
 		      setHiPrivBusy(false);
 		      loadHiPriv();
 		    }).catch((e) => {
@@ -41463,36 +43882,36 @@ var __create = Object.create;
 		      description: regDesc.trim() || void 0
 		    });
 		    if (r && r.ok) {
-		      setMsg(r.value?.notice ?? `已注册:${regSlug.trim()}`);
+		      setMsg(r.value?.notice ?? tr("已注册:{p1}", { p1: regSlug.trim() }));
 		      setRegSlug("");
 		      setRegLabel("");
 		      setRegDesc("");
 		      loadAll();
-		    } else setError(r && r.error ? r.error.message : "注册失败");
+		    } else setError(r && r.error ? r.error.message : tr("注册失败"));
 		  });
-		  const adopt = (slug) => run(async () => {
+		  const adopt2 = (slug) => run(async () => {
 		    const r = await rpc("dsh-memory/room-register", { slug, source: "grown" });
 		    if (r && r.ok) {
-		      setMsg(`已收编:${slug}(source=grown)`);
+		      setMsg(tr("已收编:{p1}(source=grown)", { p1: slug }));
 		      loadAll();
-		    } else setError(r && r.error ? r.error.message : "收编失败");
+		    } else setError(r && r.error ? r.error.message : tr("收编失败"));
 		  });
 		  const previewMerge = (override) => run(async () => {
 		    const fm = override ?? form;
 		    if (!fm) return;
 		    const to = fm.to.trim();
 		    if (!to) {
-		      setError("目标 slug 不能为空");
+		      setError(tr("目标 slug 不能为空"));
 		      return;
 		    }
 		    if (to === fm.from) {
-		      setError("目标与源相同");
+		      setError(tr("目标与源相同"));
 		      return;
 		    }
 		    const r = await rpc("dsh-memory/room-admin", { action: fm.action, from: fm.from, to });
 		    if (r && r.ok) {
 		      setPreview({ action: fm.action, from: fm.from, to, notice: String(r.value?.notice ?? "") });
-		    } else setError(r && r.error ? r.error.message : "预览失败");
+		    } else setError(r && r.error ? r.error.message : tr("预览失败"));
 		  });
 		  const beginReclass = (from, hall) => {
 		    if (!busy) {
@@ -41500,16 +43919,16 @@ var __create = Object.create;
 		      setError(null);
 		    }
 		    if (!hall) {
-		      setError("尚无 hall:先注册一个(如 dsh-plugin),再归类。");
+		      setError(tr("尚无 hall:先注册一个(如 dsh-plugin),再归类。"));
 		      return;
 		    }
 		    if (majorOf(from) === hall) {
 		      if (registry.some((e) => e.slug === from)) {
-		        setMsg(`${from} 已在 ${hall} 下。`);
+		        setMsg(tr("{p1} 已在 {p2} 下。", { p1: from, p2: hall }));
 		        return;
 		      }
 		      setPicking(null);
-		      void adopt(from);
+		      void adopt2(from);
 		      return;
 		    }
 		    const f = { action: "rename", from, to: `${hall}/${suffixOf(from)}` };
@@ -41522,26 +43941,26 @@ var __create = Object.create;
 		    if (preview.action === "rename" && !registry.some((e) => e.slug === preview.from)) {
 		      const rr = await rpc("dsh-memory/room-register", { slug: preview.from, source: "grown" });
 		      if (!rr || !rr.ok) {
-		        setError(rr && rr.error ? rr.error.message : "收编源失败");
+		        setError(rr && rr.error ? rr.error.message : tr("收编源失败"));
 		        return;
 		      }
 		    }
 		    const r = await rpc("dsh-memory/room-admin", { action: preview.action, from: preview.from, to: preview.to, dryRun: false });
 		    if (r && r.ok) {
-		      setMsg(String(r.value?.notice ?? "完成"));
+		      setMsg(String(r.value?.notice ?? tr("完成")));
 		      setPreview(null);
 		      setForm(null);
 		      loadAll();
-		    } else setError(r && r.error ? r.error.message : "执行失败");
+		    } else setError(r && r.error ? r.error.message : tr("执行失败"));
 		  });
 		  const retire = (slug, active, withRecords = false) => run(async () => {
 		    if (!active) {
-		      const tip = withRecords ? `退役 Room:${slug} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)` : `退役 Room:${slug}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)`;
+		      const tip = withRecords ? tr("退役 Room:{p1} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)", { p1: slug }) : tr("退役 Room:{p1}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)", { p1: slug });
 		      if (!window.confirm(tip)) return;
 		    }
 		    const r = await rpc("dsh-memory/room-admin", { action: "retire", slug, active, withRecords: withRecords || void 0 });
 		    if (r && r.ok) {
-		      setMsg(String(r.value?.notice ?? "完成"));
+		      setMsg(String(r.value?.notice ?? tr("完成")));
 		      loadAll();
 		      if (expandedRooms.has(slug)) {
 		        const rr = await rpc("dsh-memory/list-records", { tag: slug, limit: 10, retired: false });
@@ -41550,16 +43969,16 @@ var __create = Object.create;
 		          setRoomRecords((m) => ({ ...m, [slug]: { items: rr.value.items, total: rr.value.total ?? null } }));
 		        }
 		      }
-		    } else setError(r && r.error ? r.error.message : "操作失败");
+		    } else setError(r && r.error ? r.error.message : tr("操作失败"));
 		  });
 		  const saveEditing = () => run(async () => {
 		    if (!editing) return;
 		    const r = await rpc("dsh-memory/room-admin", { action: "update", slug: editing.slug, label: editing.label, description: editing.description });
 		    if (r && r.ok) {
-		      setMsg(String(r.value?.notice ?? "已更新"));
+		      setMsg(String(r.value?.notice ?? tr("已更新")));
 		      setEditing(null);
 		      loadAll();
-		    } else setError(r && r.error ? r.error.message : "更新失败");
+		    } else setError(r && r.error ? r.error.message : tr("更新失败"));
 		  });
 		  const toggleRoomExpand = (slug) => run(async () => {
 		    if (expandedRooms.has(slug)) {
@@ -41575,7 +43994,7 @@ var __create = Object.create;
 		      next.add(slug);
 		      setExpandedRooms(next);
 		      setRoomRecords((m) => ({ ...m, [slug]: { items: r.value.items, total: r.value.total ?? null } }));
-		    } else setError(r && r.error ? r.error.message : "加载失败");
+		    } else setError(r && r.error ? r.error.message : tr("加载失败"));
 		  });
 		  const exportRecords = (slug) => run(async () => {
 		    const r = await rpc("dsh-memory/rooms-export", { kind: "records", tag: slug });
@@ -41584,9 +44003,9 @@ var __create = Object.create;
 		      return;
 		    }
 		    if (r.value.csv) downloadCsv(r.value.csv, `dsh-memory-room-${slug.replace(/\//g, "-")}-records.csv`);
-		    else setError("导出为空");
+		    else setError(tr("导出为空"));
 		  });
-		  const groups = (0, import_react22.useMemo)(() => {
+		  const groups = (0, import_react23.useMemo)(() => {
 		    const countOf = new Map(rooms.map((r) => [r.room, r.count]));
 		    const byHall = /* @__PURE__ */ new Map();
 		    for (const e of registry) {
@@ -41603,7 +44022,7 @@ var __create = Object.create;
 		      total: entries.reduce((s2, e) => s2 + (countOf.get(e.slug) ?? 0), 0)
 		    })).sort((a, b) => a.hall.localeCompare(b.hall));
 		  }, [registry, rooms]);
-		  const grownOnly = (0, import_react22.useMemo)(() => rooms.filter((r) => !registry.some((e) => e.slug === r.room)), [rooms, registry]);
+		  const grownOnly = (0, import_react23.useMemo)(() => rooms.filter((r) => !registry.some((e) => e.slug === r.room)), [rooms, registry]);
 		  const persistHalls = (next) => {
 		    try {
 		      window.localStorage.setItem("dsh.memory.halls.open", JSON.stringify([...next]));
@@ -41623,7 +44042,7 @@ var __create = Object.create;
 		    persistHalls(next);
 		  };
 		  const normFilter = filter.trim().toLowerCase();
-		  const visibleGroups = (0, import_react22.useMemo)(() => {
+		  const visibleGroups = (0, import_react23.useMemo)(() => {
 		    if (!normFilter) return groups;
 		    return groups.map((g) => {
 		      const hallHit = g.hall.toLowerCase().includes(normFilter) || (g.label ?? "").toLowerCase().includes(normFilter);
@@ -41633,19 +44052,19 @@ var __create = Object.create;
 		      return { ...g, entries };
 		    }).filter((g) => g.entries.length > 0);
 		  }, [groups, normFilter]);
-		  const visibleGrown = (0, import_react22.useMemo)(
+		  const visibleGrown = (0, import_react23.useMemo)(
 		    () => normFilter ? grownOnly.filter((r) => r.room.toLowerCase().includes(normFilter)) : grownOnly,
 		    [grownOnly, normFilter]
 		  );
 		  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { ...S.flexRow, marginBottom: 8 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: "Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: tr("Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		        "button",
 		        {
 		          type: "button",
-		          title: "导出分类数据 CSV(Room 词表+计数)",
+		          title: tr("导出分类数据 CSV(Room 词表+计数)"),
 		          onClick: () => run(async () => {
 		            const r = await rpc("dsh-memory/rooms-export", { kind: "rooms" });
 		            if (!r.ok) {
@@ -41655,14 +44074,14 @@ var __create = Object.create;
 		            if (r.value.csv) downloadCsv(r.value.csv, "dsh-memory-rooms.csv");
 		          }),
 		          style: btn,
-		          children: "导出词表"
+		          children: tr("导出词表")
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
 		        "button",
 		        {
 		          type: "button",
-		          title: "导出无 Room 绑定的孤儿清单(含候选)",
+		          title: tr("导出无 Room 绑定的孤儿清单(含候选)"),
 		          onClick: () => run(async () => {
 		            const r = await rpc("dsh-memory/rooms-export", { kind: "orphans" });
 		            if (!r.ok) {
@@ -41673,7 +44092,8 @@ var __create = Object.create;
 		          }),
 		          style: btn,
 		          children: [
-		            "导出孤儿 · ",
+		            tr("导出孤儿 ·"),
+		            " ",
 		            orphanCount
 		          ]
 		        }
@@ -41688,12 +44108,12 @@ var __create = Object.create;
 		            border: hiPriv ? "1px solid var(--dsh-mem-danger)" : btn.border
 		          },
 		          disabled: hiPrivBusy,
-		          title: hiPriv ? "关闭高权限模式(收回模型写删工具与管理操作)" : "开启高权限模式以解锁分类管理操作",
+		          title: hiPriv ? tr("关闭高权限模式(收回模型写删工具与管理操作)") : tr("开启高权限模式以解锁分类管理操作"),
 		          onClick: toggleHiPriv,
-		          children: hiPriv ? "高权限:开" : "高权限:关"
+		          children: hiPriv ? tr("高权限:开") : tr("高权限:关")
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", style: btn, onClick: loadAll, title: "重拉注册表与计数", children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", style: btn, onClick: loadAll, title: tr("重拉注册表与计数"), children: tr("刷新") })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
@@ -41701,15 +44121,15 @@ var __create = Object.create;
 		        {
 		          value: filter,
 		          onChange: (e) => setFilter(e.target.value),
-		          placeholder: "搜索 hall/room(slug、显示名、别名)",
+		          placeholder: tr("搜索 hall/room(slug、显示名、别名)"),
 		          style: { ...S.input, width: 250, fontSize: 12 }
 		        }
 		      ),
-		      filter ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", style: btn, onClick: () => setFilter(""), children: "清除" }) : null,
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: `匹配 ${visibleGroups.reduce((s2, g) => s2 + g.entries.length, 0)} room / ${visibleGroups.length} hall` }),
+		      filter ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", style: btn, onClick: () => setFilter(""), children: tr("清除") }) : null,
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: tr("匹配 {p1} room / {p2} hall", { p1: visibleGroups.reduce((s2, g) => s2 + g.entries.length, 0), p2: visibleGroups.length }) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", style: btn, title: "展开全部 hall 的子 room", onClick: () => setAllHalls(true), children: "展开全部" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", style: btn, title: "收起全部 hall(只留 hall 头)", onClick: () => setAllHalls(false), children: "收起全部" })
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", style: btn, title: tr("展开全部 hall 的子 room"), onClick: () => setAllHalls(true), children: tr("展开全部") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", style: btn, title: tr("收起全部 hall(只留 hall 头)"), onClick: () => setAllHalls(false), children: tr("收起全部") })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
@@ -41717,7 +44137,7 @@ var __create = Object.create;
 		        {
 		          value: regSlug,
 		          onChange: (e) => setRegSlug(e.target.value),
-		          placeholder: "slug(如 dsh-plugin 或 dsh-plugin/merge)",
+		          placeholder: tr("slug(如 dsh-plugin 或 dsh-plugin/merge)"),
 		          disabled: !hiPriv || busy,
 		          style: { ...S.input, width: 210, fontSize: 12 }
 		        }
@@ -41727,7 +44147,7 @@ var __create = Object.create;
 		        {
 		          value: regLabel,
 		          onChange: (e) => setRegLabel(e.target.value),
-		          placeholder: "名称(可中文)",
+		          placeholder: tr("名称(可中文)"),
 		          disabled: !hiPriv || busy,
 		          style: { ...S.input, width: 110, fontSize: 12 }
 		        }
@@ -41737,7 +44157,7 @@ var __create = Object.create;
 		        {
 		          value: regDesc,
 		          onChange: (e) => setRegDesc(e.target.value),
-		          placeholder: "归类说明(喂标注器)",
+		          placeholder: tr("归类说明(喂标注器)"),
 		          disabled: !hiPriv || busy,
 		          style: { ...S.input, width: 170, fontSize: 12 }
 		        }
@@ -41749,24 +44169,25 @@ var __create = Object.create;
 		          disabled: !hiPriv || busy || !regSlug.trim(),
 		          onClick: register,
 		          style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy || !regSlug.trim() ? 0.5 : 1 },
-		          children: "注册"
+		          children: tr("注册")
 		        }
 		      ),
-		      !hiPriv && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: "管理操作需先开启高权限模式" })
+		      !hiPriv && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: tr("管理操作需先开启高权限模式") })
 		    ] }),
 		    editing ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { position: "sticky", top: 0, zIndex: 5, background: "var(--dsh-mem-bg-inset)", display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap", padding: "6px 8px", border: "1px solid var(--dsh-mem-accent)", borderRadius: 8 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { style: S.muted, children: [
-		        "编辑 ",
+		        tr("编辑"),
+		        " ",
 		        editing.slug
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("input", { value: editing.label, onChange: (ev) => setEditing({ ...editing, label: ev.target.value }), placeholder: "显示名(可中文)", disabled: busy, style: { ...S.input, width: 140, fontSize: 12 } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("input", { value: editing.description, onChange: (ev) => setEditing({ ...editing, description: ev.target.value }), placeholder: "归类说明(喂标注器)", disabled: busy, style: { ...S.input, width: 200, fontSize: 12 } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: saveEditing, style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: "保存" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: () => setEditing(null), style: btn, children: "取消" })
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("input", { value: editing.label, onChange: (ev) => setEditing({ ...editing, label: ev.target.value }), placeholder: tr("显示名(可中文)"), disabled: busy, style: { ...S.input, width: 140, fontSize: 12 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("input", { value: editing.description, onChange: (ev) => setEditing({ ...editing, description: ev.target.value }), placeholder: tr("归类说明(喂标注器)"), disabled: busy, style: { ...S.input, width: 200, fontSize: 12 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: saveEditing, style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: tr("保存") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: () => setEditing(null), style: btn, children: tr("取消") })
 		    ] }) : null,
 		    form ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { position: "sticky", top: 0, zIndex: 5, background: "var(--dsh-mem-bg-inset)", display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap", padding: "6px 8px", border: "1px solid var(--dsh-mem-accent)", borderRadius: 8 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { style: S.muted, children: [
-		        form.action === "merge" ? "合并" : "归类/改名",
+		        form.action === "merge" ? tr("合并") : tr("归类/改名"),
 		        " ",
 		        form.from,
 		        " →"
@@ -41776,7 +44197,7 @@ var __create = Object.create;
 		        {
 		          value: form.to,
 		          onChange: (ev) => setForm({ ...form, to: ev.target.value }),
-		          placeholder: "目标 slug",
+		          placeholder: tr("目标 slug"),
 		          disabled: busy,
 		          style: { ...S.input, width: 190, fontSize: 12 }
 		        }
@@ -41785,36 +44206,36 @@ var __create = Object.create;
 		        "button",
 		        {
 		          type: "button",
-		          title: `归入 ${gg.hall} 下(${gg.hall}/${suffixOf(form.from)})`,
+		          title: tr("归入 {p1} 下({p2}/{p3})", { p1: gg.hall, p2: gg.hall, p3: suffixOf(form.from) }),
 		          onClick: () => setForm({ ...form, to: `${gg.hall}/${suffixOf(form.from)}` }),
 		          style: { ...btn, borderRadius: 999, padding: "1px 8px" },
 		          children: gg.hall
 		        },
 		        gg.hall
 		      )) }) : null,
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: () => previewMerge(), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: "预览" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: () => previewMerge(), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: tr("预览") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: () => {
 		        setForm(null);
 		        setPreview(null);
 		        setPicking(null);
-		      }, style: btn, children: "取消" }),
-		      picking ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: "挑选中:点击目标 hall 头完成归类" }) : null,
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: "与反刍并发会互相覆盖,请在反刍空闲时执行。" })
+		      }, style: btn, children: tr("取消") }),
+		      picking ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: tr("挑选中:点击目标 hall 头完成归类") }) : null,
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: tr("与反刍并发会互相覆盖,请在反刍空闲时执行。") })
 		    ] }) : null,
 		    preview ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { position: "sticky", top: 0, zIndex: 5, background: "var(--dsh-mem-bg-inset)", marginBottom: 8, padding: "6px 8px", border: "1px solid var(--dsh-mem-danger)", borderRadius: 8, fontSize: 12 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { children: preview.notice }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", gap: 6, marginTop: 4 }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("button", { type: "button", disabled: busy, onClick: execMerge, style: { ...btn, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: [
-		          "确认执行",
-		          preview.action === "merge" ? "合并" : "归类/改名"
+		          tr("确认执行"),
+		          preview.action === "merge" ? tr("合并") : tr("归类/改名")
 		        ] }),
-		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: () => setPreview(null), style: btn, children: "再改改" })
+		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, onClick: () => setPreview(null), style: btn, children: tr("再改改") })
 		      ] })
 		    ] }) : null,
 		    msg ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.hint, children: msg }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.error, children: error }) : null,
 		    ghost ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: { position: "fixed", left: ghost.x + 12, top: ghost.y + 12, zIndex: 9999, pointerEvents: "none", fontSize: 12, padding: "2px 10px", borderRadius: 999, border: "1px solid var(--dsh-mem-accent)", background: "var(--dsh-mem-bg-inset)", color: "var(--dsh-mem-accent)" }, children: ghost.text }) : null,
-		    visibleGroups.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { style: S.intro, children: normFilter ? "无匹配的 hall/room。" : "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。" }) : visibleGroups.map((g) => {
+		    visibleGroups.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { style: S.intro, children: normFilter ? tr("无匹配的 hall/room。") : tr("注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。") }) : visibleGroups.map((g) => {
 		      const hallOpen = !!normFilter || expandedHalls.has(g.hall);
 		      return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { marginBottom: 10, border: "1px solid var(--dsh-mem-border)", borderRadius: 8, overflow: "hidden" }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
@@ -41856,13 +44277,13 @@ var __create = Object.create;
 		              outlineOffset: dragOverHall === g.hall || picking !== null ? "-2px" : void 0,
 		              cursor: "pointer"
 		            },
-		            title: picking ? "点击此 hall:把「" + picking + "」归入 " + g.hall + " 下(major/minor,预览后确认)" : hiPriv ? "拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)" : void 0,
+		            title: picking ? tr("点击此 hall:把「") + picking + tr("」归入") + g.hall + tr("下(major/minor,预览后确认)") : hiPriv ? tr("拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)") : void 0,
 		            children: [
 		              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		                "button",
 		                {
 		                  type: "button",
-		                  title: hallOpen ? "收起子 room" : "展开子 room(默认折叠)",
+		                  title: hallOpen ? tr("收起子 room") : tr("展开子 room(默认折叠)"),
 		                  onClick: (ev) => {
 		                    ev.stopPropagation();
 		                    toggleHall(g.hall);
@@ -41875,20 +44296,20 @@ var __create = Object.create;
 		                g.hall,
 		                g.label ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: " (" + g.label + ")" }) : null
 		              ] }),
-		              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: `合计 ${g.total} 条 · ${g.entries.length} 个 room` }),
+		              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: tr("合计 {p1} 条 · {p2} 个 room", { p1: g.total, p2: g.entries.length }) }),
 		              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.grow }),
 		              /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		                "button",
 		                {
 		                  type: "button",
 		                  disabled: !hiPriv || busy,
-		                  title: `预填注册表单为 ${g.hall}/…(注册该 hall 下的小类)`,
+		                  title: tr("预填注册表单为 {p1}/…(注册该 hall 下的小类)", { p1: g.hall }),
 		                  onClick: (ev) => {
 		                    ev.stopPropagation();
 		                    setRegSlug(g.hall + "/");
 		                  },
 		                  style: btn,
-		                  children: "+小类"
+		                  children: tr("+小类")
 		                }
 		              )
 		            ]
@@ -41905,7 +44326,7 @@ var __create = Object.create;
 		                  "button",
 		                  {
 		                    type: "button",
-		                    title: expandedRooms.has(e.slug) ? "收起内容" : "展开查看该 Room 的记录内容(默认收起)",
+		                    title: expandedRooms.has(e.slug) ? tr("收起内容") : tr("展开查看该 Room 的记录内容(默认收起)"),
 		                    onClick: () => void toggleRoomExpand(e.slug),
 		                    style: { ...btn, borderRadius: 999, padding: "1px 7px", flexShrink: 0 },
 		                    children: expandedRooms.has(e.slug) ? "▾" : "▸"
@@ -41918,7 +44339,7 @@ var __create = Object.create;
 		                    onPointerDown: (ev) => onDragLabelDown(ev, e.slug),
 		                    onPointerMove: onDragLabelMove,
 		                    onPointerUp: onDragLabelUp,
-		                    title: hiPriv && !busy ? "按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)" : e.description ? `${e.slug} — ${e.description}` : e.slug,
+		                    title: hiPriv && !busy ? tr("按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)") : e.description ? `${e.slug} — ${e.description}` : e.slug,
 		                    children: [
 		                      standalone ? e.slug : "· " + e.slug.slice(g.hall.length + 1),
 		                      e.source === "pre-registered" ? " ⭐" : ""
@@ -41926,24 +44347,24 @@ var __create = Object.create;
 		                  }
 		                ),
 		                e.label ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: e.label }) : null,
-		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: count + " 条" }),
-		                retired ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: "已退役" }) : null,
-		                (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: { ...S.muted, wordBreak: "break-all" }, children: "别名: " + (e.aliases ?? []).join(", ") }) : null
+		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: count + tr("条") }),
+		                retired ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: tr("已退役") }) : null,
+		                (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: { ...S.muted, wordBreak: "break-all" }, children: tr("别名:") + (e.aliases ?? []).join(", ") }) : null
 		              ] }),
 		              /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }, children: [
 		                !hiPriv ? null : /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
-		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: "编辑显示名/归类说明", onClick: () => {
+		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: tr("编辑显示名/归类说明"), onClick: () => {
 		                    setEditing({ slug: e.slug, label: e.label ?? "", description: e.description ?? "" });
 		                    setForm(null);
 		                    setPreview(null);
 		                    setPicking(null);
-		                  }, style: btn, children: "编辑" }),
+		                  }, style: btn, children: tr("编辑") }),
 		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		                    "button",
 		                    {
 		                      type: "button",
 		                      disabled: busy,
-		                      title: picking === e.slug ? "再点一次取消挑选;然后点击目标 hall 头完成归类" : "归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)",
+		                      title: picking === e.slug ? tr("再点一次取消挑选;然后点击目标 hall 头完成归类") : tr("归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)"),
 		                      onClick: () => {
 		                        if (picking === e.slug) {
 		                          setPicking(null);
@@ -41956,21 +44377,21 @@ var __create = Object.create;
 		                        setError(null);
 		                      },
 		                      style: { ...btn, ...picking === e.slug ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : {} },
-		                      children: picking === e.slug ? "选 hall…" : "归类"
+		                      children: picking === e.slug ? tr("选 hall…") : tr("归类")
 		                    }
 		                  ),
-		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: `改名(= merge 1:1 + 注册表改名)`, onClick: () => {
+		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: tr("改名(= merge 1:1 + 注册表改名)"), onClick: () => {
 		                    setForm({ action: "rename", from: e.slug, to: "" });
 		                    setPreview(null);
-		                  }, style: btn, children: "改名" }),
-		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: "合并到另一个 Room(dryRun 预览→确认实跑)", onClick: () => {
+		                  }, style: btn, children: tr("改名") }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: tr("合并到另一个 Room(dryRun 预览→确认实跑)"), onClick: () => {
 		                    setForm({ action: "merge", from: e.slug, to: "" });
 		                    setPreview(null);
-		                  }, style: btn, children: "合并" }),
-		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: retired ? "恢复该 Room 到词表" : "退役该 Room(存量 tags 不动)", onClick: () => retire(e.slug, retired), style: { ...btn, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } }, children: retired ? "恢复" : "退役" }),
-		                  !retired ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: "退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)", onClick: () => retire(e.slug, false, true), style: { ...btn, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: "退场" }) : null
+		                  }, style: btn, children: tr("合并") }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: retired ? tr("恢复该 Room 到词表") : tr("退役该 Room(存量 tags 不动)"), onClick: () => retire(e.slug, retired), style: { ...btn, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } }, children: retired ? tr("恢复") : tr("退役") }),
+		                  !retired ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: tr("退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)"), onClick: () => retire(e.slug, false, true), style: { ...btn, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: tr("退场") }) : null
 		                ] }),
-		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: "导出该 Room 的记录清单 CSV", onClick: () => exportRecords(e.slug), style: btn, children: "导出" })
+		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: busy, title: tr("导出该 Room 的记录清单 CSV"), onClick: () => exportRecords(e.slug), style: btn, children: tr("导出") })
 		              ] })
 		            ] }),
 		            expandedRooms.has(e.slug) ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { margin: "4px 0 2px", padding: "4px 8px", border: "1px dashed var(--dsh-mem-border)", borderRadius: 6 }, children: [
@@ -41980,20 +44401,22 @@ var __create = Object.create;
 		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: it.updatedAt ? fmtTime(it.updatedAt) : "" }),
 		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: { marginTop: 2, wordBreak: "break-all", color: "var(--dsh-mem-text-2)" }, children: it.content.length > 120 ? it.content.slice(0, 120) + "…" : it.content })
 		              ] }, it.id)),
-		              (roomRecords[e.slug]?.items.length ?? 0) === 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.muted, children: "该 Room 暂无记录。" }) : null,
-		              (roomRecords[e.slug]?.total ?? 0) > (roomRecords[e.slug]?.items.length ?? 0) ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: { ...S.muted, fontSize: 11 }, children: "共 " + roomRecords[e.slug].total + " 条,仅显示前 " + roomRecords[e.slug].items.length + " 条" }) : null
+		              (roomRecords[e.slug]?.items.length ?? 0) === 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.muted, children: tr("该 Room 暂无记录。") }) : null,
+		              (roomRecords[e.slug]?.total ?? 0) > (roomRecords[e.slug]?.items.length ?? 0) ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: { ...S.muted, fontSize: 11 }, children: tr("共") + roomRecords[e.slug].total + tr("条,仅显示前") + roomRecords[e.slug].items.length + tr("条") }) : null
 		            ] }) : null
 		          ] }, e.slug);
 		        }) : null
 		      ] }, g.hall);
 		    }),
 		    visibleGrown.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { marginTop: 4 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("button", { type: "button", onClick: () => setGrownOpen(!grownOpen), style: btn, title: grownOpen ? "收起未注册自生长 Room" : "展开未注册自生长 Room", children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("button", { type: "button", onClick: () => setGrownOpen(!grownOpen), style: btn, title: grownOpen ? tr("收起未注册自生长 Room") : tr("展开未注册自生长 Room"), children: [
 		        grownOpen ? "▾" : "▸",
-		        " 自生长未注册 · 共 ",
+		        " ",
+		        tr("自生长未注册 · 共"),
+		        " ",
 		        visibleGrown.length
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: "(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: tr("(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)") }),
 		      grownOpen ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginTop: 6 }, children: visibleGrown.map((r) => /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		          "span",
@@ -42002,17 +44425,17 @@ var __create = Object.create;
 		            onPointerDown: (ev) => onDragLabelDown(ev, r.room),
 		            onPointerMove: onDragLabelMove,
 		            onPointerUp: onDragLabelUp,
-		            title: hiPriv && !busy ? "自生长 slug(未注册)——按住拖到某个 hall 头上 = 收编并归为其子类" : "自生长 slug(未注册)",
+		            title: hiPriv && !busy ? tr("自生长 slug(未注册)——按住拖到某个 hall 头上 = 收编并归为其子类") : tr("自生长 slug(未注册)"),
 		            children: r.room + " · " + r.count
 		          }
 		        ),
-		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: "收编进注册表(source=grown,原地)", onClick: () => adopt(r.room), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: "收编" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: tr("收编进注册表(source=grown,原地)"), onClick: () => adopt2(r.room), style: { ...btn, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: tr("收编") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		          "button",
 		          {
 		            type: "button",
 		            disabled: !hiPriv || busy,
-		            title: "归类到已有 hall 下:点击后选目标 hall(收编+子类一步,记录随迁)",
+		            title: tr("归类到已有 hall 下:点击后选目标 hall(收编+子类一步,记录随迁)"),
 		            onClick: () => {
 		              if (picking === r.room) {
 		                setPicking(null);
@@ -42025,7 +44448,7 @@ var __create = Object.create;
 		              setError(null);
 		            },
 		            style: { ...btn, opacity: !hiPriv || busy ? 0.5 : 1, ...picking === r.room ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : {} },
-		            children: picking === r.room ? "选 hall…" : "归"
+		            children: picking === r.room ? tr("选 hall…") : tr("归")
 		          }
 		        )
 		      ] }, r.room)) }) : null
@@ -42034,7 +44457,7 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/RoomTab.tsx
-		var import_react23 = require("react");
+		var import_react24 = require("react");
 		var import_jsx_runtime22 = require("react/jsx-runtime");
 		var btn2 = {
 		  cursor: "pointer",
@@ -42056,22 +44479,22 @@ var __create = Object.create;
 		}
 		function RoomTab(props) {
 		  const rpc = props.rpc;
-		  const [registry, setRegistry] = (0, import_react23.useState)([]);
-		  const [counts, setCounts] = (0, import_react23.useState)([]);
-		  const [orphanCount, setOrphanCount] = (0, import_react23.useState)(0);
-		  const [busy, setBusy] = (0, import_react23.useState)(false);
-		  const [msg, setMsg] = (0, import_react23.useState)(null);
-		  const [error, setError] = (0, import_react23.useState)(null);
-		  const [hiPriv, setHiPriv] = (0, import_react23.useState)(false);
-		  const [hiPrivBusy, setHiPrivBusy] = (0, import_react23.useState)(false);
-		  const [reg, setReg] = (0, import_react23.useState)({ slug: "", label: "", description: "" });
-		  const [editing, setEditing] = (0, import_react23.useState)(null);
-		  const [renaming, setRenaming] = (0, import_react23.useState)(null);
-		  const [expanded, setExpanded] = (0, import_react23.useState)(/* @__PURE__ */ new Set());
-		  const [retiredFilter, setRetiredFilter] = (0, import_react23.useState)("");
-		  const [filter, setFilter] = (0, import_react23.useState)("");
-		  const [records, setRecords] = (0, import_react23.useState)({});
-		  const loadAll = (0, import_react23.useCallback)(() => {
+		  const [registry, setRegistry] = (0, import_react24.useState)([]);
+		  const [counts, setCounts] = (0, import_react24.useState)([]);
+		  const [orphanCount, setOrphanCount] = (0, import_react24.useState)(0);
+		  const [busy, setBusy] = (0, import_react24.useState)(false);
+		  const [msg, setMsg] = (0, import_react24.useState)(null);
+		  const [error, setError] = (0, import_react24.useState)(null);
+		  const [hiPriv, setHiPriv] = (0, import_react24.useState)(false);
+		  const [hiPrivBusy, setHiPrivBusy] = (0, import_react24.useState)(false);
+		  const [reg, setReg] = (0, import_react24.useState)({ slug: "", label: "", description: "" });
+		  const [editing, setEditing] = (0, import_react24.useState)(null);
+		  const [renaming, setRenaming] = (0, import_react24.useState)(null);
+		  const [expanded, setExpanded] = (0, import_react24.useState)(/* @__PURE__ */ new Set());
+		  const [retiredFilter, setRetiredFilter] = (0, import_react24.useState)("");
+		  const [filter, setFilter] = (0, import_react24.useState)("");
+		  const [records, setRecords] = (0, import_react24.useState)({});
+		  const loadAll = (0, import_react24.useCallback)(() => {
 		    rpc("dsh-memory/rooms-get", {}).then((r) => {
 		      if (r && r.ok) {
 		        setCounts(r.value.rooms ?? []);
@@ -42080,19 +44503,19 @@ var __create = Object.create;
 		      }
 		    }).catch(() => void 0);
 		  }, [rpc]);
-		  const loadHiPriv = (0, import_react23.useCallback)(() => {
+		  const loadHiPriv = (0, import_react24.useCallback)(() => {
 		    rpc("dsh-memory/settings-get", {}).then((r) => {
 		      if (r && r.ok && r.value) setHiPriv(!!r.value.settings.memoryMutate);
 		    }).catch(() => {
 		    });
 		  }, [rpc]);
-		  (0, import_react23.useEffect)(() => {
+		  (0, import_react24.useEffect)(() => {
 		    loadAll();
 		    loadHiPriv();
 		  }, [loadAll, loadHiPriv]);
 		  const toggleHiPriv = () => {
 		    const next = !hiPriv;
-		    if (next && !window.confirm("开启高权限模式:模型获得写入/删除记忆工具,并解锁 Room 管理操作。确定开启?")) return;
+		    if (next && !window.confirm(tr("开启高权限模式:模型获得写入/删除记忆工具,并解锁 Room 管理操作。确定开启?"))) return;
 		    rpc("dsh-memory/settings-set", { memoryMutate: next }).then((r) => {
 		      if (r && r.ok) setHiPriv(next);
 		      setHiPrivBusy(false);
@@ -42109,40 +44532,40 @@ var __create = Object.create;
 		  const register = () => run(async () => {
 		    const r = await rpc("dsh-memory/room-register", { slug: reg.slug.trim(), label: reg.label.trim() || void 0, description: reg.description.trim() || void 0 });
 		    if (r && r.ok) {
-		      setMsg(r.value?.notice ?? `已注册:${reg.slug.trim()}`);
+		      setMsg(r.value?.notice ?? tr("已注册:{p1}", { p1: reg.slug.trim() }));
 		      setReg({ slug: "", label: "", description: "" });
 		      loadAll();
-		    } else setError(r && r.error ? r.error.message : "注册失败");
+		    } else setError(r && r.error ? r.error.message : tr("注册失败"));
 		  });
-		  const adopt = (slug) => run(async () => {
+		  const adopt2 = (slug) => run(async () => {
 		    const r = await rpc("dsh-memory/room-register", { slug, source: "grown" });
 		    if (r && r.ok) {
-		      setMsg(`已收编:${slug}(source=grown)`);
+		      setMsg(tr("已收编:{p1}(source=grown)", { p1: slug }));
 		      loadAll();
-		    } else setError(r && r.error ? r.error.message : "收编失败");
+		    } else setError(r && r.error ? r.error.message : tr("收编失败"));
 		  });
 		  const previewRename = () => run(async () => {
 		    if (!renaming) return;
 		    const to = renaming.to.trim();
 		    if (!to) {
-		      setError("目标 slug 不能为空");
+		      setError(tr("目标 slug 不能为空"));
 		      return;
 		    }
 		    if (to === renaming.slug) {
-		      setError("目标与源相同");
+		      setError(tr("目标与源相同"));
 		      return;
 		    }
 		    if (!registry.some((e) => e.slug === renaming.slug)) {
 		      const rr = await rpc("dsh-memory/room-register", { slug: renaming.slug, source: "grown" });
 		      if (!rr || !rr.ok) {
-		        setError(rr && rr.error ? rr.error.message : "收编源失败");
+		        setError(rr && rr.error ? rr.error.message : tr("收编源失败"));
 		        return;
 		      }
 		      loadAll();
 		    }
 		    const r = await rpc("dsh-memory/room-admin", { action: "rename", from: renaming.slug, to });
 		    if (r && r.ok) setMsg(String(r.value?.notice ?? ""));
-		    else setError(r && r.error ? r.error.message : "预览失败");
+		    else setError(r && r.error ? r.error.message : tr("预览失败"));
 		  });
 		  const execRename = () => run(async () => {
 		    if (!renaming) return;
@@ -42151,28 +44574,28 @@ var __create = Object.create;
 		    }
 		    const r = await rpc("dsh-memory/room-admin", { action: "rename", from: renaming.slug, to: renaming.to.trim(), dryRun: false });
 		    if (r && r.ok) {
-		      setMsg(String(r.value?.notice ?? "完成"));
+		      setMsg(String(r.value?.notice ?? tr("完成")));
 		      setRenaming(null);
 		      loadAll();
-		    } else setError(r && r.error ? r.error.message : "执行失败");
+		    } else setError(r && r.error ? r.error.message : tr("执行失败"));
 		  });
 		  const saveEditing = () => run(async () => {
 		    if (!editing) return;
 		    const r = await rpc("dsh-memory/room-admin", { action: "update", slug: editing.slug, label: editing.label, description: editing.description });
 		    if (r && r.ok) {
-		      setMsg(String(r.value?.notice ?? "已更新"));
+		      setMsg(String(r.value?.notice ?? tr("已更新")));
 		      setEditing(null);
 		      loadAll();
-		    } else setError(r && r.error ? r.error.message : "更新失败");
+		    } else setError(r && r.error ? r.error.message : tr("更新失败"));
 		  });
 		  const retire = (slug, active, withRecords = false) => run(async () => {
 		    if (!active) {
-		      const tip = withRecords ? `退役 Room:${slug} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)` : `退役 Room:${slug}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)`;
+		      const tip = withRecords ? tr("退役 Room:{p1} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)", { p1: slug }) : tr("退役 Room:{p1}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)", { p1: slug });
 		      if (!window.confirm(tip)) return;
 		    }
 		    const r = await rpc("dsh-memory/room-admin", { action: "retire", slug, active, withRecords: withRecords || void 0 });
 		    if (r && r.ok) {
-		      setMsg(String(r.value?.notice ?? "完成"));
+		      setMsg(String(r.value?.notice ?? tr("完成")));
 		      loadAll();
 		      if (expanded.has(slug)) {
 		        const rr = await rpc("dsh-memory/list-records", { tag: slug, limit: 10, retired: false });
@@ -42181,7 +44604,7 @@ var __create = Object.create;
 		          setRecords((m) => ({ ...m, [slug]: { items: rr.value.items, total: rr.value.total ?? null } }));
 		        }
 		      }
-		    } else setError(r && r.error ? r.error.message : "操作失败");
+		    } else setError(r && r.error ? r.error.message : tr("操作失败"));
 		  });
 		  const exportRecords = (slug) => run(async () => {
 		    const r = await rpc("dsh-memory/rooms-export", { kind: "records", tag: slug });
@@ -42213,7 +44636,7 @@ var __create = Object.create;
 		      next.add(slug);
 		      setExpanded(next);
 		      setRecords((m) => ({ ...m, [slug]: { items: r.value.items, total: r.value.total ?? null } }));
-		    } else setError(r && r.error ? r.error.message : "加载失败");
+		    } else setError(r && r.error ? r.error.message : tr("加载失败"));
 		  });
 		  const countOf = (slug) => counts.find((c) => c.room === slug)?.count ?? 0;
 		  const rows = [
@@ -42230,9 +44653,9 @@ var __create = Object.create;
 		  ) : rows;
 		  return /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: { ...S.flexRow, marginBottom: 8, flexWrap: "wrap" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: "Room 级管理:存在(注册/收编/退役)· 名称(显示名/说明/改名)· 条目(展开浏览) · 归类到 hall 请到「Hall」页" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr("Room 级管理:存在(注册/收编/退役)· 名称(显示名/说明/改名)· 条目(展开浏览) · 归类到 hall 请到「Hall」页") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("button", { type: "button", style: btn2, title: "导出无 Room 绑定的孤儿清单(含候选)", onClick: () => run(async () => {
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("button", { type: "button", style: btn2, title: tr("导出无 Room 绑定的孤儿清单(含候选)"), onClick: () => run(async () => {
 		        const r = await rpc("dsh-memory/rooms-export", { kind: "orphans" });
 		        if (!r.ok) {
 		          setError(r.error.message);
@@ -42240,7 +44663,8 @@ var __create = Object.create;
 		        }
 		        if (r.value.csv) downloadCsv2(r.value.csv, "dsh-memory-room-orphans.csv");
 		      }), children: [
-		        "导出孤儿 · ",
+		        tr("导出孤儿 ·"),
+		        " ",
 		        orphanCount
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
@@ -42249,44 +44673,46 @@ var __create = Object.create;
 		          type: "button",
 		          style: { ...btn2, color: hiPriv ? "var(--dsh-mem-danger)" : void 0, border: hiPriv ? "1px solid var(--dsh-mem-danger)" : btn2.border },
 		          disabled: hiPrivBusy,
-		          title: hiPriv ? "关闭高权限模式" : "开启高权限模式以解锁 Room 管理操作",
+		          title: hiPriv ? tr("关闭高权限模式") : tr("开启高权限模式以解锁 Room 管理操作"),
 		          onClick: toggleHiPriv,
-		          children: hiPriv ? "高权限:开" : "高权限:关"
+		          children: hiPriv ? tr("高权限:开") : tr("高权限:关")
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", style: btn2, onClick: loadAll, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", style: btn2, onClick: loadAll, children: tr("刷新") })
 		    ] }),
 		    editing ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: { position: "sticky", top: 0, zIndex: 5, background: "var(--dsh-mem-bg-inset)", display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap", padding: "6px 8px", border: "1px solid var(--dsh-mem-accent)", borderRadius: 8 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { style: S.muted, children: [
-		        "编辑 ",
+		        tr("编辑"),
+		        " ",
 		        editing.slug
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: editing.label, onChange: (e) => setEditing({ ...editing, label: e.target.value }), placeholder: "显示名(可中文)", disabled: busy, style: { ...S.input, width: 140, fontSize: 12 } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: editing.description, onChange: (e) => setEditing({ ...editing, description: e.target.value }), placeholder: "归类说明(喂标注器)", disabled: busy, style: { ...S.input, width: 200, fontSize: 12 } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: saveEditing, style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: "保存" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: () => setEditing(null), style: btn2, children: "取消" })
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: editing.label, onChange: (e) => setEditing({ ...editing, label: e.target.value }), placeholder: tr("显示名(可中文)"), disabled: busy, style: { ...S.input, width: 140, fontSize: 12 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: editing.description, onChange: (e) => setEditing({ ...editing, description: e.target.value }), placeholder: tr("归类说明(喂标注器)"), disabled: busy, style: { ...S.input, width: 200, fontSize: 12 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: saveEditing, style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: tr("保存") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: () => setEditing(null), style: btn2, children: tr("取消") })
 		    ] }) : null,
 		    renaming ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: { position: "sticky", top: 0, zIndex: 5, background: "var(--dsh-mem-bg-inset)", display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap", padding: "6px 8px", border: "1px solid var(--dsh-mem-accent)", borderRadius: 8 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("span", { style: S.muted, children: [
-		        "改名 ",
+		        tr("改名"),
+		        " ",
 		        renaming.slug,
 		        " →"
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: renaming.to, onChange: (e) => setRenaming({ ...renaming, to: e.target.value }), placeholder: "新 slug(可两级:hall/子类)", disabled: busy, style: { ...S.input, width: 200, fontSize: 12 } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: previewRename, style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: "预览" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: execRename, style: { ...btn2, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: "确认执行" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: () => setRenaming(null), style: btn2, children: "取消" }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: "记录随迁;与反刍并发会互相覆盖,请在反刍空闲时执行。" })
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: renaming.to, onChange: (e) => setRenaming({ ...renaming, to: e.target.value }), placeholder: tr("新 slug(可两级:hall/子类)"), disabled: busy, style: { ...S.input, width: 200, fontSize: 12 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: previewRename, style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" }, children: tr("预览") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: execRename, style: { ...btn2, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: tr("确认执行") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, onClick: () => setRenaming(null), style: btn2, children: tr("取消") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr("记录随迁;与反刍并发会互相覆盖,请在反刍空闲时执行。") })
 		    ] }) : null,
 		    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: "退场筛选" }),
-		      [["", "全部"], ["active", "活跃"], ["retired", "已退役"]].map(([val, label]) => {
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr("退场筛选") }),
+		      [["", tr("全部")], ["active", tr("活跃")], ["retired", tr("已退役")]].map(([val, label]) => {
 		        const on = retiredFilter === val;
 		        return /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
 		          "button",
 		          {
 		            type: "button",
-		            title: val === "" ? "全部 room" : val === "active" ? "只看词表未退役的 room" : "只看已退役的 room",
+		            title: val === "" ? tr("全部 room") : val === "active" ? tr("只看词表未退役的 room") : tr("只看已退役的 room"),
 		            onClick: () => setRetiredFilter(val),
 		            style: {
 		              cursor: "pointer",
@@ -42308,22 +44734,22 @@ var __create = Object.create;
 		        {
 		          value: filter,
 		          onChange: (e) => setFilter(e.target.value),
-		          placeholder: "搜索 room(slug、显示名、别名)",
+		          placeholder: tr("搜索 room(slug、显示名、别名)"),
 		          style: { ...S.input, width: 230, fontSize: 12 }
 		        }
 		      ),
-		      filter ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", style: btn2, onClick: () => setFilter(""), children: "清除" }) : null
+		      filter ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", style: btn2, onClick: () => setFilter(""), children: tr("清除") }) : null
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: reg.slug, onChange: (e) => setReg({ ...reg, slug: e.target.value }), placeholder: "slug(如 dsh-plugin 或 dsh-plugin/merge)", disabled: !hiPriv || busy, style: { ...S.input, width: 210, fontSize: 12 } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: reg.label, onChange: (e) => setReg({ ...reg, label: e.target.value }), placeholder: "名称(可中文)", disabled: !hiPriv || busy, style: { ...S.input, width: 110, fontSize: 12 } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: reg.description, onChange: (e) => setReg({ ...reg, description: e.target.value }), placeholder: "归类说明(喂标注器)", disabled: !hiPriv || busy, style: { ...S.input, width: 170, fontSize: 12 } }),
-		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: !hiPriv || busy || !reg.slug.trim(), onClick: register, style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy || !reg.slug.trim() ? 0.5 : 1 }, children: "注册" }),
-		      !hiPriv && /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: "管理操作需先开启高权限模式" })
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: reg.slug, onChange: (e) => setReg({ ...reg, slug: e.target.value }), placeholder: tr("slug(如 dsh-plugin 或 dsh-plugin/merge)"), disabled: !hiPriv || busy, style: { ...S.input, width: 210, fontSize: 12 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: reg.label, onChange: (e) => setReg({ ...reg, label: e.target.value }), placeholder: tr("名称(可中文)"), disabled: !hiPriv || busy, style: { ...S.input, width: 110, fontSize: 12 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("input", { value: reg.description, onChange: (e) => setReg({ ...reg, description: e.target.value }), placeholder: tr("归类说明(喂标注器)"), disabled: !hiPriv || busy, style: { ...S.input, width: 170, fontSize: 12 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: !hiPriv || busy || !reg.slug.trim(), onClick: register, style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy || !reg.slug.trim() ? 0.5 : 1 }, children: tr("注册") }),
+		      !hiPriv && /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr("管理操作需先开启高权限模式") })
 		    ] }),
 		    msg ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: S.hint, children: msg }) : null,
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: S.error, children: error }) : null,
-		    visibleRows.length === 0 ? normFilter ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { style: S.intro, children: "无匹配的 Room。" }) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { style: S.intro, children: "暂无 Room:对话/反刍会从标签涌现,或在上方注册。" }) : visibleRows.map((row2) => {
+		    visibleRows.length === 0 ? normFilter ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { style: S.intro, children: tr("无匹配的 Room。") }) : /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { style: S.intro, children: tr("暂无 Room:对话/反刍会从标签涌现,或在上方注册。") }) : visibleRows.map((row2) => {
 		      const e = row2.entry;
 		      const retired = e?.status === "retired";
 		      const grownOnly = !e;
@@ -42333,7 +44759,7 @@ var __create = Object.create;
 		            "button",
 		            {
 		              type: "button",
-		              title: expanded.has(row2.slug) ? "收起记忆条目" : "展开查看该 Room 的记忆条目(默认收起)",
+		              title: expanded.has(row2.slug) ? tr("收起记忆条目") : tr("展开查看该 Room 的记忆条目(默认收起)"),
 		              onClick: () => void toggleExpand(row2.slug),
 		              style: { ...btn2, borderRadius: 999, padding: "1px 7px", flexShrink: 0 },
 		              children: expanded.has(row2.slug) ? "▾" : "▸"
@@ -42345,55 +44771,55 @@ var __create = Object.create;
 		              e?.source === "pre-registered" ? " ⭐" : ""
 		            ] }),
 		            e?.label ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: e.label }) : null,
-		            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: row2.count + " 条" }),
-		            grownOnly ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: "(自生长未注册)" }) : null,
-		            retired ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: "已退役" }) : null,
-		            (e?.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: { ...S.muted, wordBreak: "break-all" }, children: "别名: " + (e?.aliases ?? []).join(", ") }) : null
+		            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: row2.count + tr("条") }),
+		            grownOnly ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr("(自生长未注册)") }) : null,
+		            retired ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: tr("已退役") }) : null,
+		            (e?.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: { ...S.muted, wordBreak: "break-all" }, children: tr("别名:") + (e?.aliases ?? []).join(", ") }) : null
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: { display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }, children: [
 		            !hiPriv || grownOnly ? null : /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, title: "编辑显示名/归类说明", onClick: () => {
+		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, title: tr("编辑显示名/归类说明"), onClick: () => {
 		                setEditing({ slug: row2.slug, label: e?.label ?? "", description: e?.description ?? "" });
 		                setRenaming(null);
-		              }, style: btn2, children: "编辑" }),
-		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, title: "改名(可两级 slug;记录随迁,旧名进别名)", onClick: () => {
+		              }, style: btn2, children: tr("编辑") }),
+		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, title: tr("改名(可两级 slug;记录随迁,旧名进别名)"), onClick: () => {
 		                setRenaming({ slug: row2.slug, to: "" });
 		                setEditing(null);
-		              }, style: btn2, children: "改名" }),
+		              }, style: btn2, children: tr("改名") }),
 		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)(
 		                "button",
 		                {
 		                  type: "button",
 		                  disabled: busy,
-		                  title: retired ? "恢复该 Room 到词表" : "退役该 Room(存量 tags 不动)",
+		                  title: retired ? tr("恢复该 Room 到词表") : tr("退役该 Room(存量 tags 不动)"),
 		                  onClick: () => retire(row2.slug, retired),
 		                  style: { ...btn2, ...retired ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : { color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" } },
-		                  children: retired ? "恢复" : "退役"
+		                  children: retired ? tr("恢复") : tr("退役")
 		                }
 		              ),
-		              !retired ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, title: "退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)", onClick: () => retire(row2.slug, false, true), style: { ...btn2, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: "退场" }) : null
+		              !retired ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, title: tr("退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)"), onClick: () => retire(row2.slug, false, true), style: { ...btn2, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)" }, children: tr("退场") }) : null
 		            ] }),
 		            grownOnly ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)(import_jsx_runtime22.Fragment, { children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: "收编进注册表(source=grown)", onClick: () => adopt(row2.slug), style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: "收编" }),
-		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: "退场该 Room 下全部记忆(软删,可在「已退场」区恢复)", onClick: () => {
+		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: tr("收编进注册表(source=grown)"), onClick: () => adopt2(row2.slug), style: { ...btn2, color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: tr("收编") }),
+		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: !hiPriv || busy, title: tr("退场该 Room 下全部记忆(软删,可在「已退场」区恢复)"), onClick: () => {
 		                setRenaming(null);
 		                retire(row2.slug, false, true);
-		              }, style: { ...btn2, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: "退场" })
+		              }, style: { ...btn2, color: "var(--dsh-mem-danger)", borderColor: "var(--dsh-mem-danger)", opacity: !hiPriv || busy ? 0.5 : 1 }, children: tr("退场") })
 		            ] }) : null,
-		            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, title: "导出该 Room 的记录清单 CSV", onClick: () => exportRecords(row2.slug), style: btn2, children: "导出" })
+		            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("button", { type: "button", disabled: busy, title: tr("导出该 Room 的记录清单 CSV"), onClick: () => exportRecords(row2.slug), style: btn2, children: tr("导出") })
 		          ] })
 		        ] }),
 		        expanded.has(row2.slug) ? /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: { margin: "0 10px 6px", padding: "4px 8px", border: "1px dashed var(--dsh-mem-border)", borderRadius: 6 }, children: [
 		          (records[row2.slug]?.items ?? []).map((it) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: { fontSize: 11, padding: "3px 0", borderBottom: "1px solid var(--dsh-mem-border)" }, children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { className: tagClass(it.type), children: typeLabel(it.type) }),
 		            " ",
-		            it.retired ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: "[已退场]" }) : null,
+		            it.retired ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: tr("[已退场]") }) : null,
 		            " ",
 		            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: it.updatedAt ? fmtTime(it.updatedAt) : "" }),
 		            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: { marginTop: 2, wordBreak: "break-all", color: "var(--dsh-mem-text-2)", opacity: it.retired ? 0.55 : 1 }, children: it.content.length > 140 ? it.content.slice(0, 140) + "…" : it.content })
 		          ] }, it.id)),
-		          (records[row2.slug]?.items.length ?? 0) === 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: S.muted, children: "该 Room 暂无记忆条目。" }) : null,
-		          (records[row2.slug]?.total ?? 0) > (records[row2.slug]?.items.length ?? 0) ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: { ...S.muted, fontSize: 11 }, children: "共 " + records[row2.slug].total + " 条,仅显示前 " + records[row2.slug].items.length + " 条" }) : null
+		          (records[row2.slug]?.items.length ?? 0) === 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: S.muted, children: tr("该 Room 暂无记忆条目。") }) : null,
+		          (records[row2.slug]?.total ?? 0) > (records[row2.slug]?.items.length ?? 0) ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: { ...S.muted, fontSize: 11 }, children: tr("共") + records[row2.slug].total + tr("条,仅显示前") + records[row2.slug].items.length + tr("条") }) : null
 		        ] }) : null
 		      ] }, row2.slug);
 		    })
@@ -42401,7 +44827,7 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/GraphTab.tsx
-		var import_react25 = require("react");
+		var import_react26 = require("react");
 		
 		// client/src/tabs/graph-ego-subgraph.ts
 		var EGO_HOPS_MAX = 3;
@@ -42501,7 +44927,7 @@ var __create = Object.create;
 		}
 		
 		// client/src/tabs/GraphCanvas.tsx
-		var import_react24 = require("react");
+		var import_react25 = require("react");
 		var import_g6 = __toESM(require_g6_min(), 1);
 		
 		// client/src/tabs/graph-seed-layout.ts
@@ -42689,23 +45115,23 @@ var __create = Object.create;
 		  const { full, emphasisId, fit = "center", height: canvasH = CANVAS_H } = props;
 		  const fillMode = canvasH === "fill";
 		  const realH = fillMode ? CANVAS_H : canvasH;
-		  const hostRef = (0, import_react24.useRef)(null);
-		  const pickRef = (0, import_react24.useRef)(props.onPick);
+		  const hostRef = (0, import_react25.useRef)(null);
+		  const pickRef = (0, import_react25.useRef)(props.onPick);
 		  pickRef.current = props.onPick;
-		  const emphasisRef = (0, import_react24.useRef)(emphasisId);
+		  const emphasisRef = (0, import_react25.useRef)(emphasisId);
 		  emphasisRef.current = emphasisId;
-		  const graphRef = (0, import_react24.useRef)(null);
-		  const [hovered, setHovered] = (0, import_react24.useState)(null);
-		  const hideTimerRef = (0, import_react24.useRef)(null);
-		  const nodeKey = (0, import_react24.useMemo)(() => nodeKeyOf(full), [full]);
-		  const stars = (0, import_react24.useMemo)(() => starField(nodeKey), [nodeKey]);
-		  const tips = (0, import_react24.useMemo)(() => {
+		  const graphRef = (0, import_react25.useRef)(null);
+		  const [hovered, setHovered] = (0, import_react25.useState)(null);
+		  const hideTimerRef = (0, import_react25.useRef)(null);
+		  const nodeKey = (0, import_react25.useMemo)(() => nodeKeyOf(full), [full]);
+		  const stars = (0, import_react25.useMemo)(() => starField(nodeKey), [nodeKey]);
+		  const tips = (0, import_react25.useMemo)(() => {
 		    const m = /* @__PURE__ */ new Map();
 		    const nameById = new Map(full.nodes.map((n) => [n.id, n.name]));
 		    for (const n of full.nodes) {
 		      m.set(n.id, {
 		        title: n.name,
-		        sub: `类型 ${n.type} · 关系数 ${n.id === emphasisId ? "(起点)" : ""}`
+		        sub: tr("类型 {p1} · 关系数 {p2}", { p1: n.type, p2: n.id === emphasisId ? "(起点)" : "" })
 		      });
 		    }
 		    const degMap = /* @__PURE__ */ new Map();
@@ -42715,18 +45141,18 @@ var __create = Object.create;
 		    }
 		    for (const n of full.nodes) {
 		      const t = m.get(n.id);
-		      if (t) t.sub = `类型 ${n.type} · 关系数 ${degMap.get(n.id) ?? 0}${n.id === emphasisId ? " · 当前起点" : ""}`;
+		      if (t) t.sub = tr("类型 {p1} · 关系数 {p2}{p3}", { p1: n.type, p2: degMap.get(n.id) ?? 0, p3: n.id === emphasisId ? " · 当前起点" : "" });
 		    }
 		    for (const e of full.edges) {
 		      const eid = `${e.from}\0${e.to}\0${e.relation}`;
 		      m.set(eid, {
 		        title: e.relation,
-		        sub: `${nameById.get(e.from) ?? e.from} → ${nameById.get(e.to) ?? e.to}${e.causal ? " · 因果边" : ""}`
+		        sub: `${nameById.get(e.from) ?? e.from} → ${nameById.get(e.to) ?? e.to}${e.causal ? tr("· 因果边") : ""}`
 		      });
 		    }
 		    return m;
 		  }, [full, emphasisId]);
-		  (0, import_react24.useEffect)(() => {
+		  (0, import_react25.useEffect)(() => {
 		    const host = hostRef.current;
 		    if (!host) return;
 		    const width = host.clientWidth || 640;
@@ -42800,13 +45226,9 @@ var __create = Object.create;
 		        // v5 实名 animation(v4 的 animated 在这儿不生效);true = 逐 tick 迭代过渡
 		        animation: true,
 		        iterations: 300,
-		        // 分散够了就停摆：旧版故意把 alphaMin 调小维持“漂浮感”，但 manyBody 与
-		        // collide 的残余能量每 tick 都给节点重新加速，观感是随机摆动（用户裁定限制它）。
-		        // alphaMin 抬到停摆线、alphaDecay 稍快冷却、velocityDecay 加强阻尼（d3 默认 0.4）
-		        // ——前半段扩散行为不变，后半段残差速度快速衰减到静。
-		        alphaMin: 0.012,
-		        alphaDecay: 0.028,
-		        velocityDecay: 0.55,
+		        // 持续"漂浮"而非死寂:alphaMin 调小让模拟晚些收敛
+		        alphaMin: 5e-3,
+		        alphaDecay: 0.02,
 		        link: { distance: 90, strength: 0.6 },
 		        collide: { radius: 14, strength: 0.8 },
 		        manyBody: { strength: -60 },
@@ -42853,7 +45275,7 @@ var __create = Object.create;
 		      graphRef.current = null;
 		    };
 		  }, [full, nodeKey, fit, realH]);
-		  (0, import_react24.useEffect)(() => {
+		  (0, import_react25.useEffect)(() => {
 		    const graph = graphRef.current;
 		    if (!graph || graph.destroyed) return;
 		    for (const n of full.nodes) {
@@ -42917,23 +45339,23 @@ var __create = Object.create;
 		var LIST_MAX = 40;
 		function GraphTab(props) {
 		  const rpc = props.rpc;
-		  const [board, setBoard] = (0, import_react25.useState)(null);
-		  const [view, setView] = (0, import_react25.useState)("full");
-		  const [egoSeed, setEgoSeed] = (0, import_react25.useState)(null);
-		  const [hops, setHops] = (0, import_react25.useState)(2);
-		  const [loading, setLoading] = (0, import_react25.useState)(false);
-		  const [error, setError] = (0, import_react25.useState)(null);
-		  const [entityDetail, setEntityDetail] = (0, import_react25.useState)(null);
-		  const [sourceRecords, setSourceRecords] = (0, import_react25.useState)([]);
-		  const [detailLoading, setDetailLoading] = (0, import_react25.useState)(false);
-		  const call2 = (0, import_react25.useCallback)(
+		  const [board, setBoard] = (0, import_react26.useState)(null);
+		  const [view, setView] = (0, import_react26.useState)("full");
+		  const [egoSeed, setEgoSeed] = (0, import_react26.useState)(null);
+		  const [hops, setHops] = (0, import_react26.useState)(2);
+		  const [loading, setLoading] = (0, import_react26.useState)(false);
+		  const [error, setError] = (0, import_react26.useState)(null);
+		  const [entityDetail, setEntityDetail] = (0, import_react26.useState)(null);
+		  const [sourceRecords, setSourceRecords] = (0, import_react26.useState)([]);
+		  const [detailLoading, setDetailLoading] = (0, import_react26.useState)(false);
+		  const call2 = (0, import_react26.useCallback)(
 		    (payload) => rpc("dsh-memory/graph-preview", payload).then((r) => {
 		      if (r && r.ok) return r.value;
 		      throw new Error(r && r.error ? r.error.message : "RPC error");
 		    }),
 		    [rpc]
 		  );
-		  const loadBoard = (0, import_react25.useCallback)(() => {
+		  const loadBoard = (0, import_react26.useCallback)(() => {
 		    setLoading(true);
 		    setError(null);
 		    call2({ mode: "full" }).then((v) => {
@@ -42942,17 +45364,17 @@ var __create = Object.create;
 		      if (egoSeed && !still) setEgoSeed(null);
 		    }).catch((e) => setError(String(e?.message ?? e))).finally(() => setLoading(false));
 		  }, [call2, egoSeed]);
-		  (0, import_react25.useEffect)(() => {
+		  (0, import_react26.useEffect)(() => {
 		    loadBoard();
 		  }, [loadBoard]);
-		  const openEgo = (0, import_react25.useCallback)((id) => {
+		  const openEgo = (0, import_react26.useCallback)((id) => {
 		    setEgoSeed(id);
 		    setView("ego");
 		  }, []);
 		  const stats = board?.stats ?? null;
 		  const fullBlock = board?.full;
 		  const seedId = egoSeed ?? board?.seeds[0]?.node.id ?? null;
-		  (0, import_react25.useEffect)(() => {
+		  (0, import_react26.useEffect)(() => {
 		    if (view !== "ego" || !seedId) {
 		      setEntityDetail(null);
 		      setSourceRecords([]);
@@ -42983,14 +45405,14 @@ var __create = Object.create;
 		      cancelled = true;
 		    };
 		  }, [view, seedId, rpc]);
-		  const meta = (0, import_react25.useMemo)(() => new Map((fullBlock?.nodes ?? []).map((n) => [n.id, n])), [fullBlock]);
-		  const sub = (0, import_react25.useMemo)(() => egoSubgraph(fullBlock, seedId, hops), [fullBlock, seedId, hops]);
-		  const subFull = (0, import_react25.useMemo)(
+		  const meta = (0, import_react26.useMemo)(() => new Map((fullBlock?.nodes ?? []).map((n) => [n.id, n])), [fullBlock]);
+		  const sub = (0, import_react26.useMemo)(() => egoSubgraph(fullBlock, seedId, hops), [fullBlock, seedId, hops]);
+		  const subFull = (0, import_react26.useMemo)(
 		    () => ({ nodes: sub.nodes, edges: sub.edges, truncated: sub.truncated }),
 		    [sub]
 		  );
 		  const seedNode = seedId ? meta.get(seedId) ?? null : null;
-		  const direct = (0, import_react25.useMemo)(() => {
+		  const direct = (0, import_react26.useMemo)(() => {
 		    if (!fullBlock || !seedId) return [];
 		    const rows2 = [];
 		    for (const e of fullBlock.edges) {
@@ -43004,7 +45426,7 @@ var __create = Object.create;
 		    }
 		    return groupNeighbors(rows2);
 		  }, [fullBlock, seedId, meta]);
-		  const rows = (0, import_react25.useMemo)(() => {
+		  const rows = (0, import_react26.useMemo)(() => {
 		    const relOf = new Map(direct.map((d) => [d.id, d]));
 		    const out = [];
 		    for (const n of sub.nodes) {
@@ -43016,70 +45438,84 @@ var __create = Object.create;
 		    out.sort((a, b) => a.depth !== b.depth ? a.depth - b.depth : a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 		    return out;
 		  }, [sub, direct]);
-		  const growable = (0, import_react25.useMemo)(() => canGrow(fullBlock, seedId, hops), [fullBlock, seedId, hops]);
+		  const growable = (0, import_react26.useMemo)(() => canGrow(fullBlock, seedId, hops), [fullBlock, seedId, hops]);
 		  const seedDegree = seedId ? stats ? direct.length : 0 : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: S.muted, children: loading && board === null ? "加载中…" : stats ? `节点 ${stats.nodes} · 边 ${stats.edges} · 因果 ${stats.causalEdges}` + (stats.pendingJobs > 0 || (stats.deadJobs ?? 0) > 0 ? stats.deadJobs && stats.deadJobs > 0 ? ` · 投影 完成${stats.jobsTotal - stats.pendingJobs - stats.deadJobs}/失败${stats.deadJobs}/排队${stats.pendingJobs}` : ` · 构建中 ${stats.jobsTotal - stats.pendingJobs}/${stats.jobsTotal}` : "") : "—" }),
-		      stats && (stats.deadJobs ?? 0) > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: S.muted, children: loading && board === null ? tr("加载中…") : stats ? tr("节点 {p1} · 边 {p2} · 因果 {p3}", { p1: stats.nodes, p2: stats.edges, p3: stats.causalEdges }) + (stats.pendingJobs > 0 || (stats.deadJobs ?? 0) > 0 ? stats.deadJobs && stats.deadJobs > 0 ? tr("· 投影 完成{p1}/失败{p2}/排队{p3}", { p1: stats.jobsTotal - stats.pendingJobs - stats.deadJobs, p2: stats.deadJobs, p3: stats.pendingJobs }) : tr("· 构建中 {p1}/{p2}", { p1: stats.jobsTotal - stats.pendingJobs, p2: stats.jobsTotal }) : "") : "—" }),
+		      stats && (stats.deadJobs ?? 0) > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
 		        "button",
 		        {
 		          style: { ...S.segBtn, fontSize: 11, padding: "1px 8px", cursor: "pointer", marginLeft: 6 },
-		          title: `删除 ${stats.deadJobs} 行历史失败记录(它们覆盖的记录已在排队中，不影响投影)`,
+		          title: tr("删除 {p1} 行历史失败记录(它们覆盖的记录已在排队中，不影响投影)", { p1: stats.deadJobs }),
 		          onClick: () => {
 		            rpc("dsh-memory/graph-cleanup-dead", {}).then(() => loadBoard()).catch(() => {
 		            });
 		          },
-		          children: "清理失败"
+		          children: [
+		            tr("清理失败"),
+		            " "
+		          ]
 		        }
 		      ) : null,
 		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: S.seg, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { style: view === "full" ? { ...S.segBtn, ...S.segBtnOn } : S.segBtn, title: "全图星图：所有可见实体与关系一张图", onClick: () => setView("full"), children: "全图" }),
-		        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { style: view === "ego" ? { ...S.segBtn, ...S.segBtnOn } : S.segBtn, title: "邻域子图：以起点按跳数裁剪的浮动小图", onClick: () => setView("ego"), children: "邻域" })
+		        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { style: view === "full" ? { ...S.segBtn, ...S.segBtnOn } : S.segBtn, title: tr("全图星图：所有可见实体与关系一张图"), onClick: () => setView("full"), children: [
+		          tr("全图"),
+		          " "
+		        ] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("button", { style: view === "ego" ? { ...S.segBtn, ...S.segBtnOn } : S.segBtn, title: tr("邻域子图：以起点按跳数裁剪的浮动小图"), onClick: () => setView("ego"), children: [
+		          tr("邻域"),
+		          " "
+		        ] })
 		      ] }),
-		      view === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: S.seg, title: "从起点向外展开几跳", children: Array.from({ length: EGO_HOPS_MAX }, (_, i) => i + 1).map((h) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
+		      view === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: S.seg, title: tr("从起点向外展开几跳"), children: Array.from({ length: EGO_HOPS_MAX }, (_, i) => i + 1).map((h) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
 		        "button",
 		        {
 		          style: hops === h ? { ...S.segBtn, ...S.segBtnOn } : S.segBtn,
-		          title: `展开到 ${h} 跳`,
+		          title: tr("展开到 {p1} 跳", { p1: h }),
 		          onClick: () => setHops(h),
 		          children: [
 		            h,
-		            " 跳"
+		            " ",
+		            tr("跳"),
+		            " "
 		          ]
 		        },
 		        h
 		      )) }) : null,
-		      view === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
+		      view === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)(
 		        NButton,
 		        {
 		          onClick: () => {
 		            setView("full");
 		            setEgoSeed(null);
 		          },
-		          title: "回全图并清掉起点",
-		          children: "回全图"
+		          title: tr("回全图并清掉起点"),
+		          children: [
+		            tr("回全图"),
+		            " "
+		          ]
 		        }
 		      ) : null,
-		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(NButton, { onClick: loadBoard, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(NButton, { onClick: loadBoard, children: tr("刷新") })
 		    ] }),
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: S.error, children: [
 		      error,
 		      " ",
 		      " ",
-		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(NButton, { onClick: loadBoard, children: "重试" })
+		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(NButton, { onClick: loadBoard, children: tr("重试") })
 		    ] }) : null,
 		    stats && stats.nodes === 0 && !error ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { style: S.intro, children: [
-		      "图谱还没有内容。",
+		      tr("图谱还没有内容。"),
 		      graphEnableHint(),
-		      `（注意：这里指的是「${GRAPH_FEATURE_LABEL}」开关，不是「${GRAPH_TOOL_LABEL}」——后者只管模型能不能读图）`
+		      tr("（注意：这里指的是「{p1}」开关，不是「{p2}」——后者只管模型能不能读图）", { p1: GRAPH_FEATURE_LABEL, p2: GRAPH_TOOL_LABEL })
 		    ] }) : null,
 		    board && board.seeds.length > 1 && view === "full" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { ...S.flexRow, marginBottom: 8, flexWrap: "wrap", gap: 6 }, children: board.seeds.map((s) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
 		      "button",
 		      {
 		        className: egoSeed === s.node.id ? "dsh-mem-tab dsh-mem-tab-on" : "dsh-mem-tab",
-		        title: `度 ${s.node.degree}(因果 ${s.node.causalDegree})——点击展开它的邻域`,
+		        title: tr("度 {p1}(因果 {p2})——点击展开它的邻域", { p1: s.node.degree, p2: s.node.causalDegree }),
 		        onClick: () => openEgo(s.node.id),
 		        children: clipName(s.node.name)
 		      },
@@ -43088,30 +45524,38 @@ var __create = Object.create;
 		    view === "full" && fullBlock && fullBlock.nodes.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(GraphCanvas, { full: fullBlock, onPick: openEgo, height: FULL_H }),
 		      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { ...S.muted, marginTop: 4 }, children: [
-		        "拖动空白平移 · 滚轮缩放 · 拖节点可钉住 · 悬停点亮邻域并在浮层里看全名 · 单击星点即以它为中心展开邻域",
-		        fullBlock.truncated ? ` · 已达绘制上限,只画前 ${fullBlock.nodes.length} 个节点` : ""
+		        tr("拖动空白平移 · 滚轮缩放 · 拖节点可钉住 · 悬停点亮邻域并在浮层里看全名 · 单击星点即以它为中心展开邻域"),
+		        " ",
+		        fullBlock.truncated ? tr("· 已达绘制上限,只画前 {p1} 个节点", { p1: fullBlock.nodes.length }) : ""
 		      ] })
 		    ] }) : null,
-		    view === "ego" ? !fullBlock ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { style: S.intro, children: "当前服务端未提供全图块（旧版本降级），邻域视图无法本地裁剪。请点刷新重试。" }) : !seedNode ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { style: S.intro, children: [
-		      "起点不可见（可能已被取代或归档）。",
-		      board && board.seeds.length > 0 ? "可从上方种子榜另选起点，或回全图单击任一星点。" : "回全图看看。"
+		    view === "ego" ? !fullBlock ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("p", { style: S.intro, children: tr("当前服务端未提供全图块（旧版本降级），邻域视图无法本地裁剪。请点刷新重试。") }) : !seedNode ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { style: S.intro, children: [
+		      tr("起点不可见（可能已被取代或归档）。"),
+		      board && board.seeds.length > 0 ? tr("可从上方种子榜另选起点，或回全图单击任一星点。") : tr("回全图看看。")
 		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { marginBottom: 10 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { ...S.muted, fontSize: 12, marginBottom: 4 }, children: [
-		        "起点:",
+		        tr("起点:"),
 		        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("b", { children: seedNode.name }),
 		        "(",
 		        seedNode.type,
-		        " · 直连 ",
+		        " ",
+		        tr("· 直连"),
+		        " ",
 		        seedDegree,
 		        ") · ",
 		        hops,
-		        " 跳内 ",
+		        " ",
+		        tr("跳内"),
+		        " ",
 		        sub.nodes.length,
-		        " 个节点 /",
+		        " ",
+		        tr("个节点 /"),
+		        " ",
 		        sub.edges.length,
-		        " 条边",
-		        sub.truncated ? ` · 已达子图上限,另有 ${sub.cutByCap} 个连通节点未画` : "",
-		        sub.seedFound && !growable && hops < EGO_HOPS_MAX ? " · 再展开也没有新节点了" : ""
+		        " ",
+		        tr("条边"),
+		        sub.truncated ? tr("· 已达子图上限,另有 {p1} 个连通节点未画", { p1: sub.cutByCap }) : "",
+		        sub.seedFound && !growable && hops < EGO_HOPS_MAX ? tr("· 再展开也没有新节点了") : ""
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
 		        GraphCanvas,
@@ -43124,13 +45568,17 @@ var __create = Object.create;
 		        },
 		        `${seedId}|${hops}`
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { ...S.muted, marginTop: 4, marginBottom: 8 }, children: "悬停星点 = 在浮层里看完整名称与类型 · 单击星点 = 改起点继续展开 · 拖拽钉位与全图一致" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { ...S.muted, marginTop: 4, marginBottom: 8 }, children: [
+		        tr("悬停星点 = 在浮层里看完整名称与类型 · 单击星点 = 改起点继续展开 · 拖拽钉位与全图一致"),
+		        " "
+		      ] }),
 		      rows.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { ...S.muted, fontSize: 12, marginBottom: 4 }, children: "关系清单（按跳数由近及远）" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { ...S.muted, fontSize: 12, marginBottom: 4 }, children: tr("关系清单（按跳数由近及远）") }),
 		        rows.slice(0, LIST_MAX).map((r) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { ...S.flexRow, gap: 6, padding: "2px 0", fontSize: 12.5 }, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { style: { color: "var(--dsh-mem-text-3)", minWidth: 30 }, children: [
 		            r.depth,
-		            " 跳"
+		            " ",
+		            tr("跳")
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
 		            "span",
@@ -43138,21 +45586,25 @@ var __create = Object.create;
 		              style: { width: 9, height: 9, borderRadius: 9, background: TYPE_COLORS[r.type] ?? FALLBACK_COLOR2, display: "inline-block" }
 		            }
 		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { className: "dsh-mem-tab", style: { border: "none", background: "none", cursor: "pointer", padding: 0 }, onClick: () => openEgo(r.id), title: "以此为新起点", children: r.name }),
+		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { className: "dsh-mem-tab", style: { border: "none", background: "none", cursor: "pointer", padding: 0 }, onClick: () => openEgo(r.id), title: tr("以此为新起点"), children: r.name }),
 		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: r.type }),
-		          r.relations.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: r.causal ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-3)", fontWeight: r.causal ? 600 : 400 }, children: r.relations.join("·") }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: hops > 1 ? "间接相连" : "" })
+		          r.relations.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: r.causal ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-3)", fontWeight: r.causal ? 600 : 400 }, children: r.relations.join("·") }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: hops > 1 ? tr("间接相连") : "" })
 		        ] }, r.id)),
 		        rows.length > LIST_MAX ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: S.muted, children: [
-		          "另有 ",
+		          tr("另有"),
+		          " ",
 		          rows.length - LIST_MAX,
-		          " 个节点未列出。"
+		          " ",
+		          tr("个节点未列出。")
 		        ] }) : null
 		      ] }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { style: S.intro, children: [
-		        "这个起点在 ",
+		        tr("这个起点在"),
+		        " ",
 		        hops,
-		        " 跳内没有其它可达节点（孤点，或关系还没投影出来）。"
+		        " ",
+		        tr("跳内没有其它可达节点（孤点，或关系还没投影出来）。")
 		      ] }),
-		      detailLoading ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { ...S.muted, marginTop: 12 }, children: "加载实体详情…" }) : entityDetail ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { marginTop: 12, padding: "10px 12px", border: "1px solid var(--dsh-mem-border)", borderRadius: 6, fontSize: 12.5, lineHeight: 1.6 }, children: [
+		      detailLoading ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { ...S.muted, marginTop: 12 }, children: tr("加载实体详情…") }) : entityDetail ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { marginTop: 12, padding: "10px 12px", border: "1px solid var(--dsh-mem-border)", borderRadius: 6, fontSize: 12.5, lineHeight: 1.6 }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { fontWeight: 600, marginBottom: 4 }, children: [
 		          entityDetail.name,
 		          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { style: { color: "var(--dsh-mem-text-3)", marginLeft: 6 }, children: [
@@ -43161,22 +45613,23 @@ var __create = Object.create;
 		            ")"
 		          ] }),
 		          entityDetail.aliases.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { style: { color: "var(--dsh-mem-text-3)", marginLeft: 6 }, children: [
-		            "别名: ",
+		            tr("别名:"),
+		            " ",
 		            entityDetail.aliases.join(", ")
 		          ] })
 		        ] }),
 		        /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: "状态:" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: tr("状态:") }),
 		          " ",
 		          entityDetail.status,
 		          " · ",
-		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: "置信度:" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: tr("置信度:") }),
 		          " ",
 		          (entityDetail.confidence * 100).toFixed(0),
 		          "%"
 		        ] }),
 		        entityDetail.currentState && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { marginTop: 3 }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: "当前状态:" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: tr("当前状态:") }),
 		          " ",
 		          entityDetail.currentState
 		        ] }),
@@ -43194,35 +45647,36 @@ var __create = Object.create;
 		        ] }),
 		        sourceRecords.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("details", { style: { marginTop: 4 }, open: true, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("summary", { style: { cursor: "pointer", color: "var(--dsh-mem-text-3)" }, children: [
-		            "来源记录 (",
+		            tr("来源记录 ("),
 		            sourceRecords.length,
 		            ")"
 		          ] }),
 		          sourceRecords.map((r) => /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { paddingLeft: 8, marginBottom: 10, borderBottom: "1px solid var(--dsh-mem-border, #eee)", paddingBottom: 8 }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { fontSize: 14, fontWeight: 700, marginBottom: 4 }, children: r.name ?? "(无标题)" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { fontSize: 14, fontWeight: 700, marginBottom: 4 }, children: r.name ?? tr("(无标题)") }),
 		            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center", marginBottom: 4 }, children: [
 		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { className: tagClass(r.type), children: typeLabel(r.type) }),
-		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { fontSize: 11, padding: "1px 6px", borderRadius: 999, border: "1px solid var(--dsh-mem-border)", color: "var(--dsh-mem-text-2)", whiteSpace: "nowrap" }, children: r.scope === "workspace" ? "工作区" : "全局" }),
-		              r.maturity && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { fontSize: 11, padding: "1px 6px", borderRadius: 999, border: "1px solid var(--dsh-mem-border)", color: "var(--dsh-mem-text-2)", whiteSpace: "nowrap" }, children: r.maturity === "high" ? "成熟·高" : r.maturity === "mid" ? "成熟·中" : "成熟·低" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { fontSize: 11, padding: "1px 6px", borderRadius: 999, border: "1px solid var(--dsh-mem-border)", color: "var(--dsh-mem-text-2)", whiteSpace: "nowrap" }, children: r.scope === "workspace" ? tr("工作区") : tr("全局") }),
+		              r.maturity && /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { fontSize: 11, padding: "1px 6px", borderRadius: 999, border: "1px solid var(--dsh-mem-border)", color: "var(--dsh-mem-text-2)", whiteSpace: "nowrap" }, children: r.maturity === "high" ? tr("成熟·高") : r.maturity === "mid" ? tr("成熟·中") : tr("成熟·低") }),
 		              /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("span", { style: { fontSize: 11, padding: "1px 6px", borderRadius: 999, border: "1px solid var(--dsh-mem-border)", color: "var(--dsh-mem-text-2)", whiteSpace: "nowrap" }, children: [
 		                "P",
 		                r.priority
 		              ] })
 		            ] }),
 		            r.createdAt && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { fontSize: 11.5, color: "var(--dsh-mem-text-3)", marginBottom: 2 }, children: [
-		              "创建: ",
+		              tr("创建:"),
+		              " ",
 		              fmtTime(r.createdAt)
 		            ] }),
 		            r.scene && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { fontSize: 12, marginBottom: 2 }, children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("b", { children: "情境：" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("b", { children: tr("情境：") }),
 		              r.scene
 		            ] }),
 		            /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { fontSize: 12, marginBottom: 4 }, children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("b", { children: "范围：" }),
-		              r.scope === "workspace" ? "指定工作区" + (r.workspaceId ? ` (${r.workspaceId})` : "") : "用户默认 (global)"
+		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("b", { children: tr("范围：") }),
+		              r.scope === "workspace" ? tr("指定工作区") + (r.workspaceId ? ` (${r.workspaceId})` : "") : tr("用户默认 (global)")
 		            ] }),
 		            r.keywords && r.keywords.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: { marginBottom: 4 }, children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 2 }, children: "关键词" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { fontSize: 12, fontWeight: 700, marginBottom: 2 }, children: tr("关键词") }),
 		              /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { display: "flex", flexWrap: "wrap", gap: 5 }, children: r.keywords.map((kw, i) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { fontSize: 11, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--dsh-mem-border)", color: "var(--dsh-mem-text-2)", whiteSpace: "nowrap" }, children: kw }, i)) })
 		            ] }),
 		            /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { fontSize: 12.5, marginTop: 4, maxHeight: 240, overflow: "auto" }, children: /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(MarkdownBody, { text: r.content }) })
@@ -43231,19 +45685,21 @@ var __create = Object.create;
 		      ] }) : null
 		    ] }) : null,
 		    stats && stats.nodes > 0 && stats.edges === 0 && !error ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { style: S.intro, children: [
-		      "已有 ",
+		      tr("已有"),
+		      " ",
 		      stats.nodes,
-		      " 个实体节点,但还没有可连出的关系边(或投影未完成)。"
+		      " ",
+		      tr("个实体节点,但还没有可连出的关系边(或投影未完成)。")
 		    ] }) : null
 		  ] });
 		}
 		
 		// client/src/tabs/ScenesTab.tsx
-		var import_react26 = require("react");
+		var import_react27 = require("react");
 		var import_jsx_runtime25 = require("react/jsx-runtime");
 		function SceneCard(props) {
 		  const s = props.s;
-		  const [open, setOpen] = (0, import_react26.useState)(false);
+		  const [open, setOpen] = (0, import_react27.useState)(false);
 		  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { className: "dsh-mem-card dsh-mem-card-hover", style: S.card, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)(
 		      "div",
@@ -43255,21 +45711,21 @@ var __create = Object.create;
 		        children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { className: "dsh-mem-scene-chev", style: { transform: open ? "rotate(90deg)" : "none" }, children: "▸" }),
 		          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { style: S.sceneTitle, children: s.path }),
-		          s.heat ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { style: S.muted, children: "热度 " + s.heat }) : null,
+		          s.heat ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { style: S.muted, children: tr("热度") + s.heat }) : null,
 		          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { style: S.grow }),
-		          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { style: S.muted, children: "更新 " + fmtTime(s.updated) })
+		          /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { style: S.muted, children: tr("更新") + fmtTime(s.updated) })
 		        ]
 		      }
 		    ),
 		    s.summary ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { style: { ...S.muted, marginBottom: 6 }, children: s.summary }) : null,
-		    open ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("pre", { style: S.pre, children: s.content || "(空)" }) : null
+		    open ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("pre", { style: S.pre, children: s.content || tr("(空)") }) : null
 		  ] });
 		}
 		function ScenesTab(props) {
 		  const rpc = props.rpc;
-		  const [items, setItems] = (0, import_react26.useState)(null);
-		  const [error, setError] = (0, import_react26.useState)(null);
-		  const load = (0, import_react26.useCallback)(() => {
+		  const [items, setItems] = (0, import_react27.useState)(null);
+		  const [error, setError] = (0, import_react27.useState)(null);
+		  const load = (0, import_react27.useCallback)(() => {
 		    rpc("dsh-memory/scenes", {}).then((r) => {
 		      if (r && r.ok) {
 		        setItems(r.value.items);
@@ -43279,17 +45735,17 @@ var __create = Object.create;
 		      setError(String(e && e.message || e));
 		    });
 		  }, [rpc]);
-		  (0, import_react26.useEffect)(() => {
+		  (0, import_react27.useEffect)(() => {
 		    load();
 		  }, [load]);
 		  return /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime25.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { style: S.muted, children: items ? items.length + " 个场景块" : "加载中…" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("span", { style: S.muted, children: items ? items.length + tr("个场景块") : tr("加载中…") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { style: S.grow }),
-		      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(NButton, { onClick: load, children: "刷新" })
+		      /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(NButton, { onClick: load, children: tr("刷新") })
 		    ] }),
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("div", { style: S.error, children: error }) : null,
-		    items && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { style: S.intro, children: "暂无场景块。累计 5 条新记忆后 L2 会自动整合出第一个场景。" }) : null,
+		    items && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime25.jsx)("p", { style: S.intro, children: tr("暂无场景块。累计 5 条新记忆后 L2 会自动整合出第一个场景。") }) : null,
 		    (items || []).map((s) => {
 		      return /* @__PURE__ */ (0, import_jsx_runtime25.jsx)(SceneCard, { s }, s.path);
 		    })
@@ -43299,30 +45755,31 @@ var __create = Object.create;
 		// client/src/panel.tsx
 		var import_jsx_runtime26 = require("react/jsx-runtime");
 		var TABS = [
-		  ["overview", "概览"],
-		  ["records", "记忆"],
-		  ["conflicts", "冲突"],
-		  ["scenes", "场景"],
+		  ["overview", tr("概览")],
+		  ["records", tr("记忆")],
+		  ["conflicts", tr("冲突")],
+		  ["scenes", tr("场景")],
 		  ["rooms", "Hall"],
 		  ["room", "Room"],
-		  ["graph", "图谱"],
-		  ["persona", "画像"],
-		  ["cost", "成本"],
-		  ["log", "日志"],
-		  ["connect", "来源"],
-		  ["skills", "技能"]
+		  ["graph", tr("图谱")],
+		  ["persona", tr("画像")],
+		  ["cost", tr("成本")],
+		  ["log", tr("日志")],
+		  ["connect", tr("来源")],
+		  ["skills", tr("技能")]
 		];
 		var SKIN_OPTS = [
-		  ["light", "浅色"],
-		  ["dark", "深色"],
-		  ["auto", "跟随"]
+		  ["light", tr("浅色")],
+		  ["dark", tr("深色")],
+		  ["auto", tr("跟随")]
 		];
 		function MemoryPanel(props) {
+		  useLocaleRevision();
 		  const rpc = props.rpc;
-		  const [tab, setTab] = (0, import_react27.useState)("overview");
-		  const [skin, setSkinState] = (0, import_react27.useState)(() => getSkin());
+		  const [tab, setTab] = (0, import_react28.useState)("overview");
+		  const [skin, setSkinState] = (0, import_react28.useState)(() => getSkin());
 		  ensureThemeStyle(skin);
-		  (0, import_react27.useEffect)(() => {
+		  (0, import_react28.useEffect)(() => {
 		    applySkin(skin);
 		    watchSidebarIcon();
 		  }, [skin]);
@@ -43344,8 +45801,8 @@ var __create = Object.create;
 		  else if (tab === "skills") body = /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(SkillsTab, { rpc });
 		  else body = /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(LogTab, { rpc });
 		  return /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)("div", { className: "dsh-mem-root", style: S.section, children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("h2", { style: S.heading, children: "记忆 (Memory)" }),
-		    /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("p", { style: S.intro, children: "L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。" }),
+		    /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("h2", { style: S.heading, children: tr("记忆 (Memory)") }),
+		    /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("p", { style: S.intro, children: tr("L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。") }),
 		    /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(DrscHealthBanner, { rpc }),
 		    /* @__PURE__ */ (0, import_jsx_runtime26.jsxs)(
 		      "div",
@@ -43359,14 +45816,14 @@ var __create = Object.create;
 		          marginBottom: 10
 		        },
 		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", marginRight: 4 }, children: "皮肤" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime26.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", marginRight: 4 }, children: tr("皮肤") }),
 		          SKIN_OPTS.map((s) => /* @__PURE__ */ (0, import_jsx_runtime26.jsx)(
 		            "button",
 		            {
 		              className: skin === s[0] ? "dsh-mem-tab dsh-mem-tab-on" : "dsh-mem-tab",
 		              onClick: () => switchSkin(s[0]),
-		              title: `皮肤：${s[1]}`,
-		              children: s[1]
+		              title: tr("皮肤：{p1}", { p1: s[1] }),
+		              children: tr(s[1])
 		            },
 		            s[0]
 		          ))
@@ -43381,7 +45838,7 @@ var __create = Object.create;
 		          onClick: () => {
 		            setTab(t[0]);
 		          },
-		          children: t[1]
+		          children: tr(t[1])
 		        },
 		        t[0]
 		      );
@@ -43391,7 +45848,7 @@ var __create = Object.create;
 		}
 		
 		// client/src/pill/MemoryModePill.tsx
-		var import_react30 = require("react");
+		var import_react31 = require("react");
 		
 		// src/util/context-occupancy.ts
 		var CONTEXT_METER_CIRCUMFERENCE = 34.55751918948772;
@@ -43600,8 +46057,8 @@ var __create = Object.create;
 		    "stroke-dasharray",
 		    haloDashArray(ratio, CONTEXT_METER_CIRCUMFERENCE, MIN_VISIBLE_ARC)
 		  );
-		  const fill = svg.querySelector("circle:nth-of-type(2)");
-		  const offKey = fill?.getAttribute("stroke-dasharray") ?? "";
+		  const fill2 = svg.querySelector("circle:nth-of-type(2)");
+		  const offKey = fill2?.getAttribute("stroke-dasharray") ?? "";
 		  if (svg.dataset.offKey !== void 0 && svg.dataset.offKey !== offKey) {
 		    void fetchSnapshot();
 		  }
@@ -43688,18 +46145,18 @@ var __create = Object.create;
 		    "line-height:1.5"
 		  ].join(";");
 		  const title = document.createElement("div");
-		  title.textContent = "记忆占用";
+		  title.textContent = tr("记忆占用");
 		  title.style.cssText = "color:var(--dsh-mem-text-2);font-weight:600;margin-bottom:4px;";
 		  section.append(title);
 		  if (view.recallTokens !== null && view.recallTokens > 0) {
-		    section.append(row("var(--dsh-mem-accent)", "召回片段", view.recallTokens));
+		    section.append(row("var(--dsh-mem-accent)", tr("召回片段"), view.recallTokens));
 		  }
 		  if (view.profileTokens !== null && view.profileTokens > 0) {
-		    section.append(row("var(--dsh-mem-accent)", "记忆稳定区", view.profileTokens));
+		    section.append(row("var(--dsh-mem-accent)", tr("记忆稳定区"), view.profileTokens));
 		  }
 		  if (view.mode === "off") {
 		    const offNote = document.createElement("div");
-		    offNote.textContent = "已停用 · 显示现存残留";
+		    offNote.textContent = tr("已停用 · 显示现存残留");
 		    offNote.style.cssText = "color:var(--dsh-mem-text-3);padding-top:2px;";
 		    section.append(offNote);
 		  }
@@ -43707,10 +46164,10 @@ var __create = Object.create;
 		}
 		
 		// client/src/pill/WingWheel.tsx
-		var import_react29 = require("react");
+		var import_react30 = require("react");
 		
 		// client/src/pill/SessionInfoArea.tsx
-		var import_react28 = require("react");
+		var import_react29 = require("react");
 		var import_jsx_runtime27 = require("react/jsx-runtime");
 		function sinfoCell(val, label, title) {
 		  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { title: title || void 0, children: [
@@ -43721,9 +46178,9 @@ var __create = Object.create;
 		function SessionInfoArea(props) {
 		  const rpc = props.rpc;
 		  const sessionId = props.sessionId;
-		  const [stats, setStats] = (0, import_react28.useState)(void 0);
-		  const busyRef = (0, import_react28.useRef)(false);
-		  (0, import_react28.useEffect)(() => {
+		  const [stats, setStats] = (0, import_react29.useState)(void 0);
+		  const busyRef = (0, import_react29.useRef)(false);
+		  (0, import_react29.useEffect)(() => {
 		    if (!rpc || !sessionId) return void 0;
 		    let alive = true;
 		    let timer = null;
@@ -43757,10 +46214,10 @@ var __create = Object.create;
 		  if (stats === null) return null;
 		  if (stats === void 0) {
 		    return /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("div", { className: "dsh-mem-sinfo", children: /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
-		      sinfoCell("…", "召回命中"),
-		      sinfoCell("…", "攒批进度"),
-		      sinfoCell("…", "本会话记忆"),
-		      sinfoCell("…", "会话消息")
+		      sinfoCell("…", tr("召回命中")),
+		      sinfoCell("…", tr("攒批进度")),
+		      sinfoCell("…", tr("本会话记忆")),
+		      sinfoCell("…", tr("会话消息"))
 		    ] }) });
 		  }
 		  const rc = stats.recall || {};
@@ -43771,38 +46228,38 @@ var __create = Object.create;
 		  let rcLabel;
 		  let rcTitle;
 		  if (rc.enabled === false) {
-		    rcVal = "停用";
-		    rcLabel = "召回命中";
+		    rcVal = tr("停用");
+		    rcLabel = tr("召回命中");
 		    const reasonText = {
-		      deploy: "部署未启用",
-		      global: "全局开关关闭",
-		      session: "会话只写",
-		      mode: "档位关闭"
+		      deploy: tr("部署未启用"),
+		      global: tr("全局开关关闭"),
+		      session: tr("会话只写"),
+		      mode: tr("档位关闭")
 		    };
-		    rcTitle = rc.reason ? "召回已停用（" + (reasonText[rc.reason] ?? rc.reason) + "）" : "召回已停用（开关关闭 / 档位关闭 / 部署未启用）";
+		    rcTitle = rc.reason ? tr("召回已停用（") + (reasonText[rc.reason] ?? rc.reason) + "）" : tr("召回已停用（开关关闭 / 档位关闭 / 部署未启用）");
 		  } else {
 		    rcVal = (rc.hitTurns || 0) + "/" + (rc.injectedTurns || 0);
-		    rcLabel = "召回命中 · " + (rc.totalHits || 0) + " 条";
-		    rcTitle = "最近一轮命中 " + (rc.lastHits || 0) + " 条，耗时 " + (rc.lastDurationMs || 0) + "ms" + ((rc.timeouts || 0) > 0 ? "，超时跳过 " + rc.timeouts + " 次" : "");
+		    rcLabel = tr("召回命中 ·") + (rc.totalHits || 0) + tr("条");
+		    rcTitle = tr("最近一轮命中") + (rc.lastHits || 0) + tr("条，耗时") + (rc.lastDurationMs || 0) + "ms" + ((rc.timeouts || 0) > 0 ? tr("，超时跳过") + rc.timeouts + tr("次") : "");
 		  }
 		  let dVal;
 		  let dLabel;
 		  let dTitle;
 		  if (isOff) {
 		    dVal = String(di.parkedSlices || 0);
-		    dLabel = "挂起切片";
-		    dTitle = "档位关闭：未蒸馏切片挂起，切回档位后继续";
+		    dLabel = tr("挂起切片");
+		    dTitle = tr("档位关闭：未蒸馏切片挂起，切回档位后继续");
 		  } else {
 		    dVal = (di.pendingSlice || 0) + "/" + (di.threshold != null ? di.threshold : "-");
-		    dLabel = (di.parkedSlices || 0) > 0 ? "攒批 · 挂起 " + di.parkedSlices : "攒批进度";
-		    dTitle = "达到阈值后自动蒸馏（阈值随使用渐进爬坡到稳态）";
+		    dLabel = (di.parkedSlices || 0) > 0 ? tr("攒批 · 挂起") + di.parkedSlices : tr("攒批进度");
+		    dTitle = tr("达到阈值后自动蒸馏（阈值随使用渐进爬坡到稳态）");
 		  }
-		  const pTitle = di.lastDistillAt ? "最近蒸馏 " + fmtTime(di.lastDistillAt) : "本会话尚未蒸馏";
-		  const warn = gl.degraded ? "⚠ 存储不可用，记忆功能已停用" : null;
+		  const pTitle = di.lastDistillAt ? tr("最近蒸馏") + fmtTime(di.lastDistillAt) : tr("本会话尚未蒸馏");
+		  const warn = gl.degraded ? tr("⚠ 存储不可用，记忆功能已停用") : null;
 		  let note = null;
 		  if (!gl.degraded) {
-		    if (stats.retrieval === "keyword" && !isOff) note = "检索降级：纯关键词（向量不可用）";
-		    else if (stats.retrieval === "none") note = "检索不可用（FTS 与向量均失效）";
+		    if (stats.retrieval === "keyword" && !isOff) note = tr("检索降级：纯关键词（向量不可用）");
+		    else if (stats.retrieval === "none") note = tr("检索不可用（FTS 与向量均失效）");
 		  }
 		  const ago = fmtAgo(gl.lastExtractAt);
 		  return /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "dsh-mem-sinfo", children: [
@@ -43810,11 +46267,11 @@ var __create = Object.create;
 		    /* @__PURE__ */ (0, import_jsx_runtime27.jsxs)("div", { className: "dsh-mem-sinfo-grid", children: [
 		      sinfoCell(rcVal, rcLabel, rcTitle),
 		      sinfoCell(dVal, dLabel, dTitle),
-		      sinfoCell(String(di.producedRecords || 0), "本会话记忆", pTitle),
-		      sinfoCell(stats.l0Count != null ? String(stats.l0Count) : "…", "会话消息")
+		      sinfoCell(String(di.producedRecords || 0), tr("本会话记忆"), pTitle),
+		      sinfoCell(stats.l0Count != null ? String(stats.l0Count) : "…", tr("会话消息"))
 		    ] }),
 		    note ? /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("div", { className: "dsh-mem-sinfo-note", children: note }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("div", { className: "dsh-mem-sinfo-sum", children: "待蒸馏 " + (gl.pendingTotal || 0) + " · 上次蒸馏 " + (ago || "尚未蒸馏") })
+		    /* @__PURE__ */ (0, import_jsx_runtime27.jsx)("div", { className: "dsh-mem-sinfo-sum", children: tr("待蒸馏") + (gl.pendingTotal || 0) + tr("· 上次蒸馏") + (ago || tr("尚未蒸馏")) })
 		  ] });
 		}
 		
@@ -43862,8 +46319,8 @@ var __create = Object.create;
 		function WingWheel(props) {
 		  ensureThemeStyle();
 		  const isOff = props.mode === "off";
-		  const [overview, setOverview] = (0, import_react29.useState)(null);
-		  (0, import_react29.useEffect)(() => {
+		  const [overview, setOverview] = (0, import_react30.useState)(null);
+		  (0, import_react30.useEffect)(() => {
 		    let alive = true;
 		    props.rpc("dsh-memory/wing-overview", {}).then((r) => {
 		      if (!alive) return;
@@ -43879,28 +46336,28 @@ var __create = Object.create;
 		    if (id === "general") return overview.general;
 		    return overview.corners.find((c) => c.id === id)?.count ?? 0;
 		  };
-		  const boxRef = (0, import_react29.useRef)(null);
-		  const startRef = (0, import_react29.useRef)(null);
-		  const movedRef = (0, import_react29.useRef)(false);
-		  const downIndexRef = (0, import_react29.useRef)(null);
-		  const dragTargetRef = (0, import_react29.useRef)(null);
-		  const [drag, setDrag] = (0, import_react29.useState)(null);
+		  const boxRef = (0, import_react30.useRef)(null);
+		  const startRef = (0, import_react30.useRef)(null);
+		  const movedRef = (0, import_react30.useRef)(false);
+		  const downIndexRef = (0, import_react30.useRef)(null);
+		  const dragTargetRef = (0, import_react30.useRef)(null);
+		  const [drag, setDrag] = (0, import_react30.useState)(null);
 		  const lockedIndex = (() => {
 		    if (props.halls.length !== 1 || !overview) return null;
 		    const i = overview.corners.findIndex((c) => c.id === props.halls[0]);
 		    return i >= 0 ? i : null;
 		  })();
 		  const activeCorner = drag ? drag.index : lockedIndex;
-		  const blockPosRef = (0, import_react29.useRef)(
+		  const blockPosRef = (0, import_react30.useRef)(
 		    activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER }
 		  );
-		  const blockTargetRef = (0, import_react29.useRef)(blockPosRef.current);
-		  const [blockPos, setBlockPos] = (0, import_react29.useState)(blockPosRef.current);
-		  (0, import_react29.useEffect)(() => {
+		  const blockTargetRef = (0, import_react30.useRef)(blockPosRef.current);
+		  const [blockPos, setBlockPos] = (0, import_react30.useState)(blockPosRef.current);
+		  (0, import_react30.useEffect)(() => {
 		    blockTargetRef.current = activeCorner != null ? cornerXY(activeCorner) : { x: CENTER, y: CENTER };
 		  }, [activeCorner]);
-		  const reducedMotionRef = (0, import_react29.useRef)(false);
-		  (0, import_react29.useEffect)(() => {
+		  const reducedMotionRef = (0, import_react30.useRef)(false);
+		  (0, import_react30.useEffect)(() => {
 		    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
 		    const apply2 = () => {
 		      reducedMotionRef.current = mq.matches;
@@ -43909,7 +46366,7 @@ var __create = Object.create;
 		    mq.addEventListener("change", apply2);
 		    return () => mq.removeEventListener("change", apply2);
 		  }, []);
-		  (0, import_react29.useEffect)(() => {
+		  (0, import_react30.useEffect)(() => {
 		    let raf = 0;
 		    const loop = () => {
 		      const cur = blockPosRef.current;
@@ -44074,11 +46531,11 @@ var __create = Object.create;
 		              }
 		            }
 		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+		          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
 		            "button",
 		            {
 		              type: "button",
-		              title: "智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）",
+		              title: tr("智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）"),
 		              onClick: () => props.onCommitWing(null),
 		              style: {
 		                position: "absolute",
@@ -44096,13 +46553,16 @@ var __create = Object.create;
 		                cursor: "pointer",
 		                zIndex: 2
 		              },
-		              children: "智能"
+		              children: [
+		                tr("智能"),
+		                " "
+		              ]
 		            }
 		          ),
 		          [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
 		            const corner = overview?.corners[i];
 		            const id = corner?.id;
-		            const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
+		            const label = corner?.label ?? LABEL_FALLBACK[i] ?? tr("域{p1}", { p1: i + 1 });
 		            const count = id ? cornerCount(id) : null;
 		            const active = activeCorner === i;
 		            const dim = activeCorner != null && !active;
@@ -44111,8 +46571,7 @@ var __create = Object.create;
 		            return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
 		              "div",
 		              {
-		                title: id ? `「${label}」${count ?? 0} 条
-		点按/拖动 = 以该角为主题（抑制其他角）` : "词表加载中",
+		                title: id ? tr("「{p1}」{p2} 条 点按/拖动 = 以该角为主题（抑制其他角）", { p1: label, p2: count ?? 0 }) : tr("词表加载中"),
 		                style: {
 		                  position: "absolute",
 		                  left: p.left,
@@ -44138,7 +46597,7 @@ var __create = Object.create;
 		                },
 		                children: [
 		                  /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { children: label }),
-		                  /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { style: { fontSize: 8, opacity: 0.75, fontVariantNumeric: "tabular-nums" }, children: count === null ? " " : empty ? "空角" : `${count} 条` })
+		                  /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { style: { fontSize: 8, opacity: 0.75, fontVariantNumeric: "tabular-nums" }, children: count === null ? " " : empty ? tr("空角") : tr("{p1} 条", { p1: count }) })
 		                ]
 		              },
 		              id ?? i
@@ -44150,7 +46609,7 @@ var __create = Object.create;
 		    /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)(
 		      "div",
 		      {
-		        title: props.halls.length === 0 ? "选定某个角（单 Wing）后，这两项才生效" : "锁定 Wing 时两类无角记忆是否参与召回",
+		        title: props.halls.length === 0 ? tr("选定某个角（单 Wing）后，这两项才生效") : tr("锁定 Wing 时两类无角记忆是否参与召回"),
 		        style: {
 		          display: "flex",
 		          flexDirection: "column",
@@ -44161,15 +46620,15 @@ var __create = Object.create;
 		          pointerEvents: boundariesDisabled ? "none" : void 0
 		        },
 		        children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: overview ? `另有 ${overview.unlabeled} 条未打标` : "未打标" }),
+		          /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("span", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: overview ? tr("另有 {p1} 条未打标", { p1: overview.unlabeled }) : tr("未打标") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
 		              Segmented,
 		              {
 		                value: props.hallIncludeUnlabeled ? "in" : "ex",
 		                options: [
-		                  { key: "in", label: "含未打标", title: "未打标记忆默认包含" },
-		                  { key: "ex", label: "不含", title: "锁定 Wing 时排除未打标记忆" }
+		                  { key: "in", label: tr("含未打标"), title: tr("未打标记忆默认包含") },
+		                  { key: "ex", label: tr("不含"), title: tr("锁定 Wing 时排除未打标记忆") }
 		                ],
 		                onChange: (key) => props.onCommitWingBoundaries({ includeUnlabeled: key === "in" })
 		              }
@@ -44179,8 +46638,8 @@ var __create = Object.create;
 		              {
 		                value: props.hallIncludeGeneral ? "in" : "ex",
 		                options: [
-		                  { key: "in", label: "含跨域", title: "跨域（general）兜底记忆也参与召回" },
-		                  { key: "ex", label: "不含", title: "跨域与单主题相悖，默认不含" }
+		                  { key: "in", label: tr("含跨域"), title: tr("跨域（general）兜底记忆也参与召回") },
+		                  { key: "ex", label: tr("不含"), title: tr("跨域与单主题相悖，默认不含") }
 		                ],
 		                onChange: (key) => props.onCommitWingBoundaries({ includeGeneral: key === "in" })
 		              }
@@ -44189,30 +46648,30 @@ var __create = Object.create;
 		        ]
 		      }
 		    ),
-		    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Row, { label: "会话", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+		    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Row, { label: tr("会话"), children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
 		      Segmented,
 		      {
 		        value: isOff ? "off" : "on",
 		        options: [
-		          { key: "on", label: "启用", title: "本会话正常捕获/蒸馏/注入记忆" },
+		          { key: "on", label: tr("启用"), title: tr("本会话正常捕获/蒸馏/注入记忆") },
 		          {
 		            key: "off",
-		            label: "关闭",
-		            title: "本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）"
+		            label: tr("关闭"),
+		            title: tr("本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）")
 		          }
 		        ],
 		        onChange: (key) => props.onCommit(key === "off" ? "off" : "auto")
 		      }
 		    ) }),
-		    props.recall !== void 0 && props.onCommitRecall ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Row, { label: "注入", children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+		    props.recall !== void 0 && props.onCommitRecall ? /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(Row, { label: tr("注入"), children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
 		      Segmented,
 		      {
 		        value: props.recall === null ? "follow" : props.recall ? "on" : "off",
 		        disabled: isOff,
 		        options: [
-		          { key: "follow", label: "跟随全局", title: "清除本会话覆盖，跟随全局召回开关" },
-		          { key: "on", label: "开", title: "本会话强制注入记忆" },
-		          { key: "off", label: "关", title: "只写：记忆照常沉淀，但不注入本会话" }
+		          { key: "follow", label: tr("跟随全局"), title: tr("清除本会话覆盖，跟随全局召回开关") },
+		          { key: "on", label: tr("开"), title: tr("本会话强制注入记忆") },
+		          { key: "off", label: tr("关"), title: tr("只写：记忆照常沉淀，但不注入本会话") }
 		        ],
 		        onChange: (key) => props.onCommitRecall(key === "on" ? true : key === "off" ? false : null)
 		      }
@@ -44238,11 +46697,11 @@ var __create = Object.create;
 		    }
 		  );
 		}
-		var LABEL_FALLBACK = ["工作", "人际", "学习", "创作娱乐", "居家", "健康", "财务", "出行"];
+		var LABEL_FALLBACK = [tr("工作"), tr("人际"), tr("学习"), tr("创作娱乐"), tr("居家"), tr("健康"), tr("财务"), tr("出行")];
 		function useViewportClamp(popRef) {
-		  const shiftRef = (0, import_react29.useRef)(0);
-		  const [shiftX, setShiftX] = (0, import_react29.useState)(0);
-		  (0, import_react29.useEffect)(() => {
+		  const shiftRef = (0, import_react30.useRef)(0);
+		  const [shiftX, setShiftX] = (0, import_react30.useState)(0);
+		  (0, import_react30.useEffect)(() => {
 		    const clamp = () => {
 		      const el = popRef.current;
 		      if (!el) return;
@@ -44274,22 +46733,23 @@ var __create = Object.create;
 		// client/src/pill/MemoryModePill.tsx
 		var import_jsx_runtime29 = require("react/jsx-runtime");
 		function MemoryModePill(props) {
+		  useLocaleRevision();
 		  const rpc = props.rpc;
 		  const sessionId = props.sessionId || props.session && props.session.sessionId;
-		  const [mode, setMode] = (0, import_react30.useState)(null);
-		  const [recall, setRecall] = (0, import_react30.useState)(null);
-		  const [recallResolved, setRecallResolved] = (0, import_react30.useState)(true);
-		  const [halls, setWings] = (0, import_react30.useState)([]);
-		  const [hallIncludeUnlabeled, setWingIncludeUnlabeled] = (0, import_react30.useState)(true);
-		  const [hallIncludeGeneral, setWingIncludeGeneral] = (0, import_react30.useState)(false);
-		  const [wingLabels, setHallLabels] = (0, import_react30.useState)({});
-		  const [error, setError] = (0, import_react30.useState)(null);
-		  const [open, setOpen] = (0, import_react30.useState)(false);
-		  const wrapRef = (0, import_react30.useRef)(null);
-		  const popRef = (0, import_react30.useRef)(null);
+		  const [mode, setMode] = (0, import_react31.useState)(null);
+		  const [recall, setRecall] = (0, import_react31.useState)(null);
+		  const [recallResolved, setRecallResolved] = (0, import_react31.useState)(true);
+		  const [halls, setWings] = (0, import_react31.useState)([]);
+		  const [hallIncludeUnlabeled, setWingIncludeUnlabeled] = (0, import_react31.useState)(true);
+		  const [hallIncludeGeneral, setWingIncludeGeneral] = (0, import_react31.useState)(false);
+		  const [wingLabels, setHallLabels] = (0, import_react31.useState)({});
+		  const [error, setError] = (0, import_react31.useState)(null);
+		  const [open, setOpen] = (0, import_react31.useState)(false);
+		  const wrapRef = (0, import_react31.useRef)(null);
+		  const popRef = (0, import_react31.useRef)(null);
 		  const shiftX = useViewportClamp(popRef);
-		  const seqRef = (0, import_react30.useRef)(0);
-		  const load = (0, import_react30.useCallback)(() => {
+		  const seqRef = (0, import_react31.useRef)(0);
+		  const load = (0, import_react31.useCallback)(() => {
 		    if (!sessionId || !rpc) return;
 		    const token = ++seqRef.current;
 		    setError(null);
@@ -44314,13 +46774,13 @@ var __create = Object.create;
 		    }).catch(() => {
 		    });
 		  }, [sessionId, rpc]);
-		  (0, import_react30.useEffect)(() => {
+		  (0, import_react31.useEffect)(() => {
 		    load();
 		  }, [load]);
-		  (0, import_react30.useEffect)(() => {
+		  (0, import_react31.useEffect)(() => {
 		    watchSidebarIcon();
 		  }, []);
-		  (0, import_react30.useEffect)(() => {
+		  (0, import_react31.useEffect)(() => {
 		    initOccupancyIndicator(
 		      (endpoint, payload) => rpc(endpoint, payload)
 		    );
@@ -44328,7 +46788,7 @@ var __create = Object.create;
 		    watchContextMeter();
 		    noteOccupancySession(sessionId ?? null);
 		  }, [sessionId, rpc]);
-		  (0, import_react30.useEffect)(() => {
+		  (0, import_react31.useEffect)(() => {
 		    if (!open) return;
 		    const onDown = (e) => {
 		      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
@@ -44353,12 +46813,12 @@ var __create = Object.create;
 		      if (token !== seqRef.current) return;
 		      if (!r || !r.ok) {
 		        setMode(prev);
-		        setError(r && r.error ? "档位写入失败：" + r.error.message : "档位写入失败");
+		        setError(r && r.error ? tr("档位写入失败：") + r.error.message : tr("档位写入失败"));
 		      }
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
 		      setMode(prev);
-		      setError("档位写入失败：" + String(e && e.message || e));
+		      setError(tr("档位写入失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const commitRecall = (next) => {
@@ -44374,7 +46834,7 @@ var __create = Object.create;
 		      if (!r || !r.ok) {
 		        setRecall(prevRecall);
 		        setRecallResolved(prevResolved);
-		        setError(r && r.error ? "注入设置失败：" + r.error.message : "注入设置失败");
+		        setError(r && r.error ? tr("注入设置失败：") + r.error.message : tr("注入设置失败"));
 		      } else {
 		        setRecall(r.value.recall);
 		        setRecallResolved(r.value.recallResolved);
@@ -44383,7 +46843,7 @@ var __create = Object.create;
 		      if (token !== seqRef.current) return;
 		      setRecall(prevRecall);
 		      setRecallResolved(prevResolved);
-		      setError("注入设置失败：" + String(e && e.message || e));
+		      setError(tr("注入设置失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const commitWing = (next) => {
@@ -44398,14 +46858,14 @@ var __create = Object.create;
 		      if (token !== seqRef.current) return;
 		      if (!r || !r.ok) {
 		        setWings(prevHalls);
-		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
+		        setError(r && r.error ? tr("域设置失败：") + r.error.message : tr("域设置失败"));
 		      } else {
 		        setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
 		      }
 		    }).catch((e) => {
 		      if (token !== seqRef.current) return;
 		      setWings(prevHalls);
-		      setError("域设置失败：" + String(e && e.message || e));
+		      setError(tr("域设置失败：") + String(e && e.message || e));
 		    });
 		  };
 		  const commitWingBoundaries = (patch) => {
@@ -44426,7 +46886,7 @@ var __create = Object.create;
 		      if (!r || !r.ok) {
 		        setWingIncludeUnlabeled(prev.unlabeled);
 		        setWingIncludeGeneral(prev.general);
-		        setError(r && r.error ? "域设置失败：" + r.error.message : "域设置失败");
+		        setError(r && r.error ? tr("域设置失败：") + r.error.message : tr("域设置失败"));
 		      } else {
 		        setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
 		        setWingIncludeUnlabeled(r.value.hallIncludeUnlabeled);
@@ -44436,7 +46896,7 @@ var __create = Object.create;
 		      if (token !== seqRef.current) return;
 		      setWingIncludeUnlabeled(prev.unlabeled);
 		      setWingIncludeGeneral(prev.general);
-		      setError("域设置失败：" + String(e && e.message || e));
+		      setError(tr("域设置失败：") + String(e && e.message || e));
 		    });
 		  };
 		  if (!sessionId || !rpc) return null;
@@ -44445,7 +46905,7 @@ var __create = Object.create;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
 		  const wingText = halls.length === 1 ? wingLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} Wing` : null;
-		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? "只写" : wingText ? wingText : info.label;
+		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? tr("只写") : wingText ? wingText : info.label;
 		  ensureThemeStyle();
 		  const pillStyle = {
 		    position: "relative",
@@ -44473,7 +46933,7 @@ var __create = Object.create;
 		      "button",
 		      {
 		        type: "button",
-		        title: error ? "档位读取失败：" + error + "（点击重试）" : "本会话记忆域与档位（点击切换）",
+		        title: error ? tr("档位读取失败：") + error + tr("（点击重试）") : tr("本会话记忆域与档位（点击切换）"),
 		        onClick: () => {
 		          if (error) load();
 		          setOpen(!open);
@@ -44481,7 +46941,8 @@ var __create = Object.create;
 		        className: (isFlow ? "dsh-mem-flow" : "dsh-mem-pill-off") + " dsh-mem-pill-hit",
 		        style: pillStyle,
 		        children: [
-		          "记忆 · ",
+		          tr("记忆 ·"),
+		          " ",
 		          /* @__PURE__ */ (0, import_jsx_runtime29.jsx)("span", { children: faceLabel })
 		        ]
 		      }
@@ -44527,26 +46988,29 @@ var __create = Object.create;
 		}
 		
 		// client/src/explorer/ExplorerPage.tsx
-		var import_react33 = require("react");
+		var import_react34 = require("react");
 		
 		// client/src/explorer/LinkPane.tsx
 		var import_jsx_runtime30 = require("react/jsx-runtime");
 		function relLine(n) {
-		  return `${n.relation}${n.causal ? "（因果）" : ""} · ${n.hop} 跳 · 经由 ${n.viaEntityId}`;
+		  return tr("{p1}{p2} · {p3} 跳 · 经由 {p4}", { p1: n.relation, p2: n.causal ? "（因果）" : "", p3: n.hop, p4: n.viaEntityId });
 		}
 		function LinkPane(props) {
 		  const { recordId, links, loading, error, onPickRecord, onEmphasisNode, labelOfRecord } = props;
 		  if (!recordId) {
-		    return /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { padding: 14, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "从左侧选一条记忆，这里会列出它涉及的实体、这些实体的关系邻居、以及邻居们的来源记忆——可以一路跳下去。" });
+		    return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { padding: 14, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: [
+		      tr("从左侧选一条记忆，这里会列出它涉及的实体、这些实体的关系邻居、以及邻居们的来源记忆——可以一路跳下去。"),
+		      " "
+		    ] });
 		  }
 		  if (error) {
 		    return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { padding: 14, fontSize: 12, color: "var(--dsh-mem-accent)" }, children: [
-		      "关联查询失败：",
+		      tr("关联查询失败："),
 		      error
 		    ] });
 		  }
 		  if (loading || !links) {
-		    return /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { padding: 14, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: loading ? "加载中…" : " " });
+		    return /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { padding: 14, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: loading ? tr("加载中…") : " " });
 		  }
 		  const { record, entities, neighbors, records, supersede, truncated } = links;
 		  const sec = (title, count) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { fontSize: 11, letterSpacing: ".06em", color: "var(--dsh-mem-text-3)", margin: "12px 0 6px" }, children: [
@@ -44574,7 +47038,7 @@ var __create = Object.create;
 		    id + text
 		  );
 		  return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { height: "100%", overflowY: "auto", paddingRight: 2 }, children: [
-		    sec("层1 · 当前记录"),
+		    sec(tr("层1 · 当前记录")),
 		    record ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
 		      "div",
 		      {
@@ -44593,37 +47057,42 @@ var __create = Object.create;
 		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: record.type }),
 		            record.scene ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: record.scene }) : null,
 		            record.agingWeight != null ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
-		              "老化 ",
+		              tr("老化"),
+		              " ",
 		              Math.round(record.agingWeight * 100),
 		              "%"
 		            ] }) : null,
 		            record.maturity ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
-		              "成熟 ",
+		              tr("成熟"),
+		              " ",
 		              record.maturity
 		            ] }) : null,
 		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: fmtTime(record.updatedAt) }),
 		            record.retired ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
-		              "已退场",
+		              tr("已退场"),
 		              record.retiredReason ? `·${record.retiredReason}` : ""
 		            ] }) : null
 		          ] })
 		        ]
 		      }
-		    ) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "这条记忆还没有被投影进图（图谱未开启，或投影尚未跑到）——所以暂时查不到它的关联。" }),
-		    supersede.prevIds.length > 0 || supersede.nextId ? sec("取代链") : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { children: [
-		      supersede.nextId ? chip(supersede.nextId, `→ 被新记忆取代`, "取代本记录的新行，点击查看", () => onPickRecord(supersede.nextId)) : null,
-		      supersede.prevIds.map((id) => chip(id, `← 取代了旧记忆`, "本记录取代掉的旧行，点击查看", () => onPickRecord(id)))
+		    ) : /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: [
+		      tr("这条记忆还没有被投影进图（图谱未开启，或投影尚未跑到）——所以暂时查不到它的关联。"),
+		      " "
 		    ] }),
-		    sec("层2 · 涉及实体", entities.length),
-		    entities.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "无（该记录没有抽出实体）。" }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { children: entities.map((e) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
-		      chip(e.id, `${e.name}`, `度 ${e.degree} · 因果 ${e.causalDegree} · 点击在图上强调`, () => onEmphasisNode(e.id)),
+		    supersede.prevIds.length > 0 || supersede.nextId ? sec(tr("取代链")) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { children: [
+		      supersede.nextId ? chip(supersede.nextId, tr("→ 被新记忆取代"), tr("取代本记录的新行，点击查看"), () => onPickRecord(supersede.nextId)) : null,
+		      supersede.prevIds.map((id) => chip(id, tr("← 取代了旧记忆"), tr("本记录取代掉的旧行，点击查看"), () => onPickRecord(id)))
+		    ] }),
+		    sec(tr("层2 · 涉及实体"), entities.length),
+		    entities.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("无（该记录没有抽出实体）。") }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { children: entities.map((e) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
+		      chip(e.id, `${e.name}`, tr("度 {p1} · 因果 {p2} · 点击在图上强调", { p1: e.degree, p2: e.causalDegree }), () => onEmphasisNode(e.id)),
 		      e.recordIds.map(
-		        (rid) => chip(rid, `↳ ${labelOfRecord(rid).slice(0, 12)}`, "该实体的其它来源记忆，点击查看", () => onPickRecord(rid))
+		        (rid) => chip(rid, `↳ ${labelOfRecord(rid).slice(0, 12)}`, tr("该实体的其它来源记忆，点击查看"), () => onPickRecord(rid))
 		      )
 		    ] }, e.id)) }),
-		    sec("层3 · 关系邻居", neighbors.length),
-		    neighbors.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "无（这些实体目前没有 active 关系的邻居）。" }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: neighbors.map((n, i) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
+		    sec(tr("层3 · 关系邻居"), neighbors.length),
+		    neighbors.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("无（这些实体目前没有 active 关系的邻居）。") }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: neighbors.map((n, i) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
 		      "div",
 		      {
 		        style: { border: "1px solid var(--dsh-mem-border)", borderRadius: 8, padding: "6px 8px" },
@@ -44631,17 +47100,20 @@ var __create = Object.create;
 		          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }, children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { style: { fontSize: 13, fontWeight: 600 }, children: n.name }),
 		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { style: { fontSize: 11, color: n.causal ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-3)" }, children: relLine(n) }),
-		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(NButton, { onClick: () => onEmphasisNode(n.id), title: "在图上强调该节点", children: "看图" })
+		            /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(NButton, { onClick: () => onEmphasisNode(n.id), title: tr("在图上强调该节点"), children: [
+		              tr("看图"),
+		              " "
+		            ] })
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { marginTop: 4 }, children: n.recordIds.map(
-		            (rid) => chip(rid, `↳ ${labelOfRecord(rid).slice(0, 14)}`, "跳到这条邻居的来源记忆", () => onPickRecord(rid))
+		            (rid) => chip(rid, `↳ ${labelOfRecord(rid).slice(0, 14)}`, tr("跳到这条邻居的来源记忆"), () => onPickRecord(rid))
 		          ) })
 		        ]
 		      },
 		      `${n.id}-${n.relation}-${n.viaEntityId}-${i}`
 		    )) }),
-		    sec("相关记忆", records.length),
-		    records.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "无。" }) : records.map((r) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
+		    sec(tr("相关记忆"), records.length),
+		    records.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("无。") }) : records.map((r) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
 		      "button",
 		      {
 		        onClick: () => onPickRecord(r.id),
@@ -44662,7 +47134,7 @@ var __create = Object.create;
 		          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: r.content }),
 		          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
 		            r.type,
-		            r.agingWeight != null ? ` · 老化 ${Math.round(r.agingWeight * 100)}%` : "",
+		            r.agingWeight != null ? tr("· 老化 {p1}%", { p1: Math.round(r.agingWeight * 100) }) : "",
 		            " · ",
 		            fmtTime(r.updatedAt)
 		          ] })
@@ -44670,31 +47142,34 @@ var __create = Object.create;
 		      },
 		      r.id
 		    )),
-		    truncated ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-accent)", marginTop: 8 }, children: "邻居或相关记忆过多，此处已截断（不是没有更多）。" }) : null
+		    truncated ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { fontSize: 11, color: "var(--dsh-mem-accent)", marginTop: 8 }, children: [
+		      tr("邻居或相关记忆过多，此处已截断（不是没有更多）。"),
+		      " "
+		    ] }) : null
 		  ] });
 		}
 		
 		// client/src/explorer/RecordPane.tsx
-		var import_react31 = require("react");
+		var import_react32 = require("react");
 		var import_jsx_runtime31 = require("react/jsx-runtime");
 		var PAGE = 40;
 		var CONDS0 = { query: "", type: "", retired: "" };
 		function RecordPane(props) {
 		  const { rpc, activeId, onPick } = props;
-		  const [input, setInput] = (0, import_react31.useState)("");
-		  const [typeSel, setTypeSel] = (0, import_react31.useState)("");
-		  const [retiredSel, setRetiredSel] = (0, import_react31.useState)("");
-		  const [conds, setConds] = (0, import_react31.useState)(CONDS0);
-		  const [items, setItems] = (0, import_react31.useState)([]);
-		  const [hasMore, setHasMore] = (0, import_react31.useState)(false);
-		  const [total, setTotal] = (0, import_react31.useState)(null);
-		  const [truncated, setTruncated] = (0, import_react31.useState)(false);
-		  const [typeCatalog, setTypeCatalog] = (0, import_react31.useState)([]);
-		  const [loading, setLoading] = (0, import_react31.useState)(false);
-		  const [error, setError] = (0, import_react31.useState)(null);
-		  const offsetRef = (0, import_react31.useRef)(0);
-		  const seqRef = (0, import_react31.useRef)(0);
-		  const fetchPage = (0, import_react31.useCallback)(
+		  const [input, setInput] = (0, import_react32.useState)("");
+		  const [typeSel, setTypeSel] = (0, import_react32.useState)("");
+		  const [retiredSel, setRetiredSel] = (0, import_react32.useState)("");
+		  const [conds, setConds] = (0, import_react32.useState)(CONDS0);
+		  const [items, setItems] = (0, import_react32.useState)([]);
+		  const [hasMore, setHasMore] = (0, import_react32.useState)(false);
+		  const [total, setTotal] = (0, import_react32.useState)(null);
+		  const [truncated, setTruncated] = (0, import_react32.useState)(false);
+		  const [typeCatalog, setTypeCatalog] = (0, import_react32.useState)([]);
+		  const [loading, setLoading] = (0, import_react32.useState)(false);
+		  const [error, setError] = (0, import_react32.useState)(null);
+		  const offsetRef = (0, import_react32.useRef)(0);
+		  const seqRef = (0, import_react32.useRef)(0);
+		  const fetchPage = (0, import_react32.useCallback)(
 		    (next, offset, append) => {
 		      const token = ++seqRef.current;
 		      setLoading(true);
@@ -44727,7 +47202,7 @@ var __create = Object.create;
 		    setConds(next);
 		    fetchPage(next, 0, false);
 		  };
-		  (0, import_react31.useEffect)(() => {
+		  (0, import_react32.useEffect)(() => {
 		    fetchPage(CONDS0, 0, false);
 		  }, [fetchPage]);
 		  const onKey = (e) => {
@@ -44747,7 +47222,7 @@ var __create = Object.create;
 		        NInput,
 		        {
 		          style: { flex: "1 1 160px", minWidth: 140 },
-		          placeholder: "搜索记忆内容（关键词）…",
+		          placeholder: tr("搜索记忆内容（关键词）…"),
 		          value: input,
 		          onChange: (e) => setInput(e.target.value),
 		          onKeyDown: onKey
@@ -44759,10 +47234,10 @@ var __create = Object.create;
 		          className: "dsh-mem-input",
 		          value: typeSel,
 		          onChange: (e) => setTypeSel(e.target.value),
-		          title: "类型筛选",
+		          title: tr("类型筛选"),
 		          style: { maxWidth: 120 },
 		          children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "", children: "全部类型" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "", children: tr("全部类型") }),
 		            typeCatalog.map((c) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: c.id, children: c.label }, c.id))
 		          ]
 		        }
@@ -44773,40 +47248,49 @@ var __create = Object.create;
 		          className: "dsh-mem-input",
 		          value: retiredSel,
 		          onChange: (e) => setRetiredSel(e.target.value),
-		          title: "退场筛选",
+		          title: tr("退场筛选"),
 		          style: { maxWidth: 96 },
 		          children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "", children: "全部" }),
-		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "active", children: "仅活跃" }),
-		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "retired", children: "仅退场" })
+		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "", children: tr("全部") }),
+		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "active", children: tr("仅活跃") }),
+		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "retired", children: tr("仅退场") })
 		          ]
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(NButton, { onClick: search, title: "查询（Enter）", children: "查询" })
+		      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(NButton, { onClick: search, title: tr("查询（Enter）"), children: [
+		        tr("查询"),
+		        " "
+		      ] })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: "6px 2px" }, children: [
-		      total != null ? `共 ${total} 条 · ` : "",
-		      "已列 ",
+		      total != null ? tr("共 {p1} 条 ·", { p1: total }) : "",
+		      tr("已列"),
+		      " ",
 		      items.length,
-		      " 条",
-		      truncated ? " · 检索结果可能不完整" : "",
-		      loading ? " · 加载中…" : ""
+		      " ",
+		      tr("条"),
+		      " ",
+		      truncated ? tr("· 检索结果可能不完整") : "",
+		      loading ? tr("· 加载中…") : ""
 		    ] }),
 		    error && /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-accent)", padding: "4px 0" }, children: [
-		      "查询失败：",
+		      tr("查询失败："),
 		      error,
 		      " ",
-		      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(NButton, { onClick: () => fetchPage(conds, Math.max(0, offsetRef.current - items.length), false), children: "重试" })
+		      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(NButton, { onClick: () => fetchPage(conds, Math.max(0, offsetRef.current - items.length), false), children: tr("重试") })
 		    ] }),
 		    /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", border: "1px solid var(--dsh-mem-border)", borderRadius: 8 }, children: [
-		      items.length === 0 && !loading && !error ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { style: { padding: 16, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "没有符合条件的记忆。" }) : null,
+		      items.length === 0 && !loading && !error ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { padding: 16, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: [
+		        tr("没有符合条件的记忆。"),
+		        " "
+		      ] }) : null,
 		      items.map((r) => {
 		        const on = r.id === activeId;
 		        return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(
 		          "button",
 		          {
 		            onClick: () => onPick(r.id),
-		            title: r.retired ? "已退场（软删，可恢复）" : void 0,
+		            title: r.retired ? tr("已退场（软删，可恢复）") : void 0,
 		            style: {
 		              display: "block",
 		              width: "100%",
@@ -44837,38 +47321,43 @@ var __create = Object.create;
 		              /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "var(--dsh-mem-text-3)", marginTop: 4 }, children: [
 		                /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: labelOf(r.type) }),
 		                r.scene ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: r.scene }) : null,
-		                r.agingWeight != null ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { title: "老化权重（读路径衰减系数）", children: [
-		                  "老化 ",
+		                r.agingWeight != null ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { title: tr("老化权重（读路径衰减系数）"), children: [
+		                  tr("老化"),
+		                  " ",
 		                  Math.round(r.agingWeight * 100),
 		                  "%"
 		                ] }) : null,
 		                r.maturity ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { children: [
-		                  "成熟 ",
+		                  tr("成熟"),
+		                  " ",
 		                  r.maturity
 		                ] }) : null,
 		                r.usage && r.usage.used > 0 ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { children: [
-		                  "被用 ",
+		                  tr("被用"),
+		                  " ",
 		                  r.usage.used
 		                ] }) : null,
 		                /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: fmtTime(r.updatedAt) }),
-		                r.retired ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: "已退场" }) : null
+		                r.retired ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: tr("已退场") }) : null
 		              ] })
 		            ]
 		          },
 		          r.id
 		        );
 		      }),
-		      hasMore ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { style: { padding: 8, textAlign: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(NButton, { onClick: () => fetchPage(conds, offsetRef.current, true), disabled: loading, children: "加载更多" }) }) : null
+		      hasMore ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { style: { padding: 8, textAlign: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(NButton, { onClick: () => fetchPage(conds, offsetRef.current, true), disabled: loading, children: [
+		        tr("加载更多"),
+		        " "
+		      ] }) }) : null
 		    ] })
 		  ] });
 		}
 		
 		// client/src/explorer/Scene3D.tsx
-		var import_react32 = require("react");
+		var import_react33 = require("react");
 		
 		// client/src/explorer/projection.ts
 		var FOCAL = 1100;
-		var LABEL_SKIP_DIST = 2600;
 		var CAM_DEFAULT = { yaw: 0.45, pitch: -0.3, dist: 1200, panX: 0, panY: 0 };
 		var DIST_MIN = 380;
 		var DIST_MAX = 3200;
@@ -45028,10 +47517,6 @@ var __create = Object.create;
 		  }
 		  return null;
 		}
-		var BREATH_PERIOD_MS = 260;
-		function phaseOf(id) {
-		  return hash322(id) % 6283 / 1e3;
-		}
 		function easeInOut(p) {
 		  const k = Math.min(1, Math.max(0, p));
 		  return k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
@@ -45067,40 +47552,39 @@ var __create = Object.create;
 		}
 		var SPRITE_PX = 64;
 		function useLatest(fn) {
-		  const ref = (0, import_react32.useRef)(fn);
+		  const ref = (0, import_react33.useRef)(fn);
 		  ref.current = fn;
 		  return ((...args) => ref.current(...args));
 		}
 		function Scene3D(props) {
 		  const { full, onPick: onPickRaw, emphasisId, height = 620 } = props;
 		  const onPick = useLatest(onPickRaw);
-		  const hostRef = (0, import_react32.useRef)(null);
-		  const canvasRef = (0, import_react32.useRef)(null);
-		  const [glowOn, setGlowOn] = (0, import_react32.useState)(true);
-		  const [edgesOn, setEdgesOn] = (0, import_react32.useState)(true);
-		  const [labelsOn, setLabelsOn] = (0, import_react32.useState)(true);
-		  const [agingOn, setAgingOn] = (0, import_react32.useState)(true);
-		  const [pointSize, setPointSize] = (0, import_react32.useState)(2.2);
-		  const [driftOn, setDriftOn] = (0, import_react32.useState)(false);
-		  const [starry, setStarry] = (0, import_react32.useState)(true);
-		  const [twinkleOn, setTwinkleOn] = (0, import_react32.useState)(true);
-		  const camRef = (0, import_react32.useRef)({ ...CAM_DEFAULT });
-		  const modeRef = (0, import_react32.useRef)("cluster");
-		  const focusRef = (0, import_react32.useRef)(null);
-		  const hoverRef = (0, import_react32.useRef)(null);
-		  const [hoverInfo, setHoverInfo] = (0, import_react32.useState)(null);
-		  const [mode, setMode] = (0, import_react32.useState)("cluster");
-		  const dragRef = (0, import_react32.useRef)(null);
-		  const clickRef = (0, import_react32.useRef)(null);
-		  const emphasisRef = (0, import_react32.useRef)(emphasisId);
+		  const hostRef = (0, import_react33.useRef)(null);
+		  const canvasRef = (0, import_react33.useRef)(null);
+		  const [glowOn, setGlowOn] = (0, import_react33.useState)(true);
+		  const [edgesOn, setEdgesOn] = (0, import_react33.useState)(true);
+		  const [labelsOn, setLabelsOn] = (0, import_react33.useState)(true);
+		  const [agingOn, setAgingOn] = (0, import_react33.useState)(true);
+		  const [pointSize, setPointSize] = (0, import_react33.useState)(2.2);
+		  const [driftOn, setDriftOn] = (0, import_react33.useState)(false);
+		  const [starry, setStarry] = (0, import_react33.useState)(true);
+		  const camRef = (0, import_react33.useRef)({ ...CAM_DEFAULT });
+		  const modeRef = (0, import_react33.useRef)("cluster");
+		  const focusRef = (0, import_react33.useRef)(null);
+		  const hoverRef = (0, import_react33.useRef)(null);
+		  const [hoverInfo, setHoverInfo] = (0, import_react33.useState)(null);
+		  const [mode, setMode] = (0, import_react33.useState)("cluster");
+		  const dragRef = (0, import_react33.useRef)(null);
+		  const clickRef = (0, import_react33.useRef)(null);
+		  const emphasisRef = (0, import_react33.useRef)(emphasisId);
 		  emphasisRef.current = emphasisId;
-		  const wakeRef = (0, import_react32.useRef)(null);
-		  const degree = (0, import_react32.useMemo)(() => degreeMapOf(full), [full]);
-		  const edgeList = (0, import_react32.useMemo)(
+		  const dirtyRef = (0, import_react33.useRef)(true);
+		  const degree = (0, import_react33.useMemo)(() => degreeMapOf(full), [full]);
+		  const edgeList = (0, import_react33.useMemo)(
 		    () => full.edges.map((e) => ({ from: e.from, to: e.to, relation: e.relation, causal: e.causal })),
 		    [full]
 		  );
-		  const adj = (0, import_react32.useMemo)(() => {
+		  const adj = (0, import_react33.useMemo)(() => {
 		    const m = /* @__PURE__ */ new Map();
 		    for (const e of edgeList) {
 		      if (!m.has(e.from)) m.set(e.from, []);
@@ -45110,13 +47594,13 @@ var __create = Object.create;
 		    }
 		    return m;
 		  }, [edgeList]);
-		  const nodeById = (0, import_react32.useMemo)(() => new Map(full.nodes.map((n) => [n.id, n])), [full]);
-		  const nodeKeySeed = (0, import_react32.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
-		  const clusterLayout = (0, import_react32.useMemo)(() => buildClusterLayout(full.nodes.map((n) => ({ id: n.id, type: n.type }))), [full]);
-		  const layoutRef = (0, import_react32.useRef)(clusterLayout);
-		  const egoLayoutRef = (0, import_react32.useRef)(null);
-		  const transRef = (0, import_react32.useRef)(null);
-		  (0, import_react32.useEffect)(() => {
+		  const nodeById = (0, import_react33.useMemo)(() => new Map(full.nodes.map((n) => [n.id, n])), [full]);
+		  const nodeKeySeed = (0, import_react33.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
+		  const clusterLayout = (0, import_react33.useMemo)(() => buildClusterLayout(full.nodes.map((n) => ({ id: n.id, type: n.type }))), [full]);
+		  const layoutRef = (0, import_react33.useRef)(clusterLayout);
+		  const egoLayoutRef = (0, import_react33.useRef)(null);
+		  const transRef = (0, import_react33.useRef)(null);
+		  (0, import_react33.useEffect)(() => {
 		    layoutRef.current = clusterLayout;
 		    egoLayoutRef.current = null;
 		    transRef.current = null;
@@ -45124,7 +47608,7 @@ var __create = Object.create;
 		    focusRef.current = null;
 		    setMode("cluster");
 		  }, [clusterLayout]);
-		  (0, import_react32.useEffect)(() => {
+		  (0, import_react33.useEffect)(() => {
 		    if (!emphasisId || emphasisId === focusRef.current) return;
 		    if (!clusterLayout.has(emphasisId)) return;
 		    const egoL = buildEgoLayout(adj, emphasisId, EGO_HOPS_MAX2);
@@ -45136,11 +47620,10 @@ var __create = Object.create;
 		    camRef.current.dist = Math.min(3200, Math.max(380, EGO_HOPS_MAX2 * 300 * 1.55));
 		    camRef.current.panX = 0;
 		    camRef.current.panY = 0;
-		    wakeRef.current?.();
 		  }, [emphasisId, adj, clusterLayout]);
-		  const metasRef = (0, import_react32.useRef)(/* @__PURE__ */ new Map());
-		  const spritesRef = (0, import_react32.useRef)(/* @__PURE__ */ new Map());
-		  (0, import_react32.useEffect)(() => {
+		  const metasRef = (0, import_react33.useRef)(/* @__PURE__ */ new Map());
+		  const spritesRef = (0, import_react33.useRef)(/* @__PURE__ */ new Map());
+		  (0, import_react33.useEffect)(() => {
 		    const host = hostRef.current;
 		    if (!host) return;
 		    const colorCache = /* @__PURE__ */ new Map();
@@ -45173,39 +47656,20 @@ var __create = Object.create;
 		      })
 		    );
 		  }, [full, degree, pointSize]);
-		  (0, import_react32.useLayoutEffect)(() => {
+		  (0, import_react33.useLayoutEffect)(() => {
 		    const host = hostRef.current;
 		    const canvas = canvasRef.current;
 		    if (!host || !canvas) return;
 		    const ctx = canvas.getContext("2d");
 		    if (!ctx) return;
+		    dirtyRef.current = true;
 		    const buffer = document.createElement("canvas");
 		    const bctx = buffer.getContext("2d");
-		    const edgeCv = document.createElement("canvas");
-		    const ectx = edgeCv.getContext("2d");
-		    const nodeCv = document.createElement("canvas");
-		    const nctx = nodeCv.getContext("2d");
-		    let edgeDirty = true;
-		    let nodeDirty = true;
-		    let needsPresent = true;
-		    let lastActiveKey = "";
 		    let raf = 0;
-		    let running = false;
 		    let disposed = false;
 		    let vw = 0;
 		    let vh = 0;
 		    const dprRef = { current: 1 };
-		    let colEdge = "";
-		    let colCausal = "";
-		    let colText = "";
-		    let colStale = true;
-		    const refreshColors = () => {
-		      if (!colStale) return;
-		      colEdge = resolveColor2(host, "--dsh-mem-border-strong");
-		      colCausal = resolveColor2(host, "--dsh-mem-accent");
-		      colText = resolveColor2(host, "--dsh-mem-text-2");
-		      colStale = false;
-		    };
 		    const spriteFor = (color) => {
 		      const hit = spritesRef.current.get(color);
 		      if (hit) return hit;
@@ -45277,241 +47741,164 @@ var __create = Object.create;
 		      }
 		      return cv;
 		    };
-		    let sized = false;
 		    const resize = () => {
 		      const dpr = Math.min(2, window.devicePixelRatio || 1);
-		      const nextW = host.clientWidth || 640;
-		      const nextH = host.clientHeight || host.offsetHeight || height;
-		      if (sized && nextW === vw && nextH === vh && dpr === dprRef.current) return false;
-		      sized = true;
 		      dprRef.current = dpr;
-		      vw = nextW;
-		      vh = nextH;
+		      vw = host.clientWidth || 640;
+		      vh = host.clientHeight || host.offsetHeight || height;
 		      canvas.width = Math.round(vw * dpr);
 		      canvas.height = Math.round(vh * dpr);
 		      canvas.style.width = `${vw}px`;
 		      canvas.style.height = `${vh}px`;
 		      buffer.width = canvas.width;
 		      buffer.height = canvas.height;
-		      edgeCv.width = canvas.width;
-		      edgeCv.height = canvas.height;
-		      nodeCv.width = canvas.width;
-		      nodeCv.height = canvas.height;
-		      ectx.setTransform(dpr, 0, 0, dpr, 0, 0);
-		      nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		      bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		      bgCache = null;
-		      edgeDirty = true;
-		      nodeDirty = true;
-		      colStale = true;
-		      needsPresent = true;
-		      return true;
 		    };
 		    resize();
-		    const ro = new ResizeObserver(() => {
-		      if (resize()) presentNow();
-		    });
+		    const ro = new ResizeObserver(resize);
 		    ro.observe(host);
 		    const activeLayout = (now) => {
-		      const tr = transRef.current;
-		      if (!tr) return layoutRef.current;
-		      const k = (now - tr.start) / TRANSITION_MS;
+		      const tr2 = transRef.current;
+		      if (!tr2) return layoutRef.current;
+		      const k = (now - tr2.start) / TRANSITION_MS;
 		      if (k >= 1) {
-		        layoutRef.current = tr.to;
+		        layoutRef.current = tr2.to;
 		        transRef.current = null;
-		        return tr.to;
+		        return tr2.to;
 		      }
-		      return lerpLayout(tr.from, tr.to, k);
+		      return lerpLayout(tr2.from, tr2.to, k);
 		    };
 		    let lastProjected = [];
 		    const frame = (now) => {
-		      raf = 0;
 		      if (disposed) return;
-		      refreshColors();
 		      const cam = camRef.current;
 		      const layout = activeLayout(now);
 		      const ego = modeRef.current === "ego";
 		      const metas = metasRef.current;
 		      const hover = hoverRef.current;
 		      const focus = focusRef.current;
-		      const emph = emphasisRef.current;
-		      if (transRef.current !== null || driftOn && !ego) {
-		        edgeDirty = true;
-		        nodeDirty = true;
+		      let nbSet = null;
+		      if (hover) {
+		        nbSet = /* @__PURE__ */ new Set([hover, ...adj.get(hover) ?? []]);
+		        if (focus && focus !== hover) nbSet.add(focus);
 		      }
 		      const projected = projectAll(layout, cam, { w: vw, h: vh }, void 0, now, driftOn && !ego);
 		      lastProjected = projected;
-		      const activeKey = `${hover ?? ""}|${focus ?? ""}|${emph ?? ""}`;
-		      if (activeKey !== lastActiveKey) {
-		        lastActiveKey = activeKey;
-		        nodeDirty = true;
+		      const c = bctx;
+		      c.clearRect(0, 0, vw, vh);
+		      if (!bgCache || bgCacheW !== vw || bgCacheH !== vh || bgCacheStarry !== starry) {
+		        bgCache = bakeBg(vw, vh, starry, nodeKeySeed);
+		        bgCacheW = vw;
+		        bgCacheH = vh;
+		        bgCacheStarry = starry;
 		      }
-		      const activeIds = /* @__PURE__ */ new Set();
-		      if (hover) activeIds.add(hover);
-		      if (focus) activeIds.add(focus);
-		      if (emph) activeIds.add(emph);
+		      c.drawImage(bgCache, 0, 0);
 		      const pos = new Map(projected.map((p) => [p.id, p]));
-		      const edgeBase = colEdge;
-		      const causalC = colCausal;
-		      if (edgeDirty) {
-		        const c = ectx;
-		        c.clearRect(0, 0, vw, vh);
-		        if (!bgCache || bgCacheW !== vw || bgCacheH !== vh || bgCacheStarry !== starry) {
-		          bgCache = bakeBg(vw, vh, starry, nodeKeySeed);
-		          bgCacheW = vw;
-		          bgCacheH = vh;
-		          bgCacheStarry = starry;
-		        }
-		        c.drawImage(bgCache, 0, 0);
-		        if (edgesOn) {
-		          c.globalCompositeOperation = "source-over";
-		          for (const e of edgeList) {
-		            const a = pos.get(e.from);
-		            const b = pos.get(e.to);
-		            if (!a || !b) continue;
-		            const avgF = (a.f + b.f) / 2;
-		            c.strokeStyle = e.causal ? causalC : edgeBase;
-		            c.globalAlpha = Math.min(0.9, Math.max(0.05, avgF * 0.34));
-		            c.lineWidth = e.causal ? 1.2 : 0.7;
-		            c.beginPath();
-		            c.moveTo(a.x, a.y);
-		            c.lineTo(b.x, b.y);
-		            c.stroke();
-		          }
-		          c.globalAlpha = 1;
-		        }
-		        edgeDirty = false;
-		        needsPresent = true;
-		      }
-		      if (nodeDirty) {
-		        const c = nctx;
-		        c.clearRect(0, 0, vw, vh);
-		        for (const p of projected) {
-		          if (activeIds.has(p.id)) continue;
-		          const m = metas.get(p.id);
-		          if (!m) continue;
-		          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
-		          const r = Math.max(0.8, m.base * p.f * 1.75);
-		          if (glowOn) {
-		            c.globalCompositeOperation = "lighter";
-		            c.globalAlpha = alpha * 0.5;
-		            const sp = spriteFor(m.color);
-		            const gr = r * 3.4;
-		            c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
-		          }
-		          c.globalCompositeOperation = "source-over";
-		          c.globalAlpha = Math.min(1, alpha + 0.15);
-		          c.fillStyle = m.color;
+		      if (edgesOn) {
+		        const edgeBase = resolveColor2(host, "--dsh-mem-border-strong");
+		        const causalC = resolveColor2(host, "--dsh-mem-accent");
+		        c.globalCompositeOperation = "source-over";
+		        for (const e of edgeList) {
+		          const a = pos.get(e.from);
+		          const b = pos.get(e.to);
+		          if (!a || !b) continue;
+		          const related = !hover || nbSet.has(e.from) && nbSet.has(e.to) && (e.from === hover || e.to === hover);
+		          if (hover && !related) continue;
+		          const avgF = (a.f + b.f) / 2;
+		          const alpha = Math.min(0.9, Math.max(0.05, avgF * 0.34));
+		          c.strokeStyle = e.causal ? causalC : edgeBase;
+		          c.globalAlpha = hover ? Math.min(0.9, alpha + 0.25) : alpha;
+		          c.lineWidth = e.causal ? 1.2 : 0.7;
 		          c.beginPath();
-		          c.arc(p.x, p.y, r, 0, Math.PI * 2);
-		          c.fill();
+		          c.moveTo(a.x, a.y);
+		          c.lineTo(b.x, b.y);
+		          c.stroke();
 		        }
 		        c.globalAlpha = 1;
-		        if (labelsOn && cam.dist <= LABEL_SKIP_DIST) {
-		          const textColor = colText;
-		          const cand = projected.filter((p) => metas.has(p.id) && !activeIds.has(p.id)).map((p) => {
-		            const m = metas.get(p.id);
-		            return { id: p.id, x: p.x, y: p.y, f: p.f, rank: m.degree * 10 + (m.aging ?? 1) * 5 + hash322(p.id) % 7 };
-		          });
-		          const widthOf = (id) => {
-		            const m = metas.get(id);
-		            return m ? clipByWidth(m.name).length * 6.4 : 0;
+		      }
+		      for (const p of projected) {
+		        const m = metas.get(p.id);
+		        if (!m) continue;
+		        const isFocus = p.id === focus || p.id === emphasisRef.current;
+		        const isHover = p.id === hover;
+		        const dim = hover !== null && nbSet !== null && !nbSet.has(p.id) && !isFocus;
+		        let alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
+		        if (dim) alpha = Math.min(alpha, 0.12);
+		        const r = Math.max(0.8, m.base * p.f * 1.75 * (isFocus || isHover ? 1.9 : 1));
+		        if (glowOn) {
+		          c.globalCompositeOperation = "lighter";
+		          c.globalAlpha = alpha * 0.5;
+		          const sp = spriteFor(m.color);
+		          const gr = r * 3.4;
+		          c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
+		        }
+		        c.globalCompositeOperation = "source-over";
+		        c.globalAlpha = Math.min(1, alpha + 0.15);
+		        c.fillStyle = m.color;
+		        c.beginPath();
+		        c.arc(p.x, p.y, r, 0, Math.PI * 2);
+		        c.fill();
+		      }
+		      c.globalAlpha = 1;
+		      if (labelsOn) {
+		        const textColor = resolveColor2(host, "--dsh-mem-text-2");
+		        const inSet = /* @__PURE__ */ new Set();
+		        const cand = projected.filter((p) => metas.has(p.id)).map((p) => {
+		          const m = metas.get(p.id);
+		          const hot = p.id === focus || p.id === hover || p.id === emphasisRef.current;
+		          if (hot) inSet.add(p.id);
+		          return {
+		            id: p.id,
+		            x: p.x,
+		            y: p.y,
+		            f: p.f,
+		            rank: (hot ? 1e6 : 0) + m.degree * 10 + (m.aging ?? 1) * 5 + hash322(p.id) % 7
 		          };
-		          const picked = new Set(pickLabels(cand, labelBudget(cam.dist), widthOf, vw));
-		          c.globalCompositeOperation = "source-over";
-		          c.fillStyle = textColor;
-		          c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
-		          for (const p of projected) {
-		            if (!picked.has(p.id)) continue;
-		            c.globalAlpha = Math.min(1, Math.max(0.35, p.f));
-		            c.fillText(clipByWidth(metas.get(p.id).name), p.x + 7, p.y - 5);
-		          }
-		          c.globalAlpha = 1;
-		        }
-		        nodeDirty = false;
-		        needsPresent = true;
-		      }
-		      const breathing = twinkleOn && activeIds.size > 0;
-		      if (breathing) {
-		        const c = bctx;
-		        c.setTransform(1, 0, 0, 1, 0, 0);
-		        c.drawImage(edgeCv, 0, 0);
-		        c.drawImage(nodeCv, 0, 0);
-		        c.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
-		        for (const id of activeIds) {
-		          const p = pos.get(id);
+		        });
+		        const widthOf = (id) => {
 		          const m = metas.get(id);
-		          if (!p || !m) continue;
-		          const tw = 0.5 + 0.5 * Math.sin(now / BREATH_PERIOD_MS + phaseOf(id));
-		          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
-		          const r = Math.max(0.8, m.base * p.f * 1.75 * 1.9);
-		          if (glowOn) {
-		            c.globalCompositeOperation = "lighter";
-		            c.globalAlpha = Math.min(1, alpha * 0.5 + tw * 0.4);
-		            const sp = spriteFor(m.color);
-		            const gr = r * 3.4 * (1 + tw * 0.45);
-		            c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
-		          }
-		          c.globalCompositeOperation = "source-over";
-		          c.globalAlpha = Math.min(1, alpha + 0.15 + tw * 0.25);
-		          c.fillStyle = m.color;
-		          c.beginPath();
-		          c.arc(p.x, p.y, r, 0, Math.PI * 2);
-		          c.fill();
-		          if (labelsOn) {
-		            c.globalAlpha = 1;
-		            c.fillStyle = colText;
-		            c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
-		            c.fillText(clipByWidth(m.name), p.x + 7, p.y - 5);
-		          }
+		          return m ? clipByWidth(m.name).length * 6.4 : 0;
+		        };
+		        const picked = /* @__PURE__ */ new Set([...pickLabels(cand, labelBudget(cam.dist), widthOf, vw), ...inSet]);
+		        c.globalCompositeOperation = "source-over";
+		        c.fillStyle = textColor;
+		        c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+		        for (const p of projected) {
+		          if (!picked.has(p.id)) continue;
+		          const m = metas.get(p.id);
+		          const dim = hover !== null && nbSet !== null && !nbSet.has(p.id);
+		          c.globalAlpha = dim ? 0.18 : Math.min(1, Math.max(0.35, p.f));
+		          c.fillText(clipByWidth(m.name), p.x + 7, p.y - 5);
 		        }
-		        if (hover && edgesOn) {
-		          c.font = '10px system-ui, "Microsoft YaHei", sans-serif';
-		          const used = /* @__PURE__ */ new Set();
-		          const related = edgeList.filter((e) => (e.from === hover || e.to === hover) && pos.has(e.from) && pos.has(e.to)).sort((a, b) => Number(b.causal) - Number(a.causal));
-		          for (const e of related.slice(0, 12)) {
-		            const a = pos.get(e.from);
-		            const b = pos.get(e.to);
-		            const mx = (a.x + b.x) / 2;
-		            const my = (a.y + b.y) / 2;
-		            const cell = Math.floor(mx / 72) * 1e3 + Math.floor(my / 13);
-		            if (used.has(cell)) continue;
-		            used.add(cell);
-		            c.fillStyle = e.causal ? causalC : edgeBase;
-		            c.globalAlpha = 0.92;
-		            c.fillText(e.relation, mx, my);
-		          }
-		          c.globalAlpha = 1;
+		        c.globalAlpha = 1;
+		      }
+		      if (hover && edgesOn) {
+		        const causalC = resolveColor2(host, "--dsh-mem-accent");
+		        const edgeBase = resolveColor2(host, "--dsh-mem-border-strong");
+		        c.font = '10px system-ui, "Microsoft YaHei", sans-serif';
+		        const used = /* @__PURE__ */ new Set();
+		        const related = edgeList.filter((e) => (e.from === hover || e.to === hover) && pos.has(e.from) && pos.has(e.to)).sort((a, b) => Number(b.causal) - Number(a.causal));
+		        for (const e of related.slice(0, 12)) {
+		          const a = pos.get(e.from);
+		          const b = pos.get(e.to);
+		          const mx = (a.x + b.x) / 2;
+		          const my = (a.y + b.y) / 2;
+		          const cell = Math.floor(mx / 72) * 1e3 + Math.floor(my / 13);
+		          if (used.has(cell)) continue;
+		          used.add(cell);
+		          c.fillStyle = e.causal ? causalC : edgeBase;
+		          c.globalAlpha = 0.92;
+		          c.fillText(e.relation, mx, my);
 		        }
-		        ctx.setTransform(1, 0, 0, 1, 0, 0);
-		        ctx.drawImage(buffer, 0, 0);
-		        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
-		        needsPresent = false;
-		      } else if (needsPresent) {
-		        ctx.setTransform(1, 0, 0, 1, 0, 0);
-		        ctx.drawImage(edgeCv, 0, 0);
-		        ctx.drawImage(nodeCv, 0, 0);
-		        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
-		        needsPresent = false;
+		        c.globalAlpha = 1;
 		      }
-		      running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || driftOn && !ego;
-		      if (running) raf = requestAnimationFrame(frame);
+		      ctx.setTransform(1, 0, 0, 1, 0, 0);
+		      ctx.drawImage(buffer, 0, 0);
+		      ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+		      raf = requestAnimationFrame(frame);
 		    };
-		    const presentNow = () => {
-		      if (disposed) return;
-		      if (raf) cancelAnimationFrame(raf);
-		      raf = 0;
-		      running = false;
-		      frame(performance.now());
-		    };
-		    const wake = () => {
-		      if (!running && !disposed) {
-		        running = true;
-		        raf = requestAnimationFrame(frame);
-		      }
-		    };
-		    wakeRef.current = wake;
 		    frame(performance.now());
 		    const toLocal = (ev) => {
 		      const rect = canvas.getBoundingClientRect();
@@ -45535,15 +47922,13 @@ var __create = Object.create;
 		        }
 		        drag.x = pt.x;
 		        drag.y = pt.y;
-		        edgeDirty = true;
-		        nodeDirty = true;
-		        wake();
+		        dirtyRef.current = true;
 		        return;
 		      }
 		      const hit = pickNearest(lastProjected, pt.x, pt.y, PICK_PX);
 		      if (hit !== hoverRef.current) {
 		        hoverRef.current = hit;
-		        wake();
+		        dirtyRef.current = true;
 		        setHoverInfo(hit ? { id: hit, x: pt.x, y: pt.y } : null);
 		      } else if (hit) {
 		        setHoverInfo({ id: hit, x: pt.x, y: pt.y });
@@ -45596,9 +47981,7 @@ var __create = Object.create;
 		    const onWheel = (ev) => {
 		      ev.preventDefault();
 		      camRef.current.dist = zoomBy(camRef.current.dist, ev.deltaY);
-		      edgeDirty = true;
-		      nodeDirty = true;
-		      wake();
+		      dirtyRef.current = true;
 		    };
 		    const onKey = (ev) => {
 		      if (ev.key === "Enter" && hoverRef.current) onPick(hoverRef.current);
@@ -45624,7 +48007,6 @@ var __create = Object.create;
 		    return () => {
 		      disposed = true;
 		      cancelAnimationFrame(raf);
-		      wakeRef.current = null;
 		      ro.disconnect();
 		      canvas.removeEventListener("mousedown", onDown);
 		      window.removeEventListener("mousemove", onMove);
@@ -45633,7 +48015,7 @@ var __create = Object.create;
 		      canvas.removeEventListener("mouseleave", onLeave);
 		      window.removeEventListener("keydown", onKey);
 		    };
-		  }, [full, edgeList, adj, clusterLayout, glowOn, edgesOn, labelsOn, agingOn, driftOn, twinkleOn, starry, nodeKeySeed, pointSize, height, onPick]);
+		  }, [full, edgeList, adj, clusterLayout, glowOn, edgesOn, labelsOn, agingOn, driftOn, starry, nodeKeySeed, height, onPick]);
 		  const hoverMeta = hoverInfo ? metasRef.current.get(hoverInfo.id) : null;
 		  const ui = starry ? {
 		    barBg: "rgba(10, 13, 22, 0.72)",
@@ -45664,12 +48046,16 @@ var __create = Object.create;
 		      {
 		        style: { position: "absolute", top: 8, left: 8, fontSize: 11, color: ui.dim, background: ui.barBg, border: ui.border, borderRadius: 8, padding: "4px 8px", pointerEvents: "none" },
 		        children: mode === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { children: [
-		          "ego 壳层 · ",
-		          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("b", { style: { color: ui.accent }, children: (focusRef.current ? nodeById.get(focusRef.current)?.name : null) ?? "焦点" }),
-		          " 在第 0 层，第 k 跳在第 k 层",
+		          tr("ego 壳层 ·"),
+		          " ",
+		          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("b", { style: { color: ui.accent }, children: (focusRef.current ? nodeById.get(focusRef.current)?.name : null) ?? tr("焦点") }),
+		          " ",
+		          tr("在第 0 层，第 k 跳在第 k 层"),
+		          " ",
 		          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("br", {}),
-		          "点焦点/Esc 回全图 · 双击/Enter 打开记录"
-		        ] }) : /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: "左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录" })
+		          tr("点焦点/Esc 回全图 · 双击/Enter 打开记录"),
+		          " "
+		        ] }) : /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: tr("左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录") })
 		      }
 		    ),
 		    hoverInfo && hoverMeta ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
@@ -45693,13 +48079,16 @@ var __create = Object.create;
 		          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("div", { style: { fontWeight: 600, color: "var(--dsh-mem-text-1)" }, children: hoverMeta.name }),
 		          /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { children: [
 		            hoverMeta.type,
-		            " · 关系 ",
+		            " ",
+		            tr("· 关系"),
+		            " ",
 		            hoverMeta.degree,
-		            " 条",
-		            hoverMeta.aging != null ? ` · 老化 ${hoverMeta.aging.toFixed(2)}` : ""
+		            " ",
+		            tr("条"),
+		            hoverMeta.aging != null ? tr("· 老化 {p1}", { p1: hoverMeta.aging.toFixed(2) }) : ""
 		          ] }),
 		          hoverMeta.source ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { style: { color: "var(--dsh-mem-text-3)" }, children: [
-		            "出处：",
+		            tr("出处："),
 		            hoverMeta.source
 		          ] }) : null
 		        ]
@@ -45710,18 +48099,21 @@ var __create = Object.create;
 		      {
 		        style: { position: "absolute", bottom: 8, left: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", background: ui.barBg, border: ui.border, borderRadius: 10, padding: "4px 8px" },
 		        children: [
-		          toggle("辉光", glowOn, setGlowOn),
-		          toggle("边", edgesOn, setEdgesOn),
-		          toggle("标签", labelsOn, setLabelsOn),
-		          toggle("老化亮度", agingOn, setAgingOn),
-		          toggle("呼吸", twinkleOn, setTwinkleOn),
-		          toggle("漂移", driftOn, setDriftOn),
-		          toggle(starry ? "星空底" : "白底", starry, setStarry),
+		          toggle(tr("辉光"), glowOn, setGlowOn),
+		          toggle(tr("边"), edgesOn, setEdgesOn),
+		          toggle(tr("标签"), labelsOn, setLabelsOn),
+		          toggle(tr("老化亮度"), agingOn, setAgingOn),
+		          toggle(tr("漂移"), driftOn, setDriftOn),
+		          toggle(starry ? tr("星空底") : tr("白底"), starry, setStarry),
 		          /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4 }, children: [
-		            "点",
+		            tr("点"),
+		            " ",
 		            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("input", { type: "range", min: 1.2, max: 4, step: 0.2, value: pointSize, onChange: (e) => setPointSize(Number(e.target.value)) })
 		          ] }),
-		          mode === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(NButton, { onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })), title: "回到全图", style: { color: ui.text, borderColor: ui.border }, children: "回全图" }) : null
+		          mode === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(NButton, { onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })), title: tr("回到全图"), style: { color: ui.text, borderColor: ui.border }, children: [
+		            tr("回全图"),
+		            " "
+		          ] }) : null
 		        ]
 		      }
 		    )
@@ -45734,38 +48126,39 @@ var __create = Object.create;
 		var DETAIL_DEFAULT = 380;
 		var DETAIL_MAX_RATIO = 0.55;
 		var LEGEND_TYPES = [
-		  ["person", "人", "--dsh-mem-chart-1"],
-		  ["project", "项目", "--dsh-mem-chart-2"],
-		  ["organization", "组织", "--dsh-mem-chart-3"],
-		  ["tool", "工具", "--dsh-mem-chart-4"],
-		  ["place", "地点", "--dsh-mem-chart-5"]
+		  ["person", tr("人"), "--dsh-mem-chart-1"],
+		  ["project", tr("项目"), "--dsh-mem-chart-2"],
+		  ["organization", tr("组织"), "--dsh-mem-chart-3"],
+		  ["tool", tr("工具"), "--dsh-mem-chart-4"],
+		  ["place", tr("地点"), "--dsh-mem-chart-5"]
 		];
 		function ExplorerPage(props) {
+		  useLocaleRevision();
 		  const { rpc, onClose, canvasHeight = 620 } = props;
-		  const [full, setFull] = (0, import_react33.useState)(null);
-		  const [stats, setStats] = (0, import_react33.useState)(null);
-		  const [graphError, setGraphError] = (0, import_react33.useState)(null);
-		  const [graphLoading, setGraphLoading] = (0, import_react33.useState)(true);
-		  const [recordId, setRecordId] = (0, import_react33.useState)(null);
-		  const [links, setLinks] = (0, import_react33.useState)(null);
-		  const [linksLoading, setLinksLoading] = (0, import_react33.useState)(false);
-		  const [linksError, setLinksError] = (0, import_react33.useState)(null);
-		  const [emphasisId, setEmphasisId] = (0, import_react33.useState)(void 0);
-		  const [view, setView] = (0, import_react33.useState)("3d");
-		  const [egoRoot, setEgoRoot] = (0, import_react33.useState)(null);
-		  const [searchText, setSearchText] = (0, import_react33.useState)("");
-		  const [searchMiss, setSearchMiss] = (0, import_react33.useState)(false);
-		  const [searchOpen, setSearchOpen] = (0, import_react33.useState)(false);
-		  const linksSeq = (0, import_react33.useRef)(0);
-		  const [mode, setMode] = (0, import_react33.useState)("query");
-		  const [entryPane, setEntryPane] = (0, import_react33.useState)(false);
-		  const [detailOpen, setDetailOpen] = (0, import_react33.useState)(false);
-		  const [detailW, setDetailW] = (0, import_react33.useState)(DETAIL_DEFAULT);
-		  const containerRef = (0, import_react33.useRef)(null);
-		  const dragWRef = (0, import_react33.useRef)(null);
-		  const modeRef = (0, import_react33.useRef)(mode);
+		  const [full, setFull] = (0, import_react34.useState)(null);
+		  const [stats, setStats] = (0, import_react34.useState)(null);
+		  const [graphError, setGraphError] = (0, import_react34.useState)(null);
+		  const [graphLoading, setGraphLoading] = (0, import_react34.useState)(true);
+		  const [recordId, setRecordId] = (0, import_react34.useState)(null);
+		  const [links, setLinks] = (0, import_react34.useState)(null);
+		  const [linksLoading, setLinksLoading] = (0, import_react34.useState)(false);
+		  const [linksError, setLinksError] = (0, import_react34.useState)(null);
+		  const [emphasisId, setEmphasisId] = (0, import_react34.useState)(void 0);
+		  const [view, setView] = (0, import_react34.useState)("3d");
+		  const [egoRoot, setEgoRoot] = (0, import_react34.useState)(null);
+		  const [searchText, setSearchText] = (0, import_react34.useState)("");
+		  const [searchMiss, setSearchMiss] = (0, import_react34.useState)(false);
+		  const [searchOpen, setSearchOpen] = (0, import_react34.useState)(false);
+		  const linksSeq = (0, import_react34.useRef)(0);
+		  const [mode, setMode] = (0, import_react34.useState)("query");
+		  const [entryPane, setEntryPane] = (0, import_react34.useState)(false);
+		  const [detailOpen, setDetailOpen] = (0, import_react34.useState)(false);
+		  const [detailW, setDetailW] = (0, import_react34.useState)(DETAIL_DEFAULT);
+		  const containerRef = (0, import_react34.useRef)(null);
+		  const dragWRef = (0, import_react34.useRef)(null);
+		  const modeRef = (0, import_react34.useRef)(mode);
 		  modeRef.current = mode;
-		  const startDrag = (0, import_react33.useCallback)((ev) => {
+		  const startDrag = (0, import_react34.useCallback)((ev) => {
 		    ev.preventDefault();
 		    dragWRef.current = { startX: ev.clientX, startW: detailW };
 		    const onMove = (e) => {
@@ -45783,8 +48176,8 @@ var __create = Object.create;
 		    window.addEventListener("mousemove", onMove);
 		    window.addEventListener("mouseup", onUp);
 		  }, [detailW]);
-		  const labels = (0, import_react33.useRef)(/* @__PURE__ */ new Map());
-		  const loadGraph = (0, import_react33.useCallback)(() => {
+		  const labels = (0, import_react34.useRef)(/* @__PURE__ */ new Map());
+		  const loadGraph = (0, import_react34.useCallback)(() => {
 		    setGraphLoading(true);
 		    setGraphError(null);
 		    setEgoRoot(null);
@@ -45794,13 +48187,13 @@ var __create = Object.create;
 		      setFull(r.value.full ?? { nodes: [], edges: [], truncated: false });
 		    }).catch((e) => setGraphError(String(e?.message ?? e))).finally(() => setGraphLoading(false));
 		  }, [rpc]);
-		  (0, import_react33.useEffect)(() => {
+		  (0, import_react34.useEffect)(() => {
 		    loadGraph();
 		  }, [loadGraph]);
-		  const remember = (0, import_react33.useCallback)((items) => {
+		  const remember = (0, import_react34.useCallback)((items) => {
 		    for (const it of items) if (it.content) labels.current.set(it.id, it.content);
 		  }, []);
-		  const openRecord = (0, import_react33.useCallback)(
+		  const openRecord = (0, import_react34.useCallback)(
 		    (id, opts) => {
 		      const token = ++linksSeq.current;
 		      setRecordId(id);
@@ -45827,7 +48220,7 @@ var __create = Object.create;
 		    },
 		    [rpc, remember]
 		  );
-		  const onPickNode = (0, import_react33.useCallback)(
+		  const onPickNode = (0, import_react34.useCallback)(
 		    (nodeId) => {
 		      setEmphasisId(nodeId);
 		      setDetailOpen(true);
@@ -45846,18 +48239,18 @@ var __create = Object.create;
 		    },
 		    [links, openRecord, rpc]
 		  );
-		  const onPickNode2d = (0, import_react33.useCallback)(
+		  const onPickNode2d = (0, import_react34.useCallback)(
 		    (nodeId) => {
 		      setEgoRoot(nodeId);
 		      onPickNode(nodeId);
 		    },
 		    [onPickNode]
 		  );
-		  const graphData = (0, import_react33.useMemo)(
+		  const graphData = (0, import_react34.useMemo)(
 		    () => full && egoRoot ? egoSubgraph2(full, egoRoot) : full,
 		    [full, egoRoot]
 		  );
-		  const locateNode = (0, import_react33.useCallback)(
+		  const locateNode = (0, import_react34.useCallback)(
 		    (nodeId) => {
 		      setEmphasisId(nodeId);
 		      if (view === "2d") setEgoRoot(nodeId);
@@ -45865,13 +48258,13 @@ var __create = Object.create;
 		    },
 		    [view]
 		  );
-		  const searchHits = (0, import_react33.useMemo)(() => {
+		  const searchHits = (0, import_react34.useMemo)(() => {
 		    const q = searchText.trim().toLowerCase();
 		    if (!q || !full) return [];
 		    const hits = full.nodes.filter((n) => n.name.toLowerCase().includes(q));
 		    return hits.slice(0, 200);
 		  }, [searchText, full]);
-		  const locateFirstHit = (0, import_react33.useCallback)(() => {
+		  const locateFirstHit = (0, import_react34.useCallback)(() => {
 		    const q = searchText.trim().toLowerCase();
 		    if (!q || !full) return;
 		    const hit = full.nodes.find((n) => n.name.toLowerCase().includes(q));
@@ -45883,7 +48276,7 @@ var __create = Object.create;
 		    setSearchMiss(false);
 		    locateNode(hit.id);
 		  }, [searchText, full, locateNode]);
-		  const jumpToGraph = (0, import_react33.useCallback)(
+		  const jumpToGraph = (0, import_react34.useCallback)(
 		    (target) => {
 		      const root = links?.entities[0]?.id;
 		      setView(target);
@@ -45896,25 +48289,26 @@ var __create = Object.create;
 		    },
 		    [links]
 		  );
-		  const backToEntry = (0, import_react33.useCallback)(() => {
+		  const backToEntry = (0, import_react34.useCallback)(() => {
 		    setMode("query");
 		    setEntryPane(true);
 		  }, []);
-		  const labelOfRecord = (0, import_react33.useCallback)((id) => labels.current.get(id) ?? id.slice(0, 10), []);
+		  const labelOfRecord = (0, import_react34.useCallback)((id) => labels.current.get(id) ?? id.slice(0, 10), []);
 		  const building = stats && stats.jobsTotal > 0 && stats.pendingJobs > 0;
-		  const summary = (0, import_react33.useMemo)(() => {
-		    if (!stats) return "统计未到";
+		  const summary = (0, import_react34.useMemo)(() => {
+		    if (!stats) return tr("统计未到");
 		    const drawn = graphData ? graphData.nodes.length : 0;
-		    const egoNote = egoRoot ? ` · ego ≤3 跳（${drawn} 节点）` : "";
-		    const cut = graphData?.truncated ? "（已截断，仅画部分）" : "";
-		    return `节点 ${drawn}/${stats.nodes} · 边 ${graphData ? graphData.edges.length : 0}/${stats.edges} · 因果边 ${stats.causalEdges}${cut}${egoNote}`;
+		    const egoNote = egoRoot ? tr("· ego ≤3 跳（{p1} 节点）", { p1: drawn }) : "";
+		    const cut = graphData?.truncated ? tr("（已截断，仅画部分）") : "";
+		    return tr("节点 {p1}/{p2} · 边 {p3}/{p4} · 因果边 {p5}{p6}{p7}", { p1: drawn, p2: stats.nodes, p3: graphData ? graphData.edges.length : 0, p4: stats.edges, p5: stats.causalEdges, p6: cut, p7: egoNote });
 		  }, [stats, graphData, egoRoot]);
 		  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { ref: containerRef, style: { display: "flex", flexDirection: "column", gap: 8, padding: 12, height: "calc(100vh - 48px)", minHeight: 0 }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("h2", { style: { margin: 0, fontSize: 16 }, children: "记忆库" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("h2", { style: { margin: 0, fontSize: 16 }, children: tr("记忆库") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: summary }),
-		      building ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { fontSize: 12, color: "var(--dsh-mem-accent)" }, title: "图谱投影进行中", children: [
-		        "构建中 ",
+		      building ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { fontSize: 12, color: "var(--dsh-mem-accent)" }, title: tr("图谱投影进行中"), children: [
+		        tr("构建中"),
+		        " ",
 		        stats ? stats.jobsTotal - stats.pendingJobs : 0,
 		        "/",
 		        stats?.jobsTotal ?? 0
@@ -45929,7 +48323,7 @@ var __create = Object.create;
 		          ),
 		          zh
 		        ] }, t)),
-		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { title: "亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧", children: "亮度=老化" })
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { title: tr("亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧"), children: tr("亮度=老化") })
 		      ] }) : null,
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { flex: 1 } }),
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { display: "inline-flex", border: "1px solid var(--dsh-mem-border)", borderRadius: 6, overflow: "hidden", fontSize: 12 }, children: [
@@ -45938,7 +48332,7 @@ var __create = Object.create;
 		          {
 		            onClick: () => setMode("query"),
 		            style: { padding: "3px 12px", cursor: "pointer", background: mode === "query" ? "var(--dsh-mem-accent)" : "transparent", color: mode === "query" ? "#fff" : "var(--dsh-mem-text-2)" },
-		            children: "查询"
+		            children: tr("查询")
 		          }
 		        ),
 		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
@@ -45946,7 +48340,7 @@ var __create = Object.create;
 		          {
 		            onClick: () => setMode("graph"),
 		            style: { padding: "3px 12px", cursor: "pointer", background: mode === "graph" ? "var(--dsh-mem-accent)" : "transparent", color: mode === "graph" ? "#fff" : "var(--dsh-mem-text-2)" },
-		            children: "图"
+		            children: tr("图")
 		          }
 		        )
 		      ] }),
@@ -45966,7 +48360,7 @@ var __create = Object.create;
 		                if (e.key === "Enter") locateFirstHit();
 		                if (e.key === "Escape") setSearchOpen(false);
 		              },
-		              placeholder: searchMiss ? "未命中该实体" : "搜实体名…",
+		              placeholder: searchMiss ? tr("未命中该实体") : tr("搜实体名…"),
 		              style: { width: 160, fontSize: 12 }
 		            }
 		          ),
@@ -45992,7 +48386,7 @@ var __create = Object.create;
 		                  onMouseDown: (e) => e.preventDefault(),
 		                  onClick: () => locateNode(n.id),
 		                  style: { padding: "5px 10px", fontSize: 12, cursor: "pointer", display: "flex", gap: 6, alignItems: "center" },
-		                  title: `${n.type}${n.aging != null ? ` · 老化 ${n.aging.toFixed(2)}` : ""}`,
+		                  title: `${n.type}${n.aging != null ? tr("· 老化 {p1}", { p1: n.aging.toFixed(2) }) : ""}`,
 		                  children: [
 		                    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: n.name }),
 		                    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 10, color: "var(--dsh-mem-text-3)" }, children: n.type })
@@ -46002,7 +48396,7 @@ var __create = Object.create;
 		              ))
 		            }
 		          ) : null,
-		          searchOpen && searchText.trim() && searchHits.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		          searchOpen && searchText.trim() && searchHits.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
 		            "div",
 		            {
 		              style: {
@@ -46018,20 +48412,26 @@ var __create = Object.create;
 		                borderRadius: 8,
 		                color: "var(--dsh-mem-text-3)"
 		              },
-		              children: "图里没有匹配的实体"
+		              children: [
+		                tr("图里没有匹配的实体"),
+		                " "
+		              ]
 		            }
 		          ) : null
 		        ] }),
-		        view === "2d" && egoRoot ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		        view === "2d" && egoRoot ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
 		          NButton,
 		          {
 		            onClick: () => setEgoRoot(null),
-		            title: "退出 ego 聚焦，重新渲染全图",
+		            title: tr("退出 ego 聚焦，重新渲染全图"),
 		            style: { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" },
-		            children: "回全图"
+		            children: [
+		              tr("回全图"),
+		              " "
+		            ]
 		          }
 		        ) : null,
-		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
 		          NButton,
 		          {
 		            onClick: () => {
@@ -46040,9 +48440,12 @@ var __create = Object.create;
 		              }
 		              setDetailOpen((v) => !v);
 		            },
-		            title: "展开/收起右侧详情",
+		            title: tr("展开/收起右侧详情"),
 		            style: detailOpen ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : void 0,
-		            children: "详情"
+		            children: [
+		              tr("详情"),
+		              " "
+		            ]
 		          }
 		        ),
 		        /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { display: "inline-flex", border: "1px solid var(--dsh-mem-border)", borderRadius: 6, overflow: "hidden", fontSize: 12 }, children: [
@@ -46050,7 +48453,7 @@ var __create = Object.create;
 		            "span",
 		            {
 		              onClick: () => setView("2d"),
-		              title: "G6 力导星图",
+		              title: tr("G6 力导星图"),
 		              style: { padding: "3px 10px", cursor: "pointer", background: view === "2d" ? "var(--dsh-mem-accent)" : "transparent", color: view === "2d" ? "#fff" : "var(--dsh-mem-text-2)" },
 		              children: "2D"
 		            }
@@ -46059,15 +48462,15 @@ var __create = Object.create;
 		            "span",
 		            {
 		              onClick: () => setView("3d"),
-		              title: "Canvas 三维投影记忆海",
+		              title: tr("Canvas 三维投影记忆海"),
 		              style: { padding: "3px 10px", cursor: "pointer", background: view === "3d" ? "var(--dsh-mem-accent)" : "transparent", color: view === "3d" ? "#fff" : "var(--dsh-mem-text-2)" },
 		              children: "3D"
 		            }
 		          )
 		        ] })
 		      ] }) : null,
-		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, title: "重新拉取图与统计", children: "刷新图" }),
-		      onClose ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: onClose, title: "关闭", children: "关闭" }) : null
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, title: tr("重新拉取图与统计"), children: tr("刷新图") }),
+		      onClose ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: onClose, title: tr("关闭"), children: tr("关闭") }) : null
 		    ] }),
 		    mode === "query" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", flex: 1, minHeight: 0, gap: 0 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { flex: 1, minWidth: 0, minHeight: 0, overflow: "auto" }, children: /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(RecordPane, { rpc, activeId: recordId, onPick: openRecord }) }),
@@ -46088,11 +48491,17 @@ var __create = Object.create;
 		          },
 		          children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }, children: [
-		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "在图中定位本条目的实体：" }),
-		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: () => jumpToGraph("2d"), disabled: !links || links.entities.length === 0, title: "切到 2D 力导星图并 ego 聚焦首实体", children: "2D 图" }),
-		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: () => jumpToGraph("3d"), disabled: !links || links.entities.length === 0, title: "切到 3D 记忆海并 ego 聚焦首实体", children: "3D 图" }),
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("在图中定位本条目的实体：") }),
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(NButton, { onClick: () => jumpToGraph("2d"), disabled: !links || links.entities.length === 0, title: tr("切到 2D 力导星图并 ego 聚焦首实体"), children: [
+		                tr("2D 图"),
+		                " "
+		              ] }),
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(NButton, { onClick: () => jumpToGraph("3d"), disabled: !links || links.entities.length === 0, title: tr("切到 3D 记忆海并 ego 聚焦首实体"), children: [
+		                tr("3D 图"),
+		                " "
+		              ] }),
 		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { flex: 1 } }),
-		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: () => setEntryPane(false), title: "收起条目面板", children: "收起" })
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: () => setEntryPane(false), title: tr("收起条目面板"), children: tr("收起") })
 		            ] }),
 		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
 		              LinkPane,
@@ -46111,24 +48520,30 @@ var __create = Object.create;
 		      ) : null
 		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", flex: 1, minHeight: 0, gap: 0 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }, children: graphError ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-accent)", padding: 8 }, children: [
-		        "图数据读取失败：",
+		        tr("图数据读取失败："),
 		        graphError,
 		        " ",
-		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, children: "重试" })
-		      ] }) : graphLoading ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: "图加载中…" }) : full && full.nodes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: "图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。" }) : full ? view === "3d" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Scene3D, { full, onPick: onPickNode, emphasisId, height: canvasHeight }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(GraphCanvas, { full: graphData ?? full, onPick: onPickNode2d, emphasisId, fit: "view", height: "fill" }) : null }),
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, children: tr("重试") })
+		      ] }) : graphLoading ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: tr("图加载中…") }) : full && full.nodes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: [
+		        tr("图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。"),
+		        " "
+		      ] }) : full ? view === "3d" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Scene3D, { full, onPick: onPickNode, emphasisId, height: canvasHeight }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(GraphCanvas, { full: graphData ?? full, onPick: onPickNode2d, emphasisId, fit: "view", height: "fill" }) : null }),
 		      detailOpen ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
 		          "div",
 		          {
 		            onMouseDown: startDrag,
 		            style: { width: 5, cursor: "col-resize", flexShrink: 0, background: "var(--dsh-mem-border)", borderRadius: 2, margin: "0 2px", alignSelf: "stretch" },
-		            title: "拖动调整详情宽度"
+		            title: tr("拖动调整详情宽度")
 		          }
 		        ),
 		        /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { width: detailW, minWidth: DETAIL_MIN, flexShrink: 0, overflow: "auto", minHeight: 0, borderLeft: "1px solid var(--dsh-mem-border)", paddingLeft: 10, display: "flex", flexDirection: "column", gap: 8 }, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "本条目：" }),
-		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: backToEntry, disabled: !recordId, title: "切回查询视图并展开本条目（保留当前选点）", children: "按条目展示" })
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("本条目：") }),
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(NButton, { onClick: backToEntry, disabled: !recordId, title: tr("切回查询视图并展开本条目（保留当前选点）"), children: [
+		              tr("按条目展示"),
+		              " "
+		            ] })
 		          ] }),
 		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
 		            LinkPane,
@@ -46149,7 +48564,7 @@ var __create = Object.create;
 		}
 		
 		// client/src/explorer/ExplorerEntry.tsx
-		var import_react34 = require("react");
+		var import_react35 = require("react");
 		var import_jsx_runtime34 = require("react/jsx-runtime");
 		function ExplorerIcon(props) {
 		  const size = props.size ?? 16;
@@ -46174,10 +48589,13 @@ var __create = Object.create;
 		  );
 		}
 		function ExplorerFooterEntry(props) {
-		  const [open, setOpen] = (0, import_react34.useState)(false);
+		  const [open, setOpen] = (0, import_react35.useState)(false);
 		  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(import_jsx_runtime34.Fragment, { children: [
-		    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("button", { className: "dsh-mem-btn", onClick: () => setOpen(true), title: "打开记忆库（查询 L1 记忆与关联图谱）", children: "记忆库" }),
-		    open ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(NModal, { title: "记忆库", onClose: () => setOpen(false), children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { style: { height: "70vh", minHeight: 420 }, children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(ExplorerPage, { rpc: props.rpc, canvasHeight: 360 }) }) }) : null
+		    /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("button", { className: "dsh-mem-btn", onClick: () => setOpen(true), title: tr("打开记忆库（查询 L1 记忆与关联图谱）"), children: [
+		      tr("记忆库"),
+		      " "
+		    ] }),
+		    open ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(NModal, { title: tr("记忆库"), onClose: () => setOpen(false), children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { style: { height: "70vh", minHeight: 420 }, children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(ExplorerPage, { rpc: props.rpc, canvasHeight: 360 }) }) }) : null
 		  ] });
 		}
 		
@@ -46192,6 +48610,7 @@ var __create = Object.create;
 		var GEN_017_SEAT = "sidebar.workspaces.session.menu.item";
 		var EXPLORER_ORDER = 7;
 		function apply(ctx) {
+		  installLocale(ctx);
 		  const rpc = makeRpc(ctx);
 		  console.info("[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位");
 		  const SETTINGS_SEAT2 = "settings.section";
@@ -46201,7 +48620,7 @@ var __create = Object.create;
 		      cardSeatLive = true;
 		      try {
 		        return ctx.slots.register(
-		          { name: SETTINGS_SEAT2, id: "dsh-memory", order: 200, label: "记忆", inject: () => ({ rpc }) },
+		          { name: SETTINGS_SEAT2, id: "dsh-memory", order: 200, label: tr("记忆"), inject: () => ({ rpc }) },
 		          MemoryPanel
 		        );
 		      } catch (err) {
@@ -46239,7 +48658,7 @@ var __create = Object.create;
 		  const mountPage = () => {
 		    const row2 = ctx.slots.inject(
 		      PANEL_SEAT,
-		      () => ctx.slots.register({ name: PANEL_SEAT, id: EXPLORER_ID, order: EXPLORER_ORDER, label: "记忆库" }, ExplorerIcon)
+		      () => ctx.slots.register({ name: PANEL_SEAT, id: EXPLORER_ID, order: EXPLORER_ORDER, label: tr("记忆库") }, ExplorerIcon)
 		    );
 		    const page = ctx.slots.inject(
 		      MAIN_SEAT,
