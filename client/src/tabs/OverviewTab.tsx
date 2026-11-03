@@ -14,9 +14,10 @@ import { EmbeddingSection } from './EmbeddingSection.js';
 import { RebuildPanel } from './RebuildPanel.js';
 import { RuminatePanel } from './RuminatePanel.js';
 import { BackfillSection } from './BackfillSection.js';
+import { explorerEntryState } from '../explorer/entry-state.js';
 
 /** 可通过开关切换的 settings 键。 */
-type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate' | 'conflictFreeze' | 'skillsEnabled' | 'graphEnabled' | 'keywordEnabled' | 'redistillEnabled' | 'mdSyncEnabled' | 'memportEnabled' | 'toolRoom' | 'toolGraph' | 'toolRuminate' | 'toolConflict' | 'toolMutate' | 'toolSkills';
+type ToggleKey = 'enabled' | 'capture' | 'distill' | 'recall' | 'memoryMutate' | 'conflictFreeze' | 'skillsEnabled' | 'graphEnabled' | 'keywordEnabled' | 'redistillEnabled' | 'mdSyncEnabled' | 'memportEnabled' | 'explorerEnabled' | 'toolRoom' | 'toolGraph' | 'toolRuminate' | 'toolConflict' | 'toolMutate' | 'toolSkills';
 
 export function OverviewTab(props: { rpc: RpcFn }) {
   const rpc = props.rpc;
@@ -66,13 +67,18 @@ export function OverviewTab(props: { rpc: RpcFn }) {
         if (!r || !r.ok) {
           setSettingsData(prev);
           setError(r && r.error ? '开关写入失败：' + r.error.message : '开关写入失败');
+          // 入口开关写失败：挂载状态跟着 UI 一起回滚（否则行没了、面板却显示已关）。
+          if (key === 'explorerEnabled') explorerEntryState.set(prev.settings.explorerEnabled !== false);
         } else {
           setError(null);
+          // 入口开关写成功：同 bundle 直接 notify，侧栏行即时显隐（market 同款，不靠重启）。
+          if (key === 'explorerEnabled') explorerEntryState.set(value);
         }
       })
       .catch((e: unknown) => {
         setSettingsData(prev);
         setError('开关写入失败：' + String((e && (e as Error).message) || e));
+        if (key === 'explorerEnabled') explorerEntryState.set(prev.settings.explorerEnabled !== false);
       });
   };
 
@@ -164,6 +170,8 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   const redistillEnabled = settingsData && settingsData.settings ? settingsData.settings.redistillEnabled === true : false;
   const mdSyncEnabled = settingsData && settingsData.settings ? settingsData.settings.mdSyncEnabled === true : false;
   const memportEnabled = settingsData && settingsData.settings ? settingsData.settings.memportEnabled === true : false;
+  // 记忆库侧栏入口：默认**开**（只认显式 false），与其余默认关的进阶项不同。
+  const explorerEnabled = settingsData && settingsData.settings ? settingsData.settings.explorerEnabled !== false : true;
   // 回填并行度：0 = 跟随部署 cfg.backfill.concurrency（当前默认 2）
   const bfConcurrency = settingsData && settingsData.settings ? (settingsData.settings.backfillConcurrency ?? 0) : 0;
 
@@ -253,6 +261,15 @@ export function OverviewTab(props: { rpc: RpcFn }) {
                 toggle('graphEnabled', false);
               }
             }}
+          />
+          {/* 分组：记忆库入口（单开一节重点显示）——入口开关与投影写面无关，
+              默认激活；即时显隐不靠重启（同 bundle 状态单例，market 同款通道）。 */}
+          <div style={S.panelLabel}>记忆库入口</div>
+          <SwitchRow
+            label="侧栏「记忆库」入口"
+            desc={explorerEnabled ? '已开启：左侧栏显示「记忆库」（L1 查询 + 关联跳转 + 2D/3D 记忆图）；关闭即时隐藏，无需重启' : '已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启'}
+            checked={explorerEnabled}
+            onChange={(v) => { toggle('explorerEnabled', v); }}
           />
           {/* 分组：工具封印（v0.21.0）——false = 该组工具不注册,从模型工具列表消失;
               核心读(memory_search / read_scene / receipts / conversation_search)与槽位三件不受控 */}

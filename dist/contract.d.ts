@@ -131,6 +131,8 @@ export interface MemoryLiveSettings {
     memportEnabled: boolean;
     /** 时效分级门2 启用开关（概览区可拨）:true = 被动注入剔除 expired。与部署 cfg.validity.tieringEnabled 取或；关=注入与改前逐字一致。 */
     validityTiering: boolean;
+    /** 记忆库侧栏入口开关（概览区可拨）:true = 在左侧栏注册「记忆库」入口行 + 主面板。默认 true。 */
+    explorerEnabled: boolean;
     /** md 投射/后缀收敛的单次动作护栏运行时覆盖:0 = 跟随部署 `cfg.memExport.maxRecords`（默认 2000）。
      *  存在的理由：一次点完多少条属于“回填历史时才改一下”的旋钮，不该要求改 YAML + 重启。 */
     mdExportMaxRecords: number;
@@ -1335,12 +1337,15 @@ export interface GraphPreviewResponse {
         missing?: number;
     };
     /** mode==='full' 才出现;全图星图轻量块(可见节点×active 边,截断标记 truncated)。
-     *  不带此键时响应与旧形状逐字节一致——消费方按需读 `res.full?`。 */
+     *  不带此键时响应与旧形状逐字节一致——消费方按需读 `res.full?`。
+     *  节点 `aging`(0.5~1,3D 亮度通道)与 `source`(出处场景名,provenance fallback)同为可选键:无值时**缺席**。 */
     full?: {
         nodes: Array<{
             id: string;
             name: string;
             type: string;
+            aging?: number;
+            source?: string;
         }>;
         edges: Array<{
             from: string;
@@ -1357,6 +1362,64 @@ export interface GraphCleanupDeadRequest {
 }
 export interface GraphCleanupDeadResponse {
     removed: number;
+}
+/**
+ * dsh-memory/record-links(记忆库入口的关联跳转:记录 → 实体 → 关系 → 其它记录)。
+ *
+ * L1 记录本身**不是图顶点**(`l1_records` DDL 冻结、无 relation 列),所以关联一律
+ * 经图投影的 `sourceRecordIds` **反查**得到——本端点是纯读面,不写图、不建边、
+ * 不改投影。图谱未启用时返回全空结构(不抛),与 graph-preview 的降级口径一致。
+ */
+export interface RecordLinksRequest {
+    /** 起点 L1 记录 id(≤200 字符;不存在 → `record: null` + 空集,不抛)。 */
+    recordId: string;
+    /** 邻居展开跳数,缺省 1,钳制 1..2(再深只会放大 hub 爆量,不给新信息)。 */
+    hops?: number;
+    /** 邻居与回落记录各自的条数上限,缺省 60,钳制 1..200。 */
+    limit?: number;
+}
+export interface RecordLinksResponse {
+    /** 层1 起点记录(悬挂 id → null)。 */
+    record: UiRecord | null;
+    /** 层2：该记录作为来源的实体节点（按 degree 降序）。 */
+    entities: Array<{
+        id: string;
+        name: string;
+        type: string;
+        degree: number;
+        causalDegree: number;
+        /** 来源记录预览（保最新、≤5 条，已排除起点自身）。 */
+        recordIds: string[];
+    }>;
+    /** 层3：实体的一度邻居。平行关系各占一条（同对节点两条关系 = 两行，不合并）。 */
+    neighbors: Array<{
+        id: string;
+        name: string;
+        type: string;
+        relation: string;
+        causal: boolean;
+        /** 该邻居经由哪个层2 实体连出——多实体起点下用于回溯「经由谁」。 */
+        viaEntityId: string;
+        degree: number;
+        /** 本邻居是第几跳（1 = 实体的直接邻居）。 */
+        hop: number;
+        /** 邻居的来源记录预览（≤5 条）——第三层「跳到记录」的落点。 */
+        recordIds: string[];
+    }>;
+    /** 回落记录:邻居实体的来源记录(去重、排除起点自身、updatedAt 倒序、≤limit)。 */
+    records: UiRecord[];
+    /**
+     * 取代链。方向语义由 marker 的位置决定,不能凭直觉写:
+     * `dsh_superseded` **写在退场的旧行上**、`by` 指向新行——
+     * 故 `prevIds` 是**数组**(本记录取代掉的旧行,`findSupersededTargets` 反查),
+     * `nextId` 是**单值**(取代本记录的新行;本记录仍活跃时为 null)。
+     */
+    supersede: {
+        prevIds: string[];
+        nextId: string | null;
+    };
+    /** 邻居或回落记录任一维触顶(渲染侧必须显式提示,不得静默少列)。 */
+    truncated: boolean;
 }
 /** dsh-memory/scenes(两族拼接的混合视图)。 */
 export interface ScenesResponse {
@@ -1954,6 +2017,7 @@ export interface DshMemoryRequestMap {
     'dsh-memory/graph-search': GraphSearchRequest;
     'dsh-memory/graph-node-get': GraphNodeGetRequest;
     'dsh-memory/graph-preview': GraphPreviewRequest;
+    'dsh-memory/record-links': RecordLinksRequest;
     'dsh-memory/graph-cleanup-dead': GraphCleanupDeadRequest;
     'dsh-memory/scenes': Record<string, never>;
     'dsh-memory/persona': Record<string, never>;
@@ -2037,6 +2101,7 @@ export interface DshMemoryResponseMap {
     'dsh-memory/graph-search': GraphSearchResponse;
     'dsh-memory/graph-node-get': GraphNodeGetResponse;
     'dsh-memory/graph-preview': GraphPreviewResponse;
+    'dsh-memory/record-links': RecordLinksResponse;
     'dsh-memory/graph-cleanup-dead': GraphCleanupDeadResponse;
     'dsh-memory/scenes': ScenesResponse;
     'dsh-memory/persona': PersonaResponse;

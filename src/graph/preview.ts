@@ -9,7 +9,7 @@
  * 判据与检索同源(search.ts):候选 = active|disputed 节点 × active 边;
  * 确定性 = 同输入两次调用逐位一致(同分裁决链落到 id 升序兜底)。
  */
-import { GRAPH_CAUSAL_RELATIONS } from './constraints.js';
+import { GRAPH_AGING_CULL_FLOOR, GRAPH_CAUSAL_RELATIONS, isGraphNodeVisible } from './constraints.js';
 import {
   GRAPH_PREVIEW_CAUSAL_WEIGHT,
   GRAPH_PREVIEW_FULL_EDGES,
@@ -21,10 +21,8 @@ import type { GraphEdge, GraphNode, GraphNodeType } from './types.js';
 
 const CAUSAL_SET: ReadonlySet<string> = new Set<string>(GRAPH_CAUSAL_RELATIONS);
 
-/** 预览唯一判定的节点可见性(与 searchGraphNodes 候选集同式)。 */
-function visible(n: GraphNode): boolean {
-  return n.status === 'active' || n.status === 'disputed';
-}
+/** 预览的节点可见性(与检索候选集同式):引用单源判据,不在此处重抄。 */
+const visible = isGraphNodeVisible;
 
 export interface GraphSeedNode {
   id: string;
@@ -234,6 +232,17 @@ export interface FullViewNode {
   id: string;
   name: string;
   type: GraphNodeType;
+  /**
+   * 老化权重（0.5~1，与 UiRecord.agingWeight 同定义域）——3D 星图亮度通道的数据源。
+   * **可选键零漂移**：缺省（衰减关闭/无存活来源/调用方未注入 resolver）时该键**缺席**，
+   * 不是 undefined 占位——既有形状断言测试（三键）继续成立，老消费方 JSON 形状不变。
+   */
+  aging?: number;
+  /**
+   * 出处标签（provenance fallback）：来源记录的主场景名，如“字节Code M岗位”——
+   * 人物实体靠它回溯“在哪提到的”。同为可选键零漂移：无场景/未注入 resolver 时键缺席。
+   */
+  source?: string;
 }
 
 /** 全图边轻量项（causal 由单源词表判出，渲染侧不再抄词表）。 */
@@ -254,6 +263,17 @@ export interface GraphFullView {
 export interface FullViewCaps {
   nodeCap?: number;
   edgeCap?: number;
+  /**
+   * 节点老化解析器（nodeId → aging | null）：由端点层查 L1 来源记录后注入，
+   * 本纯函数**不查库**。判据在调用方：节点无自己的老化——老化属于记录，
+   * 节点取全部存活来源中**最新**那条的 agingWeight（任一来源还新鲜，实体就不该显得旧）。
+   */
+  agingOf?: (id: string) => number | null;
+  /**
+   * 出处解析器（nodeId → 场景名 | null）：同 agingOf 一样由端点层查来源记录后注入，
+   * 本纯函数不查库。B 方案（投影期落库 context）上线后本项退为兜底。
+   */
+  sourceOf?: (id: string) => string | null;
 }
 
 /**
@@ -268,7 +288,15 @@ export function buildFullView(
 ): GraphFullView {
   const nodeCap = Math.max(1, Math.floor(caps.nodeCap ?? GRAPH_PREVIEW_FULL_NODES));
   const edgeCap = Math.max(1, Math.floor(caps.edgeCap ?? GRAPH_PREVIEW_FULL_EDGES));
-  const visibleNodes = nodes.filter(visible);
+  // 老化剔除线（仅当注入 agingOf 时生效）：aging < 0.2 的节点及其悬挂边不渲染。
+  // aging=null（衰减关/无存活来源）不剔——不能因为拿不到数值就把节点删掉。
+  const cullByAging = caps.agingOf !== undefined;
+  const visibleNodes = nodes.filter((n) => {
+    if (!visible(n)) return false;
+    if (!cullByAging) return true;
+    const a = caps.agingOf!(n.id);
+    return a == null || a >= GRAPH_AGING_CULL_FLOOR;
+  });
   const nodesTruncated = visibleNodes.length > nodeCap;
   const drawn = visibleNodes.slice(0, nodeCap);
   const keep = new Set<string>(drawn.map((n) => n.id));
@@ -284,7 +312,15 @@ export function buildFullView(
     outEdges.push({ from: e.fromNodeId, to: e.toNodeId, relation: e.relation, causal: CAUSAL_SET.has(e.relation) });
   }
   return {
-    nodes: drawn.map((n) => ({ id: n.id, name: n.name, type: n.type })),
+    nodes: drawn.map((n) => {
+      const base: FullViewNode = { id: n.id, name: n.name, type: n.type };
+      // 有值才挂键（可选键零漂移：null/无 resolver → 键缺席，老消费方看到的形状不变）。
+      const aging = caps.agingOf?.(n.id) ?? null;
+      if (aging != null) base.aging = aging;
+      const source = caps.sourceOf?.(n.id) ?? null;
+      if (source != null) base.source = source;
+      return base;
+    }),
     edges: outEdges,
     truncated: nodesTruncated || edgesTruncated,
   };

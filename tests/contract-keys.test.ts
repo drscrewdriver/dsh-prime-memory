@@ -65,7 +65,7 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   'graphEnabled',
 ] as const;
 
-/** 端点全集(40 个;含 records-delete / 图谱两端点 / receipts / §C 冲突队列读写+丢弃留痕三端点 / ruminate 三端点 / 退场与快照五端点)。 */
+/** 端点全集(41 个;含 records-delete / 图谱四端点(含记忆库入口的 record-links) / receipts / §C 冲突队列读写+丢弃留痕三端点 / ruminate 三端点 / 退场与快照五端点)。 */
 const ENDPOINTS = [
   'dsh-memory/stats',
   'dsh-memory/token-cost',
@@ -92,6 +92,7 @@ const ENDPOINTS = [
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/graph-preview',
+  'dsh-memory/record-links',
   'dsh-memory/graph-cleanup-dead',
   'dsh-memory/scenes',
   'dsh-memory/persona',
@@ -175,11 +176,12 @@ describe('wing catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 67 contracted endpoints, records-delete and graph included', () => {
-    // 67 = 66 + `drsc-health`（设置面板 DRSC 依赖 banner 的探针端点）。
-    // 上一阶 66 = 65 + `skills-detect`；65 = 64 + `graph-cleanup-dead`。
-    expect(ENDPOINTS.length).toBe(67);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(67);
+  it('exposes exactly the 68 contracted endpoints, records-delete and graph included', () => {
+    // 68 = 67 + `record-links`（记忆库入口的关联跳转：记录 → 实体 → 关系 → 其它记录）。
+    // 上一阶 67 = 66 + `drsc-health`（设置面板 DRSC 依赖 banner 的探针端点）；
+    // 66 = 65 + `skills-detect`；65 = 64 + `graph-cleanup-dead`。
+    expect(ENDPOINTS.length).toBe(68);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(68);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {

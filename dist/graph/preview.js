@@ -9,13 +9,11 @@
  * 判据与检索同源(search.ts):候选 = active|disputed 节点 × active 边;
  * 确定性 = 同输入两次调用逐位一致(同分裁决链落到 id 升序兜底)。
  */
-import { GRAPH_CAUSAL_RELATIONS } from './constraints.js';
+import { GRAPH_AGING_CULL_FLOOR, GRAPH_CAUSAL_RELATIONS, isGraphNodeVisible } from './constraints.js';
 import { GRAPH_PREVIEW_CAUSAL_WEIGHT, GRAPH_PREVIEW_FULL_EDGES, GRAPH_PREVIEW_FULL_NODES, GRAPH_PREVIEW_NEIGHBORS, GRAPH_PREVIEW_SEEDS, } from './types.js';
 const CAUSAL_SET = new Set(GRAPH_CAUSAL_RELATIONS);
-/** 预览唯一判定的节点可见性(与 searchGraphNodes 候选集同式)。 */
-function visible(n) {
-    return n.status === 'active' || n.status === 'disputed';
-}
+/** 预览的节点可见性(与检索候选集同式):引用单源判据,不在此处重抄。 */
+const visible = isGraphNodeVisible;
 export function degreeMaps(nodes, edges) {
     const candidate = new Set(nodes.filter(visible).map((n) => n.id));
     const degree = new Map();
@@ -163,7 +161,17 @@ export function buildGraphPreview(nodes, edges, opts = {}) {
 export function buildFullView(nodes, edges, caps = {}) {
     const nodeCap = Math.max(1, Math.floor(caps.nodeCap ?? GRAPH_PREVIEW_FULL_NODES));
     const edgeCap = Math.max(1, Math.floor(caps.edgeCap ?? GRAPH_PREVIEW_FULL_EDGES));
-    const visibleNodes = nodes.filter(visible);
+    // 老化剔除线（仅当注入 agingOf 时生效）：aging < 0.2 的节点及其悬挂边不渲染。
+    // aging=null（衰减关/无存活来源）不剔——不能因为拿不到数值就把节点删掉。
+    const cullByAging = caps.agingOf !== undefined;
+    const visibleNodes = nodes.filter((n) => {
+        if (!visible(n))
+            return false;
+        if (!cullByAging)
+            return true;
+        const a = caps.agingOf(n.id);
+        return a == null || a >= GRAPH_AGING_CULL_FLOOR;
+    });
     const nodesTruncated = visibleNodes.length > nodeCap;
     const drawn = visibleNodes.slice(0, nodeCap);
     const keep = new Set(drawn.map((n) => n.id));
@@ -181,7 +189,17 @@ export function buildFullView(nodes, edges, caps = {}) {
         outEdges.push({ from: e.fromNodeId, to: e.toNodeId, relation: e.relation, causal: CAUSAL_SET.has(e.relation) });
     }
     return {
-        nodes: drawn.map((n) => ({ id: n.id, name: n.name, type: n.type })),
+        nodes: drawn.map((n) => {
+            const base = { id: n.id, name: n.name, type: n.type };
+            // 有值才挂键（可选键零漂移：null/无 resolver → 键缺席，老消费方看到的形状不变）。
+            const aging = caps.agingOf?.(n.id) ?? null;
+            if (aging != null)
+                base.aging = aging;
+            const source = caps.sourceOf?.(n.id) ?? null;
+            if (source != null)
+                base.source = source;
+            return base;
+        }),
         edges: outEdges,
         truncated: nodesTruncated || edgesTruncated,
     };

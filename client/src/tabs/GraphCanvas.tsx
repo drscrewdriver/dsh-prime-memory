@@ -56,13 +56,19 @@ export function GraphCanvas(props: {
   emphasisId?: string;
   /** 取景：全图居中即可，子图小、需 fit 到画面内。 */
   fit?: 'center' | 'view';
-  /** 画布高度（全图给宽景，子图可以矮一点留出详情区）。 */
-  height?: number;
+  /** 画布高度（全图给宽景，子图可以矮一点留出详情区；'fill' 则在 flex 父容器内撑满）。 */
+  height?: number | 'fill';
 }) {
   const { full, emphasisId, fit = 'center', height: canvasH = CANVAS_H } = props;
+  const fillMode = canvasH === 'fill';
+  const realH = fillMode ? CANVAS_H : (canvasH as number);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const pickRef = useRef(props.onPick);
   pickRef.current = props.onPick;
+  /** emphasisId 用 ref 读取，不进主 effect deps——否则每次点击都销毁重建 G6 + 重跑力导（“炸拓扑”）。 */
+  const emphasisRef = useRef(emphasisId);
+  emphasisRef.current = emphasisId;
+  const graphRef = useRef<InstanceType<typeof Graph> | null>(null);
 
   // ── 悬浮气泡状态 ──────────────────────────────────────────
   /** 悬浮信息(id + 容器内坐标)；null=不显示。 */
@@ -107,7 +113,7 @@ export function GraphCanvas(props: {
     const host = hostRef.current;
     if (!host) return;
     const width = host.clientWidth || 640;
-    const height = host.clientHeight || canvasH;
+    const height = host.clientHeight || realH;
 
     const color = (type: string) => resolveColor(host, TYPE_TOKENS[type] ?? FALLBACK_TOKEN);
     const edgeColor = resolveColor(host, '--dsh-mem-border-strong');
@@ -119,7 +125,7 @@ export function GraphCanvas(props: {
     /** 小图每条边都写关系词;大图只写因果边(两者都是"线看不出语义"的修法,按密度分级)。 */
     const labelAll = full.edges.length <= LABEL_ALL_EDGES_MAX;
     /** 起点强调与否看它（邻域子图里靠强调圈区分中心）。 */
-    const isSeed = (d: { id?: string }): boolean => emphasisId !== undefined && d.id === emphasisId;
+    const isSeed = (d: { id?: string }): boolean => emphasisRef.current !== undefined && d.id === emphasisRef.current;
 
     const data = toGraphData(full, width, height);
 
@@ -203,6 +209,7 @@ export function GraphCanvas(props: {
   
     // render 是异步方法;卸载竞态由 cleanup 的 destroyed 判据兆住
     void graph.render().catch(() => {});
+    graphRef.current = graph;
   
     // ── 气泡事件绑定(取代 G6 tooltip) ────────────────────
     graph.on('node:pointerenter', (evt) => {
@@ -229,16 +236,30 @@ export function GraphCanvas(props: {
     graph.on('canvas:click', () => { setHovered(null); });
   
     return () => {
-      // 红线:实例必销毁,否则切 Tab/刷新会累积 canvas 与力模拟循环
+      // 红线:实例必销毁，否则切 Tab/刷新会累积 canvas 与力模拟循环
       if (!graph.destroyed) graph.destroy();
+      graphRef.current = null;
     };
-  }, [full, nodeKey, emphasisId, fit, canvasH]);
+  }, [full, nodeKey, fit, realH]);
+  
+  /** emphasisId 变化时动态更新节点样式（不重建图）：强调圈+加粗标签。 */
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph || graph.destroyed) return;
+    // 刷新所有节点的样式回调（G6 v5 的 draw 会重新求值 style 函数）
+    for (const n of full.nodes) {
+      try {
+        graph.updateNodeData([{ id: n.id, data: { name: n.name, type: n.type, degree: n.id === emphasisId ? -1 : undefined } }]);
+      } catch { /* 节点可能已被截断不存在 */ }
+    }
+    void graph.draw().catch(() => {});
+  }, [emphasisId, full]);
 
   /** 当前要显示的气泡数据(只有 hovered)。 */
   const bubbleTip = hovered ? tips.get(hovered.id) : null;
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: canvasH, overflow: 'hidden', borderRadius: 8 }}>
+    <div style={{ position: 'relative', width: '100%', ...(fillMode ? { flex: 1, minHeight: 0 } : { height: realH }), overflow: 'hidden', borderRadius: 8 }}>
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"

@@ -148,6 +148,7 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/graph-search',
   'dsh-memory/graph-node-get',
   'dsh-memory/graph-preview',
+  'dsh-memory/record-links',
   'dsh-memory/graph-cleanup-dead',
   'dsh-memory/scenes',
   'dsh-memory/persona',
@@ -1636,6 +1637,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           mdSyncEnabled: live?.get()?.mdSyncEnabled === true,
           memportEnabled: live?.get()?.memportEnabled === true,
           validityTiering: live?.get()?.validityTiering === true,
+          explorerEnabled: live?.get()?.explorerEnabled !== false, // 默认 true
           mdExportMaxRecords: live?.get()?.mdExportMaxRecords ?? 0,
           backfillConcurrency: live?.get()?.backfillConcurrency ?? 0,
         }),
@@ -1682,7 +1684,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const patch = (payload ?? {}) as Record<string, unknown>;
       const clean: Record<string, boolean | string | number | DistillChainEntry[] | { extract: number; dedup: number; l2: number; l3: number; graph: number } | { l1: DistillChainEntry[]; l2: DistillChainEntry[]; l3: DistillChainEntry[] }> = {};
       // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
-      for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills'] as const) {
+      for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'explorerEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
       }
       // md 投射护栏运行时覆盖：数字才收，钳 0~10000（与 live schema 同上限）；0 = 跟随部署默认。
@@ -2348,7 +2350,77 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         const zero = { seeds: [], stats: { nodes: 0, edges: 0, causalEdges: 0, pendingJobs: 0, jobsTotal: 0 } };
         return mode === 'full' ? { ...zero, full: { nodes: [], edges: [], truncated: false } } : zero;
       }
-      return graph.buildPreview(seedId, mode);
+      // 老化 + 出处两条展示通道：节点无自己的老化/场景——都属于来源记录。
+      // 一次 sourceMeta() 同时供两算：aging 取最新存活来源的 agingWeight（下限 0.2 拉开亮度）；
+      // source 取主场景名（provenance fallback，B 方案落库后退为兜底）。无值→不挂键（可选键零漂移）。
+      let agingOf: ((id: string) => number | null) | undefined;
+      let sourceOf: ((id: string) => string | null) | undefined;
+      if (mode === 'full') {
+        const halfLife = stores.l1.decayHalfLife;
+        const meta = graph.sourceMeta();
+        sourceOf = (id) => meta.get(id)?.scene ?? null;
+        if (halfLife > 0) {
+          agingOf = (id) => {
+            const m = meta.get(id);
+            // 星图专用下限 0.2：让 0.2~1 的亮度差异可见（召回/列表仍用缺省 0.5，不受影响）。
+            return m == null ? null : agingWeightOf(m.ms, halfLife, undefined, 0.2);
+          };
+        }
+      }
+      return graph.buildPreview(seedId, mode, agingOf, sourceOf);
+    }
+
+    case 'dsh-memory/record-links': {
+      // 记忆库入口的关联跳转(记录 → 实体 → 关系 → 其它记录)。图侧一次 loadGraph 供三算
+      // (见 GraphStore.buildExplorer),记录侧在这里装配:UiRecord 的 agingWeight / usage /
+      // maturity 必须与 list-records **同口径**,否则同一个入口与设置页会给出两套数。
+      const p = (payload ?? {}) as { recordId?: unknown; hops?: unknown; limit?: unknown };
+      const recordId = typeof p.recordId === 'string' ? p.recordId.trim().slice(0, 200) : '';
+      // hops/limit 不在这里重复钳制——钳制判据单源在 graph/record-links.ts。
+      const hops = typeof p.hops === 'number' ? p.hops : undefined;
+      const limit = typeof p.limit === 'number' ? p.limit : undefined;
+      const graph = stores.graph;
+      const emptyResp = {
+        record: null,
+        entities: [] as never[],
+        neighbors: [] as never[],
+        records: [] as never[],
+        supersede: { prevIds: [] as string[], nextId: null as string | null },
+        truncated: false,
+      };
+      // 图谱未启用 / 记录不存在 / 该记录尚未投影:都是正常态而非错误态,统一回空结构不抛。
+      if (!graph || !recordId) return emptyResp;
+      const { links } = graph.buildExplorer(recordId, { hops, limit });
+      const rawById = new Map(stores.l1.getByIds([recordId, ...links.neighborRecordIds]).map((r) => [r.id, r]));
+      const toUi = (id: string) => {
+        const r = rawById.get(id);
+        if (!r) return null;
+        return hitToUiRecord(r, {
+          agingWeight: agingWeightOf(r.updatedAt, stores.l1.decayHalfLife),
+          usage: stores.usage?.get(r.id) ?? null,
+          userRelevance: stores.feedback?.meanOf(r.id) ?? null,
+          userMark: stores.feedback?.lastOf(r.id) ?? null,
+        });
+      };
+      const record = toUi(recordId);
+      const records: NonNullable<ReturnType<typeof toUi>>[] = [];
+      for (const id of links.neighborRecordIds) {
+        const u = toUi(id);
+        if (u) records.push(u);
+      }
+      // 取代链方向由 marker 的位置决定:dsh_superseded **写在退场的旧行上**、by 指向新行。
+      // 故 nextId 读本行的 marker(单值)、prevIds 走反向查(数组,LIKE 全扫缝)。
+      const nextId = readSupersedeMarker(rawById.get(recordId)?.metadata)?.by ?? null;
+      const prevIds = stores.l1.findSupersededTargets(recordId);
+      if (!record && links.entities.length === 0) return { ...emptyResp, records, truncated: links.truncated };
+      return {
+        record,
+        entities: links.entities,
+        neighbors: links.neighbors,
+        records,
+        supersede: { prevIds, nextId },
+        truncated: links.truncated,
+      };
     }
 
     case 'dsh-memory/graph-cleanup-dead': {
@@ -2657,11 +2729,12 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
 }
 
 /** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
-/** 老化权重(与读路径 applyDecayWeight 同式):max(0.5, 0.5^(Δ天/半衰期));半衰期 ≤0 = 关 → null。 */
-export function agingWeightOf(updatedAtMs: number | undefined, halfLifeDays: number, now: number = Date.now()): number | null {
+/** 老化权重(与读路径 applyDecayWeight 同式):max(floor, 0.5^(Δ天/半衰期));半衰期 ≤0 = 关 → null。
+ *  `floor` 缺省 0.5(召回/列表旧口径不变);星图传 0.2 以拉开更细的新年差异。 */
+export function agingWeightOf(updatedAtMs: number | undefined, halfLifeDays: number, now: number = Date.now(), floor = 0.5): number | null {
   if (!(halfLifeDays > 0)) return null;
   const ageDays = Math.max(0, (now - (updatedAtMs ?? 0)) / 86_400_000);
-  return Math.max(0.5, Math.pow(0.5, ageDays / halfLifeDays));
+  return Math.max(floor, Math.pow(0.5, ageDays / halfLifeDays));
 }
 
 export function hitToUiRecord(

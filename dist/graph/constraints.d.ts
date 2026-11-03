@@ -13,6 +13,15 @@ export declare const GRAPH_NODE_TYPE_SET: ReadonlySet<string>;
 /** 记录生命周期四态(节点/fact/边通用)。 */
 export declare const GRAPH_STATUSES: readonly GraphRecordStatus[];
 export declare const GRAPH_STATUS_SET: ReadonlySet<string>;
+/**
+ * 节点是否进入「可画 / 可检 / 可关联」的候选集——读侧可见性判据的**单源**。
+ *
+ * 预览榜单、全图元素选择、关联反查三处必须同式,否则会出现「画布上有这个节点、
+ * 关联清单里查不到」或反之的对不齐。superseded/archived 是历史而非当前状态。
+ */
+export declare function isGraphNodeVisible(n: {
+    status: GraphRecordStatus;
+}): boolean;
 /** 因果边四词单源(投影提示词枚举、校验与面板预览加权共用——防两处词表漂移)。 */
 export declare const GRAPH_CAUSAL_RELATIONS: readonly ["导致", "因为", "修复了", "取代"];
 /** 规范中文关系词(提示词给枚举;校验不做白名单——关系是开放词表,只做长度钳制)。
@@ -49,3 +58,8 @@ export declare const GRAPH_CAP: {
  * 状态仍由 active facts 决定,不影响可追溯性主体。
  */
 export declare const GRAPH_SOURCE_RECORDS_CAP = 128;
+/**
+ * 星图老化剔除下限：`buildFullView` 收到 agingOf 时，aging 低于此值的节点不渲染（连悬挂边一起退）。
+ * 与 explorer 的 `agingWeightOf(..., floor=0.2)` 同值——下限即剔除线，低于它已经暗到看不出。
+ */
+export declare const GRAPH_AGING_CULL_FLOOR = 0.2;

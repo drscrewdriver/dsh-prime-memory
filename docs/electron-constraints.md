@@ -8,11 +8,11 @@
 
 ## 1. 成因分层（先定位「谁」）
 
-| 层 | 是什么 | 决定什么 | 典型表现 |
-|---|---|---|---|
-| **A. onnxruntime 内存机制** | attention 张量 `[1,heads,T,T]`（严格 O(T²)）；BFCArena 高水位不回落，相邻两次大推理的 T² 块**共存**（m=2） | 「峰值多大」 | 单发致死线 ≈2700 token、连发致死线 (1960,1976]；峰值随 T 平方增长 |
-| **B. Electron/宿主运行时** | macOS 分配器行为、二进制即 Node（无独立 `node`）、asar 打包、原生模块 ABI、内建 `libvips` | 「同一次分配会不会被拒」「原生模块能不能加载、从哪加载」 | SIGTRAP（仅 macOS/宿主二进制）、`libvips-42.dll` 撞名、`node:sqlite`/`sqlite-vec` 装不上 |
-| **C. 宿主产品设计** | desktop profile 由 Electron 应用独占管理；`dsh.pluginDependencies` 只保证装包、不产生挂载行为 | 「插件能不能自动装/自动启用依赖」 | `dsh plugin --profile desktop` 被拒；collector 装了但不跑 |
+| 层                       | 是什么                                                                             | 决定什么                         | 典型表现                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------- |
+| **A. onnxruntime 内存机制** | attention 张量 `[1,heads,T,T]`（严格 O(T²)）；BFCArena 高水位不回落，相邻两次大推理的 T² 块**共存**（m=2） | 「峰值多大」                       | 单发致死线 ≈2700 token、连发致死线 (1960,1976]；峰值随 T 平方增长                            |
+| **B. Electron/宿主运行时**   | macOS 分配器行为、二进制即 Node（无独立 `node`）、asar 打包、原生模块 ABI、内建 `libvips`                 | 「同一次分配会不会被拒」「原生模块能不能加载、从哪加载」 | SIGTRAP（仅 macOS/宿主二进制）、`libvips-42.dll` 撞名、`node:sqlite`/`sqlite-vec` 装不上 |
+| **C. 宿主产品设计**           | desktop profile 由 Electron 应用独占管理；`dsh.pluginDependencies` 只保证装包、不产生挂载行为        | 「插件能不能自动装/自动启用依赖」            | `dsh plugin --profile desktop` 被拒；collector 装了但不跑                         |
 
 > 一句话：**A 决定病有多重，B 决定这一下会不会致命，C 决定你能不能自动给药。**
 

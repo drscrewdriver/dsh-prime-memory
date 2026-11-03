@@ -193,6 +193,16 @@ describe('buildFullView —— 全图星图轻量块', () => {
     expect(Object.keys(v.edges[0]).sort()).toEqual(['causal', 'from', 'relation', 'to']);
     expect(v.edges[0].causal).toBe(true);
   });
+
+  it('老化通道:resolver 有值才挂 aging 键;null/未注入 → 键缺席(形状退回三键,可选键零漂移)', () => {
+    const nodes = [node('a'), node('b')];
+    const withAging = buildFullView(nodes, [], { agingOf: (id) => (id === 'a' ? 0.72 : null) });
+    expect(withAging.nodes[0]).toEqual({ id: 'a', name: 'n-a', type: 'tool', aging: 0.72 });
+    expect(Object.keys(withAging.nodes[1]).sort()).toEqual(['id', 'name', 'type']);
+    // 未注入 resolver（衰减关/旧调用方）：整块退回既有三键形状，不出现 aging: undefined 占位
+    const bare = buildFullView(nodes, []);
+    for (const n of bare.nodes) expect('aging' in n).toBe(false);
+  });
 });
 
 describe('GraphStore.buildPreview mode:full 与零漂移', () => {

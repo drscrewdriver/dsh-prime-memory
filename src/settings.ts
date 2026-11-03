@@ -135,6 +135,8 @@ const ALWAYS_ON: MemoryLiveSettings = {
   memportEnabled: false,
   // 时效分级门2 灰度开关:默认关(注入与改前逐字一致)
   validityTiering: false,
+  // 记忆库侧栏入口:默认开(用户装了插件就能看到)
+  explorerEnabled: true,
   // md 投射护栏运行时覆盖:0 = 跟随部署 cfg.memExport.maxRecords（面板上可改）
   mdExportMaxRecords: 0,
   // 回填并行度运行时覆盖:0 = 跟随部署 cfg.backfill.concurrency（概览页滑块可改）
@@ -406,6 +408,7 @@ function resolveSettings(value: unknown): MemoryLiveSettings {
     mdSyncEnabled: v.mdSyncEnabled === true,
     memportEnabled: v.memportEnabled === true,
     validityTiering: v.validityTiering === true,
+    explorerEnabled: v.explorerEnabled !== false, // 默认 true，只有显式 false 才关
     // md 投射护栏钳 0~10000（与 live schema 同上限）；0 = 跟随部署默认
     mdExportMaxRecords: Math.min(10_000, Math.max(0, num(v.mdExportMaxRecords))),
     // 回填并行度钳 0~8（与 live schema 同上限）；0 = 跟随部署 cfg.backfill.concurrency

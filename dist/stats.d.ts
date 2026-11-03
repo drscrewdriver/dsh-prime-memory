@@ -168,8 +168,9 @@ export interface EndpointDeps {
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;
 /** 浏览器卡片字段(比 MemoryRecord 精简,去掉大 metadata;Hall 从 metadata 提取)。 */
-/** 老化权重(与读路径 applyDecayWeight 同式):max(0.5, 0.5^(Δ天/半衰期));半衰期 ≤0 = 关 → null。 */
-export declare function agingWeightOf(updatedAtMs: number | undefined, halfLifeDays: number, now?: number): number | null;
+/** 老化权重(与读路径 applyDecayWeight 同式):max(floor, 0.5^(Δ天/半衰期));半衰期 ≤0 = 关 → null。
+ *  `floor` 缺省 0.5(召回/列表旧口径不变);星图传 0.2 以拉开更细的新年差异。 */
+export declare function agingWeightOf(updatedAtMs: number | undefined, halfLifeDays: number, now?: number, floor?: number): number | null;
 export declare function hitToUiRecord(r: {
     id: string;
     content: string;

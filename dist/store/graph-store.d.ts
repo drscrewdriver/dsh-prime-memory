@@ -1,6 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { buildFullView } from '../graph/preview.js';
 import type { GraphPreviewResult } from '../graph/preview.js';
+import type { RecordLinksResult } from '../graph/record-links.js';
+import type { ExplorerSelection } from '../graph/select.js';
 import type { GraphEdge, GraphNode, GraphNodeSearchResult, GraphProjectionJob, GraphProjectionResult } from '../graph/types.js';
 import type { MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 /**
@@ -123,9 +125,43 @@ export declare class GraphStore {
      * 降级(db 未就绪)返**全零结构**不抛——预览是展示面,永不拖垮端点。
      * mode==='full' 时响应附 `full` 轻量块;**缺省时该键缺席**(可选键零漂移纪律,
      * 不是 undefined 占位——消费方 `'full' in res` 与 JSON 形状双判据都干净)。
+     * `agingOf`/`sourceOf` 仅在 mode==='full' 时生效(星图亮度与出处通道):本层不认识 L1,
+     * 由端点层查来源记录后注入判据(nodeId → aging | null / 场景名 | null)。
      */
-    buildPreview(seedId?: string, mode?: 'full'): GraphPreviewResult & {
+    buildPreview(seedId?: string, mode?: 'full', agingOf?: (id: string) => number | null, sourceOf?: (id: string) => string | null): GraphPreviewResult & {
         full?: ReturnType<typeof buildFullView>;
+    };
+    /**
+     * 节点 → 存活来源记录的最新时间 + 主场景标签。
+     * `graph-preview(mode:'full')` 老化与出处两条展示通道的数据源：
+     *   - `ms`：最新存活来源的 `updated_time`（老化属于记录不属于投影节点，端点层据此算 agingWeight）；
+     *   - `scene`：来源记录中出现最多的非空 `scene_name`（provenance fallback：人物实体靠场景回溯“在哪提到的”，
+     *     如“字节Code M岗位”；无场景则 null，不猜）。B 方案（投影期落库 context）上线后本项退为兜底。
+     * 只认有值的行：全来源无有效时间戳的节点**不进表**。降级返空表不抛。
+     */
+    sourceMeta(): Map<string, {
+        ms: number;
+        scene: string | null;
+    }>;
+    /**
+     * 投影作业三档计数(预览与记忆库视图共用同一分母)。
+     * db 未就绪或计数失败一律回零并 warn——计数是展示面,不值得拖垮端点。
+     */
+    private jobCounts;
+    /**
+     * 记忆库视图存储缝(契约 `dsh-memory/record-links` 的图侧数据源)。
+     *
+     * **一次 `loadGraph()` 供三算**(种子榜 / 元素选择 / 关联反查):三者必须看到
+     * 同一份图,否则会出现“画布上有这个节点、关联清单里查不到”或反之——那比慢
+     * 一点严重点。记录侧(UiRecord 装配与取代链)在 stats 端点层做,本方法不碰 l1 表。
+     */
+    buildExplorer(recordId?: string, opts?: {
+        hops?: number;
+        limit?: number;
+    }): {
+        preview: GraphPreviewResult;
+        view: ExplorerSelection;
+        links: RecordLinksResult;
     };
     /**
      * 清理历史 dead 作业行（纯审计痕迹删除，不影响已重入队的记录）。

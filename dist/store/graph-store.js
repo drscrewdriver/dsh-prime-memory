@@ -21,6 +21,8 @@ import { randomBytes } from 'node:crypto';
 import { applyGraphProjection } from '../graph/apply.js';
 import { expandHitRecordIds, searchGraphNodes } from '../graph/search.js';
 import { buildFullView, buildGraphPreview } from '../graph/preview.js';
+import { buildRecordLinks } from '../graph/record-links.js';
+import { selectExplorerNodes } from '../graph/select.js';
 import { GRAPH_JOB_BACKOFF_BASE_MS, GRAPH_JOB_BATCH, GRAPH_JOB_MAX_ATTEMPTS, GRAPH_JOB_TRANSIENT_MAX_ATTEMPTS, GRAPH_PRIORITY_BACKFILL, GRAPH_PRIORITY_NEW, GRAPH_PROJECTOR_VERSION, GRAPH_VEC_SEED_CAP, } from '../graph/types.js';
 import { normPersistence } from '../types.js';
 import { classifyValidity, isExitedState, validToSourceOf } from './validity.js';
@@ -510,29 +512,133 @@ export class GraphStore {
      * 降级(db 未就绪)返**全零结构**不抛——预览是展示面,永不拖垮端点。
      * mode==='full' 时响应附 `full` 轻量块;**缺省时该键缺席**(可选键零漂移纪律,
      * 不是 undefined 占位——消费方 `'full' in res` 与 JSON 形状双判据都干净)。
+     * `agingOf`/`sourceOf` 仅在 mode==='full' 时生效(星图亮度与出处通道):本层不认识 L1,
+     * 由端点层查来源记录后注入判据(nodeId → aging | null / 场景名 | null)。
      */
-    buildPreview(seedId, mode) {
+    buildPreview(seedId, mode, agingOf, sourceOf) {
         const zero = { seeds: [], stats: { nodes: 0, edges: 0, causalEdges: 0, pendingJobs: 0, jobsTotal: 0 } };
         if (!this.db)
             return mode === 'full' ? { ...zero, full: { nodes: [], edges: [], truncated: false } } : zero;
         const { nodes, edges } = this.loadGraph();
-        let pendingJobs = 0;
-        let jobsTotal = 0;
-        let deadJobs = 0;
-        try {
-            pendingJobs = this.db
-                .prepare("SELECT COUNT(1) AS c FROM graph_projection_jobs WHERE status IN ('pending','running','failed')")
-                .get().c;
-            jobsTotal = this.db.prepare('SELECT COUNT(1) AS c FROM graph_projection_jobs').get().c;
-            deadJobs = this.db.prepare("SELECT COUNT(1) AS c FROM graph_projection_jobs WHERE status = 'dead'").get().c;
-        }
-        catch (err) {
-            this.logger?.warn(`${TAG} 预览 job 计数失败(计数回零): ${err instanceof Error ? err.message : String(err)}`);
-        }
+        const { pendingJobs, jobsTotal, deadJobs } = this.jobCounts();
         const r = buildGraphPreview(nodes, edges, { seedId, pendingJobs, jobsTotal, deadJobs, missing: this.countMissing() });
         if (mode === 'full')
-            return { ...r, full: buildFullView(nodes, edges) };
+            return { ...r, full: buildFullView(nodes, edges, { agingOf, sourceOf }) };
         return r;
+    }
+    /**
+     * 节点 → 存活来源记录的最新时间 + 主场景标签。
+     * `graph-preview(mode:'full')` 老化与出处两条展示通道的数据源：
+     *   - `ms`：最新存活来源的 `updated_time`（老化属于记录不属于投影节点，端点层据此算 agingWeight）；
+     *   - `scene`：来源记录中出现最多的非空 `scene_name`（provenance fallback：人物实体靠场景回溯“在哪提到的”，
+     *     如“字节Code M岗位”；无场景则 null，不猜）。B 方案（投影期落库 context）上线后本项退为兜底。
+     * 只认有值的行：全来源无有效时间戳的节点**不进表**。降级返空表不抛。
+     */
+    sourceMeta() {
+        const out = new Map();
+        if (!this.db)
+            return out;
+        try {
+            const { nodes } = this.loadGraph();
+            const sources = new Set();
+            for (const n of nodes)
+                for (const id of n.sourceRecordIds)
+                    sources.add(id);
+            if (sources.size === 0)
+                return out;
+            const updatedById = new Map();
+            const sceneById = new Map();
+            for (const chunk of chunkOf([...sources])) {
+                const ph = chunk.map(() => '?').join(',');
+                for (const row of this.db
+                    .prepare(`SELECT record_id, updated_time, scene_name FROM l1_records WHERE record_id IN (${ph})`)
+                    .all(...chunk)) {
+                    const ms = Date.parse(String(row.updated_time ?? ''));
+                    if (Number.isFinite(ms))
+                        updatedById.set(row.record_id, ms);
+                    const sc = String(row.scene_name ?? '').trim();
+                    if (sc)
+                        sceneById.set(row.record_id, sc);
+                }
+            }
+            for (const n of nodes) {
+                let latest = -1;
+                const tally = new Map();
+                for (const id of n.sourceRecordIds) {
+                    const ms = updatedById.get(id);
+                    if (ms != null)
+                        latest = Math.max(latest, ms);
+                    const sc = sceneById.get(id);
+                    if (sc)
+                        tally.set(sc, (tally.get(sc) ?? 0) + 1);
+                }
+                if (latest < 0)
+                    continue; // 无有效时间戳：不挂（aging 与 scene 同进退）
+                let scene = null;
+                let best = 0;
+                for (const [s, c] of tally)
+                    if (c > best) {
+                        best = c;
+                        scene = s;
+                    }
+                out.set(n.id, { ms: latest, scene });
+            }
+            return out;
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} 来源元信息读取失败(老化/出处通道整轮缺省): ${err instanceof Error ? err.message : String(err)}`);
+            return new Map();
+        }
+    }
+    /**
+     * 投影作业三档计数(预览与记忆库视图共用同一分母)。
+     * db 未就绪或计数失败一律回零并 warn——计数是展示面,不值得拖垮端点。
+     */
+    jobCounts() {
+        const db = this.db;
+        if (!db)
+            return { pendingJobs: 0, jobsTotal: 0, deadJobs: 0 };
+        try {
+            const count = (where) => db.prepare(`SELECT COUNT(1) AS c FROM graph_projection_jobs${where}`).get().c;
+            return {
+                pendingJobs: count(` WHERE status IN ('pending','running','failed')`),
+                jobsTotal: count(''),
+                deadJobs: count(` WHERE status = 'dead'`),
+            };
+        }
+        catch (err) {
+            this.logger?.warn(`${TAG} job 计数失败(计数回零): ${err instanceof Error ? err.message : String(err)}`);
+            return { pendingJobs: 0, jobsTotal: 0, deadJobs: 0 };
+        }
+    }
+    /**
+     * 记忆库视图存储缝(契约 `dsh-memory/record-links` 的图侧数据源)。
+     *
+     * **一次 `loadGraph()` 供三算**(种子榜 / 元素选择 / 关联反查):三者必须看到
+     * 同一份图,否则会出现“画布上有这个节点、关联清单里查不到”或反之——那比慢
+     * 一点严重点。记录侧(UiRecord 装配与取代链)在 stats 端点层做,本方法不碰 l1 表。
+     */
+    buildExplorer(recordId, opts = {}) {
+        const emptyStats = { nodes: 0, edges: 0, causalEdges: 0, pendingJobs: 0, jobsTotal: 0 };
+        if (!this.db) {
+            return {
+                preview: { seeds: [], stats: emptyStats },
+                view: {
+                    nodes: [], edges: [], truncated: false,
+                    counts: { skeleton: 0, fresh: 0, tail: 0 }, totalVisible: 0, totalEdges: 0,
+                },
+                links: { entities: [], neighbors: [], neighborRecordIds: [], truncated: false },
+            };
+        }
+        const { nodes, edges } = this.loadGraph();
+        const jc = this.jobCounts();
+        return {
+            preview: buildGraphPreview(nodes, edges, {
+                pendingJobs: jc.pendingJobs, jobsTotal: jc.jobsTotal, deadJobs: jc.deadJobs, missing: this.countMissing(),
+            }),
+            view: selectExplorerNodes(nodes, edges),
+            links: buildRecordLinks(nodes, edges, recordId ?? '', opts),
+        };
     }
     /**
      * 清理历史 dead 作业行（纯审计痕迹删除，不影响已重入队的记录）。

@@ -598,6 +598,12 @@ export function liveSettingsSchema(): VolatileRef<MemoryLiveSettings> {
      *  注入侧 expired 过滤)。默认关;先面板验证再翻部署默认(照 keywordEnabled 先例)。 */
     validityTiering: Schema.boolean().default(false),
     /**
+     * 记忆库侧栏入口开关（概览页可拨）：默认**开**（与其余进阶项默认关不同）。
+     * 必须在 live schema 里有名：schema 外的键写入会被丢弃，重启后读不回，
+     * 面板上拨了等于白拨（真机踩过的缺写点）。
+     */
+    explorerEnabled: Schema.boolean().default(true),
+    /**
      * 存量回填（keyword / redistill）LLM 批调用的**运行时并行度**覆盖：
      * `0` = 跟随部署 `cfg.backfill.concurrency`；1–8 = 直接覆盖。
      *

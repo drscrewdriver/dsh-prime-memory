@@ -71,6 +71,17 @@ export interface FullViewNode {
     id: string;
     name: string;
     type: GraphNodeType;
+    /**
+     * 老化权重（0.5~1，与 UiRecord.agingWeight 同定义域）——3D 星图亮度通道的数据源。
+     * **可选键零漂移**：缺省（衰减关闭/无存活来源/调用方未注入 resolver）时该键**缺席**，
+     * 不是 undefined 占位——既有形状断言测试（三键）继续成立，老消费方 JSON 形状不变。
+     */
+    aging?: number;
+    /**
+     * 出处标签（provenance fallback）：来源记录的主场景名，如“字节Code M岗位”——
+     * 人物实体靠它回溯“在哪提到的”。同为可选键零漂移：无场景/未注入 resolver 时键缺席。
+     */
+    source?: string;
 }
 /** 全图边轻量项（causal 由单源词表判出，渲染侧不再抄词表）。 */
 export interface FullViewEdge {
@@ -88,6 +99,17 @@ export interface GraphFullView {
 export interface FullViewCaps {
     nodeCap?: number;
     edgeCap?: number;
+    /**
+     * 节点老化解析器（nodeId → aging | null）：由端点层查 L1 来源记录后注入，
+     * 本纯函数**不查库**。判据在调用方：节点无自己的老化——老化属于记录，
+     * 节点取全部存活来源中**最新**那条的 agingWeight（任一来源还新鲜，实体就不该显得旧）。
+     */
+    agingOf?: (id: string) => number | null;
+    /**
+     * 出处解析器（nodeId → 场景名 | null）：同 agingOf 一样由端点层查来源记录后注入，
+     * 本纯函数不查库。B 方案（投影期落库 context）上线后本项退为兜底。
+     */
+    sourceOf?: (id: string) => string | null;
 }
 /**
  * 全图星图数据块（纯函数，不查库）：可见节点轻量投影 × active 边，

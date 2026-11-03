@@ -16,13 +16,30 @@ export function hostRequire(id: string): unknown {
   return require(id);
 }
 
+/** 布局服务（经 `ctx.get('layout')` 懒取，不进声明式 inject）。 */
+export interface MemoryLayoutService {
+  /** 选中某个 `main` keyed 面板；传 null 回到会话。宿主面板未注册该 id 时会抛。 */
+  selectPanel(id: string | null): void;
+}
+
 /** apply(ctx) 收到的宿主上下文（对应 inject = ['slots']；其余服务懒解析）。 */
 export interface MemoryClientCtx {
   slots: {
-    /** 向某个 slot 区域声明存在感；宿主挂载该区域时调用 factory 取注册句柄。 */
-    inject(slot: string, factory: () => unknown): unknown;
-    /** 把组件连同选项（name/id/order/label/inject 等 slot 约定字段）登记进宿主。 */
-    register(options: Record<string, unknown>, component: unknown): unknown;
+    /**
+     * 向某个 slot 区域声明存在感；宿主挂载该区域时调用 factory 取注册句柄。
+     *
+     * 它同时是**座位探针**：factory 只在座位已被宿主声明时才跑（含晚声明与再次声明），
+     * 所以上线探测“这个座位在不在”就靠它，不用另外的 spec API
+     *（姊妹包 dsh-search-index 的双形态入口即此法）。
+     * @param label 可选的 effect 标签，供宿主诊断树分组。
+     * @returns 本探针/本次挂载的 disposer（与 register 同形，可直接交给卸载链）。
+     */
+    inject(slot: string, factory: () => unknown, label?: string): () => void;
+    /**
+     * 把组件连同选项（name/id/order/label/inject 等 slot 约定字段）登记进宿主。
+     * @returns 幂等的 disposer；卸载顶栏行与主页面时按「先页后行」的序调用。
+     */
+    register(options: Record<string, unknown>, component: unknown): () => void;
   };
   /**
    * 按名取客户端世界服务（cordis 语义）。不把 connection 放进声明式 inject：

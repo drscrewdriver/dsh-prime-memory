@@ -35900,6 +35900,7 @@ var __create = Object.create;
 		// client/src/entry.tsx
 		var entry_exports = {};
 		__export(entry_exports, {
+		  EXPLORER_ID: () => EXPLORER_ID,
 		  SETTINGS_SEAT: () => SETTINGS_SEAT,
 		  apply: () => apply,
 		  inject: () => inject
@@ -40096,6 +40097,41 @@ var __create = Object.create;
 		  ] });
 		}
 		
+		// client/src/explorer/entry-state.ts
+		var wanted = true;
+		var confirmed = false;
+		var chosen = false;
+		var listeners = /* @__PURE__ */ new Set();
+		var notify = () => {
+		  for (const fn of listeners) fn(wanted);
+		};
+		var explorerEntryState = {
+		  /** 当前选择（仅在 confirmed 后有意义）。 */
+		  isWanted: () => wanted,
+		  /** 首读是否已完成（entry.tsx 决定何时开放挂载）。 */
+		  isConfirmed: () => confirmed,
+		  /** settings-get 首读落定：面板还没被拨过时采纳该值。 */
+		  confirm(value) {
+		    confirmed = true;
+		    if (chosen) return;
+		    wanted = value;
+		    notify();
+		  },
+		  /** 面板即时写入成功后调用：选择立刻生效（也是 confirmed）。 */
+		  set(value) {
+		    wanted = value;
+		    chosen = true;
+		    confirmed = true;
+		    notify();
+		  },
+		  subscribe(fn) {
+		    listeners.add(fn);
+		    return () => {
+		      listeners.delete(fn);
+		    };
+		  }
+		};
+		
 		// client/src/tabs/OverviewTab.tsx
 		var import_jsx_runtime18 = require("react/jsx-runtime");
 		function OverviewTab(props) {
@@ -40133,12 +40169,15 @@ var __create = Object.create;
 		      if (!r || !r.ok) {
 		        setSettingsData(prev);
 		        setError(r && r.error ? "开关写入失败：" + r.error.message : "开关写入失败");
+		        if (key === "explorerEnabled") explorerEntryState.set(prev.settings.explorerEnabled !== false);
 		      } else {
 		        setError(null);
+		        if (key === "explorerEnabled") explorerEntryState.set(value);
 		      }
 		    }).catch((e) => {
 		      setSettingsData(prev);
 		      setError("开关写入失败：" + String(e && e.message || e));
+		      if (key === "explorerEnabled") explorerEntryState.set(prev.settings.explorerEnabled !== false);
 		    });
 		  };
 		  const requestGraphOn = () => {
@@ -40209,6 +40248,7 @@ var __create = Object.create;
 		  const redistillEnabled = settingsData && settingsData.settings ? settingsData.settings.redistillEnabled === true : false;
 		  const mdSyncEnabled = settingsData && settingsData.settings ? settingsData.settings.mdSyncEnabled === true : false;
 		  const memportEnabled = settingsData && settingsData.settings ? settingsData.settings.memportEnabled === true : false;
+		  const explorerEnabled = settingsData && settingsData.settings ? settingsData.settings.explorerEnabled !== false : true;
 		  const bfConcurrency = settingsData && settingsData.settings ? settingsData.settings.backfillConcurrency ?? 0 : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { children: [
 		    settingsData && settingsData.supported === false ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("p", { style: S.hint, children: "settings 服务不可用，记忆模式开关未启用（记忆保持全开）。" }) : settingsData ? /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { style: S.switchPanel, children: [
@@ -40298,6 +40338,18 @@ var __create = Object.create;
 		            } else {
 		              toggle("graphEnabled", false);
 		            }
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: "记忆库入口" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+		        SwitchRow,
+		        {
+		          label: "侧栏「记忆库」入口",
+		          desc: explorerEnabled ? "已开启：左侧栏显示「记忆库」（L1 查询 + 关联跳转 + 2D/3D 记忆图）；关闭即时隐藏，无需重启" : "已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启",
+		          checked: explorerEnabled,
+		          onChange: (v) => {
+		            toggle("explorerEnabled", v);
 		          }
 		        }
 		      ),
@@ -42598,9 +42650,14 @@ var __create = Object.create;
 		}
 		function GraphCanvas(props) {
 		  const { full, emphasisId, fit = "center", height: canvasH = CANVAS_H } = props;
+		  const fillMode = canvasH === "fill";
+		  const realH = fillMode ? CANVAS_H : canvasH;
 		  const hostRef = (0, import_react24.useRef)(null);
 		  const pickRef = (0, import_react24.useRef)(props.onPick);
 		  pickRef.current = props.onPick;
+		  const emphasisRef = (0, import_react24.useRef)(emphasisId);
+		  emphasisRef.current = emphasisId;
+		  const graphRef = (0, import_react24.useRef)(null);
 		  const [hovered, setHovered] = (0, import_react24.useState)(null);
 		  const hideTimerRef = (0, import_react24.useRef)(null);
 		  const nodeKey = (0, import_react24.useMemo)(() => nodeKeyOf(full), [full]);
@@ -42636,7 +42693,7 @@ var __create = Object.create;
 		    const host = hostRef.current;
 		    if (!host) return;
 		    const width = host.clientWidth || 640;
-		    const height = host.clientHeight || canvasH;
+		    const height = host.clientHeight || realH;
 		    const color = (type) => resolveColor(host, TYPE_TOKENS[type] ?? FALLBACK_TOKEN);
 		    const edgeColor = resolveColor(host, "--dsh-mem-border-strong");
 		    const causalColor = resolveColor(host, "--dsh-mem-accent");
@@ -42645,7 +42702,7 @@ var __create = Object.create;
 		    const bgColor = resolveColor(host, "--dsh-mem-bg-card");
 		    const strongColor = resolveColor(host, "--dsh-mem-text-1");
 		    const labelAll = full.edges.length <= LABEL_ALL_EDGES_MAX;
-		    const isSeed = (d) => emphasisId !== void 0 && d.id === emphasisId;
+		    const isSeed = (d) => emphasisRef.current !== void 0 && d.id === emphasisRef.current;
 		    const data = toGraphData(full, width, height);
 		    const graph = new import_g6.Graph({
 		      container: host,
@@ -42726,6 +42783,7 @@ var __create = Object.create;
 		    });
 		    void graph.render().catch(() => {
 		    });
+		    graphRef.current = graph;
 		    graph.on("node:pointerenter", (evt) => {
 		      const id = evt.target?.id;
 		      if (!id) return;
@@ -42751,10 +42809,23 @@ var __create = Object.create;
 		    });
 		    return () => {
 		      if (!graph.destroyed) graph.destroy();
+		      graphRef.current = null;
 		    };
-		  }, [full, nodeKey, emphasisId, fit, canvasH]);
+		  }, [full, nodeKey, fit, realH]);
+		  (0, import_react24.useEffect)(() => {
+		    const graph = graphRef.current;
+		    if (!graph || graph.destroyed) return;
+		    for (const n of full.nodes) {
+		      try {
+		        graph.updateNodeData([{ id: n.id, data: { name: n.name, type: n.type, degree: n.id === emphasisId ? -1 : void 0 } }]);
+		      } catch {
+		      }
+		    }
+		    void graph.draw().catch(() => {
+		    });
+		  }, [emphasisId, full]);
 		  const bubbleTip = hovered ? tips.get(hovered.id) : null;
-		  return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { style: { position: "relative", width: "100%", height: canvasH, overflow: "hidden", borderRadius: 8 }, children: [
+		  return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { style: { position: "relative", width: "100%", ...fillMode ? { flex: 1, minHeight: 0 } : { height: realH }, overflow: "hidden", borderRadius: 8 }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
 		      "svg",
 		      {
@@ -44414,10 +44485,1361 @@ var __create = Object.create;
 		  ] });
 		}
 		
+		// client/src/explorer/ExplorerPage.tsx
+		var import_react33 = require("react");
+		
+		// client/src/explorer/LinkPane.tsx
+		var import_jsx_runtime30 = require("react/jsx-runtime");
+		function relLine(n) {
+		  return `${n.relation}${n.causal ? "（因果）" : ""} · ${n.hop} 跳 · 经由 ${n.viaEntityId}`;
+		}
+		function LinkPane(props) {
+		  const { recordId, links, loading, error, onPickRecord, onEmphasisNode, labelOfRecord } = props;
+		  if (!recordId) {
+		    return /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { padding: 14, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "从左侧选一条记忆，这里会列出它涉及的实体、这些实体的关系邻居、以及邻居们的来源记忆——可以一路跳下去。" });
+		  }
+		  if (error) {
+		    return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { padding: 14, fontSize: 12, color: "var(--dsh-mem-accent)" }, children: [
+		      "关联查询失败：",
+		      error
+		    ] });
+		  }
+		  if (loading || !links) {
+		    return /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { padding: 14, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: loading ? "加载中…" : " " });
+		  }
+		  const { record, entities, neighbors, records, supersede, truncated } = links;
+		  const sec = (title, count) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { fontSize: 11, letterSpacing: ".06em", color: "var(--dsh-mem-text-3)", margin: "12px 0 6px" }, children: [
+		    title,
+		    count != null ? ` (${count})` : ""
+		  ] });
+		  const chip = (id, text, title, onClick) => /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(
+		    "button",
+		    {
+		      onClick,
+		      title,
+		      style: {
+		        display: "inline-block",
+		        margin: "0 6px 6px 0",
+		        padding: "1px 8px",
+		        borderRadius: 999,
+		        border: "1px solid var(--dsh-mem-border-strong)",
+		        background: "var(--dsh-mem-accent-weak)",
+		        color: "inherit",
+		        fontSize: 11,
+		        cursor: "pointer"
+		      },
+		      children: text
+		    },
+		    id + text
+		  );
+		  return /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { height: "100%", overflowY: "auto", paddingRight: 2 }, children: [
+		    sec("层1 · 当前记录"),
+		    record ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
+		      "div",
+		      {
+		        style: {
+		          border: "1px solid var(--dsh-mem-border)",
+		          borderRadius: 8,
+		          padding: "8px 10px",
+		          background: "var(--dsh-mem-bg-inset)",
+		          fontSize: 13,
+		          lineHeight: 1.6,
+		          opacity: record.retired ? 0.6 : 1
+		        },
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { whiteSpace: "pre-wrap", wordBreak: "break-word" }, children: record.content }),
+		          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "var(--dsh-mem-text-3)", marginTop: 6 }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: record.type }),
+		            record.scene ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: record.scene }) : null,
+		            record.agingWeight != null ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
+		              "老化 ",
+		              Math.round(record.agingWeight * 100),
+		              "%"
+		            ] }) : null,
+		            record.maturity ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
+		              "成熟 ",
+		              record.maturity
+		            ] }) : null,
+		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { children: fmtTime(record.updatedAt) }),
+		            record.retired ? /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
+		              "已退场",
+		              record.retiredReason ? `·${record.retiredReason}` : ""
+		            ] }) : null
+		          ] })
+		        ]
+		      }
+		    ) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "这条记忆还没有被投影进图（图谱未开启，或投影尚未跑到）——所以暂时查不到它的关联。" }),
+		    supersede.prevIds.length > 0 || supersede.nextId ? sec("取代链") : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { children: [
+		      supersede.nextId ? chip(supersede.nextId, `→ 被新记忆取代`, "取代本记录的新行，点击查看", () => onPickRecord(supersede.nextId)) : null,
+		      supersede.prevIds.map((id) => chip(id, `← 取代了旧记忆`, "本记录取代掉的旧行，点击查看", () => onPickRecord(id)))
+		    ] }),
+		    sec("层2 · 涉及实体", entities.length),
+		    entities.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "无（该记录没有抽出实体）。" }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { children: entities.map((e) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("span", { children: [
+		      chip(e.id, `${e.name}`, `度 ${e.degree} · 因果 ${e.causalDegree} · 点击在图上强调`, () => onEmphasisNode(e.id)),
+		      e.recordIds.map(
+		        (rid) => chip(rid, `↳ ${labelOfRecord(rid).slice(0, 12)}`, "该实体的其它来源记忆，点击查看", () => onPickRecord(rid))
+		      )
+		    ] }, e.id)) }),
+		    sec("层3 · 关系邻居", neighbors.length),
+		    neighbors.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "无（这些实体目前没有 active 关系的邻居）。" }) : /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: neighbors.map((n, i) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
+		      "div",
+		      {
+		        style: { border: "1px solid var(--dsh-mem-border)", borderRadius: 8, padding: "6px 8px" },
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }, children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { style: { fontSize: 13, fontWeight: 600 }, children: n.name }),
+		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("span", { style: { fontSize: 11, color: n.causal ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-3)" }, children: relLine(n) }),
+		            /* @__PURE__ */ (0, import_jsx_runtime30.jsx)(NButton, { onClick: () => onEmphasisNode(n.id), title: "在图上强调该节点", children: "看图" })
+		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { marginTop: 4 }, children: n.recordIds.map(
+		            (rid) => chip(rid, `↳ ${labelOfRecord(rid).slice(0, 14)}`, "跳到这条邻居的来源记忆", () => onPickRecord(rid))
+		          ) })
+		        ]
+		      },
+		      `${n.id}-${n.relation}-${n.viaEntityId}-${i}`
+		    )) }),
+		    sec("相关记忆", records.length),
+		    records.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "无。" }) : records.map((r) => /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)(
+		      "button",
+		      {
+		        onClick: () => onPickRecord(r.id),
+		        style: {
+		          display: "block",
+		          width: "100%",
+		          textAlign: "left",
+		          padding: "6px 8px",
+		          marginBottom: 4,
+		          border: "1px solid var(--dsh-mem-border)",
+		          borderRadius: 8,
+		          background: "transparent",
+		          color: "inherit",
+		          cursor: "pointer",
+		          opacity: r.retired ? 0.55 : 1
+		        },
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 12, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: r.content }),
+		          /* @__PURE__ */ (0, import_jsx_runtime30.jsxs)("div", { style: { fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
+		            r.type,
+		            r.agingWeight != null ? ` · 老化 ${Math.round(r.agingWeight * 100)}%` : "",
+		            " · ",
+		            fmtTime(r.updatedAt)
+		          ] })
+		        ]
+		      },
+		      r.id
+		    )),
+		    truncated ? /* @__PURE__ */ (0, import_jsx_runtime30.jsx)("div", { style: { fontSize: 11, color: "var(--dsh-mem-accent)", marginTop: 8 }, children: "邻居或相关记忆过多，此处已截断（不是没有更多）。" }) : null
+		  ] });
+		}
+		
+		// client/src/explorer/RecordPane.tsx
+		var import_react31 = require("react");
+		var import_jsx_runtime31 = require("react/jsx-runtime");
+		var PAGE = 40;
+		var CONDS0 = { query: "", type: "", retired: "" };
+		function RecordPane(props) {
+		  const { rpc, activeId, onPick } = props;
+		  const [input, setInput] = (0, import_react31.useState)("");
+		  const [typeSel, setTypeSel] = (0, import_react31.useState)("");
+		  const [retiredSel, setRetiredSel] = (0, import_react31.useState)("");
+		  const [conds, setConds] = (0, import_react31.useState)(CONDS0);
+		  const [items, setItems] = (0, import_react31.useState)([]);
+		  const [hasMore, setHasMore] = (0, import_react31.useState)(false);
+		  const [total, setTotal] = (0, import_react31.useState)(null);
+		  const [truncated, setTruncated] = (0, import_react31.useState)(false);
+		  const [typeCatalog, setTypeCatalog] = (0, import_react31.useState)([]);
+		  const [loading, setLoading] = (0, import_react31.useState)(false);
+		  const [error, setError] = (0, import_react31.useState)(null);
+		  const offsetRef = (0, import_react31.useRef)(0);
+		  const seqRef = (0, import_react31.useRef)(0);
+		  const fetchPage = (0, import_react31.useCallback)(
+		    (next, offset, append) => {
+		      const token = ++seqRef.current;
+		      setLoading(true);
+		      setError(null);
+		      const payload = { limit: PAGE, offset };
+		      if (next.query) payload.query = next.query;
+		      if (next.type) payload.type = next.type;
+		      if (next.retired !== "") payload.retired = next.retired === "active";
+		      rpc("dsh-memory/list-records", payload).then((r) => {
+		        if (token !== seqRef.current) return;
+		        if (!r.ok) throw new Error(r.error.message);
+		        const v = r.value;
+		        setItems((prev) => append ? [...prev, ...v.items] : v.items);
+		        setHasMore(v.hasMore);
+		        setTotal(v.total);
+		        setTruncated(v.truncated);
+		        if (v.typeCatalog && offset === 0) setTypeCatalog(v.typeCatalog);
+		        offsetRef.current = offset + v.items.length;
+		      }).catch((e) => {
+		        if (token !== seqRef.current) return;
+		        setError(String(e?.message ?? e));
+		      }).finally(() => {
+		        if (token === seqRef.current) setLoading(false);
+		      });
+		    },
+		    [rpc]
+		  );
+		  const search = () => {
+		    const next = { query: input.trim(), type: typeSel, retired: retiredSel };
+		    setConds(next);
+		    fetchPage(next, 0, false);
+		  };
+		  (0, import_react31.useEffect)(() => {
+		    fetchPage(CONDS0, 0, false);
+		  }, [fetchPage]);
+		  const onKey = (e) => {
+		    if (e.key === "Enter") search();
+		    else if (e.key === "Escape") {
+		      setInput("");
+		      setTypeSel("");
+		      setRetiredSel("");
+		      setConds(CONDS0);
+		      fetchPage(CONDS0, 0, false);
+		    }
+		  };
+		  const labelOf = (t) => typeCatalog.find((c) => c.id === t)?.label ?? t;
+		  return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
+		        NInput,
+		        {
+		          style: { flex: "1 1 160px", minWidth: 140 },
+		          placeholder: "搜索记忆内容（关键词）…",
+		          value: input,
+		          onChange: (e) => setInput(e.target.value),
+		          onKeyDown: onKey
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(
+		        "select",
+		        {
+		          className: "dsh-mem-input",
+		          value: typeSel,
+		          onChange: (e) => setTypeSel(e.target.value),
+		          title: "类型筛选",
+		          style: { maxWidth: 120 },
+		          children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "", children: "全部类型" }),
+		            typeCatalog.map((c) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: c.id, children: c.label }, c.id))
+		          ]
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(
+		        "select",
+		        {
+		          className: "dsh-mem-input",
+		          value: retiredSel,
+		          onChange: (e) => setRetiredSel(e.target.value),
+		          title: "退场筛选",
+		          style: { maxWidth: 96 },
+		          children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "", children: "全部" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "active", children: "仅活跃" }),
+		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "retired", children: "仅退场" })
+		          ]
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(NButton, { onClick: search, title: "查询（Enter）", children: "查询" })
+		    ] }),
+		    /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: "6px 2px" }, children: [
+		      total != null ? `共 ${total} 条 · ` : "",
+		      "已列 ",
+		      items.length,
+		      " 条",
+		      truncated ? " · 检索结果可能不完整" : "",
+		      loading ? " · 加载中…" : ""
+		    ] }),
+		    error && /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-accent)", padding: "4px 0" }, children: [
+		      "查询失败：",
+		      error,
+		      " ",
+		      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(NButton, { onClick: () => fetchPage(conds, Math.max(0, offsetRef.current - items.length), false), children: "重试" })
+		    ] }),
+		    /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { flex: 1, minHeight: 0, overflowY: "auto", border: "1px solid var(--dsh-mem-border)", borderRadius: 8 }, children: [
+		      items.length === 0 && !loading && !error ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { style: { padding: 16, fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: "没有符合条件的记忆。" }) : null,
+		      items.map((r) => {
+		        const on = r.id === activeId;
+		        return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)(
+		          "button",
+		          {
+		            onClick: () => onPick(r.id),
+		            title: r.retired ? "已退场（软删，可恢复）" : void 0,
+		            style: {
+		              display: "block",
+		              width: "100%",
+		              textAlign: "left",
+		              padding: "8px 10px",
+		              borderBottom: "1px solid var(--dsh-mem-border)",
+		              background: on ? "var(--dsh-mem-accent-weak)" : "transparent",
+		              color: "inherit",
+		              cursor: "pointer",
+		              opacity: r.retired ? 0.55 : 1
+		            },
+		            children: [
+		              /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(
+		                "div",
+		                {
+		                  style: {
+		                    fontSize: 13,
+		                    lineHeight: 1.5,
+		                    display: "-webkit-box",
+		                    WebkitLineClamp: 3,
+		                    WebkitBoxOrient: "vertical",
+		                    overflow: "hidden",
+		                    textDecoration: r.retired ? "line-through" : "none"
+		                  },
+		                  children: r.content
+		                }
+		              ),
+		              /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", fontSize: 11, color: "var(--dsh-mem-text-3)", marginTop: 4 }, children: [
+		                /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: labelOf(r.type) }),
+		                r.scene ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: r.scene }) : null,
+		                r.agingWeight != null ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { title: "老化权重（读路径衰减系数）", children: [
+		                  "老化 ",
+		                  Math.round(r.agingWeight * 100),
+		                  "%"
+		                ] }) : null,
+		                r.maturity ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { children: [
+		                  "成熟 ",
+		                  r.maturity
+		                ] }) : null,
+		                r.usage && r.usage.used > 0 ? /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("span", { children: [
+		                  "被用 ",
+		                  r.usage.used
+		                ] }) : null,
+		                /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: fmtTime(r.updatedAt) }),
+		                r.retired ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("span", { children: "已退场" }) : null
+		              ] })
+		            ]
+		          },
+		          r.id
+		        );
+		      }),
+		      hasMore ? /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("div", { style: { padding: 8, textAlign: "center" }, children: /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(NButton, { onClick: () => fetchPage(conds, offsetRef.current, true), disabled: loading, children: "加载更多" }) }) : null
+		    ] })
+		  ] });
+		}
+		
+		// client/src/explorer/Scene3D.tsx
+		var import_react32 = require("react");
+		
+		// client/src/explorer/projection.ts
+		var FOCAL = 1100;
+		var CAM_DEFAULT = { yaw: 0.45, pitch: -0.3, dist: 1200, panX: 0, panY: 0 };
+		var DIST_MIN = 380;
+		var DIST_MAX = 3200;
+		var PITCH_LIMIT = 1.35;
+		var ZOOM_STEP = 1.08;
+		var PICK_PX = 16;
+		var EGO_HOPS_MAX2 = 3;
+		var SHELL_GAP = 300;
+		var TRANSITION_MS = 520;
+		var LABEL_CELL_W = 104;
+		var LABEL_CELL_H = 14;
+		var LABEL_MIN_F = 0.55;
+		var LABEL_BUDGET_BASE = 72;
+		var LABEL_BUDGET_MIN = 24;
+		var LABEL_BUDGET_MAX = 280;
+		var DEPTH_LIGHT_CAP = 0.85;
+		var ALPHA_FLOOR = 0.06;
+		var AGING_STRETCH_MIN = 0.2;
+		function rand01(salt) {
+		  return hash322(salt) % 1e5 / 1e5;
+		}
+		function clusterOrder(types) {
+		  const seen = new Set(types);
+		  const known = ["person", "project", "organization", "tool", "place"].filter((t) => seen.has(t));
+		  const rest = [...seen].filter((t) => !known.includes(t)).sort((a, b) => hash322(a) - hash322(b));
+		  return [...known, ...rest];
+		}
+		function buildClusterLayout(nodes) {
+		  const out = /* @__PURE__ */ new Map();
+		  const types = clusterOrder(nodes.map((n) => n.type));
+		  const centers = /* @__PURE__ */ new Map();
+		  const total = Math.max(1, types.length);
+		  types.forEach((type, i) => {
+		    const y = total === 1 ? 0 : 1 - i / (total - 1) * 2;
+		    const ring = Math.sqrt(Math.max(0, 1 - y * y));
+		    const phi = i * Math.PI * (3 - Math.sqrt(5)) + rand01(`c:${type}`) * 0.6;
+		    const radius = 230 + rand01(`r:${type}`) * 190;
+		    centers.set(type, {
+		      x: Math.cos(phi) * ring * radius,
+		      y: y * radius * 0.82,
+		      // 纵向压扁：正球在俯视时上下层会互相挡住
+		      z: Math.sin(phi) * ring * radius
+		    });
+		  });
+		  for (const n of nodes) {
+		    const c = centers.get(n.type) ?? { x: 0, y: 0, z: 0 };
+		    const a = rand01(`a:${n.id}`) * Math.PI * 2;
+		    const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
+		    const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
+		    out.set(n.id, {
+		      x: c.x + Math.sin(b) * Math.cos(a) * rr,
+		      y: c.y + Math.cos(b) * rr * 0.72,
+		      z: c.z + Math.sin(b) * Math.sin(a) * rr
+		    });
+		  }
+		  return out;
+		}
+		function buildEgoLayout(adj, focusId, hops) {
+		  const out = /* @__PURE__ */ new Map();
+		  const depth = Math.min(Math.max(Math.floor(hops), 1), EGO_HOPS_MAX2);
+		  const hopOf = /* @__PURE__ */ new Map([[focusId, 0]]);
+		  let frontier = [focusId];
+		  const byHop = /* @__PURE__ */ new Map();
+		  byHop.set(0, [focusId]);
+		  for (let h = 1; h <= depth; h++) {
+		    const next = [];
+		    for (const id of frontier) {
+		      for (const other of adj.get(id) ?? []) {
+		        if (hopOf.has(other)) continue;
+		        hopOf.set(other, h);
+		        next.push(other);
+		      }
+		    }
+		    if (next.length > 0) byHop.set(h, next);
+		    frontier = next;
+		    if (next.length === 0) break;
+		  }
+		  for (const [h, ids] of byHop) {
+		    const R2 = h * SHELL_GAP;
+		    const total = ids.length;
+		    ids.forEach((id, i) => {
+		      if (h === 0) {
+		        out.set(id, { x: 0, y: 0, z: 0 });
+		        return;
+		      }
+		      const y = total === 1 ? 0 : 1 - i / (total - 1) * 2;
+		      const ring = Math.sqrt(Math.max(0, 1 - y * y));
+		      const phi = i * Math.PI * (3 - Math.sqrt(5)) + rand01(`e:${id}`) * 0.7;
+		      const jitter = 1 + (rand01(`j:${id}`) - 0.5) * 0.18;
+		      out.set(id, {
+		        x: Math.cos(phi) * ring * R2 * jitter,
+		        y: y * R2 * 0.85 * jitter,
+		        z: Math.sin(phi) * ring * R2 * jitter
+		      });
+		    });
+		  }
+		  return out;
+		}
+		function projectAll(layout, cam, viewport, ids, t = 0, drift = true) {
+		  const cy = Math.cos(cam.yaw);
+		  const sy = Math.sin(cam.yaw);
+		  const cp = Math.cos(cam.pitch);
+		  const sp = Math.sin(cam.pitch);
+		  const out = [];
+		  const walk = (id) => {
+		    const p = layout.get(id);
+		    if (!p) return;
+		    const d = drift ? 1 : 0;
+		    const phase = rand01(`p:${id}`) * Math.PI * 2;
+		    const wx = p.x + Math.sin(t / 3200 + phase) * 7 * d + cam.panX;
+		    const wy = p.y + Math.cos(t / 4100 + phase) * 5 * d + cam.panY;
+		    const wz = p.z + Math.sin(t / 2700 + phase * 1.3) * 7 * d;
+		    const x1 = wx * cy - wz * sy;
+		    const z1 = wx * sy + wz * cy;
+		    const y1 = wy * cp - z1 * sp;
+		    const z2 = wy * sp + z1 * cp;
+		    const depth = cam.dist + z2;
+		    const f = FOCAL / Math.max(140, depth);
+		    out.push({ id, x: viewport.w / 2 + x1 * f, y: viewport.h / 2 + y1 * f, f, depth });
+		  };
+		  if (ids) for (const id of ids) walk(id);
+		  else for (const id of layout.keys()) walk(id);
+		  out.sort((a, b) => b.depth - a.depth);
+		  return out;
+		}
+		function brightnessFor(f, agingWeight, agingOn = true) {
+		  const depthLight = Math.min(DEPTH_LIGHT_CAP, 0.2 + f * 0.55);
+		  const rawAging = agingWeight == null ? 1 : agingWeight;
+		  const stretched = AGING_STRETCH_MIN >= 1 ? 1 : 0.12 + 0.88 * Math.max(0, Math.min(1, (rawAging - AGING_STRETCH_MIN) / (1 - AGING_STRETCH_MIN)));
+		  const agingLight = agingOn ? stretched : 1;
+		  return Math.max(ALPHA_FLOOR, depthLight * agingLight);
+		}
+		function labelBudget(camDist) {
+		  const raw = Math.round(LABEL_BUDGET_BASE * (CAM_DEFAULT.dist / Math.max(1, camDist)));
+		  return Math.min(LABEL_BUDGET_MAX, Math.max(LABEL_BUDGET_MIN, raw));
+		}
+		function pickLabels(candidates, budget, widthOf, viewportW, cellW = LABEL_CELL_W, cellH = LABEL_CELL_H) {
+		  const picked = [];
+		  const occupied = /* @__PURE__ */ new Set();
+		  for (const c of [...candidates].sort((a, b) => b.rank - a.rank)) {
+		    if (picked.length >= budget) break;
+		    if (c.f < LABEL_MIN_F) continue;
+		    const w = widthOf(c.id);
+		    const x = Math.round(c.x + 7);
+		    const y = Math.round(c.y - 5);
+		    if (x + w > viewportW - 4 || x < -2) continue;
+		    const cell = `${Math.floor(x / cellW)}:${Math.floor(y / cellH)}`;
+		    if (occupied.has(cell)) continue;
+		    occupied.add(cell);
+		    picked.push(c.id);
+		  }
+		  return picked;
+		}
+		function pickNearest(projected, mx, my, threshold = PICK_PX) {
+		  for (const p of projected) {
+		    if (Math.hypot(p.x - mx, p.y - my) < threshold) return p.id;
+		  }
+		  return null;
+		}
+		function easeInOut(p) {
+		  const k = Math.min(1, Math.max(0, p));
+		  return k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+		}
+		function lerpLayout(from, to, k) {
+		  const e = easeInOut(k);
+		  const out = /* @__PURE__ */ new Map();
+		  for (const [id, b] of to) {
+		    const a = from.get(id) ?? b;
+		    out.set(id, { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, z: a.z + (b.z - a.z) * e });
+		  }
+		  return out;
+		}
+		function zoomBy(dist, deltaY) {
+		  const next = dist * (deltaY > 0 ? ZOOM_STEP : 1 / ZOOM_STEP);
+		  return Math.min(DIST_MAX, Math.max(DIST_MIN, next));
+		}
+		
+		// client/src/explorer/Scene3D.tsx
+		var import_jsx_runtime32 = require("react/jsx-runtime");
+		var TYPE_TOKENS2 = {
+		  person: "--dsh-mem-chart-1",
+		  project: "--dsh-mem-chart-2",
+		  organization: "--dsh-mem-chart-3",
+		  tool: "--dsh-mem-chart-4",
+		  place: "--dsh-mem-chart-5"
+		};
+		var FALLBACK_TOKEN2 = "--dsh-mem-chart-6";
+		var FALLBACK_COLOR3 = "#8a8f98";
+		function resolveColor2(host, token) {
+		  const v = getComputedStyle(host).getPropertyValue(token).trim();
+		  return v.length > 0 ? v : FALLBACK_COLOR3;
+		}
+		var SPRITE_PX = 64;
+		function useLatest(fn) {
+		  const ref = (0, import_react32.useRef)(fn);
+		  ref.current = fn;
+		  return ((...args) => ref.current(...args));
+		}
+		function Scene3D(props) {
+		  const { full, onPick: onPickRaw, emphasisId, height = 620 } = props;
+		  const onPick = useLatest(onPickRaw);
+		  const hostRef = (0, import_react32.useRef)(null);
+		  const canvasRef = (0, import_react32.useRef)(null);
+		  const [glowOn, setGlowOn] = (0, import_react32.useState)(true);
+		  const [edgesOn, setEdgesOn] = (0, import_react32.useState)(true);
+		  const [labelsOn, setLabelsOn] = (0, import_react32.useState)(true);
+		  const [agingOn, setAgingOn] = (0, import_react32.useState)(true);
+		  const [pointSize, setPointSize] = (0, import_react32.useState)(2.2);
+		  const [driftOn, setDriftOn] = (0, import_react32.useState)(false);
+		  const [starry, setStarry] = (0, import_react32.useState)(true);
+		  const camRef = (0, import_react32.useRef)({ ...CAM_DEFAULT });
+		  const modeRef = (0, import_react32.useRef)("cluster");
+		  const focusRef = (0, import_react32.useRef)(null);
+		  const hoverRef = (0, import_react32.useRef)(null);
+		  const [hoverInfo, setHoverInfo] = (0, import_react32.useState)(null);
+		  const [mode, setMode] = (0, import_react32.useState)("cluster");
+		  const dragRef = (0, import_react32.useRef)(null);
+		  const clickRef = (0, import_react32.useRef)(null);
+		  const emphasisRef = (0, import_react32.useRef)(emphasisId);
+		  emphasisRef.current = emphasisId;
+		  const dirtyRef = (0, import_react32.useRef)(true);
+		  const degree = (0, import_react32.useMemo)(() => degreeMapOf(full), [full]);
+		  const edgeList = (0, import_react32.useMemo)(
+		    () => full.edges.map((e) => ({ from: e.from, to: e.to, relation: e.relation, causal: e.causal })),
+		    [full]
+		  );
+		  const adj = (0, import_react32.useMemo)(() => {
+		    const m = /* @__PURE__ */ new Map();
+		    for (const e of edgeList) {
+		      if (!m.has(e.from)) m.set(e.from, []);
+		      if (!m.has(e.to)) m.set(e.to, []);
+		      m.get(e.from).push(e.to);
+		      m.get(e.to).push(e.from);
+		    }
+		    return m;
+		  }, [edgeList]);
+		  const nodeById = (0, import_react32.useMemo)(() => new Map(full.nodes.map((n) => [n.id, n])), [full]);
+		  const nodeKeySeed = (0, import_react32.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
+		  const clusterLayout = (0, import_react32.useMemo)(() => buildClusterLayout(full.nodes.map((n) => ({ id: n.id, type: n.type }))), [full]);
+		  const layoutRef = (0, import_react32.useRef)(clusterLayout);
+		  const egoLayoutRef = (0, import_react32.useRef)(null);
+		  const transRef = (0, import_react32.useRef)(null);
+		  (0, import_react32.useEffect)(() => {
+		    layoutRef.current = clusterLayout;
+		    egoLayoutRef.current = null;
+		    transRef.current = null;
+		    modeRef.current = "cluster";
+		    focusRef.current = null;
+		    setMode("cluster");
+		  }, [clusterLayout]);
+		  (0, import_react32.useEffect)(() => {
+		    if (!emphasisId || emphasisId === focusRef.current) return;
+		    if (!clusterLayout.has(emphasisId)) return;
+		    const egoL = buildEgoLayout(adj, emphasisId, EGO_HOPS_MAX2);
+		    egoLayoutRef.current = egoL;
+		    modeRef.current = "ego";
+		    focusRef.current = emphasisId;
+		    setMode("ego");
+		    transRef.current = { from: layoutRef.current, to: egoL, start: performance.now() };
+		    camRef.current.dist = Math.min(3200, Math.max(380, EGO_HOPS_MAX2 * 300 * 1.55));
+		    camRef.current.panX = 0;
+		    camRef.current.panY = 0;
+		  }, [emphasisId, adj, clusterLayout]);
+		  const metasRef = (0, import_react32.useRef)(/* @__PURE__ */ new Map());
+		  const spritesRef = (0, import_react32.useRef)(/* @__PURE__ */ new Map());
+		  (0, import_react32.useEffect)(() => {
+		    const host = hostRef.current;
+		    if (!host) return;
+		    const colorCache = /* @__PURE__ */ new Map();
+		    const colorOf = (type) => {
+		      const token = TYPE_TOKENS2[type] ?? FALLBACK_TOKEN2;
+		      let c = colorCache.get(token);
+		      if (c === void 0) {
+		        c = resolveColor2(host, token);
+		        colorCache.set(token, c);
+		      }
+		      return c;
+		    };
+		    metasRef.current = new Map(
+		      full.nodes.map((n) => {
+		        const deg = degree.get(n.id) ?? 0;
+		        return [
+		          n.id,
+		          {
+		            id: n.id,
+		            name: n.name,
+		            type: n.type,
+		            color: colorOf(n.type),
+		            degree: deg,
+		            // 度数 → 基础半径：sqrt 压缩（与 2D radiusForDegree 同一族形状，单位换成 3D 世界）
+		            base: pointSize * (1 + Math.sqrt(deg) * 0.28),
+		            aging: n.aging ?? null,
+		            source: n.source ?? null
+		          }
+		        ];
+		      })
+		    );
+		  }, [full, degree, pointSize]);
+		  (0, import_react32.useLayoutEffect)(() => {
+		    const host = hostRef.current;
+		    const canvas = canvasRef.current;
+		    if (!host || !canvas) return;
+		    const ctx = canvas.getContext("2d");
+		    if (!ctx) return;
+		    dirtyRef.current = true;
+		    const buffer = document.createElement("canvas");
+		    const bctx = buffer.getContext("2d");
+		    let raf = 0;
+		    let disposed = false;
+		    let vw = 0;
+		    let vh = 0;
+		    const dprRef = { current: 1 };
+		    const spriteFor = (color) => {
+		      const hit = spritesRef.current.get(color);
+		      if (hit) return hit;
+		      const s = document.createElement("canvas");
+		      s.width = SPRITE_PX;
+		      s.height = SPRITE_PX;
+		      const sc = s.getContext("2d");
+		      const half = SPRITE_PX / 2;
+		      const g = sc.createRadialGradient(half, half, 0, half, half, half);
+		      g.addColorStop(0, color);
+		      g.addColorStop(0.4, color);
+		      g.addColorStop(1, "rgba(0,0,0,0)");
+		      sc.fillStyle = g;
+		      sc.beginPath();
+		      sc.arc(half, half, half, 0, Math.PI * 2);
+		      sc.fill();
+		      spritesRef.current.set(color, s);
+		      return s;
+		    };
+		    let bgCache = null;
+		    let bgCacheW = 0;
+		    let bgCacheH = 0;
+		    let bgCacheStarry = null;
+		    const bakeBg = (w, h, starryMode, seedKey) => {
+		      const cv = document.createElement("canvas");
+		      cv.width = w;
+		      cv.height = h;
+		      const bc = cv.getContext("2d");
+		      if (starryMode) {
+		        const sky = bc.createLinearGradient(0, 0, 0, h);
+		        sky.addColorStop(0, "#0a1226");
+		        sky.addColorStop(1, "#04070f");
+		        bc.fillStyle = sky;
+		        bc.fillRect(0, 0, w, h);
+		        const count = Math.min(260, Math.floor(w * h / 12500));
+		        const rnd = (i, tag) => hash322(`${seedKey}:${tag}:${i}`) % 1e5 / 1e5;
+		        for (let i = 0; i < count; i++) {
+		          const x = rnd(i, "x") * w;
+		          const y = rnd(i, "y") * h;
+		          const t = rnd(i, "t");
+		          if (t < 0.05) {
+		            const halo = bc.createRadialGradient(x, y, 0, x, y, 5.5);
+		            halo.addColorStop(0, "rgba(214, 226, 255, 0.8)");
+		            halo.addColorStop(1, "rgba(214, 226, 255, 0)");
+		            bc.fillStyle = halo;
+		            bc.beginPath();
+		            bc.arc(x, y, 5.5, 0, Math.PI * 2);
+		            bc.fill();
+		            bc.fillStyle = "rgba(230, 238, 255, 0.95)";
+		            bc.beginPath();
+		            bc.arc(x, y, 1.1, 0, Math.PI * 2);
+		            bc.fill();
+		          } else if (t < 0.22) {
+		            bc.fillStyle = `rgba(196, 210, 240, ${0.34 + t * 1.2})`;
+		            bc.beginPath();
+		            bc.arc(x, y, 0.9, 0, Math.PI * 2);
+		            bc.fill();
+		          } else {
+		            bc.fillStyle = `rgba(168, 184, 220, ${0.1 + t * 0.9})`;
+		            bc.beginPath();
+		            bc.arc(x, y, 0.55, 0, Math.PI * 2);
+		            bc.fill();
+		          }
+		        }
+		        bc.globalAlpha = 1;
+		      } else {
+		        bc.fillStyle = resolveColor2(host, "--dsh-mem-bg-card");
+		        bc.fillRect(0, 0, w, h);
+		      }
+		      return cv;
+		    };
+		    const resize = () => {
+		      const dpr = Math.min(2, window.devicePixelRatio || 1);
+		      dprRef.current = dpr;
+		      vw = host.clientWidth || 640;
+		      vh = host.clientHeight || host.offsetHeight || height;
+		      canvas.width = Math.round(vw * dpr);
+		      canvas.height = Math.round(vh * dpr);
+		      canvas.style.width = `${vw}px`;
+		      canvas.style.height = `${vh}px`;
+		      buffer.width = canvas.width;
+		      buffer.height = canvas.height;
+		      bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		      bgCache = null;
+		    };
+		    resize();
+		    const ro = new ResizeObserver(resize);
+		    ro.observe(host);
+		    const activeLayout = (now) => {
+		      const tr = transRef.current;
+		      if (!tr) return layoutRef.current;
+		      const k = (now - tr.start) / TRANSITION_MS;
+		      if (k >= 1) {
+		        layoutRef.current = tr.to;
+		        transRef.current = null;
+		        return tr.to;
+		      }
+		      return lerpLayout(tr.from, tr.to, k);
+		    };
+		    let lastProjected = [];
+		    const frame = (now) => {
+		      if (disposed) return;
+		      const cam = camRef.current;
+		      const layout = activeLayout(now);
+		      const ego = modeRef.current === "ego";
+		      const metas = metasRef.current;
+		      const hover = hoverRef.current;
+		      const focus = focusRef.current;
+		      let nbSet = null;
+		      if (hover) {
+		        nbSet = /* @__PURE__ */ new Set([hover, ...adj.get(hover) ?? []]);
+		        if (focus && focus !== hover) nbSet.add(focus);
+		      }
+		      const projected = projectAll(layout, cam, { w: vw, h: vh }, void 0, now, driftOn && !ego);
+		      lastProjected = projected;
+		      const c = bctx;
+		      c.clearRect(0, 0, vw, vh);
+		      if (!bgCache || bgCacheW !== vw || bgCacheH !== vh || bgCacheStarry !== starry) {
+		        bgCache = bakeBg(vw, vh, starry, nodeKeySeed);
+		        bgCacheW = vw;
+		        bgCacheH = vh;
+		        bgCacheStarry = starry;
+		      }
+		      c.drawImage(bgCache, 0, 0);
+		      const pos = new Map(projected.map((p) => [p.id, p]));
+		      if (edgesOn) {
+		        const edgeBase = resolveColor2(host, "--dsh-mem-border-strong");
+		        const causalC = resolveColor2(host, "--dsh-mem-accent");
+		        c.globalCompositeOperation = "source-over";
+		        for (const e of edgeList) {
+		          const a = pos.get(e.from);
+		          const b = pos.get(e.to);
+		          if (!a || !b) continue;
+		          const related = !hover || nbSet.has(e.from) && nbSet.has(e.to) && (e.from === hover || e.to === hover);
+		          if (hover && !related) continue;
+		          const avgF = (a.f + b.f) / 2;
+		          const alpha = Math.min(0.9, Math.max(0.05, avgF * 0.34));
+		          c.strokeStyle = e.causal ? causalC : edgeBase;
+		          c.globalAlpha = hover ? Math.min(0.9, alpha + 0.25) : alpha;
+		          c.lineWidth = e.causal ? 1.2 : 0.7;
+		          c.beginPath();
+		          c.moveTo(a.x, a.y);
+		          c.lineTo(b.x, b.y);
+		          c.stroke();
+		        }
+		        c.globalAlpha = 1;
+		      }
+		      for (const p of projected) {
+		        const m = metas.get(p.id);
+		        if (!m) continue;
+		        const isFocus = p.id === focus || p.id === emphasisRef.current;
+		        const isHover = p.id === hover;
+		        const dim = hover !== null && nbSet !== null && !nbSet.has(p.id) && !isFocus;
+		        let alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
+		        if (dim) alpha = Math.min(alpha, 0.12);
+		        const r = Math.max(0.8, m.base * p.f * 1.75 * (isFocus || isHover ? 1.9 : 1));
+		        if (glowOn) {
+		          c.globalCompositeOperation = "lighter";
+		          c.globalAlpha = alpha * 0.5;
+		          const sp = spriteFor(m.color);
+		          const gr = r * 3.4;
+		          c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
+		        }
+		        c.globalCompositeOperation = "source-over";
+		        c.globalAlpha = Math.min(1, alpha + 0.15);
+		        c.fillStyle = m.color;
+		        c.beginPath();
+		        c.arc(p.x, p.y, r, 0, Math.PI * 2);
+		        c.fill();
+		      }
+		      c.globalAlpha = 1;
+		      if (labelsOn) {
+		        const textColor = resolveColor2(host, "--dsh-mem-text-2");
+		        const inSet = /* @__PURE__ */ new Set();
+		        const cand = projected.filter((p) => metas.has(p.id)).map((p) => {
+		          const m = metas.get(p.id);
+		          const hot = p.id === focus || p.id === hover || p.id === emphasisRef.current;
+		          if (hot) inSet.add(p.id);
+		          return {
+		            id: p.id,
+		            x: p.x,
+		            y: p.y,
+		            f: p.f,
+		            rank: (hot ? 1e6 : 0) + m.degree * 10 + (m.aging ?? 1) * 5 + hash322(p.id) % 7
+		          };
+		        });
+		        const widthOf = (id) => {
+		          const m = metas.get(id);
+		          return m ? clipByWidth(m.name).length * 6.4 : 0;
+		        };
+		        const picked = /* @__PURE__ */ new Set([...pickLabels(cand, labelBudget(cam.dist), widthOf, vw), ...inSet]);
+		        c.globalCompositeOperation = "source-over";
+		        c.fillStyle = textColor;
+		        c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+		        for (const p of projected) {
+		          if (!picked.has(p.id)) continue;
+		          const m = metas.get(p.id);
+		          const dim = hover !== null && nbSet !== null && !nbSet.has(p.id);
+		          c.globalAlpha = dim ? 0.18 : Math.min(1, Math.max(0.35, p.f));
+		          c.fillText(clipByWidth(m.name), p.x + 7, p.y - 5);
+		        }
+		        c.globalAlpha = 1;
+		      }
+		      if (hover && edgesOn) {
+		        const causalC = resolveColor2(host, "--dsh-mem-accent");
+		        const edgeBase = resolveColor2(host, "--dsh-mem-border-strong");
+		        c.font = '10px system-ui, "Microsoft YaHei", sans-serif';
+		        const used = /* @__PURE__ */ new Set();
+		        const related = edgeList.filter((e) => (e.from === hover || e.to === hover) && pos.has(e.from) && pos.has(e.to)).sort((a, b) => Number(b.causal) - Number(a.causal));
+		        for (const e of related.slice(0, 12)) {
+		          const a = pos.get(e.from);
+		          const b = pos.get(e.to);
+		          const mx = (a.x + b.x) / 2;
+		          const my = (a.y + b.y) / 2;
+		          const cell = Math.floor(mx / 72) * 1e3 + Math.floor(my / 13);
+		          if (used.has(cell)) continue;
+		          used.add(cell);
+		          c.fillStyle = e.causal ? causalC : edgeBase;
+		          c.globalAlpha = 0.92;
+		          c.fillText(e.relation, mx, my);
+		        }
+		        c.globalAlpha = 1;
+		      }
+		      ctx.setTransform(1, 0, 0, 1, 0, 0);
+		      ctx.drawImage(buffer, 0, 0);
+		      ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+		      raf = requestAnimationFrame(frame);
+		    };
+		    frame(performance.now());
+		    const toLocal = (ev) => {
+		      const rect = canvas.getBoundingClientRect();
+		      return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+		    };
+		    const onDown = (ev) => {
+		      const pt = toLocal(ev);
+		      dragRef.current = { btn: ev.button, x: pt.x, y: pt.y, panning: ev.shiftKey || ev.button === 1 };
+		    };
+		    const onMove = (ev) => {
+		      const pt = toLocal(ev);
+		      const drag = dragRef.current;
+		      if (drag) {
+		        const cam = camRef.current;
+		        if (drag.panning) {
+		          cam.panX += (pt.x - drag.x) * (cam.dist / CAM_DEFAULT.dist);
+		          cam.panY += (pt.y - drag.y) * (cam.dist / CAM_DEFAULT.dist);
+		        } else {
+		          cam.yaw += (pt.x - drag.x) * 6e-3;
+		          cam.pitch = Math.min(PITCH_LIMIT, Math.max(-PITCH_LIMIT, cam.pitch + (pt.y - drag.y) * 6e-3));
+		        }
+		        drag.x = pt.x;
+		        drag.y = pt.y;
+		        dirtyRef.current = true;
+		        return;
+		      }
+		      const hit = pickNearest(lastProjected, pt.x, pt.y, PICK_PX);
+		      if (hit !== hoverRef.current) {
+		        hoverRef.current = hit;
+		        dirtyRef.current = true;
+		        setHoverInfo(hit ? { id: hit, x: pt.x, y: pt.y } : null);
+		      } else if (hit) {
+		        setHoverInfo({ id: hit, x: pt.x, y: pt.y });
+		      }
+		    };
+		    const onUp = (ev) => {
+		      const drag = dragRef.current;
+		      dragRef.current = null;
+		      if (!drag || drag.panning || ev.button !== 0) return;
+		      const pt = toLocal(ev);
+		      if (Math.hypot(pt.x - drag.x, pt.y - drag.y) > 4) return;
+		      const hit = pickNearest(lastProjected, pt.x, pt.y, PICK_PX);
+		      if (!hit) return;
+		      const now = Date.now();
+		      const prev = clickRef.current;
+		      if (prev && prev.id === hit && now - prev.at < 380) {
+		        onPick(hit);
+		        clickRef.current = null;
+		        return;
+		      }
+		      clickRef.current = { id: hit, at: now };
+		      onPick(hit);
+		      const ego = modeRef.current === "ego";
+		      const startTransition = (to) => {
+		        transRef.current = { from: layoutRef.current, to, start: performance.now() };
+		      };
+		      if (ego && hit === focusRef.current) {
+		        modeRef.current = "cluster";
+		        focusRef.current = null;
+		        setMode("cluster");
+		        startTransition(clusterLayout);
+		        camRef.current.dist = CAM_DEFAULT.dist;
+		      } else if (!ego) {
+		        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX2);
+		        egoLayoutRef.current = egoL;
+		        modeRef.current = "ego";
+		        focusRef.current = hit;
+		        setMode("ego");
+		        startTransition(egoL);
+		        camRef.current.dist = Math.min(DIST_MAX, Math.max(DIST_MIN, EGO_HOPS_MAX2 * SHELL_GAP * 1.55));
+		        camRef.current.panX = 0;
+		        camRef.current.panY = 0;
+		      } else {
+		        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX2);
+		        egoLayoutRef.current = egoL;
+		        focusRef.current = hit;
+		        startTransition(egoL);
+		      }
+		    };
+		    const onWheel = (ev) => {
+		      ev.preventDefault();
+		      camRef.current.dist = zoomBy(camRef.current.dist, ev.deltaY);
+		      dirtyRef.current = true;
+		    };
+		    const onKey = (ev) => {
+		      if (ev.key === "Enter" && hoverRef.current) onPick(hoverRef.current);
+		      if (ev.key === "Escape" && modeRef.current === "ego") {
+		        modeRef.current = "cluster";
+		        focusRef.current = null;
+		        setMode("cluster");
+		        transRef.current = { from: layoutRef.current, to: clusterLayout, start: performance.now() };
+		        camRef.current.dist = CAM_DEFAULT.dist;
+		      }
+		    };
+		    const onLeave = () => {
+		      hoverRef.current = null;
+		      setHoverInfo(null);
+		      dragRef.current = null;
+		    };
+		    canvas.addEventListener("mousedown", onDown);
+		    window.addEventListener("mousemove", onMove);
+		    window.addEventListener("mouseup", onUp);
+		    canvas.addEventListener("wheel", onWheel, { passive: false });
+		    canvas.addEventListener("mouseleave", onLeave);
+		    window.addEventListener("keydown", onKey);
+		    return () => {
+		      disposed = true;
+		      cancelAnimationFrame(raf);
+		      ro.disconnect();
+		      canvas.removeEventListener("mousedown", onDown);
+		      window.removeEventListener("mousemove", onMove);
+		      window.removeEventListener("mouseup", onUp);
+		      canvas.removeEventListener("wheel", onWheel);
+		      canvas.removeEventListener("mouseleave", onLeave);
+		      window.removeEventListener("keydown", onKey);
+		    };
+		  }, [full, edgeList, adj, clusterLayout, glowOn, edgesOn, labelsOn, agingOn, driftOn, starry, nodeKeySeed, height, onPick]);
+		  const hoverMeta = hoverInfo ? metasRef.current.get(hoverInfo.id) : null;
+		  const ui = starry ? {
+		    barBg: "rgba(10, 13, 22, 0.72)",
+		    border: "1px solid rgba(120, 160, 255, 0.22)",
+		    text: "#c8d2e8",
+		    dim: "#93a3c4",
+		    accent: "#7fb1ff"
+		  } : {
+		    barBg: "var(--dsh-mem-bg-card)",
+		    border: "1px solid var(--dsh-mem-border)",
+		    text: "var(--dsh-mem-text-2)",
+		    dim: "var(--dsh-mem-text-3)",
+		    accent: "var(--dsh-mem-accent)"
+		  };
+		  const toggle = (label, on, set) => /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
+		    NButton,
+		    {
+		      onClick: () => set(!on),
+		      style: on ? { color: ui.accent, borderColor: ui.accent } : { color: ui.text, borderColor: ui.border },
+		      title: label,
+		      children: label
+		    }
+		  );
+		  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { ref: hostRef, style: { position: "relative", width: "100%", flex: 1, minHeight: height, overflow: "hidden", background: starry ? "#04070f" : "var(--dsh-mem-bg-card, #ffffff)" }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("canvas", { ref: canvasRef, style: { display: "block", cursor: dragRef.current ? "grabbing" : "grab", background: starry ? "#04070f" : "var(--dsh-mem-bg-card, #ffffff)" } }),
+		    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
+		      "div",
+		      {
+		        style: { position: "absolute", top: 8, left: 8, fontSize: 11, color: ui.dim, background: ui.barBg, border: ui.border, borderRadius: 8, padding: "4px 8px", pointerEvents: "none" },
+		        children: mode === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("span", { children: [
+		          "ego 壳层 · ",
+		          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("b", { style: { color: ui.accent }, children: (focusRef.current ? nodeById.get(focusRef.current)?.name : null) ?? "焦点" }),
+		          " 在第 0 层，第 k 跳在第 k 层",
+		          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("br", {}),
+		          "点焦点/Esc 回全图 · 双击/Enter 打开记录"
+		        ] }) : /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { children: "左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录" })
+		      }
+		    ),
+		    hoverInfo && hoverMeta ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
+		      "div",
+		      {
+		        style: {
+		          position: "absolute",
+		          left: Math.min(hoverInfo.x + 14, (hostRef.current?.clientWidth ?? 640) - 230),
+		          top: Math.max(6, hoverInfo.y - 10),
+		          maxWidth: 220,
+		          fontSize: 11.5,
+		          lineHeight: 1.5,
+		          background: "var(--dsh-mem-bg-card)",
+		          border: "1px solid var(--dsh-mem-border)",
+		          borderRadius: 8,
+		          padding: "6px 9px",
+		          pointerEvents: "none",
+		          color: "var(--dsh-mem-text-2)"
+		        },
+		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("div", { style: { fontWeight: 600, color: "var(--dsh-mem-text-1)" }, children: hoverMeta.name }),
+		          /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { children: [
+		            hoverMeta.type,
+		            " · 关系 ",
+		            hoverMeta.degree,
+		            " 条",
+		            hoverMeta.aging != null ? ` · 老化 ${hoverMeta.aging.toFixed(2)}` : ""
+		          ] }),
+		          hoverMeta.source ? /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { style: { color: "var(--dsh-mem-text-3)" }, children: [
+		            "出处：",
+		            hoverMeta.source
+		          ] }) : null
+		        ]
+		      }
+		    ) : null,
+		    /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)(
+		      "div",
+		      {
+		        style: { position: "absolute", bottom: 8, left: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", background: ui.barBg, border: ui.border, borderRadius: 10, padding: "4px 8px" },
+		        children: [
+		          toggle("辉光", glowOn, setGlowOn),
+		          toggle("边", edgesOn, setEdgesOn),
+		          toggle("标签", labelsOn, setLabelsOn),
+		          toggle("老化亮度", agingOn, setAgingOn),
+		          toggle("漂移", driftOn, setDriftOn),
+		          toggle(starry ? "星空底" : "白底", starry, setStarry),
+		          /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4 }, children: [
+		            "点",
+		            /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("input", { type: "range", min: 1.2, max: 4, step: 0.2, value: pointSize, onChange: (e) => setPointSize(Number(e.target.value)) })
+		          ] }),
+		          mode === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(NButton, { onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })), title: "回到全图", style: { color: ui.text, borderColor: ui.border }, children: "回全图" }) : null
+		        ]
+		      }
+		    )
+		  ] });
+		}
+		
+		// client/src/explorer/ExplorerPage.tsx
+		var import_jsx_runtime33 = require("react/jsx-runtime");
+		var DETAIL_MIN = 260;
+		var DETAIL_DEFAULT = 380;
+		var DETAIL_MAX_RATIO = 0.55;
+		var LEGEND_TYPES = [
+		  ["person", "人", "--dsh-mem-chart-1"],
+		  ["project", "项目", "--dsh-mem-chart-2"],
+		  ["organization", "组织", "--dsh-mem-chart-3"],
+		  ["tool", "工具", "--dsh-mem-chart-4"],
+		  ["place", "地点", "--dsh-mem-chart-5"]
+		];
+		function ExplorerPage(props) {
+		  const { rpc, onClose, canvasHeight = 620 } = props;
+		  const [full, setFull] = (0, import_react33.useState)(null);
+		  const [stats, setStats] = (0, import_react33.useState)(null);
+		  const [graphError, setGraphError] = (0, import_react33.useState)(null);
+		  const [graphLoading, setGraphLoading] = (0, import_react33.useState)(true);
+		  const [recordId, setRecordId] = (0, import_react33.useState)(null);
+		  const [links, setLinks] = (0, import_react33.useState)(null);
+		  const [linksLoading, setLinksLoading] = (0, import_react33.useState)(false);
+		  const [linksError, setLinksError] = (0, import_react33.useState)(null);
+		  const [emphasisId, setEmphasisId] = (0, import_react33.useState)(void 0);
+		  const [view, setView] = (0, import_react33.useState)("3d");
+		  const linksSeq = (0, import_react33.useRef)(0);
+		  const [mode, setMode] = (0, import_react33.useState)("query");
+		  const [detailOpen, setDetailOpen] = (0, import_react33.useState)(false);
+		  const [detailW, setDetailW] = (0, import_react33.useState)(DETAIL_DEFAULT);
+		  const containerRef = (0, import_react33.useRef)(null);
+		  const dragWRef = (0, import_react33.useRef)(null);
+		  const startDrag = (0, import_react33.useCallback)((ev) => {
+		    ev.preventDefault();
+		    dragWRef.current = { startX: ev.clientX, startW: detailW };
+		    const onMove = (e) => {
+		      const d = dragWRef.current;
+		      if (!d) return;
+		      const container = containerRef.current;
+		      const maxW = container ? Math.round(container.clientWidth * DETAIL_MAX_RATIO) : 600;
+		      setDetailW(Math.min(maxW, Math.max(DETAIL_MIN, d.startW - (e.clientX - d.startX))));
+		    };
+		    const onUp = () => {
+		      dragWRef.current = null;
+		      window.removeEventListener("mousemove", onMove);
+		      window.removeEventListener("mouseup", onUp);
+		    };
+		    window.addEventListener("mousemove", onMove);
+		    window.addEventListener("mouseup", onUp);
+		  }, [detailW]);
+		  const labels = (0, import_react33.useRef)(/* @__PURE__ */ new Map());
+		  const loadGraph = (0, import_react33.useCallback)(() => {
+		    setGraphLoading(true);
+		    setGraphError(null);
+		    rpc("dsh-memory/graph-preview", { mode: "full" }).then((r) => {
+		      if (!r.ok) throw new Error(r.error.message);
+		      setStats(r.value.stats);
+		      setFull(r.value.full ?? { nodes: [], edges: [], truncated: false });
+		    }).catch((e) => setGraphError(String(e?.message ?? e))).finally(() => setGraphLoading(false));
+		  }, [rpc]);
+		  (0, import_react33.useEffect)(() => {
+		    loadGraph();
+		  }, [loadGraph]);
+		  const remember = (0, import_react33.useCallback)((items) => {
+		    for (const it of items) if (it.content) labels.current.set(it.id, it.content);
+		  }, []);
+		  const openRecord = (0, import_react33.useCallback)(
+		    (id) => {
+		      const token = ++linksSeq.current;
+		      setRecordId(id);
+		      setLinksLoading(true);
+		      setLinksError(null);
+		      setMode("graph");
+		      setDetailOpen(true);
+		      rpc("dsh-memory/record-links", { recordId: id }).then((r) => {
+		        if (token !== linksSeq.current) return;
+		        if (!r.ok) throw new Error(r.error.message);
+		        const v = r.value;
+		        if (v.record) remember([v.record]);
+		        remember(v.records);
+		        setLinks(v);
+		        setEmphasisId(v.entities[0]?.id);
+		      }).catch((e) => {
+		        if (token !== linksSeq.current) return;
+		        setLinksError(String(e?.message ?? e));
+		        setLinks(null);
+		      }).finally(() => {
+		        if (token === linksSeq.current) setLinksLoading(false);
+		      });
+		    },
+		    [rpc, remember]
+		  );
+		  const onPickNode = (0, import_react33.useCallback)(
+		    (nodeId) => {
+		      setEmphasisId(nodeId);
+		      setDetailOpen(true);
+		      const known = links?.entities.find((e) => e.id === nodeId) ?? links?.neighbors.find((n) => n.id === nodeId);
+		      const first = known?.recordIds[0];
+		      if (first) {
+		        openRecord(first);
+		        return;
+		      }
+		      rpc("dsh-memory/graph-node-get", { id: nodeId }).then((r) => {
+		        const node = r.ok ? r.value.node : null;
+		        const id = node?.sourceRecordIds?.[0];
+		        if (id) openRecord(id);
+		      }).catch(() => {
+		      });
+		    },
+		    [links, openRecord, rpc]
+		  );
+		  const labelOfRecord = (0, import_react33.useCallback)((id) => labels.current.get(id) ?? id.slice(0, 10), []);
+		  const building = stats && stats.jobsTotal > 0 && stats.pendingJobs > 0;
+		  const summary = (0, import_react33.useMemo)(() => {
+		    if (!stats) return "统计未到";
+		    const drawn = full ? full.nodes.length : 0;
+		    const cut = full?.truncated ? `（已截断，仅画部分）` : "";
+		    return `节点 ${drawn}/${stats.nodes} · 边 ${full ? full.edges.length : 0}/${stats.edges} · 因果边 ${stats.causalEdges}${cut}`;
+		  }, [stats, full]);
+		  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { ref: containerRef, style: { display: "flex", flexDirection: "column", gap: 8, padding: 12, height: "calc(100vh - 48px)", minHeight: 0 }, children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("h2", { style: { margin: 0, fontSize: 16 }, children: "记忆库" }),
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: summary }),
+		      building ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { fontSize: 12, color: "var(--dsh-mem-accent)" }, title: "图谱投影进行中", children: [
+		        "构建中 ",
+		        stats ? stats.jobsTotal - stats.pendingJobs : 0,
+		        "/",
+		        stats?.jobsTotal ?? 0
+		      ] }) : null,
+		      view === "3d" && full && full.nodes.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { display: "inline-flex", gap: 8, alignItems: "center", fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
+		        LEGEND_TYPES.filter(([t]) => full.nodes.some((n) => n.type === t)).map(([t, zh, token]) => /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "span",
+		            {
+		              style: { width: 8, height: 8, borderRadius: 8, display: "inline-block", marginRight: 3, background: `var(${token})` }
+		            }
+		          ),
+		          zh
+		        ] }, t)),
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { title: "亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧", children: "亮度=老化" })
+		      ] }) : null,
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { flex: 1 } }),
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { display: "inline-flex", border: "1px solid var(--dsh-mem-border)", borderRadius: 6, overflow: "hidden", fontSize: 12 }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		          "span",
+		          {
+		            onClick: () => setMode("query"),
+		            style: { padding: "3px 12px", cursor: "pointer", background: mode === "query" ? "var(--dsh-mem-accent)" : "transparent", color: mode === "query" ? "#fff" : "var(--dsh-mem-text-2)" },
+		            children: "查询"
+		          }
+		        ),
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		          "span",
+		          {
+		            onClick: () => setMode("graph"),
+		            style: { padding: "3px 12px", cursor: "pointer", background: mode === "graph" ? "var(--dsh-mem-accent)" : "transparent", color: mode === "graph" ? "#fff" : "var(--dsh-mem-text-2)" },
+		            children: "图"
+		          }
+		        )
+		      ] }),
+		      mode === "graph" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		          NButton,
+		          {
+		            onClick: () => {
+		              if (!recordId && emphasisId) {
+		                onPickNode(emphasisId);
+		              }
+		              setDetailOpen((v) => !v);
+		            },
+		            title: "展开/收起右侧详情",
+		            style: detailOpen ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : void 0,
+		            children: "详情"
+		          }
+		        ),
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		          NButton,
+		          {
+		            onClick: () => setView((v) => v === "2d" ? "3d" : "2d"),
+		            title: "切换星图渲染：2D（G6 力导）↔ 3D（Canvas 投影）",
+		            style: view === "3d" ? { color: "var(--dsh-mem-accent)", borderColor: "var(--dsh-mem-accent)" } : void 0,
+		            children: view === "3d" ? "3D" : "2D"
+		          }
+		        )
+		      ] }) : null,
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, title: "重新拉取图与统计", children: "刷新图" }),
+		      onClose ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: onClose, title: "关闭", children: "关闭" }) : null
+		    ] }),
+		    mode === "query" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { flex: 1, minHeight: 0, overflow: "auto" }, children: /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(RecordPane, { rpc, activeId: recordId, onPick: openRecord }) }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", flex: 1, minHeight: 0, gap: 0 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }, children: graphError ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { fontSize: 12, color: "var(--dsh-mem-accent)", padding: 8 }, children: [
+		        "图数据读取失败：",
+		        graphError,
+		        " ",
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, children: "重试" })
+		      ] }) : graphLoading ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: "图加载中…" }) : full && full.nodes.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)", padding: 8 }, children: "图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。" }) : full ? view === "3d" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(Scene3D, { full, onPick: onPickNode, emphasisId, height: canvasHeight }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(GraphCanvas, { full, onPick: onPickNode, emphasisId, fit: "view", height: "fill" }) : null }),
+		      detailOpen ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		          "div",
+		          {
+		            onMouseDown: startDrag,
+		            style: { width: 5, cursor: "col-resize", flexShrink: 0, background: "var(--dsh-mem-border)", borderRadius: 2, margin: "0 2px", alignSelf: "stretch" },
+		            title: "拖动调整详情宽度"
+		          }
+		        ),
+		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { width: detailW, minWidth: DETAIL_MIN, flexShrink: 0, overflow: "auto", minHeight: 0, borderLeft: "1px solid var(--dsh-mem-border)", paddingLeft: 10 }, children: /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		          LinkPane,
+		          {
+		            recordId,
+		            links,
+		            loading: linksLoading,
+		            error: linksError,
+		            onPickRecord: openRecord,
+		            onEmphasisNode: setEmphasisId,
+		            labelOfRecord
+		          }
+		        ) })
+		      ] }) : null
+		    ] })
+		  ] });
+		}
+		
+		// client/src/explorer/ExplorerEntry.tsx
+		var import_react34 = require("react");
+		var import_jsx_runtime34 = require("react/jsx-runtime");
+		function ExplorerIcon(props) {
+		  const size = props.size ?? 16;
+		  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(
+		    "svg",
+		    {
+		      width: size,
+		      height: size,
+		      viewBox: "0 0 16 16",
+		      fill: "none",
+		      stroke: "currentColor",
+		      strokeWidth: 1.3,
+		      opacity: props.active ? 1 : 0.72,
+		      "aria-hidden": "true",
+		      children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("path", { d: "M4 11.5 L8 4 L12.5 9", strokeLinecap: "round" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("circle", { cx: "4", cy: "11.5", r: "1.7" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("circle", { cx: "8", cy: "4", r: "1.7" }),
+		        /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("circle", { cx: "12.5", cy: "9", r: "1.7" })
+		      ]
+		    }
+		  );
+		}
+		function ExplorerFooterEntry(props) {
+		  const [open, setOpen] = (0, import_react34.useState)(false);
+		  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(import_jsx_runtime34.Fragment, { children: [
+		    /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("button", { className: "dsh-mem-btn", onClick: () => setOpen(true), title: "打开记忆库（查询 L1 记忆与关联图谱）", children: "记忆库" }),
+		    open ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(NModal, { title: "记忆库", onClose: () => setOpen(false), children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { style: { height: "70vh", minHeight: 420 }, children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(ExplorerPage, { rpc: props.rpc, canvasHeight: 360 }) }) }) : null
+		  ] });
+		}
+		
 		// client/src/entry.tsx
 		var inject = ["slots"];
 		var SETTINGS_SEAT = "settings.section";
 		var SEAT_PROBE_MS = 3e3;
+		var EXPLORER_ID = "dsh-memory-explorer";
+		var PANEL_SEAT = "sidebar.panellist";
+		var MAIN_SEAT = "main";
+		var FOOTER_SEAT = "sidebar.footer.action";
+		var GEN_017_SEAT = "sidebar.workspaces.session.menu.item";
+		var EXPLORER_ORDER = 7;
 		function apply(ctx) {
 		  const rpc = makeRpc(ctx);
 		  console.info("[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位");
@@ -44441,11 +45863,103 @@ var __create = Object.create;
 		    console.warn(`[dsh-prime-memory] ${SETTINGS_SEAT2} 槽位未声明:`, err);
 		  }
 		  setTimeout(() => {
-		    if (cardSeatLive) return;
-		    console.warn(
-		      `[dsh-prime-memory] 宿主未声明 ${SETTINGS_SEAT2}：设置里的「记忆」面板不会出现。（0.1.5 的座位集合本机未验证，请在真机上确认。）`
-		    );
+		    if (!cardSeatLive) {
+		      console.warn(
+		        `[dsh-prime-memory] 宿主未声明 ${SETTINGS_SEAT2}：设置里的「记忆」面板不会出现。（0.1.5 的座位集合本机未验证，请在真机上确认。）`
+		      );
+		    }
+		    if (!explorerMounted) {
+		      console.warn("[dsh-prime-memory] 记忆库入口未挂载：panellist/main/footer 三个座位都没等到。");
+		    }
 		  }, SEAT_PROBE_MS);
+		  let gen017 = false;
+		  let mainSeat = false;
+		  let wired = false;
+		  let explorerMounted = false;
+		  let mountedPage = false;
+		  let detach = null;
+		  const selectPanel = (id) => {
+		    try {
+		      const layout = ctx.get("layout");
+		      layout?.selectPanel?.(id);
+		    } catch {
+		    }
+		  };
+		  const mountPage = () => {
+		    const row2 = ctx.slots.inject(
+		      PANEL_SEAT,
+		      () => ctx.slots.register({ name: PANEL_SEAT, id: EXPLORER_ID, order: EXPLORER_ORDER, label: "记忆库" }, ExplorerIcon)
+		    );
+		    const page = ctx.slots.inject(
+		      MAIN_SEAT,
+		      () => ctx.slots.register(
+		        { name: MAIN_SEAT, key: EXPLORER_ID, inject: () => ({ rpc, onClose: () => selectPanel(null) }) },
+		        ExplorerPage
+		      )
+		    );
+		    return () => {
+		      page();
+		      row2();
+		    };
+		  };
+		  const mountFooter = () => ctx.slots.inject(
+		    FOOTER_SEAT,
+		    () => ctx.slots.register(
+		      { name: FOOTER_SEAT, id: EXPLORER_ID, order: EXPLORER_ORDER, inject: () => ({ rpc }) },
+		      ExplorerFooterEntry
+		    )
+		  );
+		  const sync = () => {
+		    if (!explorerEntryState.isConfirmed()) return;
+		    if (!explorerEntryState.isWanted()) {
+		      detach?.();
+		      detach = null;
+		      mountedPage = false;
+		      explorerMounted = true;
+		      return;
+		    }
+		    const wantPage = gen017 && mainSeat;
+		    if (detach !== null && wantPage === mountedPage) return;
+		    detach?.();
+		    try {
+		      detach = wantPage ? mountPage() : mountFooter();
+		      mountedPage = wantPage;
+		      explorerMounted = true;
+		    } catch (err) {
+		      console.warn("[dsh-prime-memory] 记忆库入口挂载失败:", err);
+		      detach = null;
+		    }
+		  };
+		  explorerEntryState.subscribe(() => sync());
+		  try {
+		    ctx.slots.inject(GEN_017_SEAT, () => {
+		      gen017 = true;
+		      if (wired) sync();
+		      return () => {
+		        gen017 = false;
+		        if (wired) sync();
+		      };
+		    });
+		    ctx.slots.inject(MAIN_SEAT, () => {
+		      mainSeat = true;
+		      if (wired) sync();
+		      return () => {
+		        mainSeat = false;
+		        if (wired) sync();
+		      };
+		    });
+		  } catch (err) {
+		    console.warn("[dsh-prime-memory] 记忆库座位探针失败（降级为不挂载）:", err);
+		  }
+		  wired = true;
+		  void rpc("dsh-memory/settings-get", {}).then((res) => {
+		    explorerEntryState.confirm(
+		      res.ok && res.value.supported ? res.value.settings.explorerEnabled !== false : true
+		      // settings 服务缺席 → fail-open，与旧行为一致
+		    );
+		  }).catch(() => {
+		    explorerEntryState.confirm(true);
+		  });
 		  try {
 		    ctx.slots.inject("conversation.input.left", () => {
 		      return ctx.slots.register(
