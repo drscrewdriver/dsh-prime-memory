@@ -363,10 +363,10 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
         style={{ ...S.flexRow, padding: '8px 0', borderBottom: '1px solid var(--dsh-mem-border)', flexWrap: 'wrap' }}
       >
         <div style={{ minWidth: 150 }}>
-          <div style={{ fontWeight: 600 }}>{m.name}</div>
-          <div className="dsh-mem-rb-muted">{m.tags.join(' · ') + ' · ' + m.dims + tr("维 · 上下文") + m.contextTokens}</div>
+          <div style={{ fontWeight: 600 }}>{tr(m.name)}</div>
+          <div className="dsh-mem-rb-muted">{m.tags.map((tag) => tr(tag)).join(' · ') + ' · ' + m.dims + tr("维 · 上下文") + m.contextTokens}</div>
         </div>
-        <div style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>{m.description}</div>
+        <div style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>{tr(m.description)}</div>
         {action}
       </div>
     );

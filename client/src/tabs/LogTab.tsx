@@ -8,9 +8,9 @@ import { NButton } from '../ui/primitives.js';
 type TraceKind = '' | 'recall_turn' | 'distill_run';
 
 const SOURCES: Array<{ id: string; label: string }> = [
-  { id: '', label: tr("系统日志") },
-  { id: 'recall_turn', label: tr("召回追踪") },
-  { id: 'distill_run', label: tr("蒸馏追踪") },
+  { id: '', label: "系统日志" },
+  { id: 'recall_turn', label: "召回追踪" },
+  { id: 'distill_run', label: "蒸馏追踪" },
 ];
 
 function fmtEvent(ev: Record<string, unknown>): string {
@@ -68,14 +68,14 @@ export function LogTab(props: { rpc: RpcFn }) {
       <div style={{ ...S.flexRow, marginBottom: 10, gap: 8 }}>
         {SOURCES.map((s) => (
           <NButton key={s.id} onClick={() => setSource(s.id as TraceKind)}>
-            {source === s.id ? '● ' + s.label : s.label}
+            {source === s.id ? '● ' + tr(s.label) : tr(s.label)}
           </NButton>
         ))}
         <div style={S.grow} />
         <NButton onClick={load}>{tr("刷新")}</NButton>
       </div>
       <div style={{ ...S.muted, marginBottom: 10 }}>
-        {error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: SOURCES.find((s) => s.id === source)?.label })}
+        {error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: tr(SOURCES.find((s) => s.id === source)?.label ?? '') })}
       </div>
       {error ? (
         <div style={{ ...S.error, marginBottom: 10 }}>{tr("读取失败：") + error + tr("（点右上“刷新”重试）")}</div>

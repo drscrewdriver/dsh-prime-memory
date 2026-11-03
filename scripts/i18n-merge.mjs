@@ -58,8 +58,8 @@ for (const file of outFiles) {
       problems.push(`${file}: key not in extraction: ${JSON.stringify(row.zh).slice(0, 60)}`);
       continue;
     }
-    if (typeof row.en === 'string' && row.en.trim()) en.set(row.zh, row.en.trim());
-    if (typeof row.ru === 'string' && row.ru.trim()) ru.set(row.zh, row.ru.trim());
+    if (typeof row.en === 'string' && row.en.trim()) en.set(row.zh, row.en);
+    if (typeof row.ru === 'string' && row.ru.trim()) ru.set(row.zh, row.ru);
     if (/[\u4e00-\u9fff]/.test(row.en || '')) problems.push(`${file}: Chinese left in en: ${row.zh}`);
     if (/[\u4e00-\u9fff]/.test(row.ru || '')) problems.push(`${file}: Chinese left in ru: ${row.zh}`);
   }
@@ -69,13 +69,32 @@ for (const file of outFiles) {
 const overridesPath = path.join(root, 'scripts/i18n-overrides.json');
 if (existsSync(overridesPath)) {
   const overrides = JSON.parse(readFileSync(overridesPath, 'utf8'));
-  for (const [k, pair] of Object.entries(overrides)) {
+  for (const [k, pair] of Object.entries(overrides.entries || {})) {
     if (!keySet.has(k)) {
       problems.push(`override key not in extraction: ${JSON.stringify(k).slice(0, 60)}`);
       continue;
     }
     if (pair.en) en.set(k, pair.en);
     if (pair.ru) ru.set(k, pair.ru);
+  }
+  // 排版空格：中文里「共124条」不需要分隔，英文/俄文需要「Total 124 items」。
+  // 放在字典层解决，而不是去改二十个拼接点 —— 一处生效、三语各按自己的习惯。
+  const pad = (value, mode) => {
+    if (typeof value !== 'string' || !value) return value;
+    let out = value;
+    if ((mode === 'leading' || mode === 'both') && !out.startsWith(' ')) out = ` ${out}`;
+    if ((mode === 'trailing' || mode === 'both') && !out.endsWith(' ')) out = `${out} `;
+    return out;
+  };
+  for (const [mode, list] of Object.entries(overrides.spacing || {})) {
+    for (const k of list) {
+      if (!keySet.has(k)) {
+        problems.push(`spacing key not in extraction: ${JSON.stringify(k)}`);
+        continue;
+      }
+      en.set(k, pad(en.get(k), mode));
+      ru.set(k, pad(ru.get(k), mode));
+    }
   }
 }
 

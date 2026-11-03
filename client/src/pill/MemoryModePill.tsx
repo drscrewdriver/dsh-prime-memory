@@ -243,12 +243,12 @@ export function MemoryModePill(props: {
       ? '⚠'
       : '…'
     : isOff
-      ? info.label
+      ? tr(info.label)
       : !recallResolved
         ? tr("只写")
         : wingText
           ? wingText
-          : info.label;
+          : tr(info.label);
 
   ensureThemeStyle();
 

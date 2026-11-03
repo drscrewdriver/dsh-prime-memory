@@ -1,6 +1,87 @@
 {
-  "2D 图": { "en": "2D graph", "ru": "2D-граф" },
-  "3D 图": { "en": "3D graph", "ru": "3D-граф" },
-  "关闭面板": { "en": "Close", "ru": "Закрыть" },
-  "关闭窗口": { "en": "Close", "ru": "Закрыть" }
+  "entries": {
+    "2D 图": {
+      "en": "2D graph",
+      "ru": "2D-граф"
+    },
+    "3D 图": {
+      "en": "3D graph",
+      "ru": "3D-граф"
+    },
+    "关闭面板": {
+      "en": "Close",
+      "ru": "Закрыть"
+    },
+    "关闭窗口": {
+      "en": "Close",
+      "ru": "Закрыть"
+    },
+    "中文专用小模型：约 25MB，CPU 嵌入最快，适合先体验语义检索。": {
+      "en": "Chinese-only small model: ~25 MB, fastest CPU embedding — good for trying semantic search first.",
+      "ru": "Небольшая модель только для китайского: ~25 МБ, самая быстрая на CPU — подойдёт, чтобы сначала попробовать семантический поиск."
+    },
+    "Google 官方嵌入模型：100+ 语言含中文，约 295MB，质量与开销均衡（上游 MemoryCore 同款）。": {
+      "en": "Google's embedding model: 100+ languages including Chinese, ~295 MB, balanced quality and cost (the same one upstream MemoryCore uses).",
+      "ru": "Официальная модель эмбеддингов Google: 100+ языков, включая китайский, ~295 МБ, баланс качества и затрат (та же, что в upstream MemoryCore)."
+    },
+    "中文质量最强：8192 token 上下文，约 543MB，CPU 嵌入较慢（单条可达秒级）。": {
+      "en": "Best Chinese quality: 8192-token context, ~543 MB, slower on CPU (a single item can take seconds).",
+      "ru": "Лучшее качество для китайского: контекст 8192 токена, ~543 МБ, медленнее на CPU (один элемент может занять секунды)."
+    },
+    "中文": {
+      "en": "Chinese",
+      "ru": "китайский"
+    },
+    "轻量": {
+      "en": "lightweight",
+      "ru": "лёгкая"
+    },
+    "多语言": {
+      "en": "multilingual",
+      "ru": "многоязычная"
+    },
+    "均衡": {
+      "en": "balanced",
+      "ru": "сбалансированная"
+    },
+    "长上下文": {
+      "en": "long context",
+      "ru": "длинный контекст"
+    },
+    "BGE small 中文": {
+      "en": "BGE small (Chinese)",
+      "ru": "BGE small (кит.)"
+    },
+    "BGE-M3 大杯": {
+      "en": "BGE-M3 Large",
+      "ru": "BGE-M3 Large"
+    }
+  },
+  "spacing": {
+    "trailing": [
+      "共",
+      "产出",
+      "优先级",
+      "老化",
+      "下载",
+      "继续下载",
+      "召回使用",
+      "热度",
+      "更新",
+      "：新",
+      "· 近重复",
+      "· 疑似冲突",
+      "· 重复",
+      "会话（",
+      "上次重建：已取消（完成"
+    ],
+    "leading": [
+      "条",
+      "· 总输出 token"
+    ],
+    "both": [
+      "包 ·",
+      "维 · 上下文"
+    ]
+  }
 }

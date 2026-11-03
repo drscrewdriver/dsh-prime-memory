@@ -243,9 +243,12 @@ async function reachableSources() {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const reachable = await reachableSources();
-  const all = walk(SRC);
-  const files = all.filter((f) => reachable.has(path.resolve(f)));
-  const unreachable = all.filter((f) => !reachable.has(path.resolve(f)));
+  // 服务端下发、由客户端直接渲染的展示文案（模型目录的 name/description）：
+  // 不纳入抽取，字典里就会缺这些 key，界面永远回退中文。
+  const EXTRA_SOURCES = [path.join(root, 'src/store/model-catalog.ts')].filter((f) => existsSync(f));
+  const clientFiles = walk(SRC);
+  const files = [...clientFiles.filter((f) => reachable.has(path.resolve(f))), ...EXTRA_SOURCES];
+  const unreachable = clientFiles.filter((f) => !reachable.has(path.resolve(f)));
   const allKeys = new Set();
   const report = {};
   for (const file of files) {

@@ -34,9 +34,9 @@ const STY: Record<string, CSSProperties> = {
 };
 
 const MODE_OPTIONS: Array<{ key: '' | 'host' | 'direct'; label: string; title: string }> = [
-  { key: '', label: tr("跟随部署配置"), title: tr("没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）") },
-  { key: 'host', label: tr("复用宿主"), title: tr("复用宿主 ctx.llm（与付费供应商同路）") },
-  { key: 'direct', label: tr("直连端点"), title: tr("插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦") },
+  { key: '', label: "跟随部署配置", title: "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）" },
+  { key: 'host', label: "复用宿主", title: "复用宿主 ctx.llm（与付费供应商同路）" },
+  { key: 'direct', label: "直连端点", title: "插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦" },
 ];
 
 export function ChannelEditor(props: { channel: DirectChannelView; rpc: RpcFn; disabled?: boolean }) {
@@ -105,7 +105,7 @@ export function ChannelEditor(props: { channel: DirectChannelView; rpc: RpcFn; d
       <Segmented
         value={runtime}
         disabled={disabled}
-        options={MODE_OPTIONS.map((m) => ({ key: m.key, label: m.label, title: m.title }))}
+        options={MODE_OPTIONS.map((m) => ({ key: m.key, label: tr(m.label), title: tr(m.title) }))}
         onChange={(k) => commit({ distillMode: k })}
       />
 

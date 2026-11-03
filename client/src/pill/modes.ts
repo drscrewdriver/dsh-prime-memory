@@ -15,9 +15,9 @@ export interface ModeDef {
 }
 
 export const MODES: ModeDef[] = [
-  { key: 'chat', label: tr("日常"), color: 'var(--dsh-mem-mode-chat)' },
-  { key: 'auto', label: tr("智能"), color: 'var(--dsh-mem-mode-auto)' },
-  { key: 'work', label: tr("工作"), color: 'var(--dsh-mem-mode-work)' },
+  { key: 'chat', label: "日常", color: 'var(--dsh-mem-mode-chat)' },
+  { key: 'auto', label: "智能", color: 'var(--dsh-mem-mode-auto)' },
+  { key: 'work', label: "工作", color: 'var(--dsh-mem-mode-work)' },
 ];
 
 /** 滑轨几何（px）。TRACK_W 为默认宽度，调用方可传 `width` 覆盖以适配窄浮层。 */

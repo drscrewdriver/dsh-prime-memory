@@ -9,9 +9,9 @@ import type { RpcFn } from '../rpc.js';
 
 /** 运行阶段 → 面文。 */
 const RB_PHASE_LABEL: Record<string, string> = {
-  preparing: tr("准备中（归档旧数据 · 清空检索库）"),
-  distilling: tr("分块蒸馏中"),
-  finalizing: tr("收尾（强制 L2 场景 + L3 画像）"),
+  preparing: "准备中（归档旧数据 · 清空检索库）",
+  distilling: "分块蒸馏中",
+  finalizing: "收尾（强制 L2 场景 + L3 画像）",
 };
 
 export function RebuildPanel(props: { rpc: RpcFn }) {
@@ -119,7 +119,7 @@ export function RebuildPanel(props: { rpc: RpcFn }) {
         <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{tr("重建记忆")}</div>
         <div className="dsh-mem-rb-muted" style={{ flex: 1, minWidth: 180 }}>
           {running
-            ? (RB_PHASE_LABEL[rb.phase] || rb.phase) + ' · ' + rb.done + '/' + rb.total + tr("会话（") + pct + '%）'
+            ? (tr(RB_PHASE_LABEL[rb.phase] ?? '') || rb.phase) + ' · ' + rb.done + '/' + rb.total + tr("会话（") + pct + '%）'
             : tr("从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）")}
         </div>
         {running ? (

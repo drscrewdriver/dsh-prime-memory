@@ -37,11 +37,11 @@ const DETAIL_MAX_RATIO = 0.55;
 /** 类型图例（与 2D/3D 同一族令牌五色）：只列当前图里真实出现的类型；
  *  令牌按**全表索引**配（先配后筛），筛掉前面的类型不得让后面的变色。 */
 const LEGEND_TYPES: Array<[string, string, string]> = [
-  ['person', tr("人"), '--dsh-mem-chart-1'],
-  ['project', tr("项目"), '--dsh-mem-chart-2'],
-  ['organization', tr("组织"), '--dsh-mem-chart-3'],
-  ['tool', tr("工具"), '--dsh-mem-chart-4'],
-  ['place', tr("地点"), '--dsh-mem-chart-5'],
+  ['person', "人", '--dsh-mem-chart-1'],
+  ['project', "项目", '--dsh-mem-chart-2'],
+  ['organization', "组织", '--dsh-mem-chart-3'],
+  ['tool', "工具", '--dsh-mem-chart-4'],
+  ['place', "地点", '--dsh-mem-chart-5'],
 ];
 
 export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHeight?: number }) {
@@ -288,7 +288,7 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
                 <span
                   style={{ width: 8, height: 8, borderRadius: 8, display: 'inline-block', marginRight: 3, background: `var(${token})` }}
                 />
-                {zh}
+                {tr(zh)}
               </span>
             ))}
             <span title={tr("亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧")}>{tr("亮度=老化")}</span>

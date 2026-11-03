@@ -88,7 +88,9 @@ for (const [loc, dict] of Object.entries(dicts)) {
     }
     if (!v.trim()) errors.push(`${loc}: 空译文 ${JSON.stringify(k).slice(0, 60)}`);
     if (HAN.test(v)) errors.push(`${loc}: 残留汉字 ${JSON.stringify(v).slice(0, 60)}`);
-    if (/\s$/.test(v) || /\s{2,}/.test(v)) warnings.push(`${loc}: 空白异常 ${JSON.stringify(v).slice(0, 50)}`);
+    // 首尾单个空格是**排版**（中文「共124条」→ 英文「Total 124 items」），不算问题；
+    // 只报连续空白与「空格 + 标点」这种一眼可见的脏空格。
+    if (/\s{2,}/.test(v) || /\s+[，。；：、,.;:]/.test(v)) warnings.push(`${loc}: 空白异常 ${JSON.stringify(v).slice(0, 50)}`);
     // 只在中英「结尾标点类别」不一致时报警：中文「：」结尾在 ru 里保留冒号是正确行为。
     const tail = (text) => (/[：:]$/.test(text.trim()) ? ':' : /[。.]$/.test(text.trim()) ? '.' : '');
     if (tail(v) !== tail(k)) warnings.push(`${loc}: 结尾标点与原文不一致 ${JSON.stringify(v).slice(0, 50)}`);

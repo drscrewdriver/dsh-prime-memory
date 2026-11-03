@@ -19,10 +19,10 @@ import { NInput } from '../ui/primitives.js';
 import { GRAPH_BUDGET_LABEL } from '../copy.js';
 
 const LAYERS: Array<[string, string]> = [
-  ['extract', tr("抽取")],
-  ['dedup', tr("去重")],
-  ['l2', tr("L2 场景")],
-  ['l3', tr("L3 画像")],
+  ['extract', "抽取"],
+  ['dedup', "去重"],
+  ['l2', "L2 场景"],
+  ['l3', "L3 画像"],
   // 这不是“投影开关”，是投影这一步的**输出预算**（issue #16：旧标签就叫“图谱投影”，
   // 与概览页那个功能开关撞名，用户点了以为开了投影，实际只是改了 token 预算）。
   ['graph', GRAPH_BUDGET_LABEL],
@@ -253,7 +253,7 @@ export function BudgetInputs(props: {
                 <span style={{ width: 68, flexShrink: 0, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>{rowLabel(l[0]!)}</span>
                 {inputBox(
                   l[0]!,
-                  l[1]!,
+                  tr(l[1]!),
                   l[1]! + tr("输出预算（token，留空 = 默认") + (def[l[0]!] || '?') + '）',
                   110,
                   def[l[0]!],

@@ -248,7 +248,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
            * 与下方「图谱读工具」（能否向模型注册读图工具）是两个独立的面；
            * 旧版只有后者，而“图谱投影”四个字落在蒸馏预算输入框旁边（那是预算分层标签）。
            */}
-          <div style={S.panelLabel}>{GRAPH_FEATURE_LABEL}</div>
+          <div style={S.panelLabel}>{tr(GRAPH_FEATURE_LABEL)}</div>
           <SwitchRow
             label={tr("{p1}投影", { p1: GRAPH_FEATURE_LABEL })}
             desc={graphSwitchDesc(graphEnabled)}

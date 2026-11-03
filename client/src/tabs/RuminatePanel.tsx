@@ -9,11 +9,11 @@ import type { RpcFn } from '../rpc.js';
 
 /** 运行阶段 → 面文。 */
 const RM_PHASE_LABEL: Record<string, string> = {
-  refreshing: tr("轻量刷新中"),
-  distilling: tr("L1 蒸馏中"),
-  consolidating: tr("L2 场景整合中"),
-  updating: tr("L3 画像更新中"),
-  relabeling: tr("标注校验/重标定中"),
+  refreshing: "轻量刷新中",
+  distilling: "L1 蒸馏中",
+  consolidating: "L2 场景整合中",
+  updating: "L3 画像更新中",
+  relabeling: "标注校验/重标定中",
 };
 
 /** 已进入运行态的阶段(用于"运行中却声称空闲"的兜底判定)。 */

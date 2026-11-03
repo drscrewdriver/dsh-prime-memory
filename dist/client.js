@@ -35953,7 +35953,7 @@ var __create = Object.create;
 		  "；晚于此时刻的记忆会被原样保留、不重新蒸馏（不会丢）。": "; memories later than this moment are kept as-is, not re-distilled (nothing is lost).",
 		  ";最近尝试": ";last attempt",
 		  ";最近使用": ";last used",
-		  "：新": ": new",
+		  "：新": ": new ",
 		  "。上方数据为最后一次成功读取的值，记忆功能当前未工作。": ". The data above is from the last successful read, the memory feature is not working right now.",
 		  "· 本次预算 {p1} 个文件": "· {p1} files in this budget",
 		  "· 陈旧根 {p1} 个文件未参与同步（交给孤儿归档）": "· {p1} stale root files not synced (handed to orphan archive)",
@@ -35970,7 +35970,7 @@ var __create = Object.create;
 		  "· 后缀还有 {p1} 个文件待对齐，再点一次继续": "· {p1} more files to align by suffix, click again to continue",
 		  "· 加载中…": "· loading…",
 		  "· 检索结果可能不完整": "· results may be incomplete",
-		  "· 近重复": "· near duplicate",
+		  "· 近重复": "· near duplicate ",
 		  "· 老化 {p1}": "· aged {p1}",
 		  "· 老化 {p1}%": "· aged {p1}%",
 		  "· 两边都变 {p1} 条已挂账（两侧都没动）": "· {p1} changed on both sides, parked (neither side touched)",
@@ -35991,7 +35991,7 @@ var __create = Object.create;
 		  "· 未签名 {p1} 个（老投射文件无 hash，下轮导出补盖）": "· {p1} unsigned (old projection files have no hash, next export will stamp them)",
 		  "· 新起名 {p1} 条": "· {p1} newly named",
 		  "· 新文件 {p1} 个未入库（导入须走写入内核）": "· {p1} new files not ingested (import must go through the write kernel)",
-		  "· 疑似冲突": "· possible conflict",
+		  "· 疑似冲突": "· possible conflict ",
 		  "· 已达绘制上限,只画前 {p1} 个节点": "· draw limit reached, only the first {p1} nodes drawn",
 		  "· 已达子图上限,另有 {p1} 个连通节点未画": "· subgraph limit reached, {p1} more connected nodes not drawn",
 		  "· 已固定": "· pinned",
@@ -36002,9 +36002,9 @@ var __create = Object.create;
 		  "· 再展开也没有新节点了": "· expanding again yields no new nodes",
 		  "· 直连": "· direct",
 		  "· 重标定：补 cogHall": "· recalibration: fill cogHall",
-		  "· 重复": "· duplicate",
+		  "· 重复": "· duplicate ",
 		  "· 自校验不符 {p1} 个（文件被外部改动，已按文件侧处理）": "· {p1} self-check mismatches (files changed externally, handled on the file side)",
-		  "· 总输出 token": "· total output token",
+		  "· 总输出 token": " · total output token",
 		  "· ego ≤3 跳（{p1} 节点）": "· ego ≤3 hops ({p1} nodes)",
 		  "（保存后更新；当前显示已保存值）": "(updates after saving; currently showing the saved value)",
 		  "（被取消）": "(cancelled)",
@@ -36091,7 +36091,7 @@ var __create = Object.create;
 		  "把当前全部记忆渲染为 <根>/<类型>/<名称>.memory.md，并记下内容指纹（只写文件，不改库）。一次点完：一轮预算不够时服务端自己续跑下几轮，进度看下方进度条": "Render all current memories as <root>/<type>/<name>.memory.md and record the content fingerprint (writes files only, does not change the store). One click does it all: if one round's budget is not enough, the server continues the next rounds itself; see the progress bar below",
 		  "白底": "White background",
 		  "版本: v": "Version: v",
-		  "包 ·": "Package ·",
+		  "包 ·": " Package · ",
 		  "保存": "Save",
 		  "被取代": "Superseded",
 		  "被用": "Used",
@@ -36157,7 +36157,7 @@ var __create = Object.create;
 		  "查询": "Query",
 		  "查询（Enter）": "Query (Enter)",
 		  "查询失败：": "Query failed:",
-		  "产出": "Produced",
+		  "产出": "Produced ",
 		  "产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）": "ID of the distillation batch that produced this freeze (use memory_receipts to trace what was decided in that run)",
 		  "场景": "Scene",
 		  "超时": "Timeout",
@@ -36252,6 +36252,7 @@ var __create = Object.create;
 		  "端点无响应": "Endpoint not responding",
 		  "对存量未打标记忆批量补打 wing 标签 · 未打标 {p1} 条": "Batch-tag existing untagged memories with wing tags · {p1} untagged",
 		  "对话时注入相关记忆与画像": "Inject relevant memories and persona during chat",
+		  "多语言": "multilingual",
 		  "反刍工具": "Rumination tools",
 		  "反刍整理": "Rumination tidy-up",
 		  "范围：": "Scope:",
@@ -36295,7 +36296,7 @@ var __create = Object.create;
 		  "跟随默认模型": "Follow default model",
 		  "跟随默认模型（": "Follow default model (",
 		  "跟随全局": "Follow global",
-		  "更新": "Update",
+		  "更新": "Update ",
 		  "更新失败": "Update failed",
 		  "工具": "Tools",
 		  "工具封印": "Tool seal",
@@ -36303,7 +36304,7 @@ var __create = Object.create;
 		  "工作（团队）": "Work (team)",
 		  "工作区": "Workspace",
 		  "供应商": "Provider",
-		  "共": "Total",
+		  "共": "Total ",
 		  "共 {p1} 条 ·": "Total {p1} entries ·",
 		  "勾选以批量删除": "Check to delete in bulk",
 		  "构建中": "Building",
@@ -36369,7 +36370,7 @@ var __create = Object.create;
 		  "会话，产出": "session, produced",
 		  "会话，已蒸馏部分保留）": "session, distilled part kept)",
 		  "会话，已重建部分保留）": "session, rebuilt part kept)",
-		  "会话（": "Session (",
+		  "会话（": "Session ( ",
 		  "会话消息": "Session messages",
 		  "会话只写": "Session write-only",
 		  "活跃": "Active",
@@ -36391,7 +36392,7 @@ var __create = Object.create;
 		  "技能工具": "Skill tools",
 		  "技能结晶": "Skill crystallization",
 		  "技能结晶（程序性记忆）未启用。到「概览」页开启「技能」开关（或部署配置 skills.enabled）：开启后，跨会话重复出现的「工作方法」记忆会累积为技能候选，在此审阅并手动晋升。": "Skill crystallization (procedural memory) is off. Turn on the Skills switch on the Overview page (or deployment config skills.enabled): once enabled, work-method memories that recur across sessions accumulate as skill candidates, to be reviewed and manually promoted here.",
-		  "继续下载": "Continue download",
+		  "继续下载": "Continue download ",
 		  "加载更多": "Load more",
 		  "加载模型列表…": "Loading model list…",
 		  "加载嵌入模型中…（首次需数秒）": "Loading embedding model… (takes a few seconds the first time)",
@@ -36421,6 +36422,7 @@ var __create = Object.create;
 		  "静态 · YAML": "Static · YAML",
 		  "居家": "Home",
 		  "绝对路径(目录或 .mem)": "Absolute path (directory or .mem)",
+		  "均衡": "balanced",
 		  "开": "On",
 		  "开关写入失败": "Failed to write switch",
 		  "开关写入失败：": "Failed to write switch:",
@@ -36445,7 +36447,7 @@ var __create = Object.create;
 		  "来源记录 (": "source records (",
 		  "来源锚点:": "source anchor:",
 		  "来源锚点: -": "source anchor: -",
-		  "老化": "Aging",
+		  "老化": "Aging ",
 		  "老化亮度": "Aging brightness",
 		  "老化权重": "Aging weight",
 		  "老化权重（读路径衰减系数）": "Aging weight (read-path decay coefficient)",
@@ -36524,6 +36526,7 @@ var __create = Object.create;
 		  "切换嵌入源中…": "Switching embedding source…",
 		  "切换失败：": "Switch failed:",
 		  "切回查询视图并展开本条目（保留当前选点）": "Back to the query view with this entry expanded (keeps the current selection)",
+		  "轻量": "lightweight",
 		  "轻量刷新中": "Light refresh in progress",
 		  "清除": "Clear",
 		  "清除 Room/孤儿筛选": "Clear Room/orphan filters",
@@ -36568,7 +36571,7 @@ var __create = Object.create;
 		  "确认物理删除": "Confirm permanent deletion",
 		  "确认执行": "Confirm run",
 		  "确认重建全部记忆？": "Confirm rebuilding all memory?",
-		  "热度": "Heat",
+		  "热度": "Heat ",
 		  "人": "Person",
 		  "人工冲突裁决": "Manual conflict resolution",
 		  "人工退场": "Manual retire",
@@ -36600,7 +36603,7 @@ var __create = Object.create;
 		  "上次扫描": "Last scan",
 		  "上次重建：失败：": "Last rebuild: failed:",
 		  "上次重建：完成（": "Last rebuild: done (",
-		  "上次重建：已取消（完成": "Last rebuild: cancelled (completed",
+		  "上次重建：已取消（完成": "Last rebuild: cancelled (completed ",
 		  "上移": "Move up",
 		  "上移（与主路由互换/顶替为主路由）": "Move up (swap with or take over as the primary route)",
 		  "尚未命名（名称蒸馏未产出）；投射回落 mem-": "Unnamed yet (name distillation produced nothing); projection falls back to mem-",
@@ -36661,7 +36664,7 @@ var __create = Object.create;
 		  "天": "d",
 		  "天前": "days ago",
 		  "挑选中:点击目标 hall 头完成归类": "Picking: click a target hall header to finish classification",
-		  "条": "items",
+		  "条": " items",
 		  "条 · 原样保留": "items · kept as-is",
 		  "条，按每批 8 条约": "items; roughly 8 per batch, approx.",
 		  "条，此处显示": "items, shown here",
@@ -36718,7 +36721,7 @@ var __create = Object.create;
 		  "外部记忆来源 Connect": "External memory source Connect",
 		  "完成": "Done",
 		  "维": "dim",
-		  "维 · 上下文": "dim · context",
+		  "维 · 上下文": " dim · context ",
 		  "维度": "Dimension",
 		  "维度跟随部署": "Dimension follows the deployment",
 		  "为缺 dsh_keywords 的存量记忆补检索关键词，喂 FTS 关键词轴（需先开关键词回填开关）": "Backfill retrieval keywords for existing memories missing dsh_keywords, feeding the FTS keyword axis (turn on the keyword backfill switch first)",
@@ -36756,7 +36759,7 @@ var __create = Object.create;
 		  "系统日志": "system log",
 		  "下(major/minor,预览后确认)": "down (major/minor, confirm after preview)",
 		  "下移": "move down",
-		  "下载": "download",
+		  "下载": "download ",
 		  "下载失败：": "download failed:",
 		  "显示名(可选)": "display name (optional)",
 		  "显示名(可中文)": "display name (Chinese allowed)",
@@ -36849,7 +36852,7 @@ var __create = Object.create;
 		  "用户默认": "User default",
 		  "用户默认 (global)": "User default (global)",
 		  "用户默认（global，任何工作区可见）": "User default (global, visible in any workspace)",
-		  "优先级": "Priority",
+		  "优先级": "Priority ",
 		  "有效期起 {p1}": "Valid from {p1}",
 		  "有效期止 {p1}": "Valid until {p1}",
 		  "有新记录（样本省略）。": "New records exist (samples omitted).",
@@ -36913,12 +36916,13 @@ var __create = Object.create;
 		  "展开未注册自生长 Room": "Expand unregistered self-grown Rooms",
 		  "展开子 room(默认折叠)": "Expand sub-rooms (collapsed by default)",
 		  "展示近 N 天（正整数，清空=默认窗口；超出保留期后端自动回退）": "Show last N days (positive integer, empty = default window; beyond the retention period the backend falls back automatically)",
+		  "长上下文": "long context",
 		  "账本共 {p1} 条 · 仍被认领 {p2} · 无人认领 {p3}（未搬任何东西）": "Ledger: {p1} entries · still claimed {p2} · unclaimed {p3} (nothing moved)",
 		  "召回": "Recall",
 		  "召回命中": "Recall hits",
 		  "召回命中 ·": "Recall hits ·",
 		  "召回片段": "Recall snippets",
-		  "召回使用": "Recall usage",
+		  "召回使用": "Recall usage ",
 		  "召回已停用（": "Recall is off (",
 		  "召回已停用（开关关闭 / 档位关闭 / 部署未启用）": "Recall is off (switch off / mode off / deployment not enabled)",
 		  "召回追踪": "Recall tracing",
@@ -36954,6 +36958,9 @@ var __create = Object.create;
 		  "智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）": "Auto mode: determines recall domains automatically (click the center / drag inward from a corner = all domains)",
 		  "置信度:": "Confidence:",
 		  "中": "Medium",
+		  "中文": "Chinese",
+		  "中文质量最强：8192 token 上下文，约 543MB，CPU 嵌入较慢（单条可达秒级）。": "Best Chinese quality: 8192-token context, ~543 MB, slower on CPU (a single item can take seconds).",
+		  "中文专用小模型：约 25MB，CPU 嵌入最快，适合先体验语义检索。": "Chinese-only small model: ~25 MB, fastest CPU embedding — good for trying semantic search first.",
 		  "中止": "Abort",
 		  "中止请求失败：": "Abort request failed:",
 		  "中止中…": "Aborting…",
@@ -37003,6 +37010,8 @@ var __create = Object.create;
 		  "作用范围:": "Scope:",
 		  "作用范围：用户默认（global，任何工作区可见）": "Scope: user default (global, visible in any workspace)",
 		  "作用范围：指定工作区（仅归属工作区可见）": "Scope: specific workspace (visible only in its own workspace)",
+		  "BGE small 中文": "BGE small (Chinese)",
+		  "BGE-M3 大杯": "BGE-M3 Large",
 		  "Canvas 三维投影记忆海": "Canvas 3D projected memory sea",
 		  "direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。": "direct = plugin-native direct connection to OpenAI-compatible endpoints, decoupled from paid API; on failure it automatically falls back to the host route chain.",
 		  "direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。": "The direct channel uses plugin-native HTTP and does not depend on the host provider registry; if direct fails, it automatically falls back to the host route chain as a safety net.",
@@ -37010,6 +37019,7 @@ var __create = Object.create;
 		  "DRSC 已安装但未启用": "DRSC is installed but not enabled",
 		  "ego 壳层 ·": "ego shell ·",
 		  "G6 力导星图": "G6 force-directed star map",
+		  "Google 官方嵌入模型：100+ 语言含中文，约 295MB，质量与开销均衡（上游 MemoryCore 同款）。": "Google's embedding model: 100+ languages including Chinese, ~295 MB, balanced quality and cost (the same one upstream MemoryCore uses).",
 		  "Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关": 'Hall = Room category · up to 200 categories, subcategories ("category/subcategory") do not count toward the limit · unrelated to the Wing (domain) filter',
 		  "L0 今日消息": "L0 messages today",
 		  "L0 无消息，无可重建内容": "No L0 messages, nothing to rebuild",
@@ -37065,7 +37075,7 @@ var __create = Object.create;
 		  "；晚于此时刻的记忆会被原样保留、不重新蒸馏（不会丢）。": "; воспоминания позже этого момента сохраняются как есть, без повторной дистилляции (ничего не теряется).",
 		  ";最近尝试": ";последняя попытка",
 		  ";最近使用": ";последнее использование",
-		  "：新": ": новый",
+		  "：新": ": новый ",
 		  "。上方数据为最后一次成功读取的值，记忆功能当前未工作。": ". Данные выше — с последнего успешного чтения, функция памяти сейчас не работает.",
 		  "· 本次预算 {p1} 个文件": "· бюджет этого прогона: {p1} файлов",
 		  "· 陈旧根 {p1} 个文件未参与同步（交给孤儿归档）": "· {p1} файлов устаревших корней не синхронизированы (переданы в архив сирот)",
@@ -37082,7 +37092,7 @@ var __create = Object.create;
 		  "· 后缀还有 {p1} 个文件待对齐，再点一次继续": "· осталось {p1} файлов на выравнивание суффиксов, нажмите ещё раз, чтобы продолжить",
 		  "· 加载中…": "· загрузка…",
 		  "· 检索结果可能不完整": "· результаты поиска могут быть неполными",
-		  "· 近重复": "· почти дубликат",
+		  "· 近重复": "· почти дубликат ",
 		  "· 老化 {p1}": "· старение {p1}",
 		  "· 老化 {p1}%": "· старение {p1}%",
 		  "· 两边都变 {p1} 条已挂账（两侧都没动）": "· {p1} изменено с обеих сторон, отложено (ни одна сторона не тронута)",
@@ -37103,7 +37113,7 @@ var __create = Object.create;
 		  "· 未签名 {p1} 个（老投射文件无 hash，下轮导出补盖）": "· {p1} без подписи (у старых файлов проекции нет hash, следующая выгрузка проставит)",
 		  "· 新起名 {p1} 条": "· новых имён: {p1}",
 		  "· 新文件 {p1} 个未入库（导入须走写入内核）": "· {p1} новых файлов не в хранилище (импорт только через ядро записи)",
-		  "· 疑似冲突": "· возможный конфликт",
+		  "· 疑似冲突": "· возможный конфликт ",
 		  "· 已达绘制上限,只画前 {p1} 个节点": "· достигнут предел отрисовки, нарисованы только первые {p1} узлов",
 		  "· 已达子图上限,另有 {p1} 个连通节点未画": "· достигнут предел подграфа, ещё {p1} связных узлов не нарисовано",
 		  "· 已固定": "· закреплено",
@@ -37114,9 +37124,9 @@ var __create = Object.create;
 		  "· 再展开也没有新节点了": "· дальнейшее раскрытие не даёт новых узлов",
 		  "· 直连": "· прямое",
 		  "· 重标定：补 cogHall": "· перекалибровка: дополнить cogHall",
-		  "· 重复": "· дубликат",
+		  "· 重复": "· дубликат ",
 		  "· 自校验不符 {p1} 个（文件被外部改动，已按文件侧处理）": "· {p1} несовпадений самопроверки (файлы изменены извне, обработано по стороне файла)",
-		  "· 总输出 token": "· всего выходных token",
+		  "· 总输出 token": " · всего выходных token",
 		  "· ego ≤3 跳（{p1} 节点）": "· ego ≤3 переходов ({p1} узлов)",
 		  "（保存后更新；当前显示已保存值）": "(обновляется после сохранения; сейчас показано сохранённое значение)",
 		  "（被取消）": "(отменено)",
@@ -37203,7 +37213,7 @@ var __create = Object.create;
 		  "把当前全部记忆渲染为 <根>/<类型>/<名称>.memory.md，并记下内容指纹（只写文件，不改库）。一次点完：一轮预算不够时服务端自己续跑下几轮，进度看下方进度条": "Отобразить всю текущую память как <root>/<type>/<name>.memory.md и записать отпечаток содержимого (только файлы, хранилище не меняется). Один клик: если бюджета одного раунда не хватает, сервер сам продолжит следующие раунды; прогресс — в полосе ниже",
 		  "白底": "Белый фон",
 		  "版本: v": "Версия: v",
-		  "包 ·": "Пакет ·",
+		  "包 ·": " Пакет · ",
 		  "保存": "Сохранить",
 		  "被取代": "Заменено",
 		  "被用": "Использовано",
@@ -37269,7 +37279,7 @@ var __create = Object.create;
 		  "查询": "Запрос",
 		  "查询（Enter）": "Запрос (Enter)",
 		  "查询失败：": "Ошибка запроса:",
-		  "产出": "Выпущено",
+		  "产出": "Выпущено ",
 		  "产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）": "id пакета дистилляции, породившего эту заморозку (через memory_receipts можно узнать, что было решено в этом прогоне)",
 		  "场景": "Сцена",
 		  "超时": "Таймаут",
@@ -37364,6 +37374,7 @@ var __create = Object.create;
 		  "端点无响应": "Эндпоинт не отвечает",
 		  "对存量未打标记忆批量补打 wing 标签 · 未打标 {p1} 条": "Массово проставить теги wing записям без тегов · без тегов {p1}",
 		  "对话时注入相关记忆与画像": "Инъекция релевантной памяти и профиля при разговоре",
+		  "多语言": "многоязычная",
 		  "反刍工具": "Инструменты руминации",
 		  "反刍整理": "Упорядочивание руминации",
 		  "范围：": "Область:",
@@ -37407,7 +37418,7 @@ var __create = Object.create;
 		  "跟随默认模型": "Следовать модели по умолчанию",
 		  "跟随默认模型（": "Следовать модели по умолчанию (",
 		  "跟随全局": "Следовать глобальному",
-		  "更新": "Обновить",
+		  "更新": "Обновить ",
 		  "更新失败": "Не удалось обновить",
 		  "工具": "Инструменты",
 		  "工具封印": "Блокировка инструментов",
@@ -37415,7 +37426,7 @@ var __create = Object.create;
 		  "工作（团队）": "Рабочий (команда)",
 		  "工作区": "Рабочая область",
 		  "供应商": "Провайдер",
-		  "共": "Всего",
+		  "共": "Всего ",
 		  "共 {p1} 条 ·": "Всего {p1} записей ·",
 		  "勾选以批量删除": "Отметьте для массового удаления",
 		  "构建中": "Сборка",
@@ -37481,7 +37492,7 @@ var __create = Object.create;
 		  "会话，产出": "сессия, создано",
 		  "会话，已蒸馏部分保留）": "сессия, дистиллированная часть сохранена)",
 		  "会话，已重建部分保留）": "сессия, перестроенная часть сохранена)",
-		  "会话（": "Сессия (",
+		  "会话（": "Сессия ( ",
 		  "会话消息": "Сообщения сессии",
 		  "会话只写": "Только запись сессии",
 		  "活跃": "Активные",
@@ -37503,7 +37514,7 @@ var __create = Object.create;
 		  "技能工具": "Инструменты навыков",
 		  "技能结晶": "Кристаллизация навыков",
 		  "技能结晶（程序性记忆）未启用。到「概览」页开启「技能」开关（或部署配置 skills.enabled）：开启后，跨会话重复出现的「工作方法」记忆会累积为技能候选，在此审阅并手动晋升。": "Кристаллизация навыков (процедурная память) отключена. Включите переключатель «Навыки» на странице «Обзор» (или конфигурацию развёртывания skills.enabled): после включения воспоминания о «рабочих методах», повторяющиеся между сессиями, накапливаются как кандидаты в навыки — здесь их можно просмотреть и повысить вручную.",
-		  "继续下载": "Продолжить загрузку",
+		  "继续下载": "Продолжить загрузку ",
 		  "加载更多": "Загрузить ещё",
 		  "加载模型列表…": "Загрузка списка моделей…",
 		  "加载嵌入模型中…（首次需数秒）": "Загрузка модели эмбеддингов… (в первый раз займёт несколько секунд)",
@@ -37533,6 +37544,7 @@ var __create = Object.create;
 		  "静态 · YAML": "Статический · YAML",
 		  "居家": "Дом",
 		  "绝对路径(目录或 .mem)": "Абсолютный путь (каталог или .mem)",
+		  "均衡": "сбалансированная",
 		  "开": "Вкл.",
 		  "开关写入失败": "Не удалось записать переключатель",
 		  "开关写入失败：": "Не удалось записать переключатель:",
@@ -37557,7 +37569,7 @@ var __create = Object.create;
 		  "来源记录 (": "Исходные записи (",
 		  "来源锚点:": "якорь источника:",
 		  "来源锚点: -": "якорь источника: -",
-		  "老化": "Старение",
+		  "老化": "Старение ",
 		  "老化亮度": "Яркость старения",
 		  "老化权重": "Вес старения",
 		  "老化权重（读路径衰减系数）": "Вес старения (коэффициент затухания на пути чтения)",
@@ -37636,6 +37648,7 @@ var __create = Object.create;
 		  "切换嵌入源中…": "Переключение источника эмбеддингов…",
 		  "切换失败：": "Не удалось переключить:",
 		  "切回查询视图并展开本条目（保留当前选点）": "Вернуться к виду запроса и развернуть эту запись (текущий выбор сохраняется)",
+		  "轻量": "лёгкая",
 		  "轻量刷新中": "Идёт лёгкое обновление",
 		  "清除": "Очистить",
 		  "清除 Room/孤儿筛选": "Сбросить фильтры Room/сирота",
@@ -37680,7 +37693,7 @@ var __create = Object.create;
 		  "确认物理删除": "Подтвердить физическое удаление",
 		  "确认执行": "Подтвердить выполнение",
 		  "确认重建全部记忆？": "Подтвердить перестроение всей памяти?",
-		  "热度": "Популярность",
+		  "热度": "Популярность ",
 		  "人": "Человек",
 		  "人工冲突裁决": "Ручное решение конфликтов",
 		  "人工退场": "Ручной отзыв",
@@ -37712,7 +37725,7 @@ var __create = Object.create;
 		  "上次扫描": "Последнее сканирование",
 		  "上次重建：失败：": "Последнее перестроение: ошибка:",
 		  "上次重建：完成（": "Последнее перестроение: завершено (",
-		  "上次重建：已取消（完成": "Последнее перестроение: отменено (завершено",
+		  "上次重建：已取消（完成": "Последнее перестроение: отменено (завершено ",
 		  "上移": "Вверх",
 		  "上移（与主路由互换/顶替为主路由）": "Вверх (обмен с основным маршрутом или замена основного маршрута)",
 		  "尚未命名（名称蒸馏未产出）；投射回落 mem-": "Ещё без имени (дистилляция имени не дала результата); проекция откатывается к mem-",
@@ -37773,7 +37786,7 @@ var __create = Object.create;
 		  "天": "дн.",
 		  "天前": "дн. назад",
 		  "挑选中:点击目标 hall 头完成归类": "Выбор: щёлкните заголовок нужного hall, чтобы завершить классификацию",
-		  "条": "шт.",
+		  "条": " шт.",
 		  "条 · 原样保留": "шт. · сохранено как есть",
 		  "条，按每批 8 条约": "шт., примерно по 8 за партию, около",
 		  "条，此处显示": "шт., показано здесь",
@@ -37830,7 +37843,7 @@ var __create = Object.create;
 		  "外部记忆来源 Connect": "Источник внешней памяти Connect",
 		  "完成": "Готово",
 		  "维": "разм.",
-		  "维 · 上下文": "разм. · контекст",
+		  "维 · 上下文": " разм. · контекст ",
 		  "维度": "Размерность",
 		  "维度跟随部署": "Размерность зависит от развёртывания",
 		  "为缺 dsh_keywords 的存量记忆补检索关键词，喂 FTS 关键词轴（需先开关键词回填开关）": "Дозаполнить ключевые слова для существующих записей без dsh_keywords, чтобы питать ключевую ось FTS (сначала включите переключатель дозаполнения ключевых слов)",
@@ -37868,7 +37881,7 @@ var __create = Object.create;
 		  "系统日志": "системный журнал",
 		  "下(major/minor,预览后确认)": "ниже (major/minor, подтвердить после предпросмотра)",
 		  "下移": "вниз",
-		  "下载": "скачать",
+		  "下载": "скачать ",
 		  "下载失败：": "не удалось скачать:",
 		  "显示名(可选)": "отображаемое имя (необязательно)",
 		  "显示名(可中文)": "отображаемое имя (можно на китайском)",
@@ -37961,7 +37974,7 @@ var __create = Object.create;
 		  "用户默认": "По умолчанию (пользователь)",
 		  "用户默认 (global)": "По умолчанию (пользователь, global)",
 		  "用户默认（global，任何工作区可见）": "По умолчанию (пользователь, global, видно в любой рабочей области)",
-		  "优先级": "Приоритет",
+		  "优先级": "Приоритет ",
 		  "有效期起 {p1}": "Действует с {p1}",
 		  "有效期止 {p1}": "Действует до {p1}",
 		  "有新记录（样本省略）。": "Есть новые записи (образцы опущены).",
@@ -38025,12 +38038,13 @@ var __create = Object.create;
 		  "展开未注册自生长 Room": "Развернуть незарегистрированные самовыросшие Room",
 		  "展开子 room(默认折叠)": "Развернуть под-room (по умолчанию свёрнуты)",
 		  "展示近 N 天（正整数，清空=默认窗口；超出保留期后端自动回退）": "Показать последние N дней (положительное целое, пусто = окно по умолчанию; за пределами срока хранения бэкенд откатывается автоматически)",
+		  "长上下文": "длинный контекст",
 		  "账本共 {p1} 条 · 仍被认领 {p2} · 无人认领 {p3}（未搬任何东西）": "В журнале {p1} записей · всё ещё заявлено {p2} · без заявки {p3} (ничего не перемещено)",
 		  "召回": "Извлечение (recall)",
 		  "召回命中": "Попадания извлечения",
 		  "召回命中 ·": "Попадания извлечения ·",
 		  "召回片段": "Фрагменты извлечения",
-		  "召回使用": "Использование извлечения",
+		  "召回使用": "Использование извлечения ",
 		  "召回已停用（": "Извлечение отключено (",
 		  "召回已停用（开关关闭 / 档位关闭 / 部署未启用）": "Извлечение отключено (переключатель выкл. / режим выкл. / развёртывание не включено)",
 		  "召回追踪": "Трассировка извлечения",
@@ -38066,6 +38080,9 @@ var __create = Object.create;
 		  "智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）": "Умный режим: автоматически определяет домены извлечения (клик по центру / перетаскивание от угла внутрь = все домены)",
 		  "置信度:": "Уверенность:",
 		  "中": "Средний",
+		  "中文": "китайский",
+		  "中文质量最强：8192 token 上下文，约 543MB，CPU 嵌入较慢（单条可达秒级）。": "Лучшее качество для китайского: контекст 8192 токена, ~543 МБ, медленнее на CPU (один элемент может занять секунды).",
+		  "中文专用小模型：约 25MB，CPU 嵌入最快，适合先体验语义检索。": "Небольшая модель только для китайского: ~25 МБ, самая быстрая на CPU — подойдёт, чтобы сначала попробовать семантический поиск.",
 		  "中止": "Прервать",
 		  "中止请求失败：": "Ошибка запроса на прерывание:",
 		  "中止中…": "Прерывание…",
@@ -38115,6 +38132,8 @@ var __create = Object.create;
 		  "作用范围:": "Область:",
 		  "作用范围：用户默认（global，任何工作区可见）": "Область: по умолчанию (global, видно в любой рабочей области)",
 		  "作用范围：指定工作区（仅归属工作区可见）": "Область: указанная рабочая область (видно только в ней)",
+		  "BGE small 中文": "BGE small (кит.)",
+		  "BGE-M3 大杯": "BGE-M3 Large",
 		  "Canvas 三维投影记忆海": "Трёхмерное море памяти в Canvas",
 		  "direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。": "direct = нативное прямое подключение плагина к OpenAI-совместимым эндпоинтам, не связано с платным API; при сбое автоматически переходит на цепочку маршрутов хоста.",
 		  "direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。": "Канал direct работает по нативному HTTP плагина и не зависит от реестра провайдеров хоста; при сбое direct автоматически переходит на цепочку маршрутов хоста как страховка.",
@@ -38122,6 +38141,7 @@ var __create = Object.create;
 		  "DRSC 已安装但未启用": "DRSC установлен, но не включён",
 		  "ego 壳层 ·": "оболочка ego ·",
 		  "G6 力导星图": "Звёздная карта G6 с силовой раскладкой",
+		  "Google 官方嵌入模型：100+ 语言含中文，约 295MB，质量与开销均衡（上游 MemoryCore 同款）。": "Официальная модель эмбеддингов Google: 100+ языков, включая китайский, ~295 МБ, баланс качества и затрат (та же, что в upstream MemoryCore).",
 		  "Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关": "Hall = категория Room · лимит 200 категорий, подкатегории («категория/подкатегория») не расходуют квоту · не связано с фильтром Wing (домен)",
 		  "L0 今日消息": "L0 сообщения за сегодня",
 		  "L0 无消息，无可重建内容": "В L0 нет сообщений, нечего перестраивать",
@@ -39099,18 +39119,18 @@ var __create = Object.create;
 		var CONFLICT_TYPE_SECTIONS = [
 		  {
 		    type: "hard",
-		    label: tr("硬冲突（占额度）"),
-		    hint: tr("事实层面直接互斥——两边不可能同时为真，必须由人给出结论。")
+		    label: "硬冲突（占额度）",
+		    hint: "事实层面直接互斥——两边不可能同时为真，必须由人给出结论。"
 		  },
 		  {
 		    type: "conditional",
-		    label: tr("条件冲突（不占额度）"),
-		    hint: tr("各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。")
+		    label: "条件冲突（不占额度）",
+		    hint: "各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。"
 		  },
 		  {
 		    type: "supersession",
-		    label: tr("新旧取代（不占额度）"),
-		    hint: tr("线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。")
+		    label: "新旧取代（不占额度）",
+		    hint: "线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。"
 		  }
 		];
 		function conflictTypeOf(p) {
@@ -39233,14 +39253,14 @@ var __create = Object.create;
 		    view !== null && view.enabled && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: S.intro, children: tr("没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。") }) : null,
 		    sections.map((sec) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { marginBottom: 12 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: S.cardHead, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: { ...S.muted, fontWeight: 600 }, children: sec.label }),
+		        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: { ...S.muted, fontWeight: 600 }, children: tr(sec.label) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { style: S.muted, children: [
 		          sec.items.length,
 		          " ",
 		          tr("条")
 		        ] })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, fontSize: 11, marginBottom: 6 }, children: sec.hint }),
+		      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, fontSize: 11, marginBottom: 6 }, children: tr(sec.hint) }),
 		      sec.items.map((p) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ConflictCard, { pair: p, busy: busy === p.pair_id, onResolve: resolve }, p.pair_id))
 		    ] }, sec.type))
 		  ] });
@@ -39907,9 +39927,9 @@ var __create = Object.create;
 		var import_react8 = require("react");
 		var import_jsx_runtime7 = require("react/jsx-runtime");
 		var SOURCES = [
-		  { id: "", label: tr("系统日志") },
-		  { id: "recall_turn", label: tr("召回追踪") },
-		  { id: "distill_run", label: tr("蒸馏追踪") }
+		  { id: "", label: "系统日志" },
+		  { id: "recall_turn", label: "召回追踪" },
+		  { id: "distill_run", label: "蒸馏追踪" }
 		];
 		function fmtEvent(ev) {
 		  if (ev.kind === "recall_turn") {
@@ -39954,11 +39974,11 @@ var __create = Object.create;
 		  }, [lines]);
 		  return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10, gap: 8 }, children: [
-		      SOURCES.map((s) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(NButton, { onClick: () => setSource(s.id), children: source === s.id ? "● " + s.label : s.label }, s.id)),
+		      SOURCES.map((s) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(NButton, { onClick: () => setSource(s.id), children: source === s.id ? "● " + tr(s.label) : tr(s.label) }, s.id)),
 		      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(NButton, { onClick: load, children: tr("刷新") })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: SOURCES.find((s) => s.id === source)?.label }) }),
+		    /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: tr(SOURCES.find((s) => s.id === source)?.label ?? "") }) }),
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: tr("读取失败：") + error + tr("（点右上“刷新”重试）") }) : /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("pre", { style: S.pre, ref: preRef, children: (lines || []).join("\n") || tr("(暂无记录)") })
 		  ] });
 		}
@@ -39968,9 +39988,9 @@ var __create = Object.create;
 		
 		// client/src/pill/modes.ts
 		var MODES = [
-		  { key: "chat", label: tr("日常"), color: "var(--dsh-mem-mode-chat)" },
-		  { key: "auto", label: tr("智能"), color: "var(--dsh-mem-mode-auto)" },
-		  { key: "work", label: tr("工作"), color: "var(--dsh-mem-mode-work)" }
+		  { key: "chat", label: "日常", color: "var(--dsh-mem-mode-chat)" },
+		  { key: "auto", label: "智能", color: "var(--dsh-mem-mode-auto)" },
+		  { key: "work", label: "工作", color: "var(--dsh-mem-mode-work)" }
 		];
 		function modeInfo(key) {
 		  for (let i = 0; i < MODES.length; i++) if (MODES[i].key === key) return MODES[i];
@@ -39984,9 +40004,9 @@ var __create = Object.create;
 		}
 		
 		// client/src/copy.ts
-		var GRAPH_FEATURE_LABEL = tr("知识图谱");
-		var GRAPH_TOOL_LABEL = tr("图谱读工具");
-		var GRAPH_BUDGET_LABEL = tr("图谱投影预算");
+		var GRAPH_FEATURE_LABEL = "知识图谱";
+		var GRAPH_TOOL_LABEL = "图谱读工具";
+		var GRAPH_BUDGET_LABEL = "图谱投影预算";
 		function graphEnableHint() {
 		  return tr("在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。", { p1: GRAPH_FEATURE_LABEL });
 		}
@@ -40288,10 +40308,10 @@ var __create = Object.create;
 		var import_react10 = require("react");
 		var import_jsx_runtime9 = require("react/jsx-runtime");
 		var LAYERS = [
-		  ["extract", tr("抽取")],
-		  ["dedup", tr("去重")],
-		  ["l2", tr("L2 场景")],
-		  ["l3", tr("L3 画像")],
+		  ["extract", "抽取"],
+		  ["dedup", "去重"],
+		  ["l2", "L2 场景"],
+		  ["l3", "L3 画像"],
 		  // 这不是“投影开关”，是投影这一步的**输出预算**（issue #16：旧标签就叫“图谱投影”，
 		  // 与概览页那个功能开关撞名，用户点了以为开了投影，实际只是改了 token 预算）。
 		  ["graph", GRAPH_BUDGET_LABEL]
@@ -40472,7 +40492,7 @@ var __create = Object.create;
 		        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { style: { width: 68, flexShrink: 0, fontSize: 12, color: "var(--dsh-mem-text-2)" }, children: rowLabel(l[0]) }),
 		        inputBox(
 		          l[0],
-		          l[1],
+		          tr(l[1]),
 		          l[1] + tr("输出预算（token，留空 = 默认") + (def[l[0]] || "?") + "）",
 		          110,
 		          def[l[0]],
@@ -40561,9 +40581,9 @@ var __create = Object.create;
 		  preview: { fontSize: 12, color: "var(--dsh-mem-text-2)", marginTop: 8, wordBreak: "break-all", fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace" }
 		};
 		var MODE_OPTIONS = [
-		  { key: "", label: tr("跟随部署配置"), title: tr("没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）") },
-		  { key: "host", label: tr("复用宿主"), title: tr("复用宿主 ctx.llm（与付费供应商同路）") },
-		  { key: "direct", label: tr("直连端点"), title: tr("插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦") }
+		  { key: "", label: "跟随部署配置", title: "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）" },
+		  { key: "host", label: "复用宿主", title: "复用宿主 ctx.llm（与付费供应商同路）" },
+		  { key: "direct", label: "直连端点", title: "插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦" }
 		];
 		function ChannelEditor(props) {
 		  const { channel, rpc, disabled } = props;
@@ -40621,7 +40641,7 @@ var __create = Object.create;
 		      {
 		        value: runtime,
 		        disabled,
-		        options: MODE_OPTIONS.map((m) => ({ key: m.key, label: m.label, title: m.title })),
+		        options: MODE_OPTIONS.map((m) => ({ key: m.key, label: tr(m.label), title: tr(m.title) })),
 		        onChange: (k) => commit2({ distillMode: k })
 		      }
 		    ),
@@ -41302,9 +41322,9 @@ var __create = Object.create;
 		  return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...base, background: "var(--dsh-mem-track)" } });
 		}
 		var LAYER_META = {
-		  l1: { seg: "L1", title: tr("L1 · 抽取 / 去重") },
-		  l2: { seg: "L2", title: tr("L2 · 场景摘要") },
-		  l3: { seg: "L3", title: tr("L3 · 画像蒸馏") }
+		  l1: { seg: "L1", title: "L1 · 抽取 / 去重" },
+		  l2: { seg: "L2", title: "L2 · 场景摘要" },
+		  l3: { seg: "L3", title: "L3 · 画像蒸馏" }
 		};
 		function DistillSettings(props) {
 		  const rpc = props.rpc;
@@ -41330,13 +41350,13 @@ var __create = Object.create;
 		  const dotOf = (k) => layers?.[k]?.source ?? "global";
 		  const users = ["l1", "l2", "l3"].filter((k) => dotOf(k) === "global");
 		  const segOptions = [
-		    { key: "g", label: tr("全局默认"), title: tr("未单独配置的层走这条链（当前在用：") + (users.length ? users.map((k) => LAYER_META[k].seg).join("、") : tr("无")) + "）" },
+		    { key: "g", label: tr("全局默认"), title: tr("未单独配置的层走这条链（当前在用：") + (users.length ? users.map((k) => tr(LAYER_META[k].seg)).join("、") : tr("无")) + "）" },
 		    ...["l1", "l2", "l3"].map((k) => ({
 		      key: k,
-		      title: LAYER_META[k].title + " · " + (dotOf(k) === "runtime" ? tr("运行时自定义") : dotOf(k) === "static" ? tr("部署 YAML 层链（只读）") : tr("跟随全局")),
+		      title: tr(LAYER_META[k].title) + " · " + (dotOf(k) === "runtime" ? tr("运行时自定义") : dotOf(k) === "static" ? tr("部署 YAML 层链（只读）") : tr("跟随全局")),
 		      label: /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(Dot, { kind: dotOf(k) }),
-		        LAYER_META[k].seg
+		        tr(LAYER_META[k].seg)
 		      ] })
 		    }))
 		  ];
@@ -41362,14 +41382,14 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { style: STY3.panelHead, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: STY3.panelTitle, children: tr("全局默认链") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.chip, ...STY3.chipAccent }, children: tr("运行时 · 可编辑") }),
-		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.inUse, marginLeft: "auto" }, children: users.length ? tr("在用：") + users.map((k) => LAYER_META[k].seg).join("、") : tr("当前无层使用") })
+		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.inUse, marginLeft: "auto" }, children: users.length ? tr("在用：") + users.map((k) => tr(LAYER_META[k].seg)).join("、") : tr("当前无层使用") })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(RouteChainEditor, { rpc, disabled }, "g"),
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(BudgetInputs, { rpc, disabled, data: props.data, setData: props.setData, onError: props.onError, scope: "input" }, "g-budget"),
 		      info?.channel ? /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(ChannelEditor, { channel: info.channel, rpc, disabled }) : null
 		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { style: STY3.panelHead, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: STY3.panelTitle, children: LAYER_META[tab].title }),
+		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: STY3.panelTitle, children: tr(LAYER_META[tab].title) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { style: { ...STY3.chip, ...dotOf(tab) === "runtime" ? STY3.chipAccent : STY3.chipMuted }, title: chipTitle(tab), children: dotOf(tab) === "runtime" ? tr("运行时自定义") : dotOf(tab) === "static" ? tr("静态 · YAML") : tr("跟随全局") })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(RouteChainEditor, { rpc, disabled, scope: tab }, tab),
@@ -41700,10 +41720,10 @@ var __create = Object.create;
 		        style: { ...S.flexRow, padding: "8px 0", borderBottom: "1px solid var(--dsh-mem-border)", flexWrap: "wrap" },
 		        children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("div", { style: { minWidth: 150 }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { fontWeight: 600 }, children: m.name }),
-		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", children: m.tags.join(" · ") + " · " + m.dims + tr("维 · 上下文") + m.contextTokens })
+		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { fontWeight: 600 }, children: tr(m.name) }),
+		            /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { className: "dsh-mem-rb-muted", children: m.tags.map((tag) => tr(tag)).join(" · ") + " · " + m.dims + tr("维 · 上下文") + m.contextTokens })
 		          ] }),
-		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { flex: 1, minWidth: 180, fontSize: 12, color: "var(--dsh-mem-text-2)" }, children: m.description }),
+		          /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("div", { style: { flex: 1, minWidth: 180, fontSize: 12, color: "var(--dsh-mem-text-2)" }, children: tr(m.description) }),
 		          action
 		        ]
 		      },
@@ -41858,9 +41878,9 @@ var __create = Object.create;
 		var import_react16 = require("react");
 		var import_jsx_runtime15 = require("react/jsx-runtime");
 		var RB_PHASE_LABEL = {
-		  preparing: tr("准备中（归档旧数据 · 清空检索库）"),
-		  distilling: tr("分块蒸馏中"),
-		  finalizing: tr("收尾（强制 L2 场景 + L3 画像）")
+		  preparing: "准备中（归档旧数据 · 清空检索库）",
+		  distilling: "分块蒸馏中",
+		  finalizing: "收尾（强制 L2 场景 + L3 画像）"
 		};
 		function RebuildPanel(props) {
 		  const rpc = props.rpc;
@@ -41932,7 +41952,7 @@ var __create = Object.create;
 		  return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "dsh-mem-rb-card", children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: tr("重建记忆") }),
-		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-muted", style: { flex: 1, minWidth: 180 }, children: running ? (RB_PHASE_LABEL[rb.phase] || rb.phase) + " · " + rb.done + "/" + rb.total + tr("会话（") + pct + "%）" : tr("从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "dsh-mem-rb-muted", style: { flex: 1, minWidth: 180 }, children: running ? (tr(RB_PHASE_LABEL[rb.phase] ?? "") || rb.phase) + " · " + rb.done + "/" + rb.total + tr("会话（") + pct + "%）" : tr("从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）") }),
 		      running ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(NButton, { disabled: busy || rb.cancelRequested, onClick: cancel, children: rb.cancelRequested ? tr("取消中…") : tr("取消重建") }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
 		        NButton,
 		        {
@@ -42010,11 +42030,11 @@ var __create = Object.create;
 		var import_react17 = require("react");
 		var import_jsx_runtime16 = require("react/jsx-runtime");
 		var RM_PHASE_LABEL = {
-		  refreshing: tr("轻量刷新中"),
-		  distilling: tr("L1 蒸馏中"),
-		  consolidating: tr("L2 场景整合中"),
-		  updating: tr("L3 画像更新中"),
-		  relabeling: tr("标注校验/重标定中")
+		  refreshing: "轻量刷新中",
+		  distilling: "L1 蒸馏中",
+		  consolidating: "L2 场景整合中",
+		  updating: "L3 画像更新中",
+		  relabeling: "标注校验/重标定中"
 		};
 		var RM_RUNNING_PHASES = ["refreshing", "distilling", "consolidating", "updating", "relabeling"];
 		var RM_PHASE_INTERVAL = {
@@ -42738,7 +42758,7 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: GRAPH_FEATURE_LABEL }),
+		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr(GRAPH_FEATURE_LABEL) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
@@ -46927,7 +46947,7 @@ var __create = Object.create;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
 		  const wingText = halls.length === 1 ? wingLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} Wing` : null;
-		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? tr("只写") : wingText ? wingText : info.label;
+		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? tr(info.label) : !recallResolved ? tr("只写") : wingText ? wingText : tr(info.label);
 		  ensureThemeStyle();
 		  const pillStyle = {
 		    position: "relative",
@@ -48148,11 +48168,11 @@ var __create = Object.create;
 		var DETAIL_DEFAULT = 380;
 		var DETAIL_MAX_RATIO = 0.55;
 		var LEGEND_TYPES = [
-		  ["person", tr("人"), "--dsh-mem-chart-1"],
-		  ["project", tr("项目"), "--dsh-mem-chart-2"],
-		  ["organization", tr("组织"), "--dsh-mem-chart-3"],
-		  ["tool", tr("工具"), "--dsh-mem-chart-4"],
-		  ["place", tr("地点"), "--dsh-mem-chart-5"]
+		  ["person", "人", "--dsh-mem-chart-1"],
+		  ["project", "项目", "--dsh-mem-chart-2"],
+		  ["organization", "组织", "--dsh-mem-chart-3"],
+		  ["tool", "工具", "--dsh-mem-chart-4"],
+		  ["place", "地点", "--dsh-mem-chart-5"]
 		];
 		function ExplorerPage(props) {
 		  useLocaleRevision();
@@ -48343,7 +48363,7 @@ var __create = Object.create;
 		              style: { width: 8, height: 8, borderRadius: 8, display: "inline-block", marginRight: 3, background: `var(${token})` }
 		            }
 		          ),
-		          zh
+		          tr(zh)
 		        ] }, t)),
 		        /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { title: tr("亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧"), children: tr("亮度=老化") })
 		      ] }) : null,
