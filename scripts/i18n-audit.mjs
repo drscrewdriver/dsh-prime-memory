@@ -77,6 +77,16 @@ for (const file of walk(SRC)) {
   if (/tr\(\s*tr\(/.test(src)) errors.push(`${rel(file)}: 出现 tr(tr(...)) 嵌套`);
 }
 
+// 模板参数里塞未经 tr() 的模块级标签常量（如 { p1: GRAPH_FEATURE_LABEL }）→ 中文漏网
+for (const file of walk(SRC)) {
+  const src = readFileSync(file, 'utf8');
+  const re = /\b\w+: (GRAPH_[A-Z_]+_LABEL)\b/g;
+  let m;
+  while ((m = re.exec(src))) {
+    warnings.push(`${rel(file)}: 模板参数直接用了常量 ${m[1]}（应为 tr(${m[1]})）`);
+  }
+}
+
 // ── 3. 字典：覆盖 / 硬伤 ────────────────────────────────────────────
 const dicts = { en, ru };
 for (const [loc, dict] of Object.entries(dicts)) {

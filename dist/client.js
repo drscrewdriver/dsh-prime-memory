@@ -36143,10 +36143,10 @@ var __create = Object.create;
 		  "裁决结论本身不可覆盖。": "The verdict itself cannot be overridden.",
 		  "裁决失败": "Verdict failed",
 		  "裁决退场": "Retired by verdict",
-		  "裁决这一对？ 将要退场的记忆： 「{p1}」": "Resolve this pair? Memory to be retired: 「{p1}」",
+		  "裁决这一对？ 将要退场的记忆： 「{p1}」": 'Resolve this pair? Memory to be retired: "{p1}"',
 		  "裁决中…": "Resolving…",
 		  "操作失败": "Operation failed",
-		  "侧栏「记忆库」入口": "Sidebar 「Memory store」 entry",
+		  "侧栏「记忆库」入口": 'Sidebar "Memory store" entry',
 		  "测试规范": "Test conventions",
 		  "层1 · 当前记录": "Layer 1 · Current record",
 		  "层2 · 涉及实体": "Layer 2 · Involved entities",
@@ -37303,7 +37303,7 @@ var __create = Object.create;
 		  "裁决结论本身不可覆盖。": "Само решение переопределить нельзя.",
 		  "裁决失败": "Не удалось вынести решение",
 		  "裁决退场": "Отозвано по решению",
-		  "裁决这一对？ 将要退场的记忆： 「{p1}」": "Вынести решение по этой паре? Отзываемая запись: 「{p1}」",
+		  "裁决这一对？ 将要退场的记忆： 「{p1}」": "Вынести решение по этой паре? Отзываемая запись: «{p1}»",
 		  "裁决中…": "Вынесение решения…",
 		  "操作失败": "Операция не удалась",
 		  "侧栏「记忆库」入口": "Вход в «Хранилище памяти» на боковой панели",
@@ -40084,7 +40084,7 @@ var __create = Object.create;
 		var GRAPH_TOOL_LABEL = "图谱读工具";
 		var GRAPH_BUDGET_LABEL = "图谱投影预算";
 		function graphEnableHint() {
-		  return tr("在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。", { p1: GRAPH_FEATURE_LABEL });
+		  return tr("在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。", { p1: tr(GRAPH_FEATURE_LABEL) });
 		}
 		function graphSwitchDesc(on) {
 		  return on ? tr("已开启：L1 记忆会投影成实体与关系，存量在启动/开启后逐批补齐（可与「图谱读工具」独立开关）") : tr("默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时");
@@ -42838,7 +42838,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: tr("{p1}投影", { p1: GRAPH_FEATURE_LABEL }),
+		          label: tr("{p1}投影", { p1: tr(GRAPH_FEATURE_LABEL) }),
 		          desc: graphSwitchDesc(graphEnabled),
 		          checked: graphEnabled,
 		          disabled: !master,
@@ -42878,7 +42878,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
 		        SwitchRow,
 		        {
-		          label: GRAPH_TOOL_LABEL,
+		          label: tr(GRAPH_TOOL_LABEL),
 		          desc: toolGraph ? tr("已注册：memory_search_graph / memory_expand_graph_node") : tr("已封印：图谱读工具从模型工具列表移除"),
 		          checked: toolGraph,
 		          onChange: (v) => {
@@ -43043,7 +43043,7 @@ var __create = Object.create;
 		        onClose: () => {
 		          setGraphConfirm(null);
 		        },
-		        title: tr("开启{p1}投影？", { p1: GRAPH_FEATURE_LABEL }),
+		        title: tr("开启{p1}投影？", { p1: tr(GRAPH_FEATURE_LABEL) }),
 		        footer: [
 		          /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
 		            NButton,
@@ -45627,7 +45627,7 @@ var __create = Object.create;
 		    stats && stats.nodes === 0 && !error ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("p", { style: S.intro, children: [
 		      tr("图谱还没有内容。"),
 		      graphEnableHint(),
-		      tr("（注意：这里指的是「{p1}」开关，不是「{p2}」——后者只管模型能不能读图）", { p1: GRAPH_FEATURE_LABEL, p2: GRAPH_TOOL_LABEL })
+		      tr("（注意：这里指的是「{p1}」开关，不是「{p2}」——后者只管模型能不能读图）", { p1: tr(GRAPH_FEATURE_LABEL), p2: tr(GRAPH_TOOL_LABEL) })
 		    ] }) : null,
 		    board && board.seeds.length > 1 && view === "full" ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("div", { style: { ...S.flexRow, marginBottom: 8, flexWrap: "wrap", gap: 6 }, children: board.seeds.map((s) => /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
 		      "button",

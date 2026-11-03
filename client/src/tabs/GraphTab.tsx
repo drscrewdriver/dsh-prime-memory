@@ -242,7 +242,7 @@ export function GraphTab(props: { rpc: RpcFn }) {
       {stats && stats.nodes === 0 && !error ? (
         <p style={S.intro}>
           {tr("图谱还没有内容。")}{graphEnableHint()}
-          {tr("（注意：这里指的是「{p1}」开关，不是「{p2}」——后者只管模型能不能读图）", { p1: GRAPH_FEATURE_LABEL, p2: GRAPH_TOOL_LABEL })}
+          {tr("（注意：这里指的是「{p1}」开关，不是「{p2}」——后者只管模型能不能读图）", { p1: tr(GRAPH_FEATURE_LABEL), p2: tr(GRAPH_TOOL_LABEL) })}
         </p>
       ) : null}
 

@@ -98,6 +98,11 @@ if (existsSync(overridesPath)) {
   }
 }
 
+// 中文的角落括号「」在英/俄里是异类：统一成各语言的引号（en: "…" / ru: «…»）。
+for (const [map, [open, close]] of [[en, ['"', '"']], [ru, ['«', '»']]]) {
+  for (const [k, v] of map) map.set(k, v.replace(/「/g, open).replace(/」/g, close));
+}
+
 const sorted = [...keys].sort((a, b) => a.localeCompare(b, 'zh'));
 const render = (name, map, note) => {
   const lines = sorted

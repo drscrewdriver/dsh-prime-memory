@@ -250,7 +250,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
            */}
           <div style={S.panelLabel}>{tr(GRAPH_FEATURE_LABEL)}</div>
           <SwitchRow
-            label={tr("{p1}投影", { p1: GRAPH_FEATURE_LABEL })}
+            label={tr("{p1}投影", { p1: tr(GRAPH_FEATURE_LABEL) })}
             desc={graphSwitchDesc(graphEnabled)}
             checked={graphEnabled}
             disabled={!master}
@@ -282,7 +282,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             onChange={(v) => { toggle('toolRoom', v); }}
           />
           <SwitchRow
-            label={GRAPH_TOOL_LABEL}
+            label={tr(GRAPH_TOOL_LABEL)}
             desc={toolGraph ? tr("已注册：memory_search_graph / memory_expand_graph_node") : tr("已封印：图谱读工具从模型工具列表移除")}
             checked={toolGraph}
             onChange={(v) => { toggle('toolGraph', v); }}
@@ -425,7 +425,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
           onClose={() => {
             setGraphConfirm(null);
           }}
-          title={tr("开启{p1}投影？", { p1: GRAPH_FEATURE_LABEL })}
+          title={tr("开启{p1}投影？", { p1: tr(GRAPH_FEATURE_LABEL) })}
           footer={[
             <NButton
               key="cancel"

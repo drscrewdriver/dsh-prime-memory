@@ -21,7 +21,7 @@ export const GRAPH_BUDGET_LABEL = "图谱投影预算";
 
 /** 空态/提示里指路用：告诉用户开关到底在哪，且说清它管的是写面。 */
 export function graphEnableHint(): string {
-  return tr("在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。", { p1: GRAPH_FEATURE_LABEL });
+  return tr("在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。", { p1: tr(GRAPH_FEATURE_LABEL) });
 }
 
 /** 开关下方的说明文案（未开/已开两态）。 */
