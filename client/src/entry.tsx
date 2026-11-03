@@ -31,14 +31,13 @@
  *   window.__ModuleLoader__.load({ id, factory })，
  *   factory(require) 返回 { apply, inject }（wrapper 由构建脚本生成）。
  */
-import { tr } from './i18n.js';
 import type { MemoryClientCtx } from './env.js';
 import { MemoryPanel } from './panel.js';
 import { MemoryModePill } from './pill/MemoryModePill.js';
 import { ExplorerPage } from './explorer/ExplorerPage.js';
 import { ExplorerFooterEntry, ExplorerIcon } from './explorer/ExplorerEntry.js';
 import { explorerEntryState } from './explorer/entry-state.js';
-import { installLocale } from './i18n.js';
+import { installLocale, onLocaleChange, tr } from './i18n.js';
 import { makeRpc } from './rpc.js';
 
 export const inject = ['slots'];
@@ -79,17 +78,36 @@ export function apply(ctx: MemoryClientCtx) {
   // 轻量单卡片（search-index 留在那里）。各留一个座位 = 结构上不可能再出现两份。
   const SETTINGS_SEAT = 'settings.section';
   let cardSeatLive = false;
+  let sectionDispose: (() => void) | null = null;
+  const registerSection = (): (() => void) =>
+    ctx.slots.register(
+      { name: SETTINGS_SEAT, id: 'dsh-memory', order: 200, label: tr("记忆"), inject: () => ({ rpc }) },
+      MemoryPanel,
+    );
   try {
     ctx.slots.inject(SETTINGS_SEAT, () => {
       cardSeatLive = true;
       try {
-        return ctx.slots.register(
-          { name: SETTINGS_SEAT, id: 'dsh-memory', order: 200, label: tr("记忆"), inject: () => ({ rpc }) },
-          MemoryPanel,
-        );
+        sectionDispose = registerSection();
+        return () => {
+          sectionDispose?.();
+          sectionDispose = null;
+        };
       } catch (err) {
         console.warn(`[dsh-prime-memory] ${SETTINGS_SEAT} 注册失败:`, err);
         return () => {};
+      }
+    });
+
+    // locale 服务实测晚于本插件 apply（bundle 加载期 tr 仍是中文），而座位 label 是
+    // **注册时求值**的字符串：不重注册，左栏「记忆」会永远停在中文。
+    onLocaleChange(() => {
+      if (!cardSeatLive || !sectionDispose) return;
+      try {
+        sectionDispose();
+        sectionDispose = registerSection();
+      } catch (err) {
+        console.warn('[dsh-prime-memory] 语言变更后重注册设置分节失败:', err);
       }
     });
   } catch (err) {

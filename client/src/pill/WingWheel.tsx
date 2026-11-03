@@ -368,7 +368,7 @@ export function WingWheel(props: {
         {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
           const corner = overview?.corners[i];
           const id = corner?.id;
-          const label = corner?.label ?? LABEL_FALLBACK[i] ?? tr("域{p1}", { p1: i + 1 });
+          const label = corner?.label ?? tr(LABEL_FALLBACK[i] ?? "域{p1}").replace("{p1}", String(i + 1));
           const count = id ? cornerCount(id) : null;
           const active = activeCorner === i;
           const dim = activeCorner != null && !active;
@@ -529,7 +529,7 @@ function Row(props: { label: string; children: React.ReactNode }) {
 }
 
 /** 词表未送达时的兜底显示（正常路径由 wing-overview 下发的 label 取代）。 */
-const LABEL_FALLBACK = [tr("工作"), tr("人际"), tr("学习"), tr("创作娱乐"), tr("居家"), tr("健康"), tr("财务"), tr("出行")];
+const LABEL_FALLBACK = ["工作", "人际", "学习", "创作娱乐", "居家", "健康", "财务", "出行"];
 
 /** 水平视口夹持（手机端适配）：浮层以 pill 中心为轴悬浮，窄视口下贴边平移。 */
 export function useViewportClamp(popRef: RefObject<HTMLDivElement | null>): number {

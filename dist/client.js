@@ -38156,6 +38156,14 @@ var __create = Object.create;
 		var service = null;
 		var translate = null;
 		var attempted = false;
+		var pendingListeners = /* @__PURE__ */ new Set();
+		function onLocaleChange(cb) {
+		  if (service) {
+		    service.subscribe(cb);
+		    return;
+		  }
+		  pendingListeners.add(cb);
+		}
 		function installLocale(ctx) {
 		  if (attempted) return;
 		  attempted = true;
@@ -38188,6 +38196,9 @@ var __create = Object.create;
 		    registerDictionaries(svc, { en, ru });
 		    translate = makeTr(svc);
 		    service = svc;
+		    for (const cb of pendingListeners) svc.subscribe(cb);
+		    for (const cb of pendingListeners) cb();
+		    pendingListeners.clear();
 		    console.info(`[dsh-prime-memory] locale 就绪：当前 ${svc.getSnapshot().active}`);
 		  } catch (err) {
 		    console.warn("[dsh-prime-memory] locale 注册失败，界面保持中文:", err);
@@ -38524,7 +38535,7 @@ var __create = Object.create;
 		// client/src/components/DrscHealthBanner.tsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var POLL_MS = 6e4;
-		var GUIDE = tr('桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.5" - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。');
+		var GUIDE = '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.5" - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。';
 		function toneOf(h) {
 		  switch (h.state) {
 		    case "missing":
@@ -38561,7 +38572,7 @@ var __create = Object.create;
 		  }, [rpc]);
 		  const copy = (0, import_react2.useCallback)(async () => {
 		    try {
-		      await navigator.clipboard.writeText(GUIDE);
+		      await navigator.clipboard.writeText(tr(GUIDE));
 		      setCopied(true);
 		      setTimeout(() => setCopied(false), 1500);
 		    } catch {
@@ -38598,7 +38609,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("修复指引（可复制）") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { className: "dsh-mem-tab", onClick: () => void copy(), title: tr("复制修复指引"), children: copied ? tr("已复制") : tr("复制") })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", { ref: codeRef, style: S.bannerCode, children: GUIDE })
+		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", { ref: codeRef, style: S.bannerCode, children: tr(GUIDE) })
 		  ] });
 		}
 		
@@ -39142,7 +39153,7 @@ var __create = Object.create;
 		// client/src/tabs/ConflictsTab.tsx
 		var import_jsx_runtime2 = require("react/jsx-runtime");
 		var POLL_MS2 = 1e4;
-		var GONE = tr("（该记录正文不可得：已不在主表，或被更早的清理清掉了）");
+		var GONE = "（该记录正文不可得：已不在主表，或被更早的清理清掉了）";
 		function ConflictsTab(props) {
 		  const rpc = props.rpc;
 		  const [view, setView] = (0, import_react4.useState)(null);
@@ -39168,7 +39179,7 @@ var __create = Object.create;
 		  }, [load]);
 		  const resolve = (pair, outcome) => {
 		    if (outcome !== "defer") {
-		      const doomed = outcome === "winner" ? pair.loser_content || GONE : outcome === "loser" ? pair.winner_content || GONE : null;
+		      const doomed = outcome === "winner" ? pair.loser_content || tr(GONE) : outcome === "loser" ? pair.winner_content || tr(GONE) : null;
 		      if (doomed !== null) {
 		        const ok = window.confirm(
 		          tr("裁决这一对？ 将要退场的记忆： 「{p1}」", { p1: doomed }) + tr("它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。") + tr("裁决结论本身不可覆盖。")
@@ -39310,7 +39321,7 @@ var __create = Object.create;
 		  const mt = props.pair && props.side ? props.side === "winner" ? props.pair.winner_maturity : props.pair.loser_maturity : void 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { marginTop: 6 }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, fontWeight: props.accent ? 600 : void 0 }, children: props.label }),
-		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: S.content, children: props.content || GONE }),
+		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: S.content, children: props.content || tr(GONE) }),
 		    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, fontFamily: "ui-monospace, Consolas, monospace" }, children: props.id }),
 		    axis ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, marginTop: 2, fontSize: 11 }, children: axis }) : null,
 		    mt ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { ...S.muted, marginTop: 2, fontSize: 11 }, children: tr("成熟度 ·") + (mt === "high" ? tr("高") : mt === "mid" ? tr("中") : tr("低")) }) : null
@@ -39443,7 +39454,7 @@ var __create = Object.create;
 		function errMsg2(r) {
 		  return r && r.error && r.error.message ? r.error.message : tr("RPC 错误");
 		}
-		var TITLES = { candidate: tr("候选"), active: tr("活跃"), archived: tr("已归档") };
+		var TITLES = { candidate: "候选", active: "活跃", archived: "已归档" };
 		function emptyHint(data) {
 		  const p = data.producer;
 		  if (!p) return tr('暂无技能。技能从重复出现的"工作方法"记忆结晶而来。');
@@ -39515,7 +39526,7 @@ var __create = Object.create;
 		    (data?.skills || []).map((s) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: S.cardHead, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("strong", { children: s.title }),
-		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dsh-mem-tag", style: { marginLeft: 6 }, children: TITLES[s.status] }),
+		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dsh-mem-tag", style: { marginLeft: 6 }, children: tr(TITLES[s.status]) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: tr("· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条", { p1: s.tier, p2: s.pinned ? " · 已固定" : "", p3: s.sessionCount, p4: s.evidenceCount }) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.grow })
 		      ] }),
@@ -39638,7 +39649,7 @@ var __create = Object.create;
 		    })
 		  ] });
 		}
-		var RANGE_LABELS = { day: tr("今日"), week: tr("本周"), month: tr("本月"), all: tr("累计") };
+		var RANGE_LABELS = { day: "今日", week: "本周", month: "本月", all: "累计" };
 		var LAYER_OPTS = [
 		  { key: "", label: tr("全部") },
 		  { key: "l1", label: "L1" },
@@ -39819,7 +39830,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("tr", { children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: tr("层级") }),
 		        RANGES.map((r) => {
-		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: RANGE_LABELS[r] }, r);
+		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: tr(RANGE_LABELS[r] ?? r) }, r);
 		        })
 		      ] }) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("tbody", { children: layerTable.map((lc) => {
@@ -39834,7 +39845,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("tr", { children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: tr("层级") }),
 		        RANGES.map((r) => {
-		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: RANGE_LABELS[r] + "-avg" }, r);
+		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: tr(RANGE_LABELS[r] ?? r) + "-avg" }, r);
 		        })
 		      ] }) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("tbody", { children: layerTable.map((lc) => {
@@ -39849,7 +39860,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("thead", { children: /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("tr", { children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thFirst, children: tr("层级") }),
 		        RANGES.map((r) => {
-		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: RANGE_LABELS[r] + "-median" }, r);
+		          return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("th", { style: thStyle, children: tr(RANGE_LABELS[r] ?? r) + "-median" }, r);
 		        })
 		      ] }) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("tbody", { children: layerTable.map((lc) => {
@@ -39863,7 +39874,7 @@ var __create = Object.create;
 		    /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.statGrid, children: windows.map((w) => {
 		      return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "dsh-mem-card", style: S.statTile, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.statNum, children: fmtInt(w.outputTokens + w.reasoningTokens) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.statLabel, children: RANGE_LABELS[w.range] + tr("· 总输出 token") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.statLabel, children: tr(RANGE_LABELS[w.range] ?? String(w.range)) + tr("· 总输出 token") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { style: S.muted, children: tr("文字") + fmtInt(w.outputTokens) + tr("· 思考") + fmtInt(w.reasoningTokens) + " · " + w.calls + tr("次调用") })
 		      ] }, w.range);
 		    }) }),
@@ -46562,7 +46573,7 @@ var __create = Object.create;
 		          [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
 		            const corner = overview?.corners[i];
 		            const id = corner?.id;
-		            const label = corner?.label ?? LABEL_FALLBACK[i] ?? tr("域{p1}", { p1: i + 1 });
+		            const label = corner?.label ?? tr(LABEL_FALLBACK[i] ?? "域{p1}").replace("{p1}", String(i + 1));
 		            const count = id ? cornerCount(id) : null;
 		            const active = activeCorner === i;
 		            const dim = activeCorner != null && !active;
@@ -46697,7 +46708,7 @@ var __create = Object.create;
 		    }
 		  );
 		}
-		var LABEL_FALLBACK = [tr("工作"), tr("人际"), tr("学习"), tr("创作娱乐"), tr("居家"), tr("健康"), tr("财务"), tr("出行")];
+		var LABEL_FALLBACK = ["工作", "人际", "学习", "创作娱乐", "居家", "健康", "财务", "出行"];
 		function useViewportClamp(popRef) {
 		  const shiftRef = (0, import_react30.useRef)(0);
 		  const [shiftX, setShiftX] = (0, import_react30.useState)(0);
@@ -48615,18 +48626,33 @@ var __create = Object.create;
 		  console.info("[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位");
 		  const SETTINGS_SEAT2 = "settings.section";
 		  let cardSeatLive = false;
+		  let sectionDispose = null;
+		  const registerSection = () => ctx.slots.register(
+		    { name: SETTINGS_SEAT2, id: "dsh-memory", order: 200, label: tr("记忆"), inject: () => ({ rpc }) },
+		    MemoryPanel
+		  );
 		  try {
 		    ctx.slots.inject(SETTINGS_SEAT2, () => {
 		      cardSeatLive = true;
 		      try {
-		        return ctx.slots.register(
-		          { name: SETTINGS_SEAT2, id: "dsh-memory", order: 200, label: tr("记忆"), inject: () => ({ rpc }) },
-		          MemoryPanel
-		        );
+		        sectionDispose = registerSection();
+		        return () => {
+		          sectionDispose?.();
+		          sectionDispose = null;
+		        };
 		      } catch (err) {
 		        console.warn(`[dsh-prime-memory] ${SETTINGS_SEAT2} 注册失败:`, err);
 		        return () => {
 		        };
+		      }
+		    });
+		    onLocaleChange(() => {
+		      if (!cardSeatLive || !sectionDispose) return;
+		      try {
+		        sectionDispose();
+		        sectionDispose = registerSection();
+		      } catch (err) {
+		        console.warn("[dsh-prime-memory] 语言变更后重注册设置分节失败:", err);
 		      }
 		    });
 		  } catch (err) {

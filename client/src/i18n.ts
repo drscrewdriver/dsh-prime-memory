@@ -26,6 +26,22 @@ export * from './i18n-core.js';
 let service: LocaleServiceLike | null = null;
 let translate: ((key: string, params?: Record<string, unknown>) => string) | null = null;
 let attempted = false;
+/** 语言服务尚未就绪时的订阅者：就绪后补订阅，并立刻回调一次（标签需要立刻改成当前语言）。 */
+const pendingListeners = new Set<() => void>();
+
+/**
+ * 订阅语言变更（含「服务晚到」这一次）。
+ *
+ * 用途：求值时机在注册时的地方（例如槽位 `label`）无法在渲染期重取，只能重注册。
+ * @param cb - 语言就绪或切换时回调。
+ */
+export function onLocaleChange(cb: () => void): void {
+  if (service) {
+    service.subscribe(cb);
+    return;
+  }
+  pendingListeners.add(cb);
+}
 
 /**
  * 把本插件的字典登记进 locale 服务。
@@ -70,6 +86,9 @@ function adopt(svc: LocaleServiceLike): void {
     registerDictionaries(svc, { en, ru });
     translate = makeTr(svc);
     service = svc;
+    for (const cb of pendingListeners) svc.subscribe(cb);
+    for (const cb of pendingListeners) cb();
+    pendingListeners.clear();
     console.info(`[dsh-prime-memory] locale 就绪：当前 ${svc.getSnapshot().active}`);
   } catch (err) {
     // 重复注册（HMR 重载）或服务实现不符：保持中文，不抛。

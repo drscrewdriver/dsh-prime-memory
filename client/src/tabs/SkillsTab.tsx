@@ -22,7 +22,7 @@ function errMsg(r: { ok?: boolean; error?: { message?: string } } | undefined): 
   return r && r.error && r.error.message ? r.error.message : tr("RPC 错误");
 }
 
-const TITLES: Record<SkillView['status'], string> = { candidate: tr("候选"), active: tr("活跃"), archived: tr("已归档") };
+const TITLES: Record<SkillView['status'], string> = { candidate: "候选", active: "活跃", archived: "已归档" };
 
 /** 空态文案：拿不到生产者健康态（旧宿主）时不谎报已接线。 */
 function emptyHint(data: SkillsListResponse): string {
@@ -117,7 +117,7 @@ export function SkillsTab(props: { rpc: RpcFn }) {
         <div key={s.id} className="dsh-mem-card" style={S.card}>
           <div style={S.cardHead}>
             <strong>{s.title}</strong>
-            <span className="dsh-mem-tag" style={{ marginLeft: 6 }}>{TITLES[s.status]}</span>
+            <span className="dsh-mem-tag" style={{ marginLeft: 6 }}>{tr(TITLES[s.status])}</span>
             <span style={S.muted}>{tr("· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条", { p1: s.tier, p2: s.pinned ? ' · 已固定' : '', p3: s.sessionCount, p4: s.evidenceCount })}</span>
             <div style={S.grow} />
           </div>

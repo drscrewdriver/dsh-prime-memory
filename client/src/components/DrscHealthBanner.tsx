@@ -22,7 +22,7 @@ import { fmtTime } from '../format.js';
 const POLL_MS = 60_000;
 
 /** 桌面侧唯一可行链路（宿主独占管理 desktop profile，CLI 必被拒）。 */
-const GUIDE = tr("桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 \"dsh-reference-session-collector\": \"^0.2.5\" - dsh.profile.bundles 追加 \"dsh-reference-session-collector\" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。");
+const GUIDE = "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 \"dsh-reference-session-collector\": \"^0.2.5\" - dsh.profile.bundles 追加 \"dsh-reference-session-collector\" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。"
 
 interface Tone {
   title: string;
@@ -69,7 +69,7 @@ export function DrscHealthBanner({ rpc }: { rpc: RpcFn }) {
 
   const copy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(GUIDE);
+      await navigator.clipboard.writeText(tr(GUIDE));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -113,7 +113,7 @@ export function DrscHealthBanner({ rpc }: { rpc: RpcFn }) {
         </button>
       </div>
       <pre ref={codeRef} style={S.bannerCode}>
-        {GUIDE}
+        {tr(GUIDE)}
       </pre>
     </div>
   );

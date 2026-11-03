@@ -94,6 +94,21 @@ function isStructural(node) {
   return inConsoleOrThrow(node);
 }
 
+/**
+ * 是否位于**模块级常量**的初始化里。
+ *
+ * 约定：模块级标签表只存中文 key，翻译放到渲染期（`tr(TABS[i])`）。原因见
+ * `docs/i18n.md`：bundle 加载期 locale 服务通常还没就绪，模块级 `tr(...)` 会把
+ * 文案冻结在中文。这里跳过编辑但保留 key，重跑 codemod 不会把它们又包回去。
+ */
+function inModuleLevelConst(node) {
+  for (let p = node.parent; p; p = p.parent) {
+    if (ts.isVariableStatement(p)) return ts.isSourceFile(p.parent);
+    if (ts.isStatement(p) || ts.isFunctionLike(p)) return false;
+  }
+  return false;
+}
+
 /** 已包在 t(...) 里的字面量：跳过（幂等）。 */
 function alreadyWrapped(node) {
   const p = node.parent;
@@ -111,6 +126,10 @@ export function extractFile(file, source) {
     if (isStructural(node) || alreadyWrapped(node)) return;
     const key = normKey(node.text);
     if (!key) return;
+    if (inModuleLevelConst(node)) {
+      keys.push(key);
+      return;
+    }
     edits.push({ start: node.getStart(sf), end: node.getEnd(), text: `tr(${JSON.stringify(key)})`, kind });
     keys.push(key);
   };

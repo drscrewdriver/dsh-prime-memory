@@ -65,7 +65,7 @@ function renderCostChart(
   );
 }
 
-const RANGE_LABELS: Record<string, string> = { day: tr("今日"), week: tr("本周"), month: tr("本月"), all: tr("累计") };
+const RANGE_LABELS: Record<string, string> = { day: "今日", week: "本周", month: "本月", all: "累计" };
 const LAYER_OPTS: SegOption[] = [
   { key: '', label: tr("全部") },
   { key: 'l1', label: 'L1' },
@@ -273,7 +273,7 @@ export function CostTab(props: { rpc: RpcFn }) {
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
-                  {RANGE_LABELS[r]}
+                  {tr(RANGE_LABELS[r] ?? r)}
                 </th>
               );
             })}
@@ -298,7 +298,7 @@ export function CostTab(props: { rpc: RpcFn }) {
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
-                  {RANGE_LABELS[r] + '-avg'}
+                  {tr(RANGE_LABELS[r] ?? r) + '-avg'}
                 </th>
               );
             })}
@@ -323,7 +323,7 @@ export function CostTab(props: { rpc: RpcFn }) {
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
-                  {RANGE_LABELS[r] + '-median'}
+                  {tr(RANGE_LABELS[r] ?? r) + '-median'}
                 </th>
               );
             })}
@@ -346,7 +346,7 @@ export function CostTab(props: { rpc: RpcFn }) {
           return (
             <div key={w.range} className="dsh-mem-card" style={S.statTile}>
               <div style={S.statNum}>{fmtInt(w.outputTokens + w.reasoningTokens)}</div>
-              <div style={S.statLabel}>{RANGE_LABELS[w.range] + tr("· 总输出 token")}</div>
+              <div style={S.statLabel}>{tr(RANGE_LABELS[w.range] ?? String(w.range)) + tr("· 总输出 token")}</div>
               <div style={S.muted}>
                 {tr("文字") + fmtInt(w.outputTokens) + tr("· 思考") + fmtInt(w.reasoningTokens) + ' · ' + w.calls + tr("次调用")}
               </div>

@@ -45,7 +45,7 @@ import {
 const POLL_MS = 10_000;
 
 /** 取不到正文时的占位。**与"内容为空"是两回事**，必须分开说。 */
-const GONE = tr("（该记录正文不可得：已不在主表，或被更早的清理清掉了）");
+const GONE = "（该记录正文不可得：已不在主表，或被更早的清理清掉了）"
 
 type Outcome = 'winner' | 'loser' | 'both' | 'defer';
 
@@ -84,9 +84,9 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
       // 退场哪一条：winner → 败方；loser → 胜方；both → 都不退场。
       const doomed =
         outcome === 'winner'
-          ? pair.loser_content || GONE
+          ? pair.loser_content || tr(GONE)
           : outcome === 'loser'
-            ? pair.winner_content || GONE
+            ? pair.winner_content || tr(GONE)
             : null;
       if (doomed !== null) {
         const ok = window.confirm(
@@ -235,7 +235,7 @@ function Side(props: { label: string; id: string; content: string; accent?: bool
   return (
     <div style={{ marginTop: 6 }}>
       <div style={{ ...S.muted, fontWeight: props.accent ? 600 : undefined }}>{props.label}</div>
-      <div style={S.content}>{props.content || GONE}</div>
+      <div style={S.content}>{props.content || tr(GONE)}</div>
       <div style={{ ...S.muted, fontFamily: 'ui-monospace, Consolas, monospace' }}>{props.id}</div>
       {axis ? <div style={{ ...S.muted, marginTop: 2, fontSize: 11 }}>{axis}</div> : null}
       {mt ? <div style={{ ...S.muted, marginTop: 2, fontSize: 11 }}>{tr("成熟度 ·") + (mt === 'high' ? tr("高") : mt === 'mid' ? tr("中") : tr("低"))}</div> : null}
