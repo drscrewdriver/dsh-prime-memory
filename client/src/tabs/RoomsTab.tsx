@@ -648,7 +648,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                     <div style={{ margin: '4px 0 2px', padding: '4px 8px', border: '1px dashed var(--dsh-mem-border)', borderRadius: 6 }}>
                       {(roomRecords[e.slug]?.items ?? []).map((it) => (
                         <div key={it.id} style={{ fontSize: 11, padding: '3px 0', borderBottom: '1px solid var(--dsh-mem-border)' }}>
-                          <span className={tagClass(it.type)}>{typeLabel(it.type)}</span>{' '}
+                          <span className={tagClass(it.type)}>{tr(typeLabel(it.type))}</span>{' '}
                           <span style={S.muted}>{it.updatedAt ? fmtTime(it.updatedAt) : ''}</span>
                           <div style={{ marginTop: 2, wordBreak: 'break-all', color: 'var(--dsh-mem-text-2)' }}>
                             {it.content.length > 120 ? it.content.slice(0, 120) + '…' : it.content}

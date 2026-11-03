@@ -324,7 +324,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           style={{ maxWidth: 200 }}
           options={([{ id: '', label: tr("全部类型") }] as NSelOption[]).concat(
             (typeCatalogIds().length > 0 ? typeCatalogIds() : [...new Set(items.map((m) => m.type))]).map((t) => {
-              return { id: t, label: typeLabel(t) };
+              return { id: t, label: tr(typeLabel(t)) };
             }),
           )}
           value={typeFilter}
@@ -522,10 +522,10 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                     toggleSel(m.id);
                   }}
                 />
-                <span className={tagClass(m.type)}>{typeLabel(m.type)}</span>
+                <span className={tagClass(m.type)}>{tr(typeLabel(m.type))}</span>
                 {m.hall ? (
                   <span className="dsh-mem-tag dsh-mem-tag-work-fact">
-                    {"Wing · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
+                    {"Wing · " + tr(wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
                   </span>
                 ) : null}
                 {m.retired ? (

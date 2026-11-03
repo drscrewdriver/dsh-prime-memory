@@ -357,7 +357,7 @@ export function GraphTab(props: { rpc: RpcFn }) {
                         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{r.name ?? tr("(无标题)")}</div>
                         {/* 标签行: type / scope / maturity / priority */}
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center', marginBottom: 4 }}>
-                          <span className={tagClass(r.type)}>{typeLabel(r.type)}</span>
+                          <span className={tagClass(r.type)}>{tr(typeLabel(r.type))}</span>
                           <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 999, border: '1px solid var(--dsh-mem-border)', color: 'var(--dsh-mem-text-2)', whiteSpace: 'nowrap' }}>
                             {r.scope === 'workspace' ? tr("工作区") : tr("全局")}
                           </span>
