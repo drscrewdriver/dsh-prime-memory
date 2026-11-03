@@ -14,28 +14,17 @@
  * 支持多语言的前置条件是宿主装了语言包（例如 `@goodandready/dsh-russian-lang` 通过
  * `ctx.locale.addLanguage({ id: 'ru', … })` 把 ru 加进可选语言）。**本插件不自作主张
  * 注册语言**：语言选择器的所有权属于 locale 插件与语言包，插件只贡献自己的字典。
+ *
+ * 纯逻辑（字典登记 / 回退 / 占位符）在 `i18n-core.ts`，由 `tests/i18n-dict.test.ts` 覆盖。
  */
-import { useSyncExternalStore } from 'react';
+import { type LocaleServiceLike, fill, makeTr, registerDictionaries } from './i18n-core.js';
 import { en } from './locales/en.js';
 import { ru } from './locales/ru.js';
 
-/** 本插件在 locale 注册表里的命名空间。 */
-export const I18N_NS = 'dsh-prime-memory';
-
-/** locale 服务的最小结构面（官方包未随客户端发布类型，这里只建模用到的方法）。 */
-export interface LocaleServiceLike {
-  /** 单语言注册（未在 LocaleNamespaceMap 里声明的命名空间走这条）。 */
-  register(ns: string, locale: string, dict: Record<string, string>): unknown;
-  /** 绑定命名空间，返回 `(key, params?) => string`。 */
-  bind(ns: string): (key: string, params?: Record<string, unknown>) => string;
-  /** 当前快照（含 revision，变更即 +1）。 */
-  getSnapshot(): { active: string; revision: number };
-  /** 快照订阅。 */
-  subscribe(fn: () => void): () => void;
-}
+export * from './i18n-core.js';
 
 let service: LocaleServiceLike | null = null;
-let bound: ((key: string) => string) | null = null;
+let translate: ((key: string, params?: Record<string, unknown>) => string) | null = null;
 let attempted = false;
 
 /**
@@ -71,34 +60,21 @@ function readService(ctx: { get(name: string): unknown }): LocaleServiceLike | n
   return null;
 }
 
+/** 当前 locale 服务（未就绪时 null）。供 `i18n-react.ts` 的订阅钩子使用。 */
+export function getLocaleService(): LocaleServiceLike | null {
+  return service;
+}
+
 function adopt(svc: LocaleServiceLike): void {
   try {
-    // zh 恒等映射：中文用户走中文原文，不被 en 回退劫持；en 是 key 集的事实来源。
-    svc.register(I18N_NS, 'zh', identityOf(en));
-    svc.register(I18N_NS, 'en', en);
-    svc.register(I18N_NS, 'ru', ru);
-    const tr = svc.bind(I18N_NS);
-    bound = (key: string) => tr(key);
+    registerDictionaries(svc, { en, ru });
+    translate = makeTr(svc);
     service = svc;
     console.info(`[dsh-prime-memory] locale 就绪：当前 ${svc.getSnapshot().active}`);
   } catch (err) {
     // 重复注册（HMR 重载）或服务实现不符：保持中文，不抛。
     console.warn('[dsh-prime-memory] locale 注册失败，界面保持中文:', err);
   }
-}
-
-function identityOf(dict: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const key of Object.keys(dict)) out[key] = key;
-  return out;
-}
-
-/** `{p1}` 占位填充。未提供的占位原样保留（可见即可修，不静默吞掉）。 */
-function fill(template: string, params: Record<string, unknown>): string {
-  return template.replace(/\{(\w+)\}/g, (whole, name: string) => {
-    const value = params[name];
-    return value === undefined ? whole : String(value);
-  });
 }
 
 /**
@@ -109,25 +85,6 @@ function fill(template: string, params: Record<string, unknown>): string {
  * @returns 当前语言下的文案；locale 缺席或该语言未覆盖时回中文原文。
  */
 export function tr(key: string, params?: Record<string, unknown>): string {
-  const text = bound ? bound(key) : key;
-  return params ? fill(text, params) : text;
-}
-
-/** 稳定引用的订阅器：避免每次渲染换函数导致 useSyncExternalStore 反复重订阅。 */
-function subscribe(onChange: () => void): () => void {
-  return service ? service.subscribe(onChange) : () => {};
-}
-
-function snapshot(): number {
-  return service ? service.getSnapshot().revision : 0;
-}
-
-/**
- * 订阅 locale 变更以触发重渲染。
- *
- * 只在**根组件**调用一次即可：根重渲染会带走整棵子树（本插件的组件都没有 React.memo）。
- * @returns 当前 locale revision（仅用于建立订阅，值本身不参与渲染）。
- */
-export function useLocaleRevision(): number {
-  return useSyncExternalStore(subscribe, snapshot, snapshot);
+  if (translate) return translate(key, params);
+  return params ? fill(key, params) : key;
 }

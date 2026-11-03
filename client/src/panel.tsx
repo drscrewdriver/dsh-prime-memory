@@ -1,5 +1,6 @@
 /** 记忆设置分节的主面板：Tab 框架（概览 / 记忆 / 冲突 / 场景 / Hall / Room / 图谱 / 画像 / 成本 / 日志）。 */
-import { tr, useLocaleRevision } from './i18n.js';
+import { tr } from './i18n.js';
+import { useLocaleRevision } from './i18n-react.js';
 import { useEffect, useState } from 'react';
 import type { RpcFn } from './rpc.js';
 import { watchSidebarIcon } from './sidebar-icon.js';

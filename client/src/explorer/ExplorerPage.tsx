@@ -16,7 +16,8 @@
  *   3. 查询走 `list-records`，与设置页「记忆」tab 同口径。
  * 本页**只读**：不写图、不改投影、不删记忆——写操作仍归各 tab 自己。
  */
-import { tr, useLocaleRevision } from '../i18n.js';
+import { tr } from '../i18n.js';
+import { useLocaleRevision } from '../i18n-react.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GraphPreviewResponse, RecordLinksResponse } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';

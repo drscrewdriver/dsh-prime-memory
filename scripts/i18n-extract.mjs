@@ -16,7 +16,8 @@
  *     indexOf/lastIndexOf/split/match/replace` 的参数字面量、成员访问下标、import/export；
  *   - `console.*` 与 `throw new Error()` 的开发期诊断（不是界面文案，不进翻译范围）。
  */
-import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { build } from 'esbuild';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -160,6 +161,16 @@ export function extractFile(file, source) {
       }
     } else if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       addLiteral(node, 'literal');
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(sf) === 'tr' &&
+      node.arguments.length > 0 &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      // 已包装的文案：不再产出编辑，但 key 仍属于「界面会渲染的集合」。
+      // 否则重跑抽取会把 keys.json 清成「只剩新增文案」，字典随之缩水。
+      const key = normKey(node.arguments[0].text);
+      if (key) keys.push(key);
     }
     ts.forEachChild(node, visit);
   };
@@ -178,16 +189,45 @@ export function applyEdits(source, edits) {
   return out;
 }
 
+/**
+ * 从 entry 出发**真实可达**的源文件集合。
+ *
+ * 为什么需要：`client/src` 里有保留以备回滚、但已不被 import 的组件（例如
+ * `pill/SessionRecalledArea.tsx`）。若把它们的文案也抽进字典，中文串会以「字典 key」
+ * 的形式重新进入 `dist/client.js` —— 而 `tests/client-session-recalled-bundle.test.ts`
+ * 正是用「包里不得出现这些串」来钉住「不再重复渲染」这条契约。可达性用 esbuild
+ * 的 metafile 判定，与真实构建同源。
+ */
+async function reachableSources() {
+  const g6Min = path.join(root, 'node_modules', '@antv', 'g6', 'dist', 'g6.min.js');
+  const result = await build({
+    entryPoints: [path.join(root, 'client/src/entry.tsx')],
+    bundle: true,
+    write: false,
+    metafile: true,
+    format: 'cjs',
+    platform: 'browser',
+    jsx: 'automatic',
+    external: ['react', 'react/jsx-runtime', '@deepseek-ai/*'],
+    alias: existsSync(g6Min) ? { '@antv/g6': g6Min } : {},
+    logLevel: 'silent',
+  });
+  return new Set(Object.keys(result.metafile.inputs).map((p) => path.resolve(root, p)));
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const files = walk(SRC);
+  const reachable = await reachableSources();
+  const all = walk(SRC);
+  const files = all.filter((f) => reachable.has(path.resolve(f)));
+  const unreachable = all.filter((f) => !reachable.has(path.resolve(f)));
   const allKeys = new Set();
   const report = {};
   for (const file of files) {
     const source = readFileSync(file, 'utf8');
     const { edits, keys } = extractFile(file, source);
-    if (!edits.length) continue;
-    report[path.relative(root, file)] = { edits: edits.length, keys: [...new Set(keys)] };
+    // key 与 edit 是两件事：已包装的文案没有 edit，但它的 key 仍属于「界面会渲染的集合」。
     for (const k of keys) allKeys.add(k);
+    if (edits.length) report[path.relative(root, file)] = { edits: edits.length, keys: [...new Set(keys)] };
   }
   const sorted = [...allKeys].sort((a, b) => a.localeCompare(b, 'zh'));
   const outDir = path.join(root, 'client/src/locales');
@@ -196,4 +236,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   writeFileSync(path.join(root, 'i18n-report.json'), JSON.stringify(report, null, 2) + '\n');
   const sites = Object.values(report).reduce((n, r) => n + r.edits, 0);
   console.log(`files with copy: ${Object.keys(report).length}, edits: ${sites}, unique keys: ${sorted.length}`);
+  if (unreachable.length) {
+    console.log(`skipped ${unreachable.length} unreachable file(s): ${unreachable.map((f) => path.relative(root, f)).join(', ')}`);
+  }
 }

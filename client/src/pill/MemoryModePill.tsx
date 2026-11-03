@@ -1,5 +1,6 @@
 /** 输入栏 pill：点击展开八边形域轮（WingWheel）；props 来自 conversation.input.left 的 zone 注入。 */
-import { tr, useLocaleRevision } from '../i18n.js';
+import { tr } from '../i18n.js';
+import { useLocaleRevision } from '../i18n-react.js';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { currentMeterSnapshot, initOccupancyIndicator, noteOccupancySession, watchContextMeter } from '../meter/occupancy-indicator.js';
 import { initPanelSection } from '../meter/panel-section.js';

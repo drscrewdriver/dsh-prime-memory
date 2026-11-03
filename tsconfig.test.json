@@ -53,7 +53,8 @@
     "tests/conflict-freeze-switch.test.ts",
     "tests/capture-recovery.test.ts",
     "tests/capture-config.test.ts",
-    "tests/capture-anchors.test.ts"
+    "tests/capture-anchors.test.ts",
+    "tests/i18n-dict.test.ts"
   ],
   "exclude": ["src/smoke.ts", "dist", "dist-smoke", "node_modules"]
 }
