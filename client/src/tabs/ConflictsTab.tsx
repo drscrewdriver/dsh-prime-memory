@@ -103,7 +103,7 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
       .then((r) => {
         if (r && r.ok) {
           const v = r.value;
-          setNote(v.notice ?? tr("已裁决 {p1}：{p2}{p3}", { p1: v.pair_id, p2: v.outcome, p3: v.removed_record_id ? '，退场 ' + v.removed_record_id : '，未移除记录' }));
+          setNote(v.notice ?? tr("已裁决 {p1}：{p2}{p3}", { p1: v.pair_id, p2: v.outcome, p3: v.removed_record_id ? tr('，退场 ') + v.removed_record_id : tr('，未移除记录') }));
           load();
         } else {
           setError(r && r.error ? r.error.message : tr("裁决失败"));

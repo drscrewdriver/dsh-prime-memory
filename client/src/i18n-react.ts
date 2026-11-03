@@ -4,12 +4,12 @@
  * 一 import client 纯模块就会在 node 里解析 `react` 而失败）。
  */
 import { useSyncExternalStore } from 'react';
-import { getLocaleService } from './i18n.js';
+import { getLocaleService, subscribeLocale } from './i18n.js';
 
 /** 稳定引用的订阅器：避免每次渲染换函数导致 useSyncExternalStore 反复重订阅。 */
 function subscribe(onChange: () => void): () => void {
-  const svc = getLocaleService();
-  return svc ? svc.subscribe(onChange) : () => {};
+  // 服务未就绪也先挂上：boot 期挂载的页面（记忆库主页面）否则永远等不到通知。
+  return subscribeLocale(onChange);
 }
 
 function snapshot(): number {

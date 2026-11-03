@@ -409,15 +409,15 @@ export function Scene3D(props: {
 
     /** 当前帧的有效布局（过渡中为插值结果）。 */
     const activeLayout = (now: number): Map<string, Vec3> => {
-      const tr = transRef.current;
-      if (!tr) return layoutRef.current;
-      const k = (now - tr.start) / TRANSITION_MS;
+      const trans = transRef.current;
+      if (!trans) return layoutRef.current;
+      const k = (now - trans.start) / TRANSITION_MS;
       if (k >= 1) {
-        layoutRef.current = tr.to;
+        layoutRef.current = trans.to;
         transRef.current = null;
-        return tr.to;
+        return trans.to;
       }
-      return lerpLayout(tr.from, tr.to, k);
+      return lerpLayout(trans.from, trans.to, k);
     };
 
     // 上一帧投影结果缓存（拾取用，屏幕坐标是现成的）

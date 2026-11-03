@@ -87,7 +87,7 @@ export function GraphCanvas(props: {
     for (const n of full.nodes) {
       m.set(n.id, {
         title: n.name,
-        sub: tr("类型 {p1} · 关系数 {p2}", { p1: n.type, p2: n.id === emphasisId ? '(起点)' : '' }),
+        sub: tr("类型 {p1} · 关系数 {p2}", { p1: n.type, p2: n.id === emphasisId ? tr('(起点)') : '' }),
       });
     }
     // 度数从 full.edges 算(与 toGraphData 同判据)
@@ -98,7 +98,7 @@ export function GraphCanvas(props: {
     }
     for (const n of full.nodes) {
       const t = m.get(n.id);
-      if (t) t.sub = tr("类型 {p1} · 关系数 {p2}{p3}", { p1: n.type, p2: degMap.get(n.id) ?? 0, p3: n.id === emphasisId ? ' · 当前起点' : '' });
+      if (t) t.sub = tr("类型 {p1} · 关系数 {p2}{p3}", { p1: n.type, p2: degMap.get(n.id) ?? 0, p3: n.id === emphasisId ? tr(' · 当前起点') : '' });
     }
     for (const e of full.edges) {
       const eid = `${e.from}\x00${e.to}\x00${e.relation}`;

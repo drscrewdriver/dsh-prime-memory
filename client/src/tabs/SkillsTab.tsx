@@ -101,7 +101,7 @@ export function SkillsTab(props: { rpc: RpcFn }) {
   return (
     <div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
-        <span style={S.muted}>{data ? tr("{p1} 个技能 · 自动晋升{p2} · 需证据会话达阈", { p1: data.skills.length, p2: data.allowPromote ? '开' : '关(人工审阅)' }) : tr("加载中…")}</span>
+        <span style={S.muted}>{data ? tr("{p1} 个技能 · 自动晋升{p2} · 需证据会话达阈", { p1: data.skills.length, p2: data.allowPromote ? tr('开') : tr('关(人工审阅)') }) : tr("加载中…")}</span>
         <div style={S.grow} />
         <NButton onClick={detect} disabled={busy || !data?.memoryMutate}>{tr("立即检测历史")}</NButton>
         <NButton onClick={load} style={{ marginLeft: 6 }}>{tr("刷新")}</NButton>
@@ -118,7 +118,7 @@ export function SkillsTab(props: { rpc: RpcFn }) {
           <div style={S.cardHead}>
             <strong>{s.title}</strong>
             <span className="dsh-mem-tag" style={{ marginLeft: 6 }}>{tr(TITLES[s.status])}</span>
-            <span style={S.muted}>{tr("· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条", { p1: s.tier, p2: s.pinned ? ' · 已固定' : '', p3: s.sessionCount, p4: s.evidenceCount })}</span>
+            <span style={S.muted}>{tr("· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条", { p1: s.tier, p2: s.pinned ? tr(' · 已固定') : '', p3: s.sessionCount, p4: s.evidenceCount })}</span>
             <div style={S.grow} />
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>

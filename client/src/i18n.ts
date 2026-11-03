@@ -44,6 +44,21 @@ export function onLocaleChange(cb: () => void): void {
 }
 
 /**
+ * 订阅语言变化（**服务未就绪时也能挂**，就绪后自动补订阅并回调一次）。
+ *
+ * 为什么不能直接用 `service.subscribe`：`useSyncExternalStore` 只在挂载时订阅一次。
+ * 记忆库主页面在 boot 期就挂载（早于 locale 就绪），那一刻若拿不到服务，
+ * 天真的实现会返回空订阅 —— 组件此后**永远不重渲染**，界面冻结在中文。
+ * @param cb - 语言变更回调。
+ * @returns 取消订阅。
+ */
+export function subscribeLocale(cb: () => void): () => void {
+  if (service) return service.subscribe(cb);
+  pendingListeners.add(cb);
+  return () => pendingListeners.delete(cb);
+}
+
+/**
  * 把本插件的字典登记进 locale 服务。
  *
  * @param ctx - client 上下文（只用 `get`，不声明式注入）。
@@ -82,8 +97,15 @@ export function getLocaleService(): LocaleServiceLike | null {
 }
 
 function adopt(svc: LocaleServiceLike): void {
+  // 注册与绑定**分开 try**：命名空间是全局单例，宿主若把同一 bundle 评估两次
+  // （实测：设置面板与记忆库主页面的实例状态不同），第二个实例的 register 必被拒，
+  // 但 bind 仍能读到第一个实例登记好的字典 —— 不能因为注册报错就把自己锁死在中文。
   try {
     registerDictionaries(svc, { en, ru });
+  } catch (err) {
+    console.warn('[dsh-prime-memory] 字典注册被拒（可能本 bundle 的第二个实例），改走绑定:', err);
+  }
+  try {
     translate = makeTr(svc);
     service = svc;
     for (const cb of pendingListeners) svc.subscribe(cb);
@@ -91,8 +113,7 @@ function adopt(svc: LocaleServiceLike): void {
     pendingListeners.clear();
     console.info(`[dsh-prime-memory] locale 就绪：当前 ${svc.getSnapshot().active}`);
   } catch (err) {
-    // 重复注册（HMR 重载）或服务实现不符：保持中文，不抛。
-    console.warn('[dsh-prime-memory] locale 注册失败，界面保持中文:', err);
+    console.warn('[dsh-prime-memory] locale 绑定失败，界面保持中文:', err);
   }
 }
 

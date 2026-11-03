@@ -36080,8 +36080,8 @@ var __create = Object.create;
 		  "⚠ direct 未配置完整：需同时有端点 URL 与模型（llm.model / 全局链主路由），否则会回退宿主路由。": "⚠ direct is not fully configured: it needs both an endpoint URL and a model (llm.model / global-chain primary route), otherwise it falls back to the host route.",
 		  "0·跟随配置（默认 1=串行）": "0·follow config (default 1 = serial)",
 		  "1·串行逐条": "1·serial, one by one",
-		  "2D 图": "2D chart",
-		  "3D 图": "3D chart",
+		  "2D 图": "2D graph",
+		  "3D 图": "3D graph",
 		  "安装推理运行时中… 已耗时": "Installing inference runtime… elapsed",
 		  "按模型（累计）": "By model (cumulative)",
 		  "按条目展示": "Show by item",
@@ -36314,9 +36314,11 @@ var __create = Object.create;
 		  "关": "Off",
 		  "关(人工审阅)": "Off (manual review)",
 		  "关闭": "Off",
+		  "关闭窗口": "Close",
 		  "关闭高权限模式": "Turn off high-privilege mode",
 		  "关闭高权限模式(收回模型写删工具与管理操作)": "Turn off high-privilege mode (revokes the model's write/delete tools and management actions)",
 		  "关闭高权限模式（收回模型写删工具与删除权限）": "Turn off high-privilege mode (revokes the model's write/delete tools and delete permission)",
+		  "关闭面板": "Close",
 		  "关键词": "Keywords",
 		  "关键词:": "Keywords:",
 		  "关键词回填": "Keyword backfill",
@@ -37190,8 +37192,8 @@ var __create = Object.create;
 		  "⚠ direct 未配置完整：需同时有端点 URL 与模型（llm.model / 全局链主路由），否则会回退宿主路由。": "⚠ direct настроен не полностью: нужны и URL эндпоинта, и модель (llm.model / основной маршрут глобальной цепочки), иначе произойдёт откат на маршрут хоста.",
 		  "0·跟随配置（默认 1=串行）": "0·как в конфигурации (по умолчанию 1 = последовательно)",
 		  "1·串行逐条": "1·последовательно, по одной",
-		  "2D 图": "2D-график",
-		  "3D 图": "3D-график",
+		  "2D 图": "2D-граф",
+		  "3D 图": "3D-граф",
 		  "安装推理运行时中… 已耗时": "Установка среды вывода… затрачено",
 		  "按模型（累计）": "По модели (накопительно)",
 		  "按条目展示": "Показывать по элементам",
@@ -37424,9 +37426,11 @@ var __create = Object.create;
 		  "关": "Выкл.",
 		  "关(人工审阅)": "Выкл. (ручная проверка)",
 		  "关闭": "Выкл.",
+		  "关闭窗口": "Закрыть",
 		  "关闭高权限模式": "Отключить режим высоких прав",
 		  "关闭高权限模式(收回模型写删工具与管理操作)": "Отключить режим высоких прав (отзывает инструменты записи и удаления и управляющие действия)",
 		  "关闭高权限模式（收回模型写删工具与删除权限）": "Отключить режим высоких прав (отзывает инструменты записи и удаления и право удаления)",
+		  "关闭面板": "Закрыть",
 		  "关键词": "Ключевые слова",
 		  "关键词:": "Ключевые слова:",
 		  "关键词回填": "Заполнение ключевых слов",
@@ -38164,6 +38168,11 @@ var __create = Object.create;
 		  }
 		  pendingListeners.add(cb);
 		}
+		function subscribeLocale(cb) {
+		  if (service) return service.subscribe(cb);
+		  pendingListeners.add(cb);
+		  return () => pendingListeners.delete(cb);
+		}
 		function installLocale(ctx) {
 		  if (attempted) return;
 		  attempted = true;
@@ -38194,6 +38203,10 @@ var __create = Object.create;
 		function adopt(svc) {
 		  try {
 		    registerDictionaries(svc, { en, ru });
+		  } catch (err) {
+		    console.warn("[dsh-prime-memory] 字典注册被拒（可能本 bundle 的第二个实例），改走绑定:", err);
+		  }
+		  try {
 		    translate = makeTr(svc);
 		    service = svc;
 		    for (const cb of pendingListeners) svc.subscribe(cb);
@@ -38201,7 +38214,7 @@ var __create = Object.create;
 		    pendingListeners.clear();
 		    console.info(`[dsh-prime-memory] locale 就绪：当前 ${svc.getSnapshot().active}`);
 		  } catch (err) {
-		    console.warn("[dsh-prime-memory] locale 注册失败，界面保持中文:", err);
+		    console.warn("[dsh-prime-memory] locale 绑定失败，界面保持中文:", err);
 		  }
 		}
 		function tr(key, params) {
@@ -38212,9 +38225,7 @@ var __create = Object.create;
 		// client/src/i18n-react.ts
 		var import_react = require("react");
 		function subscribe(onChange) {
-		  const svc = getLocaleService();
-		  return svc ? svc.subscribe(onChange) : () => {
-		  };
+		  return subscribeLocale(onChange);
 		}
 		function snapshot() {
 		  const svc = getLocaleService();
@@ -39061,7 +39072,7 @@ var __create = Object.create;
 		}
 		function NModal(props) {
 		  if (props.open === false) return null;
-		  if (P && P.Modal) return (0, import_react3.createElement)(P.Modal, { closeLabel: tr("关闭"), ...props });
+		  if (P && P.Modal) return (0, import_react3.createElement)(P.Modal, { closeLabel: tr("关闭窗口"), ...props });
 		  return (0, import_react3.createElement)(
 		    "div",
 		    {
@@ -39192,7 +39203,7 @@ var __create = Object.create;
 		    rpc("dsh-memory/conflict-resolve", { pairId: pair.pair_id, outcome }).then((r) => {
 		      if (r && r.ok) {
 		        const v = r.value;
-		        setNote(v.notice ?? tr("已裁决 {p1}：{p2}{p3}", { p1: v.pair_id, p2: v.outcome, p3: v.removed_record_id ? "，退场 " + v.removed_record_id : "，未移除记录" }));
+		        setNote(v.notice ?? tr("已裁决 {p1}：{p2}{p3}", { p1: v.pair_id, p2: v.outcome, p3: v.removed_record_id ? tr("，退场 ") + v.removed_record_id : tr("，未移除记录") }));
 		        load();
 		      } else {
 		        setError(r && r.error ? r.error.message : tr("裁决失败"));
@@ -39509,7 +39520,7 @@ var __create = Object.create;
 		  const promotable = data && data.producer ? data.skills.filter((s) => s.status === "candidate" && s.sessionCount >= data.producer.minSessions).length : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: data ? tr("{p1} 个技能 · 自动晋升{p2} · 需证据会话达阈", { p1: data.skills.length, p2: data.allowPromote ? "开" : "关(人工审阅)" }) : tr("加载中…") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: data ? tr("{p1} 个技能 · 自动晋升{p2} · 需证据会话达阈", { p1: data.skills.length, p2: data.allowPromote ? tr("开") : tr("关(人工审阅)") }) : tr("加载中…") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: detect, disabled: busy || !data?.memoryMutate, children: tr("立即检测历史") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(NButton, { onClick: load, style: { marginLeft: 6 }, children: tr("刷新") })
@@ -39527,7 +39538,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: S.cardHead, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("strong", { children: s.title }),
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dsh-mem-tag", style: { marginLeft: 6 }, children: tr(TITLES[s.status]) }),
-		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: tr("· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条", { p1: s.tier, p2: s.pinned ? " · 已固定" : "", p3: s.sessionCount, p4: s.evidenceCount }) }),
+		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { style: S.muted, children: tr("· 档:{p1}{p2} · 覆盖 {p3} 会话 / 证据 {p4} 条", { p1: s.tier, p2: s.pinned ? tr(" · 已固定") : "", p3: s.sessionCount, p4: s.evidenceCount }) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { style: S.grow })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }, children: [
@@ -40003,7 +40014,7 @@ var __create = Object.create;
 		  const named = rep.named > 0 ? tr("· 新起名 {p1} 条", { p1: rep.named }) : "";
 		  const nameBad = rep.nameFailed > 0 ? tr("· 起名失败 {p1} 条(下轮重试)", { p1: rep.nameFailed }) : "";
 		  const s = rep.suffix;
-		  const suffix = s && s.renamed + s.revived + s.both + s.edited > 0 ? tr("· 后缀对齐 改名 {p1}{p2} 改回 {p3}{p4}", { p1: s.renamed, p2: s.edited > 0 ? `(人改过 ${s.edited})` : "", p3: s.revived, p4: s.both > 0 ? ` · 冲突 ${s.both}` : "" }) : "";
+		  const suffix = s && s.renamed + s.revived + s.both + s.edited > 0 ? tr("· 后缀对齐 改名 {p1}{p2} 改回 {p3}{p4}", { p1: s.renamed, p2: s.edited > 0 ? tr("(人改过 {p1})", { p1: s.edited }) : "", p3: s.revived, p4: s.both > 0 ? tr(" · 冲突 {p1}", { p1: s.both }) : "" }) : "";
 		  const suffixMore = s && s.capped && s.remaining > 0 ? tr("· 后缀还有 {p1} 个文件待对齐，再点一次继续", { p1: s.remaining }) : "";
 		  const tail = rep.remaining > 0 ? tr("· 剩余 {p1} 个文件，再点一次继续", { p1: rep.remaining }) : "";
 		  const budget = typeof rep.appliedMaxRecords === "number" && rep.appliedMaxRecords > 0 ? tr("· 本次预算 {p1} 个文件", { p1: rep.appliedMaxRecords }) : "";
@@ -40038,10 +40049,10 @@ var __create = Object.create;
 		  return head + tail + (rep.dir.length > 0 ? tr("· 归档到 {p1}", { p1: rep.dir }) : "");
 		}
 		function lineOfCleanup(rep) {
-		  if (rep.aborted) return tr("清理已中止（未删任何记录）：{p1}", { p1: rep.diffs.join("；") || "门禁未通过" });
+		  if (rep.aborted) return tr("清理已中止（未删任何记录）：{p1}", { p1: rep.diffs.join("；") || tr("门禁未通过") });
 		  if (rep.dryRun) return tr("待删 {p1} 条（预览了前 {p2} 条）——未删除任何东西", { p1: rep.targets, p2: rep.items?.length ?? 0 });
 		  const f = rep.files ?? { moved: 0, failed: 0, absent: 0 };
-		  const head = tr("已删 {p1} 条 · 归档正文 {p2} · 文件搬家 {p3}(失败 {p4}) · 图索引 {p5}", { p1: rep.purged, p2: rep.archiveMd === void 0 || rep.archiveMd === "" ? "未写" : "已写", p3: f.moved, p4: f.failed, p5: rep.graphForgotten ?? 0 });
+		  const head = tr("已删 {p1} 条 · 归档正文 {p2} · 文件搬家 {p3}(失败 {p4}) · 图索引 {p5}", { p1: rep.purged, p2: rep.archiveMd === void 0 || rep.archiveMd === "" ? tr("未写") : tr("已写"), p3: f.moved, p4: f.failed, p5: rep.graphForgotten ?? 0 });
 		  return rep.otherChanged && rep.otherChanged > 0 ? tr("{p1} · 本批之外 {p2} 条处于漂移（不影响本批）", { p1: head, p2: rep.otherChanged }) : head;
 		}
 		function ArchiveSection(props) {
@@ -42237,7 +42248,7 @@ var __create = Object.create;
 		      p.concurrency > 1 ? tr("并行 {p1}", { p1: p.concurrency }) : tr("串行"),
 		      (counts?.failed ?? 0) > 0 ? tr("失败 {p1} 条", { p1: counts.failed }) : ""
 		    ].filter(Boolean);
-		    const outcome = counts ? tr("（写回 {p1}{p2}）", { p1: counts.updated ?? 0, p2: counts.skipped !== void 0 ? ` / 留原文 ${counts.skipped}` : "" }) : "";
+		    const outcome = counts ? tr("（写回 {p1}{p2}）", { p1: counts.updated ?? 0, p2: counts.skipped !== void 0 ? tr(" / 留原文 {p1}", { p1: counts.skipped }) : "" }) : "";
 		    return parts.join(" · ") + outcome;
 		  };
 		  const tail = (p) => p && p.cancelled ? tr("，已中止、剩 {p1} 条待再点一次", { p1: p.deferred }) : p && p.deferred > 0 ? tr("，本次未跑完、剩 {p1} 条待再点一次", { p1: p.deferred }) : "";
@@ -42298,7 +42309,7 @@ var __create = Object.create;
 		        return;
 		      }
 		      const head = last?.cancelled ? tr("关键词回填已中止") : tr("关键词回填完成");
-		      setKwSummary(tr("{p1}：成功 {p2} 条{p3}{p4}", { p1: head, p2: v.updated ?? 0, p3: fail > 0 ? `，失败 ${fail} 条` : "", p4: tail(last) }));
+		      setKwSummary(tr("{p1}：成功 {p2} 条{p3}{p4}", { p1: head, p2: v.updated ?? 0, p3: fail > 0 ? tr("，失败 {p1} 条", { p1: fail }) : "", p4: tail(last) }));
 		    };
 		    const failMsg = (m) => {
 		      setErr(m);
@@ -42378,7 +42389,7 @@ var __create = Object.create;
 		        return;
 		      }
 		      const head = last?.cancelled ? tr("整形已中止") : tr("整形完成");
-		      setRdSummary(tr("{p1}：写回 {p2} 条，留原文 {p3} 条{p4}{p5}", { p1: head, p2: v.updated ?? 0, p3: v.skipped ?? 0, p4: (v.failed ?? 0) > 0 ? `，失败 ${v.failed} 条` : "", p5: tail(last) }));
+		      setRdSummary(tr("{p1}：写回 {p2} 条，留原文 {p3} 条{p4}{p5}", { p1: head, p2: v.updated ?? 0, p3: v.skipped ?? 0, p4: (v.failed ?? 0) > 0 ? tr("，失败 {p1} 条", { p1: v.failed }) : "", p5: tail(last) }));
 		    };
 		    const failMsg = (m) => {
 		      setErr(m);
@@ -45142,7 +45153,7 @@ var __create = Object.create;
 		    for (const n of full.nodes) {
 		      m.set(n.id, {
 		        title: n.name,
-		        sub: tr("类型 {p1} · 关系数 {p2}", { p1: n.type, p2: n.id === emphasisId ? "(起点)" : "" })
+		        sub: tr("类型 {p1} · 关系数 {p2}", { p1: n.type, p2: n.id === emphasisId ? tr("(起点)") : "" })
 		      });
 		    }
 		    const degMap = /* @__PURE__ */ new Map();
@@ -45152,7 +45163,7 @@ var __create = Object.create;
 		    }
 		    for (const n of full.nodes) {
 		      const t = m.get(n.id);
-		      if (t) t.sub = tr("类型 {p1} · 关系数 {p2}{p3}", { p1: n.type, p2: degMap.get(n.id) ?? 0, p3: n.id === emphasisId ? " · 当前起点" : "" });
+		      if (t) t.sub = tr("类型 {p1} · 关系数 {p2}{p3}", { p1: n.type, p2: degMap.get(n.id) ?? 0, p3: n.id === emphasisId ? tr(" · 当前起点") : "" });
 		    }
 		    for (const e of full.edges) {
 		      const eid = `${e.from}\0${e.to}\0${e.relation}`;
@@ -46573,7 +46584,7 @@ var __create = Object.create;
 		          [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
 		            const corner = overview?.corners[i];
 		            const id = corner?.id;
-		            const label = corner?.label ?? tr(LABEL_FALLBACK[i] ?? "域{p1}").replace("{p1}", String(i + 1));
+		            const label = corner?.label ?? (LABEL_FALLBACK[i] ? tr(LABEL_FALLBACK[i]) : tr("域{p1}")).replace("{p1}", String(i + 1));
 		            const count = id ? cornerCount(id) : null;
 		            const active = activeCorner === i;
 		            const dim = activeCorner != null && !active;
@@ -47004,7 +47015,7 @@ var __create = Object.create;
 		// client/src/explorer/LinkPane.tsx
 		var import_jsx_runtime30 = require("react/jsx-runtime");
 		function relLine(n) {
-		  return tr("{p1}{p2} · {p3} 跳 · 经由 {p4}", { p1: n.relation, p2: n.causal ? "（因果）" : "", p3: n.hop, p4: n.viaEntityId });
+		  return tr("{p1}{p2} · {p3} 跳 · 经由 {p4}", { p1: n.relation, p2: n.causal ? tr("（因果）") : "", p3: n.hop, p4: n.viaEntityId });
 		}
 		function LinkPane(props) {
 		  const { recordId, links, loading, error, onPickRecord, onEmphasisNode, labelOfRecord } = props;
@@ -47771,15 +47782,15 @@ var __create = Object.create;
 		    const ro = new ResizeObserver(resize);
 		    ro.observe(host);
 		    const activeLayout = (now) => {
-		      const tr2 = transRef.current;
-		      if (!tr2) return layoutRef.current;
-		      const k = (now - tr2.start) / TRANSITION_MS;
+		      const trans = transRef.current;
+		      if (!trans) return layoutRef.current;
+		      const k = (now - trans.start) / TRANSITION_MS;
 		      if (k >= 1) {
-		        layoutRef.current = tr2.to;
+		        layoutRef.current = trans.to;
 		        transRef.current = null;
-		        return tr2.to;
+		        return trans.to;
 		      }
-		      return lerpLayout(tr2.from, tr2.to, k);
+		      return lerpLayout(trans.from, trans.to, k);
 		    };
 		    let lastProjected = [];
 		    const frame = (now) => {
@@ -48481,7 +48492,7 @@ var __create = Object.create;
 		        ] })
 		      ] }) : null,
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: loadGraph, title: tr("重新拉取图与统计"), children: tr("刷新图") }),
-		      onClose ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: onClose, title: tr("关闭"), children: tr("关闭") }) : null
+		      onClose ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(NButton, { onClick: onClose, title: tr("关闭面板"), children: tr("关闭面板") }) : null
 		    ] }),
 		    mode === "query" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { display: "flex", flex: 1, minHeight: 0, gap: 0 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("div", { style: { flex: 1, minWidth: 0, minHeight: 0, overflow: "auto" }, children: /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(RecordPane, { rpc, activeId: recordId, onPick: openRecord }) }),
@@ -48755,6 +48766,17 @@ var __create = Object.create;
 		    );
 		  }).catch(() => {
 		    explorerEntryState.confirm(true);
+		  });
+		  onLocaleChange(() => {
+		    if (!explorerMounted || detach === null) return;
+		    try {
+		      detach();
+		      detach = null;
+		      mountedPage = false;
+		      sync();
+		    } catch (err) {
+		      console.warn("[dsh-prime-memory] 语言变更后重挂记忆库入口失败:", err);
+		    }
 		  });
 		  try {
 		    ctx.slots.inject("conversation.input.left", () => {

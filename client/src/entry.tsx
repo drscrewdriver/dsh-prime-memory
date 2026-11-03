@@ -239,6 +239,20 @@ export function apply(ctx: MemoryClientCtx) {
       explorerEntryState.confirm(true);
     });
 
+  // 左栏「记忆库」行同样是**注册时求值**的 label（与设置分节同理）：语言一变就重挂一次，
+  // 否则它会永远停在初始化那一刻的语言。代价是整页重挂，只在切语言时发生。
+  onLocaleChange(() => {
+    if (!explorerMounted || detach === null) return;
+    try {
+      detach();
+      detach = null;
+      mountedPage = false;
+      sync();
+    } catch (err) {
+      console.warn('[dsh-prime-memory] 语言变更后重挂记忆库入口失败:', err);
+    }
+  });
+
   // 输入栏（模式选择器右侧）：会话档位 pill + 滑动选择器。
   // inject owner 实测为裸 sessionId 字符串——rc.8 的命名座位不随快照 props；
   // 旧会话的占用回填因此在 host 侧完成（recall.ts estimateRecallTokens）

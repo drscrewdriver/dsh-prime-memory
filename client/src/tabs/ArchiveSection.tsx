@@ -61,7 +61,7 @@ function lineOf(rep: ExportReport): string {
   // `rep.suffix` 是后加的字段：客户端 bundle 可能比服务端旧（浏览器缓存），所以先判在。
   const s = rep.suffix;
   const suffix = s && s.renamed + s.revived + s.both + s.edited > 0
-    ? tr("· 后缀对齐 改名 {p1}{p2} 改回 {p3}{p4}", { p1: s.renamed, p2: s.edited > 0 ? `(人改过 ${s.edited})` : '', p3: s.revived, p4: s.both > 0 ? ` · 冲突 ${s.both}` : '' })
+    ? tr("· 后缀对齐 改名 {p1}{p2} 改回 {p3}{p4}", { p1: s.renamed, p2: s.edited > 0 ? tr("(人改过 {p1})", { p1: s.edited }) : '', p3: s.revived, p4: s.both > 0 ? tr(" · 冲突 {p1}", { p1: s.both }) : '' })
     : '';
   const suffixMore = s && s.capped && s.remaining > 0 ? tr("· 后缀还有 {p1} 个文件待对齐，再点一次继续", { p1: s.remaining }) : '';
   const tail = rep.remaining > 0 ? tr("· 剩余 {p1} 个文件，再点一次继续", { p1: rep.remaining }) : '';
@@ -112,10 +112,10 @@ function lineOfOrphans(rep: OrphanReport): string {
 }
 
 function lineOfCleanup(rep: CleanupReport): string {
-  if (rep.aborted) return tr("清理已中止（未删任何记录）：{p1}", { p1: rep.diffs.join('；') || '门禁未通过' });
+  if (rep.aborted) return tr("清理已中止（未删任何记录）：{p1}", { p1: rep.diffs.join('；') || tr('门禁未通过') });
   if (rep.dryRun) return tr("待删 {p1} 条（预览了前 {p2} 条）——未删除任何东西", { p1: rep.targets, p2: rep.items?.length ?? 0 });
   const f = rep.files ?? { moved: 0, failed: 0, absent: 0 };
-  const head = tr("已删 {p1} 条 · 归档正文 {p2} · 文件搬家 {p3}(失败 {p4}) · 图索引 {p5}", { p1: rep.purged, p2: rep.archiveMd === undefined || rep.archiveMd === '' ? '未写' : '已写', p3: f.moved, p4: f.failed, p5: rep.graphForgotten ?? 0 });
+  const head = tr("已删 {p1} 条 · 归档正文 {p2} · 文件搬家 {p3}(失败 {p4}) · 图索引 {p5}", { p1: rep.purged, p2: rep.archiveMd === undefined || rep.archiveMd === '' ? tr('未写') : tr('已写'), p3: f.moved, p4: f.failed, p5: rep.graphForgotten ?? 0 });
   return rep.otherChanged && rep.otherChanged > 0 ? tr("{p1} · 本批之外 {p2} 条处于漂移（不影响本批）", { p1: head, p2: rep.otherChanged }) : head;
 }
 

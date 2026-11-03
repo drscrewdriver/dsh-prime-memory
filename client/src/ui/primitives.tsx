@@ -51,7 +51,7 @@ export function NInput(props: NPrimitiveProps) {
 /** 原生 Modal 优先；回退 .dsh-mem-rb-overlay/.dsh-mem-rb-modal 自绘模态。 */
 export function NModal(props: NPrimitiveProps) {
   if (props.open === false) return null;
-  if (P && P.Modal) return createElement(P.Modal, { closeLabel: tr("关闭"), ...props });
+  if (P && P.Modal) return createElement(P.Modal, { closeLabel: tr("关闭窗口"), ...props });
   return createElement(
     'div',
     {

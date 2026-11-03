@@ -12,18 +12,14 @@
  *
  * 用法：`node scripts/i18n-merge.mjs <translations-dir>`
  */
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOCALES = path.join(root, 'client/src/locales');
 
-const dir = process.argv[2];
-if (!dir) {
-  console.error('usage: node scripts/i18n-merge.mjs <translations-dir>');
-  process.exit(2);
-}
+const dir = process.argv[2]; // 可选：译稿目录（out-*.json）
 
 const keys = JSON.parse(readFileSync(path.join(LOCALES, 'keys.json'), 'utf8'));
 const keySet = new Set(keys);
@@ -31,7 +27,27 @@ const en = new Map();
 const ru = new Map();
 const problems = [];
 
-for (const file of readdirSync(dir).filter((f) => /^out-\d+\.json$/.test(f))) {
+/**
+ * 基座：读现有字典。
+ *
+ * 这一步让 merge 变成**更新器**：只补新增 key、丢已经不在抽取集里的 key，
+ * 而不是每次重跑都把整本字典清成「本次译稿覆盖到的部分」。没有基座时，
+ * 一次忘了带全译稿的 merge 会把 1100 条译文洗成几十条。
+ */
+function seed(file, map) {
+  const full = path.join(LOCALES, file);
+  if (!existsSync(full)) return;
+  const src = readFileSync(full, 'utf8');
+  const body = src.slice(src.indexOf('{') + 1, src.lastIndexOf('}')).replace(/,\s*$/, '');
+  for (const [k, v] of Object.entries(JSON.parse(`{${body}}`))) {
+    if (keySet.has(k) && typeof v === 'string' && v.trim()) map.set(k, v);
+  }
+}
+seed('en.ts', en);
+seed('ru.ts', ru);
+
+const outFiles = dir && existsSync(dir) ? readdirSync(dir).filter((f) => /^out-\d+\.json$/.test(f)) : [];
+for (const file of outFiles) {
   const rows = JSON.parse(readFileSync(path.join(dir, file), 'utf8'));
   for (const row of rows) {
     if (!row || typeof row.zh !== 'string') {
@@ -46,6 +62,20 @@ for (const file of readdirSync(dir).filter((f) => /^out-\d+\.json$/.test(f))) {
     if (typeof row.ru === 'string' && row.ru.trim()) ru.set(row.zh, row.ru.trim());
     if (/[\u4e00-\u9fff]/.test(row.en || '')) problems.push(`${file}: Chinese left in en: ${row.zh}`);
     if (/[\u4e00-\u9fff]/.test(row.ru || '')) problems.push(`${file}: Chinese left in ru: ${row.zh}`);
+  }
+}
+
+// 人工覆盖：生成物之上的一层，专治「同形异义」「术语定稿」。重跑 merge 不会丢。
+const overridesPath = path.join(root, 'scripts/i18n-overrides.json');
+if (existsSync(overridesPath)) {
+  const overrides = JSON.parse(readFileSync(overridesPath, 'utf8'));
+  for (const [k, pair] of Object.entries(overrides)) {
+    if (!keySet.has(k)) {
+      problems.push(`override key not in extraction: ${JSON.stringify(k).slice(0, 60)}`);
+      continue;
+    }
+    if (pair.en) en.set(k, pair.en);
+    if (pair.ru) ru.set(k, pair.ru);
   }
 }
 

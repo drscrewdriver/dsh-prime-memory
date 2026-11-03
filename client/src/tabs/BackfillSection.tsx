@@ -94,7 +94,7 @@ export function BackfillSection(props: { rpc: RpcFn }) {
       (counts?.failed ?? 0) > 0 ? tr("失败 {p1} 条", { p1: counts!.failed }) : '',
     ].filter(Boolean);
     const outcome = counts
-      ? tr("（写回 {p1}{p2}）", { p1: counts.updated ?? 0, p2: counts.skipped !== undefined ? ` / 留原文 ${counts.skipped}` : '' })
+      ? tr("（写回 {p1}{p2}）", { p1: counts.updated ?? 0, p2: counts.skipped !== undefined ? tr(" / 留原文 {p1}", { p1: counts.skipped }) : '' })
       : '';
     return parts.join(' · ') + outcome;
   };
@@ -176,7 +176,7 @@ export function BackfillSection(props: { rpc: RpcFn }) {
         return;
       }
       const head = last?.cancelled ? tr("关键词回填已中止") : tr("关键词回填完成");
-      setKwSummary(tr("{p1}：成功 {p2} 条{p3}{p4}", { p1: head, p2: v.updated ?? 0, p3: fail > 0 ? `，失败 ${fail} 条` : '', p4: tail(last) }));
+      setKwSummary(tr("{p1}：成功 {p2} 条{p3}{p4}", { p1: head, p2: v.updated ?? 0, p3: fail > 0 ? tr("，失败 {p1} 条", { p1: fail }) : '', p4: tail(last) }));
     };
     const failMsg = (m: string) => {
       setErr(m);
@@ -250,7 +250,7 @@ export function BackfillSection(props: { rpc: RpcFn }) {
         return;
       }
       const head = last?.cancelled ? tr("整形已中止") : tr("整形完成");
-      setRdSummary(tr("{p1}：写回 {p2} 条，留原文 {p3} 条{p4}{p5}", { p1: head, p2: v.updated ?? 0, p3: v.skipped ?? 0, p4: (v.failed ?? 0) > 0 ? `，失败 ${v.failed} 条` : '', p5: tail(last) }));
+      setRdSummary(tr("{p1}：写回 {p2} 条，留原文 {p3} 条{p4}{p5}", { p1: head, p2: v.updated ?? 0, p3: v.skipped ?? 0, p4: (v.failed ?? 0) > 0 ? tr("，失败 {p1} 条", { p1: v.failed }) : '', p5: tail(last) }));
     };
     const failMsg = (m: string) => {
       setErr(m);

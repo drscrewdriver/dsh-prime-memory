@@ -111,7 +111,14 @@ function inModuleLevelConst(node) {
 
 /** 已包在 t(...) 里的字面量：跳过（幂等）。 */
 function alreadyWrapped(node) {
-  const p = node.parent;
+  // 穿过 `??` / 括号 / 三元：`tr(LABEL ?? "域{p1}")` 里的字面量同样已被 tr 覆盖。
+  let p = node.parent;
+  while (
+    p &&
+    (ts.isParenthesizedExpression(p) || ts.isConditionalExpression(p) || ts.isBinaryExpression(p))
+  ) {
+    p = p.parent;
+  }
   return !!(p && ts.isCallExpression(p) && p.expression.getText() === 'tr');
 }
 

@@ -416,7 +416,7 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
           </>
         ) : null}
         <NButton onClick={loadGraph} title={tr("重新拉取图与统计")}>{tr("刷新图")}</NButton>
-        {onClose ? <NButton onClick={onClose} title={tr("关闭")}>{tr("关闭")}</NButton> : null}
+        {onClose ? <NButton onClick={onClose} title={tr("关闭面板")}>{tr("关闭面板")}</NButton> : null}
       </div>
 
       {/* 主体：查询模式 = 列表 + 条目展开（点记录就地展开，跳图是面板里的显式动作） */}
