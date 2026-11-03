@@ -29,9 +29,11 @@ import {
   lerpLayout,
   pickLabels,
   pickNearest,
+  phaseOf,
   projectAll,
   radiusFor,
   zoomBy,
+  BREATH_PERIOD_MS,
   type LabelCandidate,
   type LayoutNode,
 } from '../client/src/explorer/projection.js';
@@ -273,5 +275,31 @@ describe('pickNearest / lerpLayout', () => {
     const a = new Map<string, { x: number; y: number; z: number }>();
     const b = new Map([['new', { x: 5, y: 5, z: 5 }]]);
     expect(lerpLayout(a, b, 0.3).get('new')).toEqual({ x: 5, y: 5, z: 5 });
+  });
+});
+
+describe('phaseOf / BREATH_PERIOD_MS —— 激活元素呼吸的错相门禁', () => {
+  it('呼吸周期 260ms（反光节奏，不是加载动画）', () => {
+    expect(BREATH_PERIOD_MS).toBe(260);
+  });
+
+  it('反相位门禁（齐闪反例）：相位差 π 的两点 sin 项互补，峰点时刻差 > 0.5', () => {
+    const a = (t: number) => 0.5 + 0.5 * Math.sin(t / BREATH_PERIOD_MS + 0);
+    const b = (t: number) => 0.5 + 0.5 * Math.sin(t / BREATH_PERIOD_MS + Math.PI);
+    // 互补：任意时刻 a+b = 1（一个亮另一个必暗）。
+    for (const t of [0, 200, 700, 3000]) {
+      expect(a(t) + b(t)).toBeCloseTo(1, 5);
+    }
+    // 取 sin 峰点（周期×π/2）做拉开断言；t=0 是交点不能做反例。
+    expect(Math.abs(a(408.4) - b(408.4))).toBeGreaterThan(0.5);
+  });
+
+  it('phaseOf 确定性且落在 [0, 2π)：同 id 恒同相位，不同 id 错相', () => {
+    expect(phaseOf('abc')).toBe(phaseOf('abc'));
+    expect(phaseOf('abc')).toBeGreaterThanOrEqual(0);
+    expect(phaseOf('abc')).toBeLessThan(Math.PI * 2);
+    // 批量不同 id 不应全同相位（齐闪即此处失守）。
+    const set = new Set(Array.from({ length: 50 }, (_, i) => Math.round(phaseOf(`node-${i}`) * 100)));
+    expect(set.size).toBeGreaterThan(40);
   });
 });

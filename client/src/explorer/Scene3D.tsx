@@ -23,10 +23,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { GraphFull } from '../tabs/graph-canvas-data.js';
 import { clipByWidth, degreeMapOf, hash32 } from '../tabs/graph-canvas-data.js';
 import {
+  BREATH_PERIOD_MS,
   CAM_DEFAULT,
   DIST_MAX,
   DIST_MIN,
   EGO_HOPS_MAX,
+  LABEL_SKIP_DIST,
   PICK_PX,
   PITCH_LIMIT,
   SHELL_GAP,
@@ -38,6 +40,7 @@ import {
   lerpLayout,
   pickLabels,
   pickNearest,
+  phaseOf,
   projectAll,
   zoomBy,
 } from './projection.js';
@@ -115,6 +118,9 @@ export function Scene3D(props: {
   const [driftOn, setDriftOn] = useState(false);
   /** 主题：星空（暗底+星点，默认）/ 白底（浅色）。 */
   const [starry, setStarry] = useState(true);
+  /** 呼吸：只有激活元素（hover 命中/焦点）错相脉冲，背景星恒静。
+   *  默认开；早先的 90px  proximity 场被真机否决（鼠标一动全场闪跳）。 */
+  const [twinkleOn, setTwinkleOn] = useState(true);
 
   // ── 交互态（ref 为主，避免每帧 setState；hover 走 DOM 浮层才需要 state） ──
   const camRef = useRef({ ...CAM_DEFAULT });
@@ -128,8 +134,8 @@ export function Scene3D(props: {
   /** emphasisId 用 ref 读取，不进主循环 deps——否则每次点击都重建 rAF 导致闪烁。 */
   const emphasisRef = useRef(emphasisId);
   emphasisRef.current = emphasisId;
-  /** 空闲冻结：无交互/无过渡/无漂移时不重绘，消除静态图的持续重绘闪烁。事件回调置 true。 */
-  const dirtyRef = useRef(true);
+  /** 主循环的唤醒钩子：空闲停摆后，外部（如 emphasisId 驱动的 ego 过渡）要能踢醒 rAF。 */
+  const wakeRef = useRef<(() => void) | null>(null);
 
   // ── 数据面：degree 表 / 邻接 / 边表（full 变化才重算，渲染层样式函数不聚合） ──
   const degree = useMemo(() => degreeMapOf(full), [full]);
@@ -180,6 +186,7 @@ export function Scene3D(props: {
     camRef.current.dist = Math.min(3200, Math.max(380, EGO_HOPS_MAX * 300 * 1.55));
     camRef.current.panX = 0;
     camRef.current.panY = 0;
+    wakeRef.current?.();
   }, [emphasisId, adj, clusterLayout]);
 
   // ── 派生色/半径表：随令牌解析与开关变化重建 ──
@@ -227,21 +234,50 @@ export function Scene3D(props: {
     if (!host || !canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    // 任何依赖变化（老化亮度/辉光/主题…）重跑本 effect 时必须强制重画一帧：
-    // resize() 会把 canvas 清空成透明，若 dirty 仍停在上轮的 false，首帧会被空闲冻结跳过 → 白屏卡死。
-    dirtyRef.current = true;
+    // 任何依赖变化（老化亮度/辉光/主题…）重跑本 effect 时闭包重建，
+    // staticDirty/needsPresent 初始即 true → 首帧必重画必上屏，不会停在透明态。
 
     // 帧缓存：所有绘制先写离屏 buffer，完成后一次性 blit 到可见 canvas。
     // 消除 Electron GPU 合成器可能提前暴露部分绘制状态导致的“激活点边界闪烁”。
     const buffer = document.createElement('canvas');
     const bctx = buffer.getContext('2d')!;
 
+    // 三层缓存（用户取证裁定“只重画激活元素”，3D only）：
+    // edgeCv = bg + 边——只随相机/数据/主题/边开关重建，**hover 切换不碰这几百条边**；
+    // nodeCv = 非激活节点 + 标签（透明底）——hover/激活集变才重建（百级点，便宜一个量级）；
+    // 激活点（呼吸）在动态层逐帧合成；无呼吸且无脏时停 rAF，事件唤醒（方向③）。
+    const edgeCv = document.createElement('canvas');
+    const ectx = edgeCv.getContext('2d')!;
+    const nodeCv = document.createElement('canvas');
+    const nctx = nodeCv.getContext('2d')!;
+    let edgeDirty = true;
+    let nodeDirty = true;
+    let needsPresent = true;
+    let lastActiveKey = '';
+
     let raf = 0;
+    let running = false;
     let disposed = false;
     let vw = 0;
     let vh = 0;
     /** 当前 DPR：blit 后恢复可见 ctx 的变换用。 */
     const dprRef = { current: 1 };
+
+    /**
+     * 令牌解色缓存：`getComputedStyle` 每帧调 4 次会强制同步样式重算，是纯白交的每帧税。
+     * 主题/尺寸变化（resize）与本 effect 重建时置脏，其余帧只读缓存。
+     */
+    let colEdge = '';
+    let colCausal = '';
+    let colText = '';
+    let colStale = true;
+    const refreshColors = (): void => {
+      if (!colStale) return;
+      colEdge = resolveColor(host, '--dsh-mem-border-strong');
+      colCausal = resolveColor(host, '--dsh-mem-accent');
+      colText = resolveColor(host, '--dsh-mem-text-2');
+      colStale = false;
+    };
 
     const spriteFor = (color: string): HTMLCanvasElement => {
       const hit = spritesRef.current.get(color);
@@ -326,23 +362,49 @@ export function Scene3D(props: {
       return cv;
     };
 
-    const resize = () => {
+    /**
+     * 幂等 resize：尺寸 / DPR 都没变就整段跳过。
+     * 给 `canvas.width` 赋值这个动作本身就清空整张位图（规范行为，非实现差异），
+     * 而 ResizeObserver 在布局抖动/滚动条出现时会被反复触发——无条件赋值 = 反复擦白，
+     * 擦完到下一 rAF 补画之间若被合成器取样，就是真机上「闪一下变暗」的那一帧。
+     */
+    let sized = false;
+    const resize = (): boolean => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const nextW = host.clientWidth || 640;
+      const nextH = host.clientHeight || host.offsetHeight || height;
+      if (sized && nextW === vw && nextH === vh && dpr === dprRef.current) return false;
+      sized = true;
       dprRef.current = dpr;
-      vw = host.clientWidth || 640;
-      vh = host.clientHeight || host.offsetHeight || height;
+      vw = nextW;
+      vh = nextH;
       canvas.width = Math.round(vw * dpr);
       canvas.height = Math.round(vh * dpr);
       canvas.style.width = `${vw}px`;
       canvas.style.height = `${vh}px`;
       buffer.width = canvas.width;
       buffer.height = canvas.height;
+      edgeCv.width = canvas.width;
+      edgeCv.height = canvas.height;
+      nodeCv.width = canvas.width;
+      nodeCv.height = canvas.height;
+      ectx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       bgCache = null;
+      edgeDirty = true;
+      nodeDirty = true;
+      colStale = true;
+      needsPresent = true;
+      return true;
     };
     resize();
-    const ro = new ResizeObserver(resize);
+    // 真擦了就同步补帧：RO 回调跑在渲染步骤的 layout 之后、paint 之前，
+    // 此刻直接画完上屏，空位图永远不会进合成器（wake() 只排下一 rAF，来不及）。
+    const ro = new ResizeObserver(() => {
+      if (resize()) presentNow();
+    });
     ro.observe(host);
 
     /** 当前帧的有效布局（过渡中为插值结果）。 */
@@ -362,156 +424,234 @@ export function Scene3D(props: {
     let lastProjected: Projected[] = [];
 
     const frame = (now: number) => {
+      // 进来就把句柄清零：这个函数也可能被 presentNow() 同步调用，
+      // 留着旧句柄会让随后的 wake() 以为还有链在跑，从而漏排帧。
+      raf = 0;
       if (disposed) return;
+      refreshColors();
       const cam = camRef.current;
       const layout = activeLayout(now);
       const ego = modeRef.current === 'ego';
       const metas = metasRef.current;
       const hover = hoverRef.current;
       const focus = focusRef.current;
+      const emph = emphasisRef.current;
 
-      // hover 邻域集（压暗路线：非邻居 alpha 封到 0.12，不靠加亮焦点）
-      let nbSet: Set<string> | null = null;
-      if (hover) {
-        nbSet = new Set<string>([hover, ...(adj.get(hover) ?? [])]);
-        if (focus && focus !== hover) nbSet.add(focus);
+      // 漂移/过渡中：点位逐帧变 → 两层都重建（等价旧的“全量重绘”行为）。
+      if (transRef.current !== null || (driftOn && !ego)) {
+        edgeDirty = true;
+        nodeDirty = true;
       }
 
-      // 漂移：开关控制（默认关）；ego 壳层半径本身是语义（第几跳=第几层），强制不抖。
       const projected = projectAll(layout, cam, { w: vw, h: vh }, undefined, now, driftOn && !ego);
       lastProjected = projected;
 
-      // 所有绘制写到离屏 buffer 而非可见 canvas
-      const c = bctx;
-      c.clearRect(0, 0, vw, vh);
-      // 背景 blit（主题变了或尺寸变了才重烘）
-      if (!bgCache || bgCacheW !== vw || bgCacheH !== vh || bgCacheStarry !== starry) {
-        bgCache = bakeBg(vw, vh, starry, nodeKeySeed);
-        bgCacheW = vw; bgCacheH = vh; bgCacheStarry = starry;
+      // 激活集（hover/focus/emphasis）变了 → 只重建点层（旧激活点要回点层；
+      // 边层不受影响——遮罩已撤，边的画法与 hover 无关）。
+      const activeKey = `${hover ?? ''}|${focus ?? ''}|${emph ?? ''}`;
+      if (activeKey !== lastActiveKey) {
+        lastActiveKey = activeKey;
+        nodeDirty = true;
       }
-      c.drawImage(bgCache, 0, 0);
+      const activeIds = new Set<string>();
+      if (hover) activeIds.add(hover);
+      if (focus) activeIds.add(focus);
+      if (emph) activeIds.add(emph);
 
       const pos = new Map(projected.map((p) => [p.id, p]));
+      const edgeBase = colEdge;
+      const causalC = colCausal;
 
-      // ── 边（先画：点在上方，遮挡自然；远→近顺序对线无所谓，alpha 统一） ──
-      if (edgesOn) {
-        const edgeBase = resolveColor(host, '--dsh-mem-border-strong');
-        const causalC = resolveColor(host, '--dsh-mem-accent');
-        c.globalCompositeOperation = 'source-over';
-        for (const e of edgeList) {
-          const a = pos.get(e.from);
-          const b = pos.get(e.to);
-          if (!a || !b) continue;
-          const related = !hover || (nbSet!.has(e.from) && nbSet!.has(e.to) && (e.from === hover || e.to === hover));
-          if (hover && !related) continue;
-          const avgF = (a.f + b.f) / 2;
-          const alpha = Math.min(0.9, Math.max(0.05, avgF * 0.34));
-          c.strokeStyle = e.causal ? causalC : edgeBase;
-          c.globalAlpha = hover ? Math.min(0.9, alpha + 0.25) : alpha;
-          c.lineWidth = e.causal ? 1.2 : 0.7;
-          c.beginPath();
-          c.moveTo(a.x, a.y);
-          c.lineTo(b.x, b.y);
-          c.stroke();
+      // ── 边层：bg + 边。只在相机/数据/主题/开关变化时重建（hover 不碰这层）──
+      if (edgeDirty) {
+        const c = ectx;
+        c.clearRect(0, 0, vw, vh);
+        if (!bgCache || bgCacheW !== vw || bgCacheH !== vh || bgCacheStarry !== starry) {
+          bgCache = bakeBg(vw, vh, starry, nodeKeySeed);
+          bgCacheW = vw; bgCacheH = vh; bgCacheStarry = starry;
         }
-        c.globalAlpha = 1;
+        c.drawImage(bgCache, 0, 0);
+
+        // ── 边：恒全量画——3D 的 hover 遮罩/滤波已撤（用户裁定；2D GraphCanvas 保留）──
+        if (edgesOn) {
+          c.globalCompositeOperation = 'source-over';
+          for (const e of edgeList) {
+            const a = pos.get(e.from);
+            const b = pos.get(e.to);
+            if (!a || !b) continue;
+            const avgF = (a.f + b.f) / 2;
+            c.strokeStyle = e.causal ? causalC : edgeBase;
+            c.globalAlpha = Math.min(0.9, Math.max(0.05, avgF * 0.34));
+            c.lineWidth = e.causal ? 1.2 : 0.7;
+            c.beginPath();
+            c.moveTo(a.x, a.y);
+            c.lineTo(b.x, b.y);
+            c.stroke();
+          }
+          c.globalAlpha = 1;
+        }
+        edgeDirty = false;
+        needsPresent = true;
       }
 
-      // ── 点（远→近；辉光走 lighter 叠加，密集簇自然成发光球团） ──
-      for (const p of projected) {
-        const m = metas.get(p.id);
-        if (!m) continue;
-        const isFocus = p.id === focus || p.id === emphasisRef.current;
-        const isHover = p.id === hover;
-        const dim = hover !== null && nbSet !== null && !nbSet.has(p.id) && !isFocus;
-        let alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
-        if (dim) alpha = Math.min(alpha, 0.12);
-        const r = Math.max(0.8, m.base * p.f * 1.75 * (isFocus || isHover ? 1.9 : 1));
-        if (glowOn) {
-          c.globalCompositeOperation = 'lighter';
-          c.globalAlpha = alpha * 0.5;
-          const sp = spriteFor(m.color);
-          const gr = r * 3.4;
-          c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
-        }
-        c.globalCompositeOperation = 'source-over';
-        c.globalAlpha = Math.min(1, alpha + 0.15);
-        c.fillStyle = m.color;
-        c.beginPath();
-        c.arc(p.x, p.y, r, 0, Math.PI * 2);
-        c.fill();
-      }
-      c.globalAlpha = 1;
+      // ── 点层：非激活点 + 标签（透明底）。hover/激活集或位置变才重建 ──
+      if (nodeDirty) {
+        const c = nctx;
+        c.clearRect(0, 0, vw, vh);
 
-      // ── 标签 LOD：预算随缩放；焦点/悬停加权在集外必标 ──
-      if (labelsOn) {
-        const textColor = resolveColor(host, '--dsh-mem-text-2');
-        // 预算单源在 projection.labelBudget（与单测同一函数），这里不另抄一份
-        const inSet = new Set<string>();
-        const cand = projected
-          .filter((p) => metas.has(p.id))
-          .map((p) => {
-            const m = metas.get(p.id)!;
-            const hot = p.id === focus || p.id === hover || p.id === emphasisRef.current;
-            if (hot) inSet.add(p.id);
-            return {
-              id: p.id,
-              x: p.x,
-              y: p.y,
-              f: p.f,
-              rank: (hot ? 1e6 : 0) + m.degree * 10 + (m.aging ?? 1) * 5 + hash32(p.id) % 7,
-            };
-          });
-        const widthOf = (id: string): number => {
-          const m = metas.get(id);
-          return m ? clipByWidth(m.name).length * 6.4 : 0;
-        };
-        const picked = new Set([...pickLabels(cand, labelBudget(cam.dist), widthOf, vw), ...inSet]);
-        c.globalCompositeOperation = 'source-over';
-        c.fillStyle = textColor;
-        c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+        // ── 点（远→近；辉光走 lighter 叠加）：跳过激活点，它们由动态层画，防残影 ──
         for (const p of projected) {
-          if (!picked.has(p.id)) continue;
-          const m = metas.get(p.id)!;
-          const dim = hover !== null && nbSet !== null && !nbSet.has(p.id);
-          c.globalAlpha = dim ? 0.18 : Math.min(1, Math.max(0.35, p.f));
-          c.fillText(clipByWidth(m.name), p.x + 7, p.y - 5);
+          if (activeIds.has(p.id)) continue;
+          const m = metas.get(p.id);
+          if (!m) continue;
+          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
+          const r = Math.max(0.8, m.base * p.f * 1.75);
+          if (glowOn) {
+            c.globalCompositeOperation = 'lighter';
+            c.globalAlpha = alpha * 0.5;
+            const sp = spriteFor(m.color);
+            const gr = r * 3.4;
+            c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
+          }
+          c.globalCompositeOperation = 'source-over';
+          c.globalAlpha = Math.min(1, alpha + 0.15);
+          c.fillStyle = m.color;
+          c.beginPath();
+          c.arc(p.x, p.y, r, 0, Math.PI * 2);
+          c.fill();
         }
         c.globalAlpha = 1;
-      }
 
-      // ── 关系词：hover 时画在相关边中点（小网格避让，因果优先占格） ──
-      if (hover && edgesOn) {
-        const causalC = resolveColor(host, '--dsh-mem-accent');
-        const edgeBase = resolveColor(host, '--dsh-mem-border-strong');
-        c.font = '10px system-ui, "Microsoft YaHei", sans-serif';
-        const used = new Set<number>();
-        const related = edgeList
-          .filter((e) => (e.from === hover || e.to === hover) && pos.has(e.from) && pos.has(e.to))
-          .sort((a, b) => Number(b.causal) - Number(a.causal));
-        for (const e of related.slice(0, 12)) {
-          const a = pos.get(e.from)!;
-          const b = pos.get(e.to)!;
-          const mx = (a.x + b.x) / 2;
-          const my = (a.y + b.y) / 2;
-          const cell = Math.floor(mx / 72) * 1000 + Math.floor(my / 13);
-          if (used.has(cell)) continue;
-          used.add(cell);
-          c.fillStyle = e.causal ? causalC : edgeBase;
-          c.globalAlpha = 0.92;
-          c.fillText(e.relation, mx, my);
+        // ── 标签 LOD：预算随缩放；方向②——拉远过阈值整层跳过（fillText×N 是最贵的一块，
+        // 远端字本就读不清）；激活点的标签由动态层必标 ──
+        if (labelsOn && cam.dist <= LABEL_SKIP_DIST) {
+          const textColor = colText;
+          // 预算单源在 projection.labelBudget（与单测同一函数），这里不另抄一份
+          const cand = projected
+            .filter((p) => metas.has(p.id) && !activeIds.has(p.id))
+            .map((p) => {
+              const m = metas.get(p.id)!;
+              return { id: p.id, x: p.x, y: p.y, f: p.f, rank: m.degree * 10 + (m.aging ?? 1) * 5 + hash32(p.id) % 7 };
+            });
+          const widthOf = (id: string): number => {
+            const m = metas.get(id);
+            return m ? clipByWidth(m.name).length * 6.4 : 0;
+          };
+          const picked = new Set(pickLabels(cand, labelBudget(cam.dist), widthOf, vw));
+          c.globalCompositeOperation = 'source-over';
+          c.fillStyle = textColor;
+          c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+          for (const p of projected) {
+            if (!picked.has(p.id)) continue;
+            c.globalAlpha = Math.min(1, Math.max(0.35, p.f));
+            c.fillText(clipByWidth(metas.get(p.id)!.name), p.x + 7, p.y - 5);
+          }
+          c.globalAlpha = 1;
         }
-        c.globalAlpha = 1;
+        nodeDirty = false;
+        needsPresent = true;
       }
 
-      // 帧缓存完成：一次性 blit 到可见 canvas，消除中间态闪烁。
-      // buffer 已是设备像素尺寸，blit 前必须重置变换——否则 dpr 二次缩放会把画面推偏。
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.drawImage(buffer, 0, 0);
-      ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+      // ── 动态层：只画激活点（呼吸）+ hover 关系词。无呼吸时不合成，两层缓存直接上屏 ──
+      const breathing = twinkleOn && activeIds.size > 0;
+      if (breathing) {
+        const c = bctx;
+        // 缓存层是设备像素尺寸，blit 前重置变换（dpr 二次缩放的坑）。1:1 叠画，不会糊。
+        c.setTransform(1, 0, 0, 1, 0, 0);
+        c.drawImage(edgeCv, 0, 0);
+        c.drawImage(nodeCv, 0, 0);
+        c.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+        for (const id of activeIds) {
+          const p = pos.get(id);
+          const m = metas.get(id);
+          if (!p || !m) continue;
+          // 呼吸：错相脉冲（id 相位），背景星恒静。
+          const tw = 0.5 + 0.5 * Math.sin(now / BREATH_PERIOD_MS + phaseOf(id));
+          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
+          const r = Math.max(0.8, m.base * p.f * 1.75 * 1.9);
+          if (glowOn) {
+            c.globalCompositeOperation = 'lighter';
+            c.globalAlpha = Math.min(1, alpha * 0.5 + tw * 0.4);
+            const sp = spriteFor(m.color);
+            const gr = r * 3.4 * (1 + tw * 0.45);
+            c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
+          }
+          c.globalCompositeOperation = 'source-over';
+          c.globalAlpha = Math.min(1, alpha + 0.15 + tw * 0.25);
+          c.fillStyle = m.color;
+          c.beginPath();
+          c.arc(p.x, p.y, r, 0, Math.PI * 2);
+          c.fill();
+          if (labelsOn) {
+            c.globalAlpha = 1;
+            c.fillStyle = colText;
+            c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+            c.fillText(clipByWidth(m.name), p.x + 7, p.y - 5);
+          }
+        }
 
-      raf = requestAnimationFrame(frame);
+        // ── 关系词：hover 时画在相关边中点（激活信息，不是遮罩）──
+        if (hover && edgesOn) {
+          c.font = '10px system-ui, "Microsoft YaHei", sans-serif';
+          const used = new Set<number>();
+          const related = edgeList
+            .filter((e) => (e.from === hover || e.to === hover) && pos.has(e.from) && pos.has(e.to))
+            .sort((a, b) => Number(b.causal) - Number(a.causal));
+          for (const e of related.slice(0, 12)) {
+            const a = pos.get(e.from)!;
+            const b = pos.get(e.to)!;
+            const mx = (a.x + b.x) / 2;
+            const my = (a.y + b.y) / 2;
+            const cell = Math.floor(mx / 72) * 1000 + Math.floor(my / 13);
+            if (used.has(cell)) continue;
+            used.add(cell);
+            c.fillStyle = e.causal ? causalC : edgeBase;
+            c.globalAlpha = 0.92;
+            c.fillText(e.relation, mx, my);
+          }
+          c.globalAlpha = 1;
+        }
+
+        // 帧缓存完成：一次性 blit 到可见 canvas，消除中间态闪烁。
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(buffer, 0, 0);
+        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+        needsPresent = false;
+      } else if (needsPresent) {
+        // 无呼吸：两层叠画上屏一次；之后不碰画布（显示内容仍是上一帧——
+        // 不存在旧“空闲冻结”的坑：那条会先 clear 再跳过，这里从不 clear 可见 canvas）。
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.drawImage(edgeCv, 0, 0);
+        ctx.drawImage(nodeCv, 0, 0);
+        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+        needsPresent = false;
+      }
+
+      // 空闲停摆（取证方向③）：无脏/无呼吸/无过渡/无待上屏 → 停 rAF，事件唤醒；
+      // 单帧超支时不再“逐帧追不上”，而是压根不排帧——掉帧闪烁的根源拆除。
+      running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || (driftOn && !ego);
+      if (running) raf = requestAnimationFrame(frame);
     };
+    /**
+     * 同步出帧：给「位图刚被清空」这一种场景用（resize），不能等下一个 rAF。
+     * ResizeObserver 回调落在渲染步骤的 layout 之后、paint 之前，此刻画完即上屏，
+     * 空位图没机会被合成器取样——这是真机「闪一下变暗」的直接解。
+     */
+    const presentNow = (): void => {
+      if (disposed) return;
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      running = false;
+      frame(performance.now());
+    };
+    /** 事件唤醒：从空闲停摆重启 rAF（方向③的另一半——停得下、叫得醒）。 */
+    const wake = (): void => {
+      if (!running && !disposed) {
+        running = true;
+        raf = requestAnimationFrame(frame);
+      }
+    };
+    wakeRef.current = wake;
     // 同步画第一帧：避免浏览器在 rAF 回调前 paint 一次“空画布”导致元素闪烁。
     frame(performance.now());
 
@@ -538,13 +678,16 @@ export function Scene3D(props: {
         }
         drag.x = pt.x;
         drag.y = pt.y;
-        dirtyRef.current = true;
+        // 相机变了：两层缓存里的点位置全变，必须重建；循环可能已停摆，踢醒。
+        edgeDirty = true;
+        nodeDirty = true;
+        wake();
         return;
       }
       const hit = pickNearest(lastProjected, pt.x, pt.y, PICK_PX);
       if (hit !== hoverRef.current) {
         hoverRef.current = hit;
-        dirtyRef.current = true;
+        wake(); // 激活集变化由 frame 内 activeKey 检出，但停摆中需要先踢醒
         setHoverInfo(hit ? { id: hit, x: pt.x, y: pt.y } : null);
       } else if (hit) {
         setHoverInfo({ id: hit, x: pt.x, y: pt.y });
@@ -602,7 +745,9 @@ export function Scene3D(props: {
     const onWheel = (ev: WheelEvent) => {
       ev.preventDefault();
       camRef.current.dist = zoomBy(camRef.current.dist, ev.deltaY);
-      dirtyRef.current = true;
+      edgeDirty = true;
+      nodeDirty = true;
+      wake();
     };
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === 'Enter' && hoverRef.current) onPick(hoverRef.current);
@@ -630,6 +775,7 @@ export function Scene3D(props: {
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
+      wakeRef.current = null;
       ro.disconnect();
       canvas.removeEventListener('mousedown', onDown);
       window.removeEventListener('mousemove', onMove);
@@ -639,7 +785,7 @@ export function Scene3D(props: {
       window.removeEventListener('keydown', onKey);
     };
     // clusterLayout 进依赖：数据换了循环要拿到新布局闭包；starry/driftOn/nodeKeySeed 变了循环要重烘背景/改漂移。
-  }, [full, edgeList, adj, clusterLayout, glowOn, edgesOn, labelsOn, agingOn, driftOn, starry, nodeKeySeed, height, onPick]);
+  }, [full, edgeList, adj, clusterLayout, glowOn, edgesOn, labelsOn, agingOn, driftOn, twinkleOn, starry, nodeKeySeed, pointSize, height, onPick]);
 
   const hoverMeta = hoverInfo ? metasRef.current.get(hoverInfo.id) : null;
 
@@ -728,6 +874,7 @@ export function Scene3D(props: {
         {toggle('边', edgesOn, setEdgesOn)}
         {toggle('标签', labelsOn, setLabelsOn)}
         {toggle('老化亮度', agingOn, setAgingOn)}
+        {toggle('呼吸', twinkleOn, setTwinkleOn)}
         {toggle('漂移', driftOn, setDriftOn)}
         {toggle(starry ? '星空底' : '白底', starry, setStarry)}
         <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>

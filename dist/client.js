@@ -44864,6 +44864,7 @@ var __create = Object.create;
 		
 		// client/src/explorer/projection.ts
 		var FOCAL = 1100;
+		var LABEL_SKIP_DIST = 2600;
 		var CAM_DEFAULT = { yaw: 0.45, pitch: -0.3, dist: 1200, panX: 0, panY: 0 };
 		var DIST_MIN = 380;
 		var DIST_MAX = 3200;
@@ -45023,6 +45024,10 @@ var __create = Object.create;
 		  }
 		  return null;
 		}
+		var BREATH_PERIOD_MS = 260;
+		function phaseOf(id) {
+		  return hash322(id) % 6283 / 1e3;
+		}
 		function easeInOut(p) {
 		  const k = Math.min(1, Math.max(0, p));
 		  return k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
@@ -45074,6 +45079,7 @@ var __create = Object.create;
 		  const [pointSize, setPointSize] = (0, import_react32.useState)(2.2);
 		  const [driftOn, setDriftOn] = (0, import_react32.useState)(false);
 		  const [starry, setStarry] = (0, import_react32.useState)(true);
+		  const [twinkleOn, setTwinkleOn] = (0, import_react32.useState)(true);
 		  const camRef = (0, import_react32.useRef)({ ...CAM_DEFAULT });
 		  const modeRef = (0, import_react32.useRef)("cluster");
 		  const focusRef = (0, import_react32.useRef)(null);
@@ -45084,7 +45090,7 @@ var __create = Object.create;
 		  const clickRef = (0, import_react32.useRef)(null);
 		  const emphasisRef = (0, import_react32.useRef)(emphasisId);
 		  emphasisRef.current = emphasisId;
-		  const dirtyRef = (0, import_react32.useRef)(true);
+		  const wakeRef = (0, import_react32.useRef)(null);
 		  const degree = (0, import_react32.useMemo)(() => degreeMapOf(full), [full]);
 		  const edgeList = (0, import_react32.useMemo)(
 		    () => full.edges.map((e) => ({ from: e.from, to: e.to, relation: e.relation, causal: e.causal })),
@@ -45126,6 +45132,7 @@ var __create = Object.create;
 		    camRef.current.dist = Math.min(3200, Math.max(380, EGO_HOPS_MAX2 * 300 * 1.55));
 		    camRef.current.panX = 0;
 		    camRef.current.panY = 0;
+		    wakeRef.current?.();
 		  }, [emphasisId, adj, clusterLayout]);
 		  const metasRef = (0, import_react32.useRef)(/* @__PURE__ */ new Map());
 		  const spritesRef = (0, import_react32.useRef)(/* @__PURE__ */ new Map());
@@ -45168,14 +45175,33 @@ var __create = Object.create;
 		    if (!host || !canvas) return;
 		    const ctx = canvas.getContext("2d");
 		    if (!ctx) return;
-		    dirtyRef.current = true;
 		    const buffer = document.createElement("canvas");
 		    const bctx = buffer.getContext("2d");
+		    const edgeCv = document.createElement("canvas");
+		    const ectx = edgeCv.getContext("2d");
+		    const nodeCv = document.createElement("canvas");
+		    const nctx = nodeCv.getContext("2d");
+		    let edgeDirty = true;
+		    let nodeDirty = true;
+		    let needsPresent = true;
+		    let lastActiveKey = "";
 		    let raf = 0;
+		    let running = false;
 		    let disposed = false;
 		    let vw = 0;
 		    let vh = 0;
 		    const dprRef = { current: 1 };
+		    let colEdge = "";
+		    let colCausal = "";
+		    let colText = "";
+		    let colStale = true;
+		    const refreshColors = () => {
+		      if (!colStale) return;
+		      colEdge = resolveColor2(host, "--dsh-mem-border-strong");
+		      colCausal = resolveColor2(host, "--dsh-mem-accent");
+		      colText = resolveColor2(host, "--dsh-mem-text-2");
+		      colStale = false;
+		    };
 		    const spriteFor = (color) => {
 		      const hit = spritesRef.current.get(color);
 		      if (hit) return hit;
@@ -45247,23 +45273,41 @@ var __create = Object.create;
 		      }
 		      return cv;
 		    };
+		    let sized = false;
 		    const resize = () => {
 		      const dpr = Math.min(2, window.devicePixelRatio || 1);
+		      const nextW = host.clientWidth || 640;
+		      const nextH = host.clientHeight || host.offsetHeight || height;
+		      if (sized && nextW === vw && nextH === vh && dpr === dprRef.current) return false;
+		      sized = true;
 		      dprRef.current = dpr;
-		      vw = host.clientWidth || 640;
-		      vh = host.clientHeight || host.offsetHeight || height;
+		      vw = nextW;
+		      vh = nextH;
 		      canvas.width = Math.round(vw * dpr);
 		      canvas.height = Math.round(vh * dpr);
 		      canvas.style.width = `${vw}px`;
 		      canvas.style.height = `${vh}px`;
 		      buffer.width = canvas.width;
 		      buffer.height = canvas.height;
+		      edgeCv.width = canvas.width;
+		      edgeCv.height = canvas.height;
+		      nodeCv.width = canvas.width;
+		      nodeCv.height = canvas.height;
+		      ectx.setTransform(dpr, 0, 0, dpr, 0, 0);
+		      nctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		      bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		      bgCache = null;
+		      edgeDirty = true;
+		      nodeDirty = true;
+		      colStale = true;
+		      needsPresent = true;
+		      return true;
 		    };
 		    resize();
-		    const ro = new ResizeObserver(resize);
+		    const ro = new ResizeObserver(() => {
+		      if (resize()) presentNow();
+		    });
 		    ro.observe(host);
 		    const activeLayout = (now) => {
 		      const tr = transRef.current;
@@ -45278,133 +45322,192 @@ var __create = Object.create;
 		    };
 		    let lastProjected = [];
 		    const frame = (now) => {
+		      raf = 0;
 		      if (disposed) return;
+		      refreshColors();
 		      const cam = camRef.current;
 		      const layout = activeLayout(now);
 		      const ego = modeRef.current === "ego";
 		      const metas = metasRef.current;
 		      const hover = hoverRef.current;
 		      const focus = focusRef.current;
-		      let nbSet = null;
-		      if (hover) {
-		        nbSet = /* @__PURE__ */ new Set([hover, ...adj.get(hover) ?? []]);
-		        if (focus && focus !== hover) nbSet.add(focus);
+		      const emph = emphasisRef.current;
+		      if (transRef.current !== null || driftOn && !ego) {
+		        edgeDirty = true;
+		        nodeDirty = true;
 		      }
 		      const projected = projectAll(layout, cam, { w: vw, h: vh }, void 0, now, driftOn && !ego);
 		      lastProjected = projected;
-		      const c = bctx;
-		      c.clearRect(0, 0, vw, vh);
-		      if (!bgCache || bgCacheW !== vw || bgCacheH !== vh || bgCacheStarry !== starry) {
-		        bgCache = bakeBg(vw, vh, starry, nodeKeySeed);
-		        bgCacheW = vw;
-		        bgCacheH = vh;
-		        bgCacheStarry = starry;
+		      const activeKey = `${hover ?? ""}|${focus ?? ""}|${emph ?? ""}`;
+		      if (activeKey !== lastActiveKey) {
+		        lastActiveKey = activeKey;
+		        nodeDirty = true;
 		      }
-		      c.drawImage(bgCache, 0, 0);
+		      const activeIds = /* @__PURE__ */ new Set();
+		      if (hover) activeIds.add(hover);
+		      if (focus) activeIds.add(focus);
+		      if (emph) activeIds.add(emph);
 		      const pos = new Map(projected.map((p) => [p.id, p]));
-		      if (edgesOn) {
-		        const edgeBase = resolveColor2(host, "--dsh-mem-border-strong");
-		        const causalC = resolveColor2(host, "--dsh-mem-accent");
-		        c.globalCompositeOperation = "source-over";
-		        for (const e of edgeList) {
-		          const a = pos.get(e.from);
-		          const b = pos.get(e.to);
-		          if (!a || !b) continue;
-		          const related = !hover || nbSet.has(e.from) && nbSet.has(e.to) && (e.from === hover || e.to === hover);
-		          if (hover && !related) continue;
-		          const avgF = (a.f + b.f) / 2;
-		          const alpha = Math.min(0.9, Math.max(0.05, avgF * 0.34));
-		          c.strokeStyle = e.causal ? causalC : edgeBase;
-		          c.globalAlpha = hover ? Math.min(0.9, alpha + 0.25) : alpha;
-		          c.lineWidth = e.causal ? 1.2 : 0.7;
-		          c.beginPath();
-		          c.moveTo(a.x, a.y);
-		          c.lineTo(b.x, b.y);
-		          c.stroke();
+		      const edgeBase = colEdge;
+		      const causalC = colCausal;
+		      if (edgeDirty) {
+		        const c = ectx;
+		        c.clearRect(0, 0, vw, vh);
+		        if (!bgCache || bgCacheW !== vw || bgCacheH !== vh || bgCacheStarry !== starry) {
+		          bgCache = bakeBg(vw, vh, starry, nodeKeySeed);
+		          bgCacheW = vw;
+		          bgCacheH = vh;
+		          bgCacheStarry = starry;
 		        }
-		        c.globalAlpha = 1;
-		      }
-		      for (const p of projected) {
-		        const m = metas.get(p.id);
-		        if (!m) continue;
-		        const isFocus = p.id === focus || p.id === emphasisRef.current;
-		        const isHover = p.id === hover;
-		        const dim = hover !== null && nbSet !== null && !nbSet.has(p.id) && !isFocus;
-		        let alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
-		        if (dim) alpha = Math.min(alpha, 0.12);
-		        const r = Math.max(0.8, m.base * p.f * 1.75 * (isFocus || isHover ? 1.9 : 1));
-		        if (glowOn) {
-		          c.globalCompositeOperation = "lighter";
-		          c.globalAlpha = alpha * 0.5;
-		          const sp = spriteFor(m.color);
-		          const gr = r * 3.4;
-		          c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
+		        c.drawImage(bgCache, 0, 0);
+		        if (edgesOn) {
+		          c.globalCompositeOperation = "source-over";
+		          for (const e of edgeList) {
+		            const a = pos.get(e.from);
+		            const b = pos.get(e.to);
+		            if (!a || !b) continue;
+		            const avgF = (a.f + b.f) / 2;
+		            c.strokeStyle = e.causal ? causalC : edgeBase;
+		            c.globalAlpha = Math.min(0.9, Math.max(0.05, avgF * 0.34));
+		            c.lineWidth = e.causal ? 1.2 : 0.7;
+		            c.beginPath();
+		            c.moveTo(a.x, a.y);
+		            c.lineTo(b.x, b.y);
+		            c.stroke();
+		          }
+		          c.globalAlpha = 1;
 		        }
-		        c.globalCompositeOperation = "source-over";
-		        c.globalAlpha = Math.min(1, alpha + 0.15);
-		        c.fillStyle = m.color;
-		        c.beginPath();
-		        c.arc(p.x, p.y, r, 0, Math.PI * 2);
-		        c.fill();
+		        edgeDirty = false;
+		        needsPresent = true;
 		      }
-		      c.globalAlpha = 1;
-		      if (labelsOn) {
-		        const textColor = resolveColor2(host, "--dsh-mem-text-2");
-		        const inSet = /* @__PURE__ */ new Set();
-		        const cand = projected.filter((p) => metas.has(p.id)).map((p) => {
-		          const m = metas.get(p.id);
-		          const hot = p.id === focus || p.id === hover || p.id === emphasisRef.current;
-		          if (hot) inSet.add(p.id);
-		          return {
-		            id: p.id,
-		            x: p.x,
-		            y: p.y,
-		            f: p.f,
-		            rank: (hot ? 1e6 : 0) + m.degree * 10 + (m.aging ?? 1) * 5 + hash322(p.id) % 7
-		          };
-		        });
-		        const widthOf = (id) => {
-		          const m = metas.get(id);
-		          return m ? clipByWidth(m.name).length * 6.4 : 0;
-		        };
-		        const picked = /* @__PURE__ */ new Set([...pickLabels(cand, labelBudget(cam.dist), widthOf, vw), ...inSet]);
-		        c.globalCompositeOperation = "source-over";
-		        c.fillStyle = textColor;
-		        c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+		      if (nodeDirty) {
+		        const c = nctx;
+		        c.clearRect(0, 0, vw, vh);
 		        for (const p of projected) {
-		          if (!picked.has(p.id)) continue;
+		          if (activeIds.has(p.id)) continue;
 		          const m = metas.get(p.id);
-		          const dim = hover !== null && nbSet !== null && !nbSet.has(p.id);
-		          c.globalAlpha = dim ? 0.18 : Math.min(1, Math.max(0.35, p.f));
-		          c.fillText(clipByWidth(m.name), p.x + 7, p.y - 5);
+		          if (!m) continue;
+		          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
+		          const r = Math.max(0.8, m.base * p.f * 1.75);
+		          if (glowOn) {
+		            c.globalCompositeOperation = "lighter";
+		            c.globalAlpha = alpha * 0.5;
+		            const sp = spriteFor(m.color);
+		            const gr = r * 3.4;
+		            c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
+		          }
+		          c.globalCompositeOperation = "source-over";
+		          c.globalAlpha = Math.min(1, alpha + 0.15);
+		          c.fillStyle = m.color;
+		          c.beginPath();
+		          c.arc(p.x, p.y, r, 0, Math.PI * 2);
+		          c.fill();
 		        }
 		        c.globalAlpha = 1;
-		      }
-		      if (hover && edgesOn) {
-		        const causalC = resolveColor2(host, "--dsh-mem-accent");
-		        const edgeBase = resolveColor2(host, "--dsh-mem-border-strong");
-		        c.font = '10px system-ui, "Microsoft YaHei", sans-serif';
-		        const used = /* @__PURE__ */ new Set();
-		        const related = edgeList.filter((e) => (e.from === hover || e.to === hover) && pos.has(e.from) && pos.has(e.to)).sort((a, b) => Number(b.causal) - Number(a.causal));
-		        for (const e of related.slice(0, 12)) {
-		          const a = pos.get(e.from);
-		          const b = pos.get(e.to);
-		          const mx = (a.x + b.x) / 2;
-		          const my = (a.y + b.y) / 2;
-		          const cell = Math.floor(mx / 72) * 1e3 + Math.floor(my / 13);
-		          if (used.has(cell)) continue;
-		          used.add(cell);
-		          c.fillStyle = e.causal ? causalC : edgeBase;
-		          c.globalAlpha = 0.92;
-		          c.fillText(e.relation, mx, my);
+		        if (labelsOn && cam.dist <= LABEL_SKIP_DIST) {
+		          const textColor = colText;
+		          const cand = projected.filter((p) => metas.has(p.id) && !activeIds.has(p.id)).map((p) => {
+		            const m = metas.get(p.id);
+		            return { id: p.id, x: p.x, y: p.y, f: p.f, rank: m.degree * 10 + (m.aging ?? 1) * 5 + hash322(p.id) % 7 };
+		          });
+		          const widthOf = (id) => {
+		            const m = metas.get(id);
+		            return m ? clipByWidth(m.name).length * 6.4 : 0;
+		          };
+		          const picked = new Set(pickLabels(cand, labelBudget(cam.dist), widthOf, vw));
+		          c.globalCompositeOperation = "source-over";
+		          c.fillStyle = textColor;
+		          c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+		          for (const p of projected) {
+		            if (!picked.has(p.id)) continue;
+		            c.globalAlpha = Math.min(1, Math.max(0.35, p.f));
+		            c.fillText(clipByWidth(metas.get(p.id).name), p.x + 7, p.y - 5);
+		          }
+		          c.globalAlpha = 1;
 		        }
-		        c.globalAlpha = 1;
+		        nodeDirty = false;
+		        needsPresent = true;
 		      }
-		      ctx.setTransform(1, 0, 0, 1, 0, 0);
-		      ctx.drawImage(buffer, 0, 0);
-		      ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
-		      raf = requestAnimationFrame(frame);
+		      const breathing = twinkleOn && activeIds.size > 0;
+		      if (breathing) {
+		        const c = bctx;
+		        c.setTransform(1, 0, 0, 1, 0, 0);
+		        c.drawImage(edgeCv, 0, 0);
+		        c.drawImage(nodeCv, 0, 0);
+		        c.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+		        for (const id of activeIds) {
+		          const p = pos.get(id);
+		          const m = metas.get(id);
+		          if (!p || !m) continue;
+		          const tw = 0.5 + 0.5 * Math.sin(now / BREATH_PERIOD_MS + phaseOf(id));
+		          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
+		          const r = Math.max(0.8, m.base * p.f * 1.75 * 1.9);
+		          if (glowOn) {
+		            c.globalCompositeOperation = "lighter";
+		            c.globalAlpha = Math.min(1, alpha * 0.5 + tw * 0.4);
+		            const sp = spriteFor(m.color);
+		            const gr = r * 3.4 * (1 + tw * 0.45);
+		            c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
+		          }
+		          c.globalCompositeOperation = "source-over";
+		          c.globalAlpha = Math.min(1, alpha + 0.15 + tw * 0.25);
+		          c.fillStyle = m.color;
+		          c.beginPath();
+		          c.arc(p.x, p.y, r, 0, Math.PI * 2);
+		          c.fill();
+		          if (labelsOn) {
+		            c.globalAlpha = 1;
+		            c.fillStyle = colText;
+		            c.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+		            c.fillText(clipByWidth(m.name), p.x + 7, p.y - 5);
+		          }
+		        }
+		        if (hover && edgesOn) {
+		          c.font = '10px system-ui, "Microsoft YaHei", sans-serif';
+		          const used = /* @__PURE__ */ new Set();
+		          const related = edgeList.filter((e) => (e.from === hover || e.to === hover) && pos.has(e.from) && pos.has(e.to)).sort((a, b) => Number(b.causal) - Number(a.causal));
+		          for (const e of related.slice(0, 12)) {
+		            const a = pos.get(e.from);
+		            const b = pos.get(e.to);
+		            const mx = (a.x + b.x) / 2;
+		            const my = (a.y + b.y) / 2;
+		            const cell = Math.floor(mx / 72) * 1e3 + Math.floor(my / 13);
+		            if (used.has(cell)) continue;
+		            used.add(cell);
+		            c.fillStyle = e.causal ? causalC : edgeBase;
+		            c.globalAlpha = 0.92;
+		            c.fillText(e.relation, mx, my);
+		          }
+		          c.globalAlpha = 1;
+		        }
+		        ctx.setTransform(1, 0, 0, 1, 0, 0);
+		        ctx.drawImage(buffer, 0, 0);
+		        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+		        needsPresent = false;
+		      } else if (needsPresent) {
+		        ctx.setTransform(1, 0, 0, 1, 0, 0);
+		        ctx.drawImage(edgeCv, 0, 0);
+		        ctx.drawImage(nodeCv, 0, 0);
+		        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
+		        needsPresent = false;
+		      }
+		      running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || driftOn && !ego;
+		      if (running) raf = requestAnimationFrame(frame);
 		    };
+		    const presentNow = () => {
+		      if (disposed) return;
+		      if (raf) cancelAnimationFrame(raf);
+		      raf = 0;
+		      running = false;
+		      frame(performance.now());
+		    };
+		    const wake = () => {
+		      if (!running && !disposed) {
+		        running = true;
+		        raf = requestAnimationFrame(frame);
+		      }
+		    };
+		    wakeRef.current = wake;
 		    frame(performance.now());
 		    const toLocal = (ev) => {
 		      const rect = canvas.getBoundingClientRect();
@@ -45428,13 +45531,15 @@ var __create = Object.create;
 		        }
 		        drag.x = pt.x;
 		        drag.y = pt.y;
-		        dirtyRef.current = true;
+		        edgeDirty = true;
+		        nodeDirty = true;
+		        wake();
 		        return;
 		      }
 		      const hit = pickNearest(lastProjected, pt.x, pt.y, PICK_PX);
 		      if (hit !== hoverRef.current) {
 		        hoverRef.current = hit;
-		        dirtyRef.current = true;
+		        wake();
 		        setHoverInfo(hit ? { id: hit, x: pt.x, y: pt.y } : null);
 		      } else if (hit) {
 		        setHoverInfo({ id: hit, x: pt.x, y: pt.y });
@@ -45487,7 +45592,9 @@ var __create = Object.create;
 		    const onWheel = (ev) => {
 		      ev.preventDefault();
 		      camRef.current.dist = zoomBy(camRef.current.dist, ev.deltaY);
-		      dirtyRef.current = true;
+		      edgeDirty = true;
+		      nodeDirty = true;
+		      wake();
 		    };
 		    const onKey = (ev) => {
 		      if (ev.key === "Enter" && hoverRef.current) onPick(hoverRef.current);
@@ -45513,6 +45620,7 @@ var __create = Object.create;
 		    return () => {
 		      disposed = true;
 		      cancelAnimationFrame(raf);
+		      wakeRef.current = null;
 		      ro.disconnect();
 		      canvas.removeEventListener("mousedown", onDown);
 		      window.removeEventListener("mousemove", onMove);
@@ -45521,7 +45629,7 @@ var __create = Object.create;
 		      canvas.removeEventListener("mouseleave", onLeave);
 		      window.removeEventListener("keydown", onKey);
 		    };
-		  }, [full, edgeList, adj, clusterLayout, glowOn, edgesOn, labelsOn, agingOn, driftOn, starry, nodeKeySeed, height, onPick]);
+		  }, [full, edgeList, adj, clusterLayout, glowOn, edgesOn, labelsOn, agingOn, driftOn, twinkleOn, starry, nodeKeySeed, pointSize, height, onPick]);
 		  const hoverMeta = hoverInfo ? metasRef.current.get(hoverInfo.id) : null;
 		  const ui = starry ? {
 		    barBg: "rgba(10, 13, 22, 0.72)",
@@ -45602,6 +45710,7 @@ var __create = Object.create;
 		          toggle("边", edgesOn, setEdgesOn),
 		          toggle("标签", labelsOn, setLabelsOn),
 		          toggle("老化亮度", agingOn, setAgingOn),
+		          toggle("呼吸", twinkleOn, setTwinkleOn),
 		          toggle("漂移", driftOn, setDriftOn),
 		          toggle(starry ? "星空底" : "白底", starry, setStarry),
 		          /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4 }, children: [

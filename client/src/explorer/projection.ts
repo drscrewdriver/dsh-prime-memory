@@ -22,6 +22,8 @@ import { hash32 } from '../tabs/graph-canvas-data.js';
 // ── 相机与交互常量（渲染层与单测共用同一组数字） ──────────────────
 /** 透视焦距：越大越接近平视，越小纵深越夸张。 */
 export const FOCAL = 1100;
+/** 标签整层跳过的相机距离阈值（取证方向②：文字是最贵的一块，拉远后本就读不清）。 */
+export const LABEL_SKIP_DIST = 2600;
 /** 初始相机。yaw/pitch 取"斜上方俯视"，球状团簇在这个角度下层次最清楚。 */
 export const CAM_DEFAULT = { yaw: 0.45, pitch: -0.3, dist: 1200, panX: 0, panY: 0 };
 export const DIST_MIN = 380;
@@ -314,6 +316,18 @@ export function pickNearest(projected: readonly Projected[], mx: number, my: num
     if (Math.hypot(p.x - mx, p.y - my) < threshold) return p.id;
   }
   return null;
+}
+
+// ── 激活元素呼吸（时间项脉冲）────────────────────────────
+/** 呼吸周期（ms）：260ms 接近“反光”而非“加载动画”的节奏。
+ *  只作用于激活元素（hover 命中/焦点）；背景星恒静——
+ *  早先的 90px proximity 激活场被真机否决：鼠标随便一动全场闪跳。 */
+export const BREATH_PERIOD_MS = 260;
+
+/** 每点相位由 id 散列派生（0~2π）：同图恒同相位；焦点与 hover 错相呼吸——
+ *  齐闪会读成加载动画，错相才读成星空（单测钉住这条反例门禁）。 */
+export function phaseOf(id: string): number {
+  return (hash32(id) % 6283) / 1000;
 }
 
 /** ease-in-out（二次）：过渡头尾慢、中间快，观感上"被放下去"而不是"弹过去"。 */
