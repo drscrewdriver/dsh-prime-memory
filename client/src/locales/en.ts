@@ -1096,7 +1096,7 @@ export const en: Record<string, string> = {
   "状态:": "Status:",
   "准备中（归档旧数据 · 清空检索库）": "Preparing (archiving old data · clearing the retrieval store)",
   "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 \"dsh-reference-session-collector\": \"^0.2.5\" - dsh.profile.bundles 追加 \"dsh-reference-session-collector\" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。": "The desktop build (DSH Desktop) cannot use `dsh plugin --profile desktop add` (the host manages it exclusively and will reject it), so do it manually: 1. Edit ~/.dsh/profiles/desktop/package.json - add \"dsh-reference-session-collector\": \"^0.2.5\" to dependencies - add \"dsh-reference-session-collector\" to dsh.profile.bundles 2. Run pnpm install in that directory 3. Restart DSH Desktop Note: enabling only Memory will not enable the reference session store — the memory plugin is only its consumer and has no right to mount it.",
-  "字符": "characters",
+  "字符": " characters",
   "自定义 ·": "Custom ·",
   "自定义本层链": "Customize this layer's chain",
   "自生长 slug(未注册)": "Self-grown slug (unregistered)",

@@ -231,6 +231,10 @@
     "[memory] type '{p1}' 不在词表，family 按旧前缀规则回落（请核对来源）": {
       "en": "[memory] type '{p1}' is not in the vocabulary; family falls back to the legacy prefix rule (check the source)",
       "ru": "[memory] тип '{p1}' отсутствует в словаре; семейство определяется по старому правилу префикса (проверьте источник)"
+    },
+    "字符": {
+      "en": "characters",
+      "ru": "символов"
     }
   },
   "spacing": {
@@ -261,6 +265,7 @@
       "分钟前",
       "天",
       "天前",
+      "字符",
       "条",
       "条 · 原样保留",
       "条可恢复",

@@ -1096,7 +1096,7 @@ export const ru: Record<string, string> = {
   "状态:": "Состояние:",
   "准备中（归档旧数据 · 清空检索库）": "Подготовка (архивация старых данных · очистка хранилища поиска)",
   "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 \"dsh-reference-session-collector\": \"^0.2.5\" - dsh.profile.bundles 追加 \"dsh-reference-session-collector\" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。": "Настольная версия (DSH Desktop) не может использовать `dsh plugin --profile desktop add` (хост управляет этим единолично и отклонит запрос), поэтому только вручную: 1. Откройте ~/.dsh/profiles/desktop/package.json - добавьте в dependencies \"dsh-reference-session-collector\": \"^0.2.5\" - добавьте \"dsh-reference-session-collector\" в dsh.profile.bundles 2. Выполните pnpm install в этом каталоге 3. Перезапустите DSH Desktop Внимание: включение только «Памяти» не включит хранилище референсных сессий — плагин памяти лишь его потребитель и не вправе его подключать.",
-  "字符": "символов",
+  "字符": " символов",
   "自定义 ·": "Своё ·",
   "自定义本层链": "Настроить цепочку этого уровня",
   "自生长 slug(未注册)": "Самовыращенный slug (не зарегистрирован)",
