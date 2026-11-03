@@ -611,7 +611,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                       {standalone ? e.slug : '· ' + e.slug.slice(g.hall.length + 1)}
                       {e.source === 'pre-registered' ? ' ⭐' : ''}
                     </span>
-                    {e.label ? <span style={S.muted}>{e.label}</span> : null}
+                    {e.label ? <span style={S.muted}>{tr(e.label)}</span> : null}
                     <span style={S.muted}>{count + tr("条")}</span>
                     {retired ? <span style={{ ...S.muted, color: 'var(--dsh-mem-danger)' }}>{tr("已退役")}</span> : null}
                     {(e.aliases ?? []).length > 0 ? <span style={{ ...S.muted, wordBreak: 'break-all' }}>{tr("别名:") + (e.aliases ?? []).join(', ')}</span> : null}

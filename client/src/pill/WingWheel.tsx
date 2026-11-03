@@ -368,7 +368,7 @@ export function WingWheel(props: {
         {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
           const corner = overview?.corners[i];
           const id = corner?.id;
-          const label = corner?.label ?? (LABEL_FALLBACK[i] ? tr(LABEL_FALLBACK[i]) : tr("域{p1}")).replace("{p1}", String(i + 1));
+          const label = tr(corner?.label ?? (LABEL_FALLBACK[i] ? LABEL_FALLBACK[i] : tr("域{p1}")).replace("{p1}", String(i + 1)));
           const count = id ? cornerCount(id) : null;
           const active = activeCorner === i;
           const dim = activeCorner != null && !active;

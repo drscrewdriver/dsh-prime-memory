@@ -747,7 +747,7 @@ export const en: Record<string, string> = {
   "锁定 Wing 时两类无角记忆是否参与召回": "Whether both kinds of corner-less memories participate in recall when a Wing is locked",
   "锁定 Wing 时排除未打标记忆": "Exclude untagged memories when a Wing is locked",
   "它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。": "It is removed from the retrieval surface (no longer recalled), but the record is kept — you can restore it in the \"retired\" section of the \"Memory\" page.",
-  "探针：": "Probe:",
+  "探针：": "Probe: ",
   "提示：登记/退役需先在面板开启「高权限模式」。": "Note: registering/decommissioning requires turning on \"High-privilege mode\" in the panel first.",
   "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。": "Note: promoting/archiving/pinning/scanning history requires turning on \"High-privilege mode\" in the panel.",
   "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。": "Note: deleting memories requires high-privilege mode first (top-right switch or \"High-privilege mode\" on the Overview page); while it is off, the delete button is unavailable.",

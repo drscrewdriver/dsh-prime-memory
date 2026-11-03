@@ -131,7 +131,7 @@ export function RecordPane(props: {
           <option value="">{tr("全部类型")}</option>
           {typeCatalog.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.label}
+              {tr(c.label)}
             </option>
           ))}
         </select>

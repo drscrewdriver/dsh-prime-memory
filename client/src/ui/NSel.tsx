@@ -159,7 +159,7 @@ export function NSel(props: {
                     if (idx !== i) setIdx(i);
                   }}
                 >
-                  <span className="dsh-mem-pop-opt-label">{o.label}</span>
+                  <span className="dsh-mem-pop-opt-label">{tr(o.label)}</span>
                   {o.id === value ? <span className="dsh-mem-pop-check">✓</span> : null}
                 </button>
               );

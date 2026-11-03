@@ -799,7 +799,7 @@ function WingMultiSelect(props: {
             return (
               <button key={o.id} type="button" className="dsh-mem-pop-opt" onClick={() => toggle(o.id)} aria-selected={active}>
                 <span className="dsh-mem-pop-check">{active ? '✓' : ''}</span>
-                <span className="dsh-mem-pop-label">{o.label}</span>
+                <span className="dsh-mem-pop-label">{tr(o.label)}</span>
               </button>
             );
           })}

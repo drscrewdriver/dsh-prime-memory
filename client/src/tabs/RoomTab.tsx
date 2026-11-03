@@ -339,7 +339,7 @@ export function RoomTab(props: { rpc: RpcFn }) {
                     {row.slug}
                     {e?.source === 'pre-registered' ? ' ⭐' : ''}
                   </span>
-                  {e?.label ? <span style={S.muted}>{e.label}</span> : null}
+                  {e?.label ? <span style={S.muted}>{tr(e.label)}</span> : null}
                   <span style={S.muted}>{row.count + tr("条")}</span>
                   {grownOnly ? <span style={S.muted}>{tr("(自生长未注册)")}</span> : null}
                   {retired ? <span style={{ ...S.muted, color: 'var(--dsh-mem-danger)' }}>{tr("已退役")}</span> : null}

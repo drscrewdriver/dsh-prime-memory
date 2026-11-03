@@ -36681,7 +36681,7 @@ var __create = Object.create;
 		  "锁定 Wing 时两类无角记忆是否参与召回": "Whether both kinds of corner-less memories participate in recall when a Wing is locked",
 		  "锁定 Wing 时排除未打标记忆": "Exclude untagged memories when a Wing is locked",
 		  "它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。": 'It is removed from the retrieval surface (no longer recalled), but the record is kept — you can restore it in the "retired" section of the "Memory" page.',
-		  "探针：": "Probe:",
+		  "探针：": "Probe: ",
 		  "提示：登记/退役需先在面板开启「高权限模式」。": 'Note: registering/decommissioning requires turning on "High-privilege mode" in the panel first.',
 		  "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。": 'Note: promoting/archiving/pinning/scanning history requires turning on "High-privilege mode" in the panel.',
 		  "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。": 'Note: deleting memories requires high-privilege mode first (top-right switch or "High-privilege mode" on the Overview page); while it is off, the delete button is unavailable.',
@@ -37841,7 +37841,7 @@ var __create = Object.create;
 		  "锁定 Wing 时两类无角记忆是否参与召回": "Участвуют ли оба типа записей без угла в извлечении при блокировке Wing",
 		  "锁定 Wing 时排除未打标记忆": "Исключать записи без тегов при блокировке Wing",
 		  "它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。": "Она убирается из области поиска (больше не извлекается), но запись сохраняется — её можно восстановить в разделе «отозвано» на странице «Память».",
-		  "探针：": "Зонд:",
+		  "探针：": "Зонд: ",
 		  "提示：登记/退役需先在面板开启「高权限模式」。": "Подсказка: для регистрации/вывода из эксплуатации сначала включите «Режим высоких прав» в панели.",
 		  "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。": "Подсказка: для повышения/архивации/закрепления/проверки истории нужно включить «Режим высоких прав» в панели.",
 		  "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。": "Подсказка: для удаления воспоминаний сначала нужен режим высоких прав (переключатель справа вверху или «Режим высоких прав» на странице обзора); пока он выключен, кнопка удаления недоступна.",
@@ -40915,7 +40915,7 @@ var __create = Object.create;
 		            if (idx !== i) setIdx(i);
 		          },
 		          children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "dsh-mem-pop-opt-label", children: o.label }),
+		            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "dsh-mem-pop-opt-label", children: tr(o.label) }),
 		            o.id === value ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "dsh-mem-pop-check", children: "✓" }) : null
 		          ]
 		        },
@@ -43023,7 +43023,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.statGrid, children: tiles.map((t) => {
 		        return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: "dsh-mem-card", style: S.statTile, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.statNum, children: t.num }),
-		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.statLabel, children: t.label })
+		          /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.statLabel, children: tr(t.label) })
 		        ] }, t.label);
 		      }) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { style: S.panelLabel, children: tr("运行状态") }),
@@ -43857,7 +43857,7 @@ var __create = Object.create;
 		        const active = props.selected.includes(o.id);
 		        return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("button", { type: "button", className: "dsh-mem-pop-opt", onClick: () => toggle(o.id), "aria-selected": active, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "dsh-mem-pop-check", children: active ? "✓" : "" }),
-		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "dsh-mem-pop-label", children: o.label })
+		          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "dsh-mem-pop-label", children: tr(o.label) })
 		        ] }, o.id);
 		      }),
 		      props.selected.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("button", { type: "button", className: "dsh-mem-pop-opt", onClick: () => props.onChange([]), children: [
@@ -44464,7 +44464,7 @@ var __create = Object.create;
 		                    ]
 		                  }
 		                ),
-		                e.label ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: e.label }) : null,
+		                e.label ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: tr(e.label) }) : null,
 		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.muted, children: count + tr("条") }),
 		                retired ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: tr("已退役") }) : null,
 		                (e.aliases ?? []).length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: { ...S.muted, wordBreak: "break-all" }, children: tr("别名:") + (e.aliases ?? []).join(", ") }) : null
@@ -44888,7 +44888,7 @@ var __create = Object.create;
 		              row2.slug,
 		              e?.source === "pre-registered" ? " ⭐" : ""
 		            ] }),
-		            e?.label ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: e.label }) : null,
+		            e?.label ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr(e.label) }) : null,
 		            /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: row2.count + tr("条") }),
 		            grownOnly ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr("(自生长未注册)") }) : null,
 		            retired ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: { ...S.muted, color: "var(--dsh-mem-danger)" }, children: tr("已退役") }) : null,
@@ -46680,7 +46680,7 @@ var __create = Object.create;
 		          [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
 		            const corner = overview?.corners[i];
 		            const id = corner?.id;
-		            const label = corner?.label ?? (LABEL_FALLBACK[i] ? tr(LABEL_FALLBACK[i]) : tr("域{p1}")).replace("{p1}", String(i + 1));
+		            const label = tr(corner?.label ?? (LABEL_FALLBACK[i] ? LABEL_FALLBACK[i] : tr("域{p1}")).replace("{p1}", String(i + 1)));
 		            const count = id ? cornerCount(id) : null;
 		            const active = activeCorner === i;
 		            const dim = activeCorner != null && !active;
@@ -47356,7 +47356,7 @@ var __create = Object.create;
 		          style: { maxWidth: 120 },
 		          children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: "", children: tr("全部类型") }),
-		            typeCatalog.map((c) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: c.id, children: c.label }, c.id))
+		            typeCatalog.map((c) => /* @__PURE__ */ (0, import_jsx_runtime31.jsx)("option", { value: c.id, children: tr(c.label) }, c.id))
 		          ]
 		        }
 		      ),

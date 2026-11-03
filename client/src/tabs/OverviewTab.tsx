@@ -398,7 +398,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
               return (
                 <div key={t.label} className="dsh-mem-card" style={S.statTile}>
                   <div style={S.statNum}>{t.num}</div>
-                  <div style={S.statLabel}>{t.label}</div>
+                  <div style={S.statLabel}>{tr(t.label)}</div>
                 </div>
               );
             })}
