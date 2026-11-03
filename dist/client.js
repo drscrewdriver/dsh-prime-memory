@@ -47333,7 +47333,7 @@ var __create = Object.create;
 		      fetchPage(CONDS0, 0, false);
 		    }
 		  };
-		  const labelOf = (t) => typeCatalog.find((c) => c.id === t)?.label ?? t;
+		  const labelOf = (t) => tr(typeCatalog.find((c) => c.id === t)?.label ?? t);
 		  return /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime31.jsxs)("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime31.jsx)(

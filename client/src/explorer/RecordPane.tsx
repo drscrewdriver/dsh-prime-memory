@@ -107,7 +107,9 @@ export function RecordPane(props: {
   };
 
   /** 类型显示名：词表优先，缺席回落原值（旧服务端不下发词表时不至于显示空白）。 */
-  const labelOf = (t: string) => typeCatalog.find((c) => c.id === t)?.label ?? t;
+  // 类型标签由 host 的 typeCatalog 下发（值是 type id，标签是中文）：显示期翻译，
+  // 存储值与筛选值都不动。自定义/未知类型原样透传（key 不匹配）。
+  const labelOf = (t: string) => tr(typeCatalog.find((c) => c.id === t)?.label ?? t);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
