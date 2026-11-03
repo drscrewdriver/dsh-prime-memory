@@ -7,6 +7,7 @@
  * - `ExplorerFooterEntry`：≤0.1.5 的回落形态，底栏一个按钮 + 自绘 dialog。
  *   两条线渲染的是**同一个 `ExplorerPage`**，只差容器高度，老线不缩水。
  */
+import { tr } from '../i18n.js';
 import { useState } from 'react';
 import { ExplorerPage } from './ExplorerPage.js';
 import { NModal } from '../ui/primitives.js';
@@ -39,11 +40,10 @@ export function ExplorerFooterEntry(props: { rpc: RpcFn }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button className="dsh-mem-btn" onClick={() => setOpen(true)} title="打开记忆库（查询 L1 记忆与关联图谱）">
-        记忆库
-      </button>
+      <button className="dsh-mem-btn" onClick={() => setOpen(true)} title={tr("打开记忆库（查询 L1 记忆与关联图谱）")}>
+        {tr("记忆库")} </button>
       {open ? (
-        <NModal title="记忆库" onClose={() => setOpen(false)}>
+        <NModal title={tr("记忆库")} onClose={() => setOpen(false)}>
           <div style={{ height: '70vh', minHeight: 420 }}>
             {/* dialog 里三栏太挤：图给矮一点，靠两侧栏滚动承载内容。 */}
             <ExplorerPage rpc={props.rpc} canvasHeight={360} />

@@ -26,6 +26,7 @@
  * 前两者会删掉一条记忆，故走确认弹窗并把**将要退场的那条正文**摆出来 ——
  * 不让人对着 id 做不可逆决定。
  */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { ConflictPairView, ConflictsResponse } from '../../../src/contract.js';
 import { fmtTime } from '../format.js';
@@ -44,7 +45,7 @@ import {
 const POLL_MS = 10_000;
 
 /** 取不到正文时的占位。**与"内容为空"是两回事**，必须分开说。 */
-const GONE = '（该记录正文不可得：已不在主表，或被更早的清理清掉了）';
+const GONE = tr("（该记录正文不可得：已不在主表，或被更早的清理清掉了）");
 
 type Outcome = 'winner' | 'loser' | 'both' | 'defer';
 
@@ -89,9 +90,9 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
             : null;
       if (doomed !== null) {
         const ok = window.confirm(
-          `裁决这一对？\n\n将要退场的记忆：\n「${doomed}」\n\n` +
-            '它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。' +
-            '裁决结论本身不可覆盖。',
+          tr("裁决这一对？ 将要退场的记忆： 「{p1}」", { p1: doomed }) +
+            tr("它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。") +
+            tr("裁决结论本身不可覆盖。"),
         );
         if (!ok) return;
       }
@@ -102,10 +103,10 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
       .then((r) => {
         if (r && r.ok) {
           const v = r.value;
-          setNote(v.notice ?? `已裁决 ${v.pair_id}：${v.outcome}${v.removed_record_id ? '，退场 ' + v.removed_record_id : '，未移除记录'}`);
+          setNote(v.notice ?? tr("已裁决 {p1}：{p2}{p3}", { p1: v.pair_id, p2: v.outcome, p3: v.removed_record_id ? '，退场 ' + v.removed_record_id : '，未移除记录' }));
           load();
         } else {
-          setError(r && r.error ? r.error.message : '裁决失败');
+          setError(r && r.error ? r.error.message : tr("裁决失败"));
         }
       })
       .catch((e: unknown) => {
@@ -123,10 +124,10 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
     <div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>
-          {view === null ? '加载中…' : view.enabled ? `待裁决 ${view.total} 对` : '矛盾冻结未开启'}
+          {view === null ? tr("加载中…") : view.enabled ? tr("待裁决 {p1} 对", { p1: view.total }) : tr("矛盾冻结未开启")}
         </span>
         <div style={S.grow} />
-        <NButton onClick={load}>刷新</NButton>
+        <NButton onClick={load}>{tr("刷新")}</NButton>
       </div>
 
       {error ? <div style={S.error}>{error}</div> : null}
@@ -135,22 +136,20 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
       {/* 未开启与"开启了但队列为空"必须分开说：前者要去开开关，后者无事可做 */}
       {view !== null && !view.enabled ? (
         <p style={S.intro}>
-          {view.notice ?? '矛盾冻结未开启。'}
+          {view.notice ?? tr("矛盾冻结未开启。")}
           <br />
-          矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。
-          确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。
-        </p>
+          {tr("矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。")} </p>
       ) : null}
 
       {view !== null && view.enabled && items.length === 0 ? (
-        <p style={S.intro}>没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。</p>
+        <p style={S.intro}>{tr("没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。")}</p>
       ) : null}
 
       {sections.map((sec) => (
         <div key={sec.type} style={{ marginBottom: 12 }}>
           <div style={S.cardHead}>
             <span style={{ ...S.muted, fontWeight: 600 }}>{sec.label}</span>
-            <span style={S.muted}>{sec.items.length} 条</span>
+            <span style={S.muted}>{sec.items.length} {tr("条")}</span>
           </div>
           <div style={{ ...S.muted, fontSize: 11, marginBottom: 6 }}>{sec.hint}</div>
           {sec.items.map((p) => (
@@ -175,58 +174,55 @@ function ConflictCard(props: { pair: ConflictPairView; busy: boolean; onResolve:
         {rl ? <span style={{ ...S.muted, color: isDeferred(p) ? 'var(--dsh-mem-accent-fill)' : undefined }}>{rl}</span> : null}
         {cl ? <span style={S.muted}>{cl}</span> : null}
         <div style={S.grow} />
-        <span style={S.muted} title={'产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）'}>
+        <span style={S.muted} title={tr("产生该冻结的蒸馏批次 id（可用 memory_receipts 追这一轮判了什么）")}>
           {'run ' + p.run_id.slice(0, 12)}
         </span>
       </div>
 
       <Side
-        label="LLM 建议：胜方"
+        label={tr("LLM 建议：胜方")}
         accent
         id={p.winner_id}
         content={p.winner_content}
         pair={p}
         side="winner"
       />
-      <Side label="LLM 建议：败方" id={p.loser_id} content={p.loser_content} pair={p} side="loser" />
+      <Side label={tr("LLM 建议：败方")} id={p.loser_id} content={p.loser_content} pair={p} side="loser" />
 
       <div style={{ ...S.flexRow, marginTop: 8 }}>
         <NButton
           disabled={props.busy}
-          title="判 LLM 建议的胜方为真；败方从检索库退场"
+          title={tr("判 LLM 建议的胜方为真；败方从检索库退场")}
           onClick={() => {
             props.onResolve(p, 'winner');
           }}
         >
-          {props.busy ? '裁决中…' : '判胜方为真'}
+          {props.busy ? tr("裁决中…") : tr("判胜方为真")}
         </NButton>
         <NButton
           disabled={props.busy}
-          title="判败方为真；胜方从检索库退场"
+          title={tr("判败方为真；胜方从检索库退场")}
           onClick={() => {
             props.onResolve(p, 'loser');
           }}
         >
-          判败方为真
-        </NButton>
+          {tr("判败方为真")} </NButton>
         <NButton
           disabled={props.busy}
-          title="判两者其实是各自独立的事实（LLM 判错了）；两条都保留，不删除"
+          title={tr("判两者其实是各自独立的事实（LLM 判错了）；两条都保留，不删除")}
           onClick={() => {
             props.onResolve(p, 'both');
           }}
         >
-          两者都保留
-        </NButton>
+          {tr("两者都保留")} </NButton>
         <NButton
           disabled={props.busy}
-          title="看过但暂不裁决——该对仍在队列里，重置超时并累计复看次数"
+          title={tr("看过但暂不裁决——该对仍在队列里，重置超时并累计复看次数")}
           onClick={() => {
             props.onResolve(p, 'defer');
           }}
         >
-          看过，暂不裁决
-        </NButton>
+          {tr("看过，暂不裁决")} </NButton>
       </div>
     </div>
   );
@@ -242,7 +238,7 @@ function Side(props: { label: string; id: string; content: string; accent?: bool
       <div style={S.content}>{props.content || GONE}</div>
       <div style={{ ...S.muted, fontFamily: 'ui-monospace, Consolas, monospace' }}>{props.id}</div>
       {axis ? <div style={{ ...S.muted, marginTop: 2, fontSize: 11 }}>{axis}</div> : null}
-      {mt ? <div style={{ ...S.muted, marginTop: 2, fontSize: 11 }}>{'成熟度 · ' + (mt === 'high' ? '高' : mt === 'mid' ? '中' : '低')}</div> : null}
+      {mt ? <div style={{ ...S.muted, marginTop: 2, fontSize: 11 }}>{tr("成熟度 ·") + (mt === 'high' ? tr("高") : mt === 'mid' ? tr("中") : tr("低"))}</div> : null}
     </div>
   );
 }

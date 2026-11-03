@@ -1,4 +1,5 @@
 /** Tab：蒸馏成本看板（多模型折线趋势 + 层级×窗口表格 + 窗口瓦片 + 按模型明细）。 */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { CostSnapshot, TrendBucket } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
@@ -64,17 +65,17 @@ function renderCostChart(
   );
 }
 
-const RANGE_LABELS: Record<string, string> = { day: '今日', week: '本周', month: '本月', all: '累计' };
+const RANGE_LABELS: Record<string, string> = { day: tr("今日"), week: tr("本周"), month: tr("本月"), all: tr("累计") };
 const LAYER_OPTS: SegOption[] = [
-  { key: '', label: '全部' },
+  { key: '', label: tr("全部") },
   { key: 'l1', label: 'L1' },
   { key: 'l2', label: 'L2' },
   { key: 'l3', label: 'L3' },
 ];
 const GRAN_OPTS: SegOption[] = [
-  { key: 'day', label: '日' },
-  { key: 'week', label: '周' },
-  { key: 'month', label: '月' },
+  { key: 'day', label: tr("日") },
+  { key: 'week', label: tr("周") },
+  { key: 'month', label: tr("月") },
 ];
 const PALETTE = [
   'var(--dsh-mem-chart-1)',
@@ -133,7 +134,7 @@ export function CostTab(props: { rpc: RpcFn }) {
       const d = new Date(ts);
       // 近 N 天窗口后端强制日粒度：横轴按 trend 实际粒度格式化，不按用户选的周/月
       const g = data && data.trend ? data.trend.granularity : granularity;
-      if (g === 'month') return d.getMonth() + 1 + '月';
+      if (g === 'month') return d.getMonth() + 1 + tr("月");
       return d.getMonth() + 1 + '/' + d.getDate();
     } catch {
       return '';
@@ -218,17 +219,17 @@ export function CostTab(props: { rpc: RpcFn }) {
             setRangeOpen(!rangeOpen);
           }}
         >
-          {rangeDays > 0 ? '近 ' + rangeDays + ' 天' : '近N天'}
+          {rangeDays > 0 ? tr("近") + rangeDays + tr("天") : tr("近N天")}
         </NButton>
         <div style={S.grow} />
-        <NButton onClick={load}>刷新</NButton>
+        <NButton onClick={load}>{tr("刷新")}</NButton>
       </div>
       {rangeOpen ? (
         <div style={{ ...S.flexRow, marginBottom: 10 }}>
-          <span style={S.muted}>展示近 N 天（正整数，清空=默认窗口；超出保留期后端自动回退）</span>
+          <span style={S.muted}>{tr("展示近 N 天（正整数，清空=默认窗口；超出保留期后端自动回退）")}</span>
           <NInput
             value={rangeDays === 0 ? '' : String(rangeDays)}
-            placeholder="如 30"
+            placeholder={tr("如 30")}
             style={{ width: 90 }}
             onChange={(e: { target: { value: string } }) => {
               const v = String(e.target.value || '').trim();
@@ -242,8 +243,8 @@ export function CostTab(props: { rpc: RpcFn }) {
           />
         </div>
       ) : null}
-      {error ? <div style={S.error}>{'成本读取失败：' + error}</div> : null}
-      <div style={S.panelLabel}>成本趋势（按模型）</div>
+      {error ? <div style={S.error}>{tr("成本读取失败：") + error}</div> : null}
+      <div style={S.panelLabel}>{tr("成本趋势（按模型）")}</div>
       {buckets.length > 0 ? (
         <div>
           {renderCostChart(buckets, models, maxY, fmtDate, fmtInt, PALETTE)}
@@ -262,13 +263,13 @@ export function CostTab(props: { rpc: RpcFn }) {
           </div>
         </div>
       ) : (
-        <p style={S.muted}>{data ? '暂无成本数据（触发一次蒸馏后这里会出现趋势）。' : '加载中…'}</p>
+        <p style={S.muted}>{data ? tr("暂无成本数据（触发一次蒸馏后这里会出现趋势）。") : tr("加载中…")}</p>
       )}
-      <div style={S.panelLabel}>层级成本（输出 token）</div>
+      <div style={S.panelLabel}>{tr("层级成本（输出 token）")}</div>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 14 }}>
         <thead>
           <tr>
-            <th style={thFirst}>层级</th>
+            <th style={thFirst}>{tr("层级")}</th>
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
@@ -289,11 +290,11 @@ export function CostTab(props: { rpc: RpcFn }) {
           })}
         </tbody>
       </table>
-      <div style={S.panelLabel}>层级成本（单次 avg）</div>
+      <div style={S.panelLabel}>{tr("层级成本（单次 avg）")}</div>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 14 }}>
         <thead>
           <tr>
-            <th style={thFirst}>层级</th>
+            <th style={thFirst}>{tr("层级")}</th>
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
@@ -314,11 +315,11 @@ export function CostTab(props: { rpc: RpcFn }) {
           })}
         </tbody>
       </table>
-      <div style={S.panelLabel}>层级成本（单次 median）</div>
+      <div style={S.panelLabel}>{tr("层级成本（单次 median）")}</div>
       <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 14 }}>
         <thead>
           <tr>
-            <th style={thFirst}>层级</th>
+            <th style={thFirst}>{tr("层级")}</th>
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
@@ -339,15 +340,15 @@ export function CostTab(props: { rpc: RpcFn }) {
           })}
         </tbody>
       </table>
-      <div style={S.panelLabel}>时间窗口总览</div>
+      <div style={S.panelLabel}>{tr("时间窗口总览")}</div>
       <div style={S.statGrid}>
         {windows.map((w) => {
           return (
             <div key={w.range} className="dsh-mem-card" style={S.statTile}>
               <div style={S.statNum}>{fmtInt(w.outputTokens + w.reasoningTokens)}</div>
-              <div style={S.statLabel}>{RANGE_LABELS[w.range] + ' · 总输出 token'}</div>
+              <div style={S.statLabel}>{RANGE_LABELS[w.range] + tr("· 总输出 token")}</div>
               <div style={S.muted}>
-                {'文字 ' + fmtInt(w.outputTokens) + ' · 思考 ' + fmtInt(w.reasoningTokens) + ' · ' + w.calls + ' 次调用'}
+                {tr("文字") + fmtInt(w.outputTokens) + tr("· 思考") + fmtInt(w.reasoningTokens) + ' · ' + w.calls + tr("次调用")}
               </div>
             </div>
           );
@@ -355,14 +356,14 @@ export function CostTab(props: { rpc: RpcFn }) {
       </div>
       {byModel.length > 0 ? (
         <div>
-          <div style={S.panelLabel}>按模型（累计）</div>
+          <div style={S.panelLabel}>{tr("按模型（累计）")}</div>
           {byModel.map((m) => {
             const label = fmtModel(m.provider, m.model);
             return (
               <div key={'m-' + label} style={S.infoRow}>
                 <span style={S.infoKey}>{label}</span>
                 <span style={S.infoVal}>
-                  {m.calls + ' 次 · 输出 ' + fmtInt(m.outputTokens) + ' · 思考 ' + fmtInt(m.reasoningTokens)}
+                  {m.calls + tr("次 · 输出") + fmtInt(m.outputTokens) + tr("· 思考") + fmtInt(m.reasoningTokens)}
                 </span>
               </div>
             );
@@ -370,7 +371,7 @@ export function CostTab(props: { rpc: RpcFn }) {
         </div>
       ) : null}
       {data ? (
-        <p style={S.hint}>输入按字符、输出/思考按 token 计；趋势图 Y 轴为输出 token，上方可切换层级与颗粒度。</p>
+        <p style={S.hint}>{tr("输入按字符、输出/思考按 token 计；趋势图 Y 轴为输出 token，上方可切换层级与颗粒度。")}</p>
       ) : null}
     </div>
   );

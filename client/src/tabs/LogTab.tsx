@@ -1,4 +1,5 @@
 /** Tab：运行日志（log-tail 尾读 + 自动贴底）。§F:可切换召回/蒸馏追踪事件流。 */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
@@ -7,9 +8,9 @@ import { NButton } from '../ui/primitives.js';
 type TraceKind = '' | 'recall_turn' | 'distill_run';
 
 const SOURCES: Array<{ id: string; label: string }> = [
-  { id: '', label: '系统日志' },
-  { id: 'recall_turn', label: '召回追踪' },
-  { id: 'distill_run', label: '蒸馏追踪' },
+  { id: '', label: tr("系统日志") },
+  { id: 'recall_turn', label: tr("召回追踪") },
+  { id: 'distill_run', label: tr("蒸馏追踪") },
 ];
 
 function fmtEvent(ev: Record<string, unknown>): string {
@@ -71,16 +72,16 @@ export function LogTab(props: { rpc: RpcFn }) {
           </NButton>
         ))}
         <div style={S.grow} />
-        <NButton onClick={load}>刷新</NButton>
+        <NButton onClick={load}>{tr("刷新")}</NButton>
       </div>
       <div style={{ ...S.muted, marginBottom: 10 }}>
-        {error ? '加载失败' : lines === null ? '加载中…' : `最近 ${lines.length} 条（${SOURCES.find((s) => s.id === source)?.label}）`}
+        {error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: SOURCES.find((s) => s.id === source)?.label })}
       </div>
       {error ? (
-        <div style={{ ...S.error, marginBottom: 10 }}>{'读取失败：' + error + '（点右上“刷新”重试）'}</div>
+        <div style={{ ...S.error, marginBottom: 10 }}>{tr("读取失败：") + error + tr("（点右上“刷新”重试）")}</div>
       ) : (
         <pre style={S.pre} ref={preRef}>
-          {(lines || []).join('\n') || '(暂无记录)'}
+          {(lines || []).join('\n') || tr("(暂无记录)")}
         </pre>
       )}
     </div>

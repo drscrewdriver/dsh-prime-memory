@@ -1,4 +1,5 @@
 /** 记忆设置分节的主面板：Tab 框架（概览 / 记忆 / 冲突 / 场景 / Hall / Room / 图谱 / 画像 / 成本 / 日志）。 */
+import { tr, useLocaleRevision } from './i18n.js';
 import { useEffect, useState } from 'react';
 import type { RpcFn } from './rpc.js';
 import { watchSidebarIcon } from './sidebar-icon.js';
@@ -27,28 +28,30 @@ import { ScenesTab } from './tabs/ScenesTab.js';
  * 裁决端点一直在，但没有任何地方列得出 `pair_id`）。
  */
 const TABS: Array<[string, string]> = [
-  ['overview', '概览'],
-  ['records', '记忆'],
-  ['conflicts', '冲突'],
-  ['scenes', '场景'],
+  ['overview', tr("概览")],
+  ['records', tr("记忆")],
+  ['conflicts', tr("冲突")],
+  ['scenes', tr("场景")],
   ['rooms', 'Hall'],
   ['room', 'Room'],
-  ['graph', '图谱'],
-  ['persona', '画像'],
-  ['cost', '成本'],
-  ['log', '日志'],
-  ['connect', '来源'],
-  ['skills', '技能'],
+  ['graph', tr("图谱")],
+  ['persona', tr("画像")],
+  ['cost', tr("成本")],
+  ['log', tr("日志")],
+  ['connect', tr("来源")],
+  ['skills', tr("技能")],
 ];
 
 /** 皮肤三态（轨1-P0）：纯表现层，偏好存 localStorage，不进插件 config。 */
 const SKIN_OPTS: Array<[Skin, string]> = [
-  ['light', '浅色'],
-  ['dark', '深色'],
-  ['auto', '跟随'],
+  ['light', tr("浅色")],
+  ['dark', tr("深色")],
+  ['auto', tr("跟随")],
 ];
 
 export function MemoryPanel(props: { rpc: RpcFn }) {
+  // 语言切换即重渲染：tab 名等在渲染期解析（模块级常量活在 bundle 加载期）
+  useLocaleRevision();
   const rpc = props.rpc;
   const [tab, setTab] = useState('overview');
   const [skin, setSkinState] = useState<Skin>(() => getSkin());
@@ -83,8 +86,8 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
 
   return (
     <div className="dsh-mem-root" style={S.section}>
-      <h2 style={S.heading}>记忆 (Memory)</h2>
-      <p style={S.intro}>L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。</p>
+      <h2 style={S.heading}>{tr("记忆 (Memory)")}</h2>
+      <p style={S.intro}>{tr("L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。")}</p>
       {/* DRSC 依赖状态：顶部一条横幅，跨 12 个 tab 全局可见；ok 态自作 null 不占版面 */}
       <DrscHealthBanner rpc={rpc} />
       <div
@@ -97,15 +100,15 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
           marginBottom: 10,
         }}
       >
-        <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)', marginRight: 4 }}>皮肤</span>
+        <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)', marginRight: 4 }}>{tr("皮肤")}</span>
         {SKIN_OPTS.map((s) => (
           <button
             key={s[0]}
             className={skin === s[0] ? 'dsh-mem-tab dsh-mem-tab-on' : 'dsh-mem-tab'}
             onClick={() => switchSkin(s[0])}
-            title={`皮肤：${s[1]}`}
+            title={tr("皮肤：{p1}", { p1: s[1] })}
           >
-            {s[1]}
+            {tr(s[1])}
           </button>
         ))}
       </div>
@@ -119,7 +122,7 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
                 setTab(t[0]!);
               }}
             >
-              {t[1]}
+              {tr(t[1])}
             </button>
           );
         })}

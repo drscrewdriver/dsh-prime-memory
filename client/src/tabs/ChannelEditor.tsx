@@ -8,6 +8,7 @@
  *  - direct 下端点 debounce 提交、密钥 Enter/失焦提交后清空（不回读明文）；
  *  - 与部署 pin 正交：direct 是独立传输层，不受宿主 provider pin 约束。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { DirectChannelView } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
@@ -33,9 +34,9 @@ const STY: Record<string, CSSProperties> = {
 };
 
 const MODE_OPTIONS: Array<{ key: '' | 'host' | 'direct'; label: string; title: string }> = [
-  { key: '', label: '跟随部署配置', title: '没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）' },
-  { key: 'host', label: '复用宿主', title: '复用宿主 ctx.llm（与付费供应商同路）' },
-  { key: 'direct', label: '直连端点', title: '插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦' },
+  { key: '', label: tr("跟随部署配置"), title: tr("没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）") },
+  { key: 'host', label: tr("复用宿主"), title: tr("复用宿主 ctx.llm（与付费供应商同路）") },
+  { key: 'direct', label: tr("直连端点"), title: tr("插件原生 HTTP 直连 OpenAI 兼容端点，与付费 API 解耦") },
 ];
 
 export function ChannelEditor(props: { channel: DirectChannelView; rpc: RpcFn; disabled?: boolean }) {
@@ -90,17 +91,16 @@ export function ChannelEditor(props: { channel: DirectChannelView; rpc: RpcFn; d
   return (
     <div style={STY.block}>
       <div style={STY.head}>
-        <span style={STY.title}>蒸馏通道</span>
+        <span style={STY.title}>{tr("蒸馏通道")}</span>
         <span style={isDirect ? STY.chipAccent : STY.chipMuted}>
-          {isDirect ? '直连端点' : '复用宿主'}
+          {isDirect ? tr("直连端点") : tr("复用宿主")}
         </span>
-        <span title="direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
-          生效：{runtime ? (runtime === 'direct' ? '运行时直连' : '运行时宿主') : '跟随部署配置'}
+        <span title={tr("direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。")} style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
+          {tr("生效：")}{runtime ? (runtime === 'direct' ? tr("运行时直连") : tr("运行时宿主")) : tr("跟随部署配置")}
         </span>
       </div>
       <div style={STY.desc}>
-        direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。
-      </div>
+        {tr("direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。")} </div>
 
       <Segmented
         value={runtime}
@@ -113,10 +113,10 @@ export function ChannelEditor(props: { channel: DirectChannelView; rpc: RpcFn; d
         <div>
           {/* 端点（非机密，可回显） */}
           <div style={STY.fieldRow}>
-            <span style={STY.fieldLabel}>端点 URL</span>
+            <span style={STY.fieldLabel}>{tr("端点 URL")}</span>
             <NInput
               style={STY.input}
-              placeholder="如 http://127.0.0.1:11434/v1 或 https://api.xxx/v1"
+              placeholder={tr("如 http://127.0.0.1:11434/v1 或 https://api.xxx/v1")}
               value={baseText}
               disabled={disabled}
               onChange={(e: { target: { value: string } }) => onBaseChange(e.target.value)}
@@ -130,7 +130,7 @@ export function ChannelEditor(props: { channel: DirectChannelView; rpc: RpcFn; d
             />
             {deployedDirect && !channel.runtimeBaseURL ? (
               <span style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
-                部署基线：{channel.deployedBaseURL || '（空）'}
+                {tr("部署基线：")}{channel.deployedBaseURL || tr("（空）")}
               </span>
             ) : null}
           </div>
@@ -140,7 +140,7 @@ export function ChannelEditor(props: { channel: DirectChannelView; rpc: RpcFn; d
             <NInput
               style={STY.input}
               type="password"
-              placeholder={apiKeySet ? '••••••••（已配置；留空提交可覆盖）' : '本地免 key 可留空'}
+              placeholder={apiKeySet ? tr("••••••••（已配置；留空提交可覆盖）") : tr("本地免 key 可留空")}
               value={keyText}
               disabled={disabled}
               autoComplete="new-password"
@@ -150,22 +150,21 @@ export function ChannelEditor(props: { channel: DirectChannelView; rpc: RpcFn; d
               }}
               onBlur={commitKey}
             />
-            {apiKeySet ? <span style={STY.chipAccent}>已配置</span> : <span style={STY.chipMuted}>未配置</span>}
+            {apiKeySet ? <span style={STY.chipAccent}>{tr("已配置")}</span> : <span style={STY.chipMuted}>{tr("未配置")}</span>}
             <NButton
               disabled={disabled}
-              title="写入空串清除运行时密钥（部署 .yml 的密钥不受影响）"
+              title={tr("写入空串清除运行时密钥（部署 .yml 的密钥不受影响）")}
               onClick={() => commit({ directApiKey: '' })}
             >
-              清除
-            </NButton>
+              {tr("清除")} </NButton>
           </div>
-          {showWarn ? <div style={STY.warn}>{'⚠ direct 未配置完整：需同时有端点 URL 与模型（llm.model / 全局链主路由），否则会回退宿主路由。'}</div> : null}
+          {showWarn ? <div style={STY.warn}>{tr("⚠ direct 未配置完整：需同时有端点 URL 与模型（llm.model / 全局链主路由），否则会回退宿主路由。")}</div> : null}
         </div>
       ) : (
         <div style={STY.preview}>
           {isDirect
-            ? '当前将直连端点：' + (channel.runtimeBaseURL || channel.deployedBaseURL || '（未配置端点）') + (apiKeySet ? ' · 密钥已配置' : ' · 未配置密钥')
-            : '当前复用宿主 ctx.llm（' + (runtime === 'host' ? '运行时锁定' : '跟随部署配置') + '）'}
+            ? tr("当前将直连端点：") + (channel.runtimeBaseURL || channel.deployedBaseURL || tr("（未配置端点）")) + (apiKeySet ? tr("· 密钥已配置") : tr("· 未配置密钥"))
+            : tr("当前复用宿主 ctx.llm（") + (runtime === 'host' ? tr("运行时锁定") : tr("跟随部署配置")) + '）'}
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 /** 反刍整理面板：按需冲刷未蒸馏缓冲 → L1 抽取 → L2 场景整合 → L3 画像轻刷新 → 标注重标定。 */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RuminateStatus, RuminateStatusResponse } from '../../../src/contract.js';
 import { fmtTime } from '../format.js';
@@ -8,11 +9,11 @@ import type { RpcFn } from '../rpc.js';
 
 /** 运行阶段 → 面文。 */
 const RM_PHASE_LABEL: Record<string, string> = {
-  refreshing: '轻量刷新中',
-  distilling: 'L1 蒸馏中',
-  consolidating: 'L2 场景整合中',
-  updating: 'L3 画像更新中',
-  relabeling: '标注校验/重标定中',
+  refreshing: tr("轻量刷新中"),
+  distilling: tr("L1 蒸馏中"),
+  consolidating: tr("L2 场景整合中"),
+  updating: tr("L3 画像更新中"),
+  relabeling: tr("标注校验/重标定中"),
 };
 
 /** 已进入运行态的阶段(用于"运行中却声称空闲"的兜底判定)。 */
@@ -116,7 +117,7 @@ export function RuminatePanel(props: { rpc: RpcFn }) {
           setConfirmOpen(false);
           setRm(r.value);
         } else {
-          setRmError(r && r.error ? r.error.message : '启动失败');
+          setRmError(r && r.error ? r.error.message : tr("启动失败"));
         }
       })
       .catch((e: unknown) => {
@@ -146,62 +147,62 @@ export function RuminatePanel(props: { rpc: RpcFn }) {
   const idleLike = !running;
   const elapsed = running && rm.startedAt ? Math.max(0, Date.now() - rm.startedAt) : 0;
   const elapsedText =
-    elapsed > 0 ? (elapsed >= 60000 ? Math.floor(elapsed / 60000) + '分' + Math.floor((elapsed % 60000) / 1000) + '秒' : Math.floor(elapsed / 1000) + '秒') : '';
+    elapsed > 0 ? (elapsed >= 60000 ? Math.floor(elapsed / 60000) + tr("分") + Math.floor((elapsed % 60000) / 1000) + tr("秒") : Math.floor(elapsed / 1000) + tr("秒")) : '';
 
   // 非运行态收尾摘要
   let lastNote: string | null = null;
   if (idleLike && rm.phase === 'done') {
     const rl = rm.relabel;
     lastNote =
-      '上次反刍整理：完成（' +
+      tr("上次反刍整理：完成（") +
       rm.done +
       '/' +
       rm.total +
-      ' 步' +
-      (rm.recordsBuilt > 0 ? '，产出 ' + rm.recordsBuilt + ' 条记录' : '，无待消化缓冲') +
+      tr("步") +
+      (rm.recordsBuilt > 0 ? tr("，产出") + rm.recordsBuilt + tr("条记录") : tr("，无待消化缓冲")) +
       '）' +
-      (rl ? ' · 重标定：补 cogHall ' + rl.cogHallFixed + '，补 wing ' + rl.wingLabeled + '，打 tags ' + rl.tagged + (rl.deferred > 0 ? '，让出 ' + rl.deferred : '') : '') +
+      (rl ? tr("· 重标定：补 cogHall") + rl.cogHallFixed + tr("，补 wing") + rl.wingLabeled + tr("，打 tags") + rl.tagged + (rl.deferred > 0 ? tr("，让出") + rl.deferred : '') : '') +
       (rm.finishedAt ? ' · ' + fmtTime(new Date(rm.finishedAt).toISOString()) : '');
   } else if (idleLike && rm.phase === 'cancelled') {
-    lastNote = '上次反刍整理：已取消（完成 ' + rm.done + '/' + rm.total + ' 会话，已蒸馏部分保留）';
+    lastNote = tr("上次反刍整理：已取消（完成") + rm.done + '/' + rm.total + tr("会话，已蒸馏部分保留）");
   } else if (idleLike && rm.phase === 'failed') {
-    lastNote = '上次反刍整理：失败：' + (rm.error || '未知错误');
+    lastNote = tr("上次反刍整理：失败：") + (rm.error || tr("未知错误"));
   }
 
   // 轻量刷新/重标定阶段计的是"步骤"，蒸馏阶段计的是"会话"
-  const unit = rm.phase === 'refreshing' || rm.phase === 'relabeling' ? '步' : '会话';
+  const unit = rm.phase === 'refreshing' || rm.phase === 'relabeling' ? tr("步") : tr("会话");
   const progressText = sub
     ? sub.label + ' ' + sub.done + '/' + sub.total + '（' + Math.round((sub.done / sub.total) * 100) + '%）'
     : rm.total > 0
       ? rm.done + '/' + rm.total + ' ' + unit + '（' + pct + '%）'
-      : '进行中…';
+      : tr("进行中…");
 
   return (
     <div className="dsh-mem-rb-card">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>反刍整理</div>
+        <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{tr("反刍整理")}</div>
         <div className="dsh-mem-rb-muted" style={{ flex: 1, minWidth: 180 }}>
           {running
             ? (RM_PHASE_LABEL[rm.phase] || rm.phase) +
               ' · ' +
               progressText +
-              (elapsedText ? ' · 已用 ' + elapsedText : '')
-            : '冲刷未蒸馏缓冲，跑一轮 L1→L2→L3 消化；不清库不改 L0'}
+              (elapsedText ? tr("· 已用") + elapsedText : '')
+            : tr("冲刷未蒸馏缓冲，跑一轮 L1→L2→L3 消化；不清库不改 L0")}
         </div>
         {running ? (
           <NButton disabled={busy || rm.cancelRequested} onClick={cancel}>
-            {rm.cancelRequested ? '取消中…' : '取消整理'}
+            {rm.cancelRequested ? tr("取消中…") : tr("取消整理")}
           </NButton>
         ) : (
           <NButton
             disabled={busy}
-            title="消化未蒸馏的记忆缓冲"
+            title={tr("消化未蒸馏的记忆缓冲")}
             style={{ color: 'var(--dsh-mem-accent)' }}
             onClick={() => {
               setConfirmOpen(true);
             }}
           >
-            {busy ? '…' : '反刍整理'}
+            {busy ? '…' : tr("反刍整理")}
           </NButton>
         )}
       </div>
@@ -216,13 +217,13 @@ export function RuminatePanel(props: { rpc: RpcFn }) {
           <span className="dsh-mem-rb-muted" style={{ whiteSpace: 'nowrap' }}>
             {sub
               ? sub.label + ' ' + sub.done + '/' + sub.total
-              : '产出 ' + rm.recordsBuilt + ' 条'}
+              : tr("产出") + rm.recordsBuilt + tr("条")}
           </span>
         </div>
       ) : null}
       {running && rm.detail ? (
         <div className="dsh-mem-rb-muted" style={{ marginTop: 6, whiteSpace: 'normal' }}>
-          {'当前：' + rm.detail}
+          {tr("当前：") + rm.detail}
         </div>
       ) : null}
       {lastNote ? (
@@ -237,25 +238,22 @@ export function RuminatePanel(props: { rpc: RpcFn }) {
         <NModal
           open={true}
           onClose={() => setConfirmOpen(false)}
-          title="确认反刍整理？"
+          title={tr("确认反刍整理？")}
           footer={[
             <NButton
               key="cancel"
               onClick={() => setConfirmOpen(false)}
             >
-              取消
-            </NButton>,
+              {tr("取消")} </NButton>,
             <NButton key="confirm" variant="primary" disabled={busy} onClick={start}>
-              {busy ? '启动中…' : '反刍整理'}
+              {busy ? tr("启动中…") : tr("反刍整理")}
             </NButton>,
           ]}
         >
           <div>
-            将扫描未蒸馏缓冲，按会话逐个跑蒸馏管线，完成后强制 L2 场景整合与 L3 画像更新。
-          </div>
+            {tr("将扫描未蒸馏缓冲，按会话逐个跑蒸馏管线，完成后强制 L2 场景整合与 L3 画像更新。")} </div>
           <div style={{ marginTop: 8 }}>
-            与重建不同：不清空 L1 检索库、不归档旧产物、不改 L0；仅消化攒而未蒸馏的切片，无缓冲时做轻量 L2/L3 刷新。
-          </div>
+            {tr("与重建不同：不清空 L1 检索库、不归档旧产物、不改 L0；仅消化攒而未蒸馏的切片，无缓冲时做轻量 L2/L3 刷新。")} </div>
         </NModal>
       ) : null}
     </div>

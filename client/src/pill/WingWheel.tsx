@@ -13,6 +13,7 @@
  * 数据：角计数来自 dsh-memory/wing-overview（打开时拉取一次）。
  * 层级：设置页全局闸 ⊃ 会话闸（图形外）⊃ 域范围（图形内）。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { Segmented } from '../ui/controls.js';
 import type { RpcFn } from '../rpc.js';
@@ -340,7 +341,7 @@ export function WingWheel(props: {
         {/* 中心 = 智能档：点击回中心 = 全域。视觉与角标同尺寸，蓝块滑到此处即智能 */}
         <button
           type="button"
-          title="智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）"
+          title={tr("智能档：自动判断召回各域（点中心 / 从角向内拖 = 全域）")}
           onClick={() => props.onCommitWing(null)}
           style={{
             position: 'absolute',
@@ -362,13 +363,12 @@ export function WingWheel(props: {
             zIndex: 2,
           }}
         >
-          智能
-        </button>
+          {tr("智能")} </button>
         {/* 8 角 = 域：视觉层，pointerEvents none（命中统一由 box 处理） */}
         {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
           const corner = overview?.corners[i];
           const id = corner?.id;
-          const label = corner?.label ?? LABEL_FALLBACK[i] ?? `域${i + 1}`;
+          const label = corner?.label ?? LABEL_FALLBACK[i] ?? tr("域{p1}", { p1: i + 1 });
           const count = id ? cornerCount(id) : null;
           const active = activeCorner === i;
           const dim = activeCorner != null && !active;
@@ -379,8 +379,8 @@ export function WingWheel(props: {
               key={id ?? i}
               title={
                 id
-                  ? `「${label}」${count ?? 0} 条\n点按/拖动 = 以该角为主题（抑制其他角）`
-                  : '词表加载中'
+                  ? tr("「{p1}」{p2} 条 点按/拖动 = 以该角为主题（抑制其他角）", { p1: label, p2: count ?? 0 })
+                  : tr("词表加载中")
               }
               style={{
                 position: 'absolute',
@@ -413,7 +413,7 @@ export function WingWheel(props: {
               <span>{label}</span>
               {/* 空角诚实展示：不写"0 条" */}
               <span style={{ fontSize: 8, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
-                {count === null ? ' ' : empty ? '空角' : `${count} 条`}
+                {count === null ? ' ' : empty ? tr("空角") : tr("{p1} 条", { p1: count })}
               </span>
             </div>
           );
@@ -425,7 +425,7 @@ export function WingWheel(props: {
           智能档/off 时**置灰占位**（不卸载 → 浮层高度稳定、无跳变）。 */}
       <div
         title={
-          props.halls.length === 0 ? '选定某个角（单 Wing）后，这两项才生效' : '锁定 Wing 时两类无角记忆是否参与召回'
+          props.halls.length === 0 ? tr("选定某个角（单 Wing）后，这两项才生效") : tr("锁定 Wing 时两类无角记忆是否参与召回")
         }
         style={{
           display: 'flex',
@@ -438,22 +438,22 @@ export function WingWheel(props: {
         }}
       >
         <span style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
-          {overview ? `另有 ${overview.unlabeled} 条未打标` : '未打标'}
+          {overview ? tr("另有 {p1} 条未打标", { p1: overview.unlabeled }) : tr("未打标")}
         </span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <Segmented
             value={props.hallIncludeUnlabeled ? 'in' : 'ex'}
             options={[
-              { key: 'in', label: '含未打标', title: '未打标记忆默认包含' },
-              { key: 'ex', label: '不含', title: '锁定 Wing 时排除未打标记忆' },
+              { key: 'in', label: tr("含未打标"), title: tr("未打标记忆默认包含") },
+              { key: 'ex', label: tr("不含"), title: tr("锁定 Wing 时排除未打标记忆") },
             ]}
             onChange={(key) => props.onCommitWingBoundaries({ includeUnlabeled: key === 'in' })}
           />
           <Segmented
             value={props.hallIncludeGeneral ? 'in' : 'ex'}
             options={[
-              { key: 'in', label: '含跨域', title: '跨域（general）兜底记忆也参与召回' },
-              { key: 'ex', label: '不含', title: '跨域与单主题相悖，默认不含' },
+              { key: 'in', label: tr("含跨域"), title: tr("跨域（general）兜底记忆也参与召回") },
+              { key: 'ex', label: tr("不含"), title: tr("跨域与单主题相悖，默认不含") },
             ]}
             onChange={(key) => props.onCommitWingBoundaries({ includeGeneral: key === 'in' })}
           />
@@ -461,15 +461,15 @@ export function WingWheel(props: {
       </div>
 
       {/* 会话闸：off = 本会话完全隐身 */}
-      <Row label="会话">
+      <Row label={tr("会话")}>
         <Segmented
           value={isOff ? 'off' : 'on'}
           options={[
-            { key: 'on', label: '启用', title: '本会话正常捕获/蒸馏/注入记忆' },
+            { key: 'on', label: tr("启用"), title: tr("本会话正常捕获/蒸馏/注入记忆") },
             {
               key: 'off',
-              label: '关闭',
-              title: '本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）',
+              label: tr("关闭"),
+              title: tr("本会话对记忆系统隐身：不捕获、不蒸馏、不注入（数据保留）"),
             },
           ]}
           onChange={(key) => props.onCommit(key === 'off' ? 'off' : 'auto')}
@@ -478,14 +478,14 @@ export function WingWheel(props: {
 
       {/* 是否注入三态（off 档禁用） */}
       {props.recall !== undefined && props.onCommitRecall ? (
-        <Row label="注入">
+        <Row label={tr("注入")}>
           <Segmented
             value={props.recall === null ? 'follow' : props.recall ? 'on' : 'off'}
             disabled={isOff}
             options={[
-              { key: 'follow', label: '跟随全局', title: '清除本会话覆盖，跟随全局召回开关' },
-              { key: 'on', label: '开', title: '本会话强制注入记忆' },
-              { key: 'off', label: '关', title: '只写：记忆照常沉淀，但不注入本会话' },
+              { key: 'follow', label: tr("跟随全局"), title: tr("清除本会话覆盖，跟随全局召回开关") },
+              { key: 'on', label: tr("开"), title: tr("本会话强制注入记忆") },
+              { key: 'off', label: tr("关"), title: tr("只写：记忆照常沉淀，但不注入本会话") },
             ]}
             onChange={(key) => props.onCommitRecall!(key === 'on' ? true : key === 'off' ? false : null)}
           />
@@ -529,7 +529,7 @@ function Row(props: { label: string; children: React.ReactNode }) {
 }
 
 /** 词表未送达时的兜底显示（正常路径由 wing-overview 下发的 label 取代）。 */
-const LABEL_FALLBACK = ['工作', '人际', '学习', '创作娱乐', '居家', '健康', '财务', '出行'];
+const LABEL_FALLBACK = [tr("工作"), tr("人际"), tr("学习"), tr("创作娱乐"), tr("居家"), tr("健康"), tr("财务"), tr("出行")];
 
 /** 水平视口夹持（手机端适配）：浮层以 pill 中心为轴悬浮，窄视口下贴边平移。 */
 export function useViewportClamp(popRef: RefObject<HTMLDivElement | null>): number {

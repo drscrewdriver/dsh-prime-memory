@@ -6,6 +6,7 @@
  * （scope 裁剪显示列）。层级语义（ADR-0005）：每层实际链 = 层自定义 → 部署 YAML
  * 层链 → 全局默认链逐级兜底；部署 pin 时运行时编辑只读。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { LayerRouteKey, LlmProvidersResponse, SettingsGetResponse } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
@@ -39,9 +40,9 @@ function Dot(props: { kind: 'runtime' | 'static' | 'global' }) {
 }
 
 const LAYER_META: Record<LayerRouteKey, { seg: string; title: string }> = {
-  l1: { seg: 'L1', title: 'L1 · 抽取 / 去重' },
-  l2: { seg: 'L2', title: 'L2 · 场景摘要' },
-  l3: { seg: 'L3', title: 'L3 · 画像蒸馏' },
+  l1: { seg: 'L1', title: tr("L1 · 抽取 / 去重") },
+  l2: { seg: 'L2', title: tr("L2 · 场景摘要") },
+  l3: { seg: 'L3', title: tr("L3 · 画像蒸馏") },
 };
 
 export function DistillSettings(props: {
@@ -79,10 +80,10 @@ export function DistillSettings(props: {
   const users = (['l1', 'l2', 'l3'] as LayerRouteKey[]).filter((k) => dotOf(k) === 'global');
 
   const segOptions: SegOption[] = [
-    { key: 'g', label: '全局默认', title: '未单独配置的层走这条链（当前在用：' + (users.length ? users.map((k) => LAYER_META[k].seg).join('、') : '无') + '）' },
+    { key: 'g', label: tr("全局默认"), title: tr("未单独配置的层走这条链（当前在用：") + (users.length ? users.map((k) => LAYER_META[k].seg).join('、') : tr("无")) + '）' },
     ...(['l1', 'l2', 'l3'] as LayerRouteKey[]).map((k) => ({
       key: k,
-      title: LAYER_META[k].title + ' · ' + (dotOf(k) === 'runtime' ? '运行时自定义' : dotOf(k) === 'static' ? '部署 YAML 层链（只读）' : '跟随全局'),
+      title: LAYER_META[k].title + ' · ' + (dotOf(k) === 'runtime' ? tr("运行时自定义") : dotOf(k) === 'static' ? tr("部署 YAML 层链（只读）") : tr("跟随全局")),
       label: (
         <span>
           <Dot kind={dotOf(k)} />
@@ -94,27 +95,26 @@ export function DistillSettings(props: {
 
   const chipTitle = (k: LayerRouteKey): string =>
     dotOf(k) === 'runtime'
-      ? '本层走设置页自定义链'
+      ? tr("本层走设置页自定义链")
       : dotOf(k) === 'static'
-        ? '本层走部署 YAML 层链（UI 只读，自定义可覆盖）'
-        : '本层未单独配置，走全局默认链';
+        ? tr("本层走部署 YAML 层链（UI 只读，自定义可覆盖）")
+        : tr("本层未单独配置，走全局默认链");
 
   return (
     <div>
       <Segmented value={tab} options={segOptions} onChange={(k) => setTab(k as 'g' | LayerRouteKey)} />
       {/* 圆点图例 + 一行优先级提示（完整解释挂 tooltip，不占版面） */}
       <div style={STY.hint}>
-        <Dot kind="runtime" /> 自定义 · <Dot kind="static" /> 部署 YAML · <Dot kind="global" /> 跟随全局
-        <span title="每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读">（层链优先于全局）</span>
+        <Dot kind="runtime" /> {tr("自定义 ·")} <Dot kind="static" /> {tr("部署 YAML ·")} <Dot kind="global" /> {tr("跟随全局")} <span title={tr("每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读")}>{tr("（层链优先于全局）")}</span>
       </div>
 
       {tab === 'g' ? (
         <div>
           <div style={STY.panelHead}>
-            <span style={STY.panelTitle}>全局默认链</span>
-            <span style={{ ...STY.chip, ...STY.chipAccent }}>运行时 · 可编辑</span>
+            <span style={STY.panelTitle}>{tr("全局默认链")}</span>
+            <span style={{ ...STY.chip, ...STY.chipAccent }}>{tr("运行时 · 可编辑")}</span>
             <span style={{ ...STY.inUse, marginLeft: 'auto' }}>
-              {users.length ? '在用：' + users.map((k) => LAYER_META[k].seg).join('、') : '当前无层使用'}
+              {users.length ? tr("在用：") + users.map((k) => LAYER_META[k].seg).join('、') : tr("当前无层使用")}
             </span>
           </div>
           {/* key=tab 强制重挂载：编辑草稿是子组件内部态，切范围不重挂会把上一段
@@ -130,7 +130,7 @@ export function DistillSettings(props: {
           <div style={STY.panelHead}>
             <span style={STY.panelTitle}>{LAYER_META[tab].title}</span>
             <span style={{ ...STY.chip, ...(dotOf(tab) === 'runtime' ? STY.chipAccent : STY.chipMuted) }} title={chipTitle(tab)}>
-              {dotOf(tab) === 'runtime' ? '运行时自定义' : dotOf(tab) === 'static' ? '静态 · YAML' : '跟随全局'}
+              {dotOf(tab) === 'runtime' ? tr("运行时自定义") : dotOf(tab) === 'static' ? tr("静态 · YAML") : tr("跟随全局")}
             </span>
           </div>
           <RouteChainEditor key={tab} rpc={rpc} disabled={disabled} scope={tab} />

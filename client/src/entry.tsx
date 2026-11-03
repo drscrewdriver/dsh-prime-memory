@@ -31,12 +31,14 @@
  *   window.__ModuleLoader__.load({ id, factory })，
  *   factory(require) 返回 { apply, inject }（wrapper 由构建脚本生成）。
  */
+import { tr } from './i18n.js';
 import type { MemoryClientCtx } from './env.js';
 import { MemoryPanel } from './panel.js';
 import { MemoryModePill } from './pill/MemoryModePill.js';
 import { ExplorerPage } from './explorer/ExplorerPage.js';
 import { ExplorerFooterEntry, ExplorerIcon } from './explorer/ExplorerEntry.js';
 import { explorerEntryState } from './explorer/entry-state.js';
+import { installLocale } from './i18n.js';
 import { makeRpc } from './rpc.js';
 
 export const inject = ['slots'];
@@ -61,6 +63,8 @@ const GEN_017_SEAT = 'sidebar.workspaces.session.menu.item';
 const EXPLORER_ORDER = 7;
 
 export function apply(ctx: MemoryClientCtx) {
+  // 界面文案的 locale 接入（可选服务：拿不到就保持中文，见 i18n.ts）
+  installLocale(ctx);
   const rpc = makeRpc(ctx);
   console.info('[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位');
 
@@ -80,7 +84,7 @@ export function apply(ctx: MemoryClientCtx) {
       cardSeatLive = true;
       try {
         return ctx.slots.register(
-          { name: SETTINGS_SEAT, id: 'dsh-memory', order: 200, label: '记忆', inject: () => ({ rpc }) },
+          { name: SETTINGS_SEAT, id: 'dsh-memory', order: 200, label: tr("记忆"), inject: () => ({ rpc }) },
           MemoryPanel,
         );
       } catch (err) {
@@ -129,7 +133,7 @@ export function apply(ctx: MemoryClientCtx) {
 
   const mountPage = (): (() => void) => {
     const row = ctx.slots.inject(PANEL_SEAT, () =>
-      ctx.slots.register({ name: PANEL_SEAT, id: EXPLORER_ID, order: EXPLORER_ORDER, label: '记忆库' }, ExplorerIcon),
+      ctx.slots.register({ name: PANEL_SEAT, id: EXPLORER_ID, order: EXPLORER_ORDER, label: tr("记忆库") }, ExplorerIcon),
     );
     const page = ctx.slots.inject(MAIN_SEAT, () =>
       ctx.slots.register(

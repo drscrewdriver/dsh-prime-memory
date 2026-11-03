@@ -4,6 +4,7 @@
  * 抽出来的理由与 Phase 3 把额度判据抽成纯函数相同：分段与文案是判据，
  * 藏在组件里就只能靠肉眼复核（本项目没有 React 组件测试夹具）。
  */
+import { tr } from '../i18n.js';
 import type { ConflictPairView } from '../../../src/contract.js';
 
 // ── 类型 ──
@@ -20,18 +21,18 @@ export const CONFLICT_TYPE_SECTIONS: ReadonlyArray<{
 }> = [
   {
     type: 'hard',
-    label: '硬冲突（占额度）',
-    hint: '事实层面直接互斥——两边不可能同时为真，必须由人给出结论。',
+    label: tr("硬冲突（占额度）"),
+    hint: tr("事实层面直接互斥——两边不可能同时为真，必须由人给出结论。"),
   },
   {
     type: 'conditional',
-    label: '条件冲突（不占额度）',
-    hint: '各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。',
+    label: tr("条件冲突（不占额度）"),
+    hint: tr("各自前提不同才显得矛盾（环境/配置/工作区）；先确认前提是否还成立。"),
   },
   {
     type: 'supersession',
-    label: '新旧取代（不占额度）',
-    hint: '线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。',
+    label: tr("新旧取代（不占额度）"),
+    hint: tr("线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。"),
   },
 ];
 
@@ -77,7 +78,7 @@ export function groupConflictsByType(items: readonly ConflictPairView[]): Confli
 /** R1 复看状态文案：`unseen` → ''（不渲染，"没人看过"就是没有信息）；`deferred` → '已复看 N 次'。 */
 export function reviewLabel(p: ConflictPairView): string {
   if ((p.review_state ?? 'unseen') === 'unseen') return '';
-  return `已复看 ${String(p.defer_count ?? 0)} 次`;
+  return tr("已复看 {p1} 次", { p1: String(p.defer_count ?? 0) });
 }
 
 /** R1: 是否被复看过。 */
@@ -102,9 +103,9 @@ export function axisText(p: ConflictPairView, side: 'winner' | 'loser'): string 
   const parts: string[] = [];
   const vfS = D(vf);
   const vtS = D(vt);
-  if (vfS) parts.push(`有效期起 ${vfS}`);
-  if (vtS) parts.push(`有效期止 ${vtS}`);
-  if (ps) parts.push(`持续性 ${ps}`);
+  if (vfS) parts.push(tr("有效期起 {p1}", { p1: vfS }));
+  if (vtS) parts.push(tr("有效期止 {p1}", { p1: vtS }));
+  if (ps) parts.push(tr("持续性 {p1}", { p1: ps }));
   return parts.join(' / ');
 }
 

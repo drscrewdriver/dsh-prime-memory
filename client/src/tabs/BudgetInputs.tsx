@@ -10,6 +10,7 @@
  * | 'l1' | 'l2' | 'l3'（仅该层输出行；l1 = 抽取 + 去重两行）。提交始终整组五键，
  * 未编辑键带现值回写，避免互相清零。
  */
+import { tr } from '../i18n.js';
 import { useState } from 'react';
 import type { SettingsGetResponse, SettingsSetRequest } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
@@ -18,10 +19,10 @@ import { NInput } from '../ui/primitives.js';
 import { GRAPH_BUDGET_LABEL } from '../copy.js';
 
 const LAYERS: Array<[string, string]> = [
-  ['extract', '抽取'],
-  ['dedup', '去重'],
-  ['l2', 'L2 场景'],
-  ['l3', 'L3 画像'],
+  ['extract', tr("抽取")],
+  ['dedup', tr("去重")],
+  ['l2', tr("L2 场景")],
+  ['l3', tr("L3 画像")],
   // 这不是“投影开关”，是投影这一步的**输出预算**（issue #16：旧标签就叫“图谱投影”，
   // 与概览页那个功能开关撞名，用户点了以为开了投影，实际只是改了 token 预算）。
   ['graph', GRAPH_BUDGET_LABEL],
@@ -88,10 +89,10 @@ export function BudgetInputs(props: {
       if (!Number.isInteger(n) || n < min || n > max) {
         onError(
           key === 'input'
-            ? '输入预算须为 0 或 1000~256000 的整数（留空或 0 = 跟随配置）'
+            ? tr("输入预算须为 0 或 1000~256000 的整数（留空或 0 = 跟随配置）")
             : key === 'timeout'
-              ? '蒸馏超时须为 0 或 1000~600000 的整数（留空或 0 = 跟随配置）'
-              : '输出预算须为 0~1000000 的整数（留空或 0 = 跟随默认）',
+              ? tr("蒸馏超时须为 0 或 1000~600000 的整数（留空或 0 = 跟随配置）")
+              : tr("输出预算须为 0~1000000 的整数（留空或 0 = 跟随默认）"),
         );
         setDraft(null);
         return;
@@ -105,14 +106,14 @@ export function BudgetInputs(props: {
       .then((r) => {
         if (!r || !r.ok) {
           setData(prev);
-          onError(r && r.error ? '预算写入失败：' + r.error.message : '预算写入失败');
+          onError(r && r.error ? tr("预算写入失败：") + r.error.message : tr("预算写入失败"));
         } else {
           onError(null);
         }
       })
       .catch((e: unknown) => {
         setData(prev);
-        onError('预算写入失败：' + String((e && (e as Error).message) || e));
+        onError(tr("预算写入失败：") + String((e && (e as Error).message) || e));
       });
   };
 
@@ -232,7 +233,7 @@ export function BudgetInputs(props: {
   const effNote = layers.map((l) => eff[l[0]!] || '?').join(' / ');
   /** 行标签点明输出预算归属的调用点（L1 面板两行分指抽取/去重）。 */
   const rowLabel = (key: string): string =>
-    key === 'extract' ? '抽取输出' : key === 'dedup' ? '去重输出' : key === 'l2' ? 'L2 输出' : 'L3 输出';
+    key === 'extract' ? tr("抽取输出") : key === 'dedup' ? tr("去重输出") : key === 'l2' ? tr("L2 输出") : tr("L3 输出");
   const rowStyle = { display: 'flex', alignItems: 'center', gap: 8 } as const;
   return (
     <div>
@@ -241,12 +242,11 @@ export function BudgetInputs(props: {
           <div
             style={S.switchLabel}
             title={
-              (scope === 'l1' ? 'L1 的抽取与去重是两次独立调用，输出限额各自设置（路由共用同一条链）。' : '') +
-              '留空或 0 = 跟随默认（当前生效 ' + effNote + '）；思考档 high/xhigh/max 时实际限额自动 ×4'
+              (scope === 'l1' ? tr("L1 的抽取与去重是两次独立调用，输出限额各自设置（路由共用同一条链）。") : '') +
+              tr("留空或 0 = 跟随默认（当前生效") + effNote + tr("）；思考档 high/xhigh/max 时实际限额自动 ×4")
             }
           >
-            输出预算
-          </div>
+            {tr("输出预算")} </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
             {layers.map((l) => (
               <div key={l[0]} style={rowStyle}>
@@ -254,7 +254,7 @@ export function BudgetInputs(props: {
                 {inputBox(
                   l[0]!,
                   l[1]!,
-                  l[1]! + ' 输出预算（token，留空 = 默认 ' + (def[l[0]!] || '?') + '）',
+                  l[1]! + tr("输出预算（token，留空 = 默认") + (def[l[0]!] || '?') + '）',
                   110,
                   def[l[0]!],
                   commitOutputs,
@@ -269,22 +269,21 @@ export function BudgetInputs(props: {
         <div style={{ marginTop: 12 }}>
           <div
             style={S.switchLabel}
-            title={'单次蒸馏调用的输入字符上限（≈token）：L1 抽取按此分块、L2/L3 超限截断；留空或 0 = 跟随配置（当前生效 ' + (effIn || '?') + '，来自 llm.maxInputChars）'}
+            title={tr("单次蒸馏调用的输入字符上限（≈token）：L1 抽取按此分块、L2/L3 超限截断；留空或 0 = 跟随配置（当前生效") + (effIn || '?') + tr("，来自 llm.maxInputChars）")}
           >
-            输入预算
-          </div>
+            {tr("输入预算")} </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
             <div style={rowStyle}>
-              <span style={{ width: 68, flexShrink: 0, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>单次输入</span>
+              <span style={{ width: 68, flexShrink: 0, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>{tr("单次输入")}</span>
               {inputBox(
                 'input',
-                '输入',
-                '单次蒸馏输入字符上限（≈token，中文 1 字≈1 token；留空 = 跟随配置 ' + (ib.fallback || '?') + '）',
+                tr("输入"),
+                tr("单次蒸馏输入字符上限（≈token，中文 1 字≈1 token；留空 = 跟随配置") + (ib.fallback || '?') + '）',
                 110,
                 ib.fallback,
                 commitInput,
               )}
-              <span style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>字符</span>
+              <span style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>{tr("字符")}</span>
             </div>
           </div>
         </div>
@@ -293,17 +292,16 @@ export function BudgetInputs(props: {
         <div style={{ marginTop: 12 }}>
           <div
             style={S.switchLabel}
-            title={'单次蒸馏调用超时(ms)：治"慢但未被网关掐"的路由需更大超时窗；留空或 0 = 跟随配置（当前生效 ' + (effTo || '?') + 'ms，来自 llm.timeoutMs）。注：供应商网关侧固定掐断（如某些路由 60s）抬此值无效，须换路由'}
+            title={tr("单次蒸馏调用超时(ms)：治\"慢但未被网关掐\"的路由需更大超时窗；留空或 0 = 跟随配置（当前生效") + (effTo || '?') + tr("ms，来自 llm.timeoutMs）。注：供应商网关侧固定掐断（如某些路由 60s）抬此值无效，须换路由")}
           >
-            蒸馏超时
-          </div>
+            {tr("蒸馏超时")} </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
             <div style={rowStyle}>
-              <span style={{ width: 68, flexShrink: 0, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>超时</span>
+              <span style={{ width: 68, flexShrink: 0, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>{tr("超时")}</span>
               {inputBox(
                 'timeout',
-                '超时',
-                '单次蒸馏调用超时(ms)（留空 = 跟随配置 ' + (tb.fallback || '?') + '）',
+                tr("超时"),
+                tr("单次蒸馏调用超时(ms)（留空 = 跟随配置") + (tb.fallback || '?') + '）',
                 110,
                 tb.fallback,
                 commitTimeout,

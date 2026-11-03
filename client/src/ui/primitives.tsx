@@ -3,6 +3,7 @@
  * 视觉与宿主完全一致）。宿主未注册该模块（老版本 dsh）时静默回退到本 bundle
  * 的等效实现——degrade-don't-crash，与插件整体降级哲学一致。
  */
+import { tr } from '../i18n.js';
 import { createElement, type ReactNode } from 'react';
 import { hostRequire } from '../env.js';
 
@@ -50,7 +51,7 @@ export function NInput(props: NPrimitiveProps) {
 /** 原生 Modal 优先；回退 .dsh-mem-rb-overlay/.dsh-mem-rb-modal 自绘模态。 */
 export function NModal(props: NPrimitiveProps) {
   if (props.open === false) return null;
-  if (P && P.Modal) return createElement(P.Modal, { closeLabel: '关闭', ...props });
+  if (P && P.Modal) return createElement(P.Modal, { closeLabel: tr("关闭"), ...props });
   return createElement(
     'div',
     {

@@ -1,3 +1,4 @@
+import { tr } from '../i18n.js';
 /**
  * 会话记忆档位控件（覆写滑轨）的档位词表与几何常量。
  * v5（wing 八边形）：`off` 移出滑轨、由 WingWheel 图形外的关闭闸承载；
@@ -14,9 +15,9 @@ export interface ModeDef {
 }
 
 export const MODES: ModeDef[] = [
-  { key: 'chat', label: '日常', color: 'var(--dsh-mem-mode-chat)' },
-  { key: 'auto', label: '智能', color: 'var(--dsh-mem-mode-auto)' },
-  { key: 'work', label: '工作', color: 'var(--dsh-mem-mode-work)' },
+  { key: 'chat', label: tr("日常"), color: 'var(--dsh-mem-mode-chat)' },
+  { key: 'auto', label: tr("智能"), color: 'var(--dsh-mem-mode-auto)' },
+  { key: 'work', label: tr("工作"), color: 'var(--dsh-mem-mode-work)' },
 ];
 
 /** 滑轨几何（px）。TRACK_W 为默认宽度，调用方可传 `width` 覆盖以适配窄浮层。 */
@@ -48,10 +49,10 @@ export function modeInfo(key: string | null | undefined): ModeDef {
 
 /** 面文用完整档名（附族注）。 */
 export function modeLabel(key: string): string {
-  if (key === 'auto') return '智能（双族）';
-  if (key === 'chat') return '日常（个人）';
-  if (key === 'work') return '工作（团队）';
-  return '关闭';
+  if (key === 'auto') return tr("智能（双族）");
+  if (key === 'chat') return tr("日常（个人）");
+  if (key === 'work') return tr("工作（团队）");
+  return tr("关闭");
 }
 
 /** 档位 → 滑轨序；未知键落默认档序（智能 = 1）。 */

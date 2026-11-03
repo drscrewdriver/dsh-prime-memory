@@ -6,6 +6,7 @@
  * 整面受 config `memport.enabled` 门控（默认关）；关时列表为空、扫描返回未启用提示。
  * 写类操作（登记/退役）另需面板开启「高权限模式」（memoryMutate 门）。
  */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { MemorySourceView, MemorySourcesListResponse, MemportScanResponse } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
@@ -13,7 +14,7 @@ import { S } from '../styles.js';
 import { NButton } from '../ui/primitives.js';
 
 function errMsg(r: { ok?: boolean; error?: { message?: string } } | undefined): string {
-  return r && r.error && r.error.message ? r.error.message : 'RPC 错误';
+  return r && r.error && r.error.message ? r.error.message : tr("RPC 错误");
 }
 
 function SourceCard(props: { rpc: RpcFn; src: MemorySourceView; onChanged: () => void; onErr: (m: string) => void }) {
@@ -31,13 +32,13 @@ function SourceCard(props: { rpc: RpcFn; src: MemorySourceView; onChanged: () =>
     <div className="dsh-mem-card" style={S.card}>
       <div style={S.cardHead}>
         <strong>{src.label || src.id}</strong>
-        <span style={S.muted}>{'· ' + src.kind + (retired ? ' · 已退役' : src.disabled ? ' · 已停用' : '')}</span>
+        <span style={S.muted}>{'· ' + src.kind + (retired ? tr("· 已退役") : src.disabled ? tr("· 已停用") : '')}</span>
         <div style={S.grow} />
-        <NButton onClick={() => retire(!retired)}>{retired ? '恢复' : '退役'}</NButton>
+        <NButton onClick={() => retire(!retired)}>{retired ? tr("恢复") : tr("退役")}</NButton>
       </div>
       <div style={{ ...S.detail }}>{src.path}</div>
       <div style={{ ...S.muted, marginTop: 4 }}>
-        {'上次扫描 ' + (src.lastScanAt || '—') + ' · 上次导入 ' + (src.lastImportAt || '—')}
+        {tr("上次扫描") + (src.lastScanAt || '—') + tr("· 上次导入") + (src.lastImportAt || '—')}
       </div>
     </div>
   );
@@ -68,7 +69,7 @@ export function ConnectTab(props: { rpc: RpcFn }) {
 
   const add = () => {
     if (!form.id.trim() || !form.path.trim()) {
-      setError('登记来源需要 id 与绝对路径 path');
+      setError(tr("登记来源需要 id 与绝对路径 path"));
       return;
     }
     rpc('dsh-memory/memory-sources-add', { id: form.id.trim(), kind: form.kind, path: form.path.trim(), label: form.label.trim() || undefined })
@@ -109,26 +110,25 @@ export function ConnectTab(props: { rpc: RpcFn }) {
   return (
     <div>
       <p style={S.intro}>
-        登记外部 AI 工具的记忆来源（仅存路径指针，正文不复制入库）。扫描为只读预览；实际导入由「memport 导入」经 memory_import 完成。整面需在设置开启
-        <code> memport.enabled</code>。
+        {tr("登记外部 AI 工具的记忆来源（仅存路径指针，正文不复制入库）。扫描为只读预览；实际导入由「memport 导入」经 memory_import 完成。整面需在设置开启")} <code> memport.enabled</code>。
       </p>
 
       <div style={S.toolbar}>
-        {input('id', '来源 id(小写-连字符)')}
+        {input('id', tr("来源 id(小写-连字符)"))}
         {input('kind', 'kind: claude/codex/workbuddy/file…')}
-        {input('path', '绝对路径(目录或 .mem)')}
-        {input('label', '显示名(可选)')}
-        <NButton onClick={add}>登记来源</NButton>
+        {input('path', tr("绝对路径(目录或 .mem)"))}
+        {input('label', tr("显示名(可选)"))}
+        <NButton onClick={add}>{tr("登记来源")}</NButton>
       </div>
-      {!data?.memoryMutate ? <div style={S.hint}>提示：登记/退役需先在面板开启「高权限模式」。</div> : null}
+      {!data?.memoryMutate ? <div style={S.hint}>{tr("提示：登记/退役需先在面板开启「高权限模式」。")}</div> : null}
 
       <div style={{ ...S.flexRow, margin: '8px 0 12px' }}>
-        <span style={S.muted}>{data ? (data.sources.length ? data.sources.length + ' 个来源' : '暂无来源') : '加载中…'}</span>
+        <span style={S.muted}>{data ? (data.sources.length ? data.sources.length + tr("个来源") : tr("暂无来源")) : tr("加载中…")}</span>
         <div style={S.grow} />
         <NButton onClick={runScan} disabled={busy}>
-          {busy ? '扫描中…' : '扫描全部来源'}
+          {busy ? tr("扫描中…") : tr("扫描全部来源")}
         </NButton>
-        <NButton onClick={load}>刷新</NButton>
+        <NButton onClick={load}>{tr("刷新")}</NButton>
       </div>
       {error ? <div style={S.error}>{error}</div> : null}
 
@@ -138,26 +138,26 @@ export function ConnectTab(props: { rpc: RpcFn }) {
 
       {scan ? (
         <div style={{ marginTop: 12 }}>
-          <div style={S.heading}>扫描预览{scan.notice ? `（${scan.notice}）` : ''}</div>
+          <div style={S.heading}>{tr("扫描预览")}{scan.notice ? `（${scan.notice}）` : ''}</div>
           {scan.sources.map((s) => (
             <div key={s.sourceId} className="dsh-mem-card" style={S.card}>
               <div style={S.cardHead}>
                 <strong>{s.label || s.sourceId}</strong>
                 <span style={S.muted}>
-                  {'：新 ' + s.counts.new + ' · 近重复 ' + s.counts['near-dup'] + ' · 疑似冲突 ' + s.counts['conflict-candidate'] + ' · 重复 ' + s.counts.dup}
+                  {tr("：新") + s.counts.new + tr("· 近重复") + s.counts['near-dup'] + tr("· 疑似冲突") + s.counts['conflict-candidate'] + tr("· 重复") + s.counts.dup}
                 </span>
                 <div style={S.grow} />
-                <span style={S.muted}>{s.files + ' 包 · ' + s.total + ' 条'}</span>
+                <span style={S.muted}>{s.files + tr("包 ·") + s.total + tr("条")}</span>
               </div>
               {s.errors.length ? <div style={{ ...S.error, whiteSpace: 'pre-wrap' }}>{s.errors.join('\n')}</div> : null}
               {s.sampleNew.length ? (
                 <div style={{ ...S.detail }}>{s.sampleNew.map((n) => `[${n.type}] ${n.content}`).join('\n')}</div>
               ) : s.counts.new > 0 ? (
-                <div style={S.muted}>有新记录（样本省略）。</div>
+                <div style={S.muted}>{tr("有新记录（样本省略）。")}</div>
               ) : null}
             </div>
           ))}
-          {scan.enabled && scan.sources.length === 0 ? <div style={S.muted}>无启用来源，或来源下未发现 .mem。</div> : null}
+          {scan.enabled && scan.sources.length === 0 ? <div style={S.muted}>{tr("无启用来源，或来源下未发现 .mem。")}</div> : null}
         </div>
       ) : null}
     </div>

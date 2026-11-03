@@ -1,4 +1,5 @@
 /** Tab：L2 场景浏览。场景卡默认收起，点头部展开正文（与记忆卡同一展开范式）。 */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { ScenesResponse } from '../../../src/contract.js';
 import { fmtTime } from '../format.js';
@@ -22,12 +23,12 @@ function SceneCard(props: { s: ScenesResponse['items'][number] }) {
           ▸
         </span>
         <span style={S.sceneTitle}>{s.path}</span>
-        {s.heat ? <span style={S.muted}>{'热度 ' + s.heat}</span> : null}
+        {s.heat ? <span style={S.muted}>{tr("热度") + s.heat}</span> : null}
         <div style={S.grow} />
-        <span style={S.muted}>{'更新 ' + fmtTime(s.updated)}</span>
+        <span style={S.muted}>{tr("更新") + fmtTime(s.updated)}</span>
       </div>
       {s.summary ? <div style={{ ...S.muted, marginBottom: 6 }}>{s.summary}</div> : null}
-      {open ? <pre style={S.pre}>{s.content || '(空)'}</pre> : null}
+      {open ? <pre style={S.pre}>{s.content || tr("(空)")}</pre> : null}
     </div>
   );
 }
@@ -57,13 +58,13 @@ export function ScenesTab(props: { rpc: RpcFn }) {
   return (
     <div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
-        <span style={S.muted}>{items ? items.length + ' 个场景块' : '加载中…'}</span>
+        <span style={S.muted}>{items ? items.length + tr("个场景块") : tr("加载中…")}</span>
         <div style={S.grow} />
-        <NButton onClick={load}>刷新</NButton>
+        <NButton onClick={load}>{tr("刷新")}</NButton>
       </div>
       {error ? <div style={S.error}>{error}</div> : null}
       {items && items.length === 0 ? (
-        <p style={S.intro}>暂无场景块。累计 5 条新记忆后 L2 会自动整合出第一个场景。</p>
+        <p style={S.intro}>{tr("暂无场景块。累计 5 条新记忆后 L2 会自动整合出第一个场景。")}</p>
       ) : null}
       {(items || []).map((s) => {
         return <SceneCard key={s.path} s={s} />;

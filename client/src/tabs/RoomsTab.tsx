@@ -7,6 +7,7 @@
  *    退役·恢复 / 每 room 记录 CSV 导出。破坏性操作统一走 dsh-memory/room-admin,
  *    高权限(memoryMutate)门控,与 memory_room_admin 工具同一编排(备份+入队场景重算)。
  */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RpcFn } from '../rpc.js';
 import type { UiRecord } from '../../../src/contract.js';
@@ -146,12 +147,12 @@ export function RoomsTab(props: { rpc: RpcFn }) {
 
   const toggleHiPriv = () => {
     const next = !hiPriv;
-    if (next && !window.confirm('开启高权限模式:模型获得写入/删除记忆工具,并解锁 Hall 页的分类管理操作。确定开启?')) return;
+    if (next && !window.confirm(tr("开启高权限模式:模型获得写入/删除记忆工具,并解锁 Hall 页的分类管理操作。确定开启?"))) return;
     setHiPrivBusy(true);
     rpc('dsh-memory/settings-set', { memoryMutate: next })
       .then((r) => {
         if (r && r.ok) setHiPriv(next);
-        else if (r) setError(r.error ? r.error.message : '切换高权限模式失败');
+        else if (r) setError(r.error ? r.error.message : tr("切换高权限模式失败"));
         setHiPrivBusy(false);
         loadHiPriv();
       })
@@ -178,12 +179,12 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         description: regDesc.trim() || undefined,
       });
       if (r && r.ok) {
-        setMsg(r.value?.notice ?? `已注册:${regSlug.trim()}`);
+        setMsg(r.value?.notice ?? tr("已注册:{p1}", { p1: regSlug.trim() }));
         setRegSlug('');
         setRegLabel('');
         setRegDesc('');
         loadAll();
-      } else setError(r && r.error ? r.error.message : '注册失败');
+      } else setError(r && r.error ? r.error.message : tr("注册失败"));
     });
 
   /** 收编自生长 slug(source=grown;词表挂靠优先级与预注册同)。 */
@@ -191,9 +192,9 @@ export function RoomsTab(props: { rpc: RpcFn }) {
     run(async () => {
       const r = await rpc('dsh-memory/room-register', { slug, source: 'grown' });
       if (r && r.ok) {
-        setMsg(`已收编:${slug}(source=grown)`);
+        setMsg(tr("已收编:{p1}(source=grown)", { p1: slug }));
         loadAll();
-      } else setError(r && r.error ? r.error.message : '收编失败');
+      } else setError(r && r.error ? r.error.message : tr("收编失败"));
     });
 
   const previewMerge = (override?: { action: 'merge' | 'rename'; from: string; to: string }) =>
@@ -201,21 +202,21 @@ export function RoomsTab(props: { rpc: RpcFn }) {
       const fm = override ?? form;
       if (!fm) return;
       const to = fm.to.trim();
-      if (!to) { setError('目标 slug 不能为空'); return; }
-      if (to === fm.from) { setError('目标与源相同'); return; }
+      if (!to) { setError(tr("目标 slug 不能为空")); return; }
+      if (to === fm.from) { setError(tr("目标与源相同")); return; }
       const r = await rpc('dsh-memory/room-admin', { action: fm.action, from: fm.from, to });
       if (r && r.ok) {
         setPreview({ action: fm.action, from: fm.from, to, notice: String(r.value?.notice ?? '') });
-      } else setError(r && r.error ? r.error.message : '预览失败');
+      } else setError(r && r.error ? r.error.message : tr("预览失败"));
     });
 
   /** 归类到 hall 下(拖拽松手 / 「归类」按钮共用):预填 rename 表单(major/minor)
    *  并直接出 dryRun 预览——记录随迁、旧名进别名,确认后才实跑。 */
   const beginReclass = (from: string, hall: string) => {
     if (!busy) { setMsg(null); setError(null); }
-    if (!hall) { setError('尚无 hall:先注册一个(如 dsh-plugin),再归类。'); return; }
+    if (!hall) { setError(tr("尚无 hall:先注册一个(如 dsh-plugin),再归类。")); return; }
     if (majorOf(from) === hall) {
-      if (registry.some((e) => e.slug === from)) { setMsg(`${from} 已在 ${hall} 下。`); return; }
+      if (registry.some((e) => e.slug === from)) { setMsg(tr("{p1} 已在 {p2} 下。", { p1: from, p2: hall })); return; }
       setPicking(null);
       void adopt(from); // 未注册 slug 落回自己的 hall = 原地收编
       return;
@@ -233,28 +234,28 @@ export function RoomsTab(props: { rpc: RpcFn }) {
       // 再走 rename——顺序钉死在 hall-room.integration.test 的组合用例
       if (preview.action === 'rename' && !registry.some((e) => e.slug === preview.from)) {
         const rr = await rpc('dsh-memory/room-register', { slug: preview.from, source: 'grown' });
-        if (!rr || !rr.ok) { setError(rr && rr.error ? rr.error.message : '收编源失败'); return; }
+        if (!rr || !rr.ok) { setError(rr && rr.error ? rr.error.message : tr("收编源失败")); return; }
       }
       const r = await rpc('dsh-memory/room-admin', { action: preview.action, from: preview.from, to: preview.to, dryRun: false });
       if (r && r.ok) {
-        setMsg(String(r.value?.notice ?? '完成'));
+        setMsg(String(r.value?.notice ?? tr("完成")));
         setPreview(null);
         setForm(null);
         loadAll();
-      } else setError(r && r.error ? r.error.message : '执行失败');
+      } else setError(r && r.error ? r.error.message : tr("执行失败"));
     });
 
   const retire = (slug: string, active: boolean, withRecords = false) =>
     run(async () => {
       if (!active) {
         const tip = withRecords
-          ? `退役 Room:${slug} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)`
-          : `退役 Room:${slug}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)`;
+          ? tr("退役 Room:{p1} 并退场其下全部记忆?(记录为软删,可在记忆页「已退场」区逐条恢复)", { p1: slug })
+          : tr("退役 Room:{p1}?(存量记录的 tags 不动,仅词表不再推荐;可随时恢复)", { p1: slug });
         if (!window.confirm(tip)) return;
       }
       const r = await rpc('dsh-memory/room-admin', { action: 'retire', slug, active, withRecords: withRecords || undefined });
       if (r && r.ok) {
-        setMsg(String(r.value?.notice ?? '完成'));
+        setMsg(String(r.value?.notice ?? tr("完成")));
         loadAll();
         // 退场效果立现:该 room 正展开时刷新其活跃条目
         if (expandedRooms.has(slug)) {
@@ -264,7 +265,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
             setRoomRecords((m) => ({ ...m, [slug]: { items: rr.value.items, total: rr.value.total ?? null } }));
           }
         }
-      } else setError(r && r.error ? r.error.message : '操作失败');
+      } else setError(r && r.error ? r.error.message : tr("操作失败"));
     });
 
   const saveEditing = () =>
@@ -272,10 +273,10 @@ export function RoomsTab(props: { rpc: RpcFn }) {
       if (!editing) return;
       const r = await rpc('dsh-memory/room-admin', { action: 'update', slug: editing.slug, label: editing.label, description: editing.description });
       if (r && r.ok) {
-        setMsg(String(r.value?.notice ?? '已更新'));
+        setMsg(String(r.value?.notice ?? tr("已更新")));
         setEditing(null);
         loadAll();
-      } else setError(r && r.error ? r.error.message : '更新失败');
+      } else setError(r && r.error ? r.error.message : tr("更新失败"));
     });
 
   /** room 内容展开/收起(读操作,不吃高权限门;首次展开拉前 10 条)。 */
@@ -294,7 +295,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         next.add(slug);
         setExpandedRooms(next);
         setRoomRecords((m) => ({ ...m, [slug]: { items: r.value.items, total: r.value.total ?? null } }));
-      } else setError(r && r.error ? r.error.message : '加载失败');
+      } else setError(r && r.error ? r.error.message : tr("加载失败"));
     });
 
   const exportRecords = (slug: string) =>
@@ -302,7 +303,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
       const r = await rpc('dsh-memory/rooms-export', { kind: 'records', tag: slug });
       if (!r.ok) { setError(r.error.message); return; }
       if (r.value.csv) downloadCsv(r.value.csv, `dsh-memory-room-${slug.replace(/\//g, '-')}-records.csv`);
-      else setError('导出为空');
+      else setError(tr("导出为空"));
     });
 
   // ── 视图模型:hall 分组 + 未注册自生长区 ──
@@ -373,11 +374,11 @@ export function RoomsTab(props: { rpc: RpcFn }) {
   return (
     <div>
       <div style={{ ...S.flexRow, marginBottom: 8 }}>
-        <span style={S.muted}>Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关</span>
+        <span style={S.muted}>{tr("Hall = Room 大类 · 大类上限 200,小类「大类/小类」细分不占额度 · 与 Wing(域)筛选无关")}</span>
         <div style={S.grow} />
         <button
           type="button"
-          title="导出分类数据 CSV(Room 词表+计数)"
+          title={tr("导出分类数据 CSV(Room 词表+计数)")}
           onClick={() =>
             run(async () => {
               const r = await rpc('dsh-memory/rooms-export', { kind: 'rooms' });
@@ -386,10 +387,10 @@ export function RoomsTab(props: { rpc: RpcFn }) {
             })
           }
           style={btn}
-        >导出词表</button>
+        >{tr("导出词表")}</button>
         <button
           type="button"
-          title="导出无 Room 绑定的孤儿清单(含候选)"
+          title={tr("导出无 Room 绑定的孤儿清单(含候选)")}
           onClick={() =>
             run(async () => {
               const r = await rpc('dsh-memory/rooms-export', { kind: 'orphans' });
@@ -398,7 +399,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
             })
           }
           style={btn}
-        >导出孤儿 · {orphanCount}</button>
+        >{tr("导出孤儿 ·")} {orphanCount}</button>
         <button
           type="button"
           style={{
@@ -407,10 +408,10 @@ export function RoomsTab(props: { rpc: RpcFn }) {
             border: hiPriv ? '1px solid var(--dsh-mem-danger)' : btn.border,
           }}
           disabled={hiPrivBusy}
-          title={hiPriv ? '关闭高权限模式(收回模型写删工具与管理操作)' : '开启高权限模式以解锁分类管理操作'}
+          title={hiPriv ? tr("关闭高权限模式(收回模型写删工具与管理操作)") : tr("开启高权限模式以解锁分类管理操作")}
           onClick={toggleHiPriv}
-        >{hiPriv ? '高权限:开' : '高权限:关'}</button>
-        <button type="button" style={btn} onClick={loadAll} title="重拉注册表与计数">刷新</button>
+        >{hiPriv ? tr("高权限:开") : tr("高权限:关")}</button>
+        <button type="button" style={btn} onClick={loadAll} title={tr("重拉注册表与计数")}>{tr("刷新")}</button>
       </div>
 
       {/* 搜索过滤 + 折叠批量操作 */}
@@ -418,14 +419,14 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="搜索 hall/room(slug、显示名、别名)"
+          placeholder={tr("搜索 hall/room(slug、显示名、别名)")}
           style={{ ...S.input, width: 250, fontSize: 12 }}
         />
-        {filter ? <button type="button" style={btn} onClick={() => setFilter('')}>清除</button> : null}
-        <span style={S.muted}>{`匹配 ${visibleGroups.reduce((s2, g) => s2 + g.entries.length, 0)} room / ${visibleGroups.length} hall`}</span>
+        {filter ? <button type="button" style={btn} onClick={() => setFilter('')}>{tr("清除")}</button> : null}
+        <span style={S.muted}>{tr("匹配 {p1} room / {p2} hall", { p1: visibleGroups.reduce((s2, g) => s2 + g.entries.length, 0), p2: visibleGroups.length })}</span>
         <div style={S.grow} />
-        <button type="button" style={btn} title="展开全部 hall 的子 room" onClick={() => setAllHalls(true)}>展开全部</button>
-        <button type="button" style={btn} title="收起全部 hall(只留 hall 头)" onClick={() => setAllHalls(false)}>收起全部</button>
+        <button type="button" style={btn} title={tr("展开全部 hall 的子 room")} onClick={() => setAllHalls(true)}>{tr("展开全部")}</button>
+        <button type="button" style={btn} title={tr("收起全部 hall(只留 hall 头)")} onClick={() => setAllHalls(false)}>{tr("收起全部")}</button>
       </div>
 
       {/* 注册表单(高权限):两级 slug 一次注册 */}
@@ -433,21 +434,21 @@ export function RoomsTab(props: { rpc: RpcFn }) {
         <input
           value={regSlug}
           onChange={(e) => setRegSlug(e.target.value)}
-          placeholder="slug(如 dsh-plugin 或 dsh-plugin/merge)"
+          placeholder={tr("slug(如 dsh-plugin 或 dsh-plugin/merge)")}
           disabled={!hiPriv || busy}
           style={{ ...S.input, width: 210, fontSize: 12 }}
         />
         <input
           value={regLabel}
           onChange={(e) => setRegLabel(e.target.value)}
-          placeholder="名称(可中文)"
+          placeholder={tr("名称(可中文)")}
           disabled={!hiPriv || busy}
           style={{ ...S.input, width: 110, fontSize: 12 }}
         />
         <input
           value={regDesc}
           onChange={(e) => setRegDesc(e.target.value)}
-          placeholder="归类说明(喂标注器)"
+          placeholder={tr("归类说明(喂标注器)")}
           disabled={!hiPriv || busy}
           style={{ ...S.input, width: 170, fontSize: 12 }}
         />
@@ -456,27 +457,27 @@ export function RoomsTab(props: { rpc: RpcFn }) {
           disabled={!hiPriv || busy || !regSlug.trim()}
           onClick={register}
           style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)', opacity: !hiPriv || busy || !regSlug.trim() ? 0.5 : 1 }}
-        >注册</button>
-        {!hiPriv && <span style={S.muted}>管理操作需先开启高权限模式</span>}
+        >{tr("注册")}</button>
+        {!hiPriv && <span style={S.muted}>{tr("管理操作需先开启高权限模式")}</span>}
       </div>
 
       {/* 全局操作栏:合并/归类/改名的表单与预览常驻页首(sticky 跟随滚动,不被埋) */}
       {editing ? (
         <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--dsh-mem-bg-inset)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap', padding: '6px 8px', border: '1px solid var(--dsh-mem-accent)', borderRadius: 8 }}>
-          <span style={S.muted}>编辑 {editing.slug}</span>
-          <input value={editing.label} onChange={(ev) => setEditing({ ...editing, label: ev.target.value })} placeholder="显示名(可中文)" disabled={busy} style={{ ...S.input, width: 140, fontSize: 12 }} />
-          <input value={editing.description} onChange={(ev) => setEditing({ ...editing, description: ev.target.value })} placeholder="归类说明(喂标注器)" disabled={busy} style={{ ...S.input, width: 200, fontSize: 12 }} />
-          <button type="button" disabled={busy} onClick={saveEditing} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}>保存</button>
-          <button type="button" disabled={busy} onClick={() => setEditing(null)} style={btn}>取消</button>
+          <span style={S.muted}>{tr("编辑")} {editing.slug}</span>
+          <input value={editing.label} onChange={(ev) => setEditing({ ...editing, label: ev.target.value })} placeholder={tr("显示名(可中文)")} disabled={busy} style={{ ...S.input, width: 140, fontSize: 12 }} />
+          <input value={editing.description} onChange={(ev) => setEditing({ ...editing, description: ev.target.value })} placeholder={tr("归类说明(喂标注器)")} disabled={busy} style={{ ...S.input, width: 200, fontSize: 12 }} />
+          <button type="button" disabled={busy} onClick={saveEditing} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}>{tr("保存")}</button>
+          <button type="button" disabled={busy} onClick={() => setEditing(null)} style={btn}>{tr("取消")}</button>
         </div>
       ) : null}
       {form ? (
         <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--dsh-mem-bg-inset)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap', padding: '6px 8px', border: '1px solid var(--dsh-mem-accent)', borderRadius: 8 }}>
-          <span style={S.muted}>{form.action === 'merge' ? '合并' : '归类/改名'} {form.from} →</span>
+          <span style={S.muted}>{form.action === 'merge' ? tr("合并") : tr("归类/改名")} {form.from} →</span>
           <input
             value={form.to}
             onChange={(ev) => setForm({ ...form, to: ev.target.value })}
-            placeholder="目标 slug"
+            placeholder={tr("目标 slug")}
             disabled={busy}
             style={{ ...S.input, width: 190, fontSize: 12 }}
           />
@@ -486,25 +487,25 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                 <button
                   key={gg.hall}
                   type="button"
-                  title={`归入 ${gg.hall} 下(${gg.hall}/${suffixOf(form.from)})`}
+                  title={tr("归入 {p1} 下({p2}/{p3})", { p1: gg.hall, p2: gg.hall, p3: suffixOf(form.from) })}
                   onClick={() => setForm({ ...form, to: `${gg.hall}/${suffixOf(form.from)}` })}
                   style={{ ...btn, borderRadius: 999, padding: '1px 8px' }}
                 >{gg.hall}</button>
               ))}
             </span>
           ) : null}
-          <button type="button" disabled={busy} onClick={() => previewMerge()} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}>预览</button>
-          <button type="button" disabled={busy} onClick={() => { setForm(null); setPreview(null); setPicking(null); }} style={btn}>取消</button>
-          {picking ? <span style={S.muted}>挑选中:点击目标 hall 头完成归类</span> : null}
-          <span style={S.muted}>与反刍并发会互相覆盖,请在反刍空闲时执行。</span>
+          <button type="button" disabled={busy} onClick={() => previewMerge()} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}>{tr("预览")}</button>
+          <button type="button" disabled={busy} onClick={() => { setForm(null); setPreview(null); setPicking(null); }} style={btn}>{tr("取消")}</button>
+          {picking ? <span style={S.muted}>{tr("挑选中:点击目标 hall 头完成归类")}</span> : null}
+          <span style={S.muted}>{tr("与反刍并发会互相覆盖,请在反刍空闲时执行。")}</span>
         </div>
       ) : null}
       {preview ? (
         <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--dsh-mem-bg-inset)', marginBottom: 8, padding: '6px 8px', border: '1px solid var(--dsh-mem-danger)', borderRadius: 8, fontSize: 12 }}>
           <div>{preview.notice}</div>
           <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-            <button type="button" disabled={busy} onClick={execMerge} style={{ ...btn, color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }}>确认执行{preview.action === 'merge' ? '合并' : '归类/改名'}</button>
-            <button type="button" disabled={busy} onClick={() => setPreview(null)} style={btn}>再改改</button>
+            <button type="button" disabled={busy} onClick={execMerge} style={{ ...btn, color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }}>{tr("确认执行")}{preview.action === 'merge' ? tr("合并") : tr("归类/改名")}</button>
+            <button type="button" disabled={busy} onClick={() => setPreview(null)} style={btn}>{tr("再改改")}</button>
           </div>
         </div>
       ) : null}
@@ -518,7 +519,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
 
       {/* Hall 分组树(默认折叠,只显示 hall 头;搜索时自动展开匹配组) */}
       {visibleGroups.length === 0 ? (
-        <p style={S.intro}>{normFilter ? '无匹配的 hall/room。' : '注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。'}</p>
+        <p style={S.intro}>{normFilter ? tr("无匹配的 hall/room。") : tr("注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。")}</p>
       ) : (
         visibleGroups.map((g) => {
         const hallOpen = !!normFilter || expandedHalls.has(g.hall);
@@ -561,12 +562,12 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                 cursor: 'pointer',
               }}
               title={picking
-                ? '点击此 hall:把「' + picking + '」归入 ' + g.hall + ' 下(major/minor,预览后确认)'
-                : hiPriv ? '拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)' : undefined}
+                ? tr("点击此 hall:把「") + picking + tr("」归入") + g.hall + tr("下(major/minor,预览后确认)")
+                : hiPriv ? tr("拖入 room 归类到该 hall 下(major/minor;记录随迁,旧名进别名,预览后确认)") : undefined}
             >
               <button
                 type="button"
-                title={hallOpen ? '收起子 room' : '展开子 room(默认折叠)'}
+                title={hallOpen ? tr("收起子 room") : tr("展开子 room(默认折叠)")}
                 onClick={(ev) => { ev.stopPropagation(); toggleHall(g.hall); }}
                 style={{ ...btn, borderRadius: 999, padding: '1px 7px', flexShrink: 0 }}
               >{hallOpen ? '▾' : '▸'}</button>
@@ -574,15 +575,15 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                 {g.hall}
                 {g.label ? <span style={S.muted}>{' (' + g.label + ')'}</span> : null}
               </span>
-              <span style={S.muted}>{`合计 ${g.total} 条 · ${g.entries.length} 个 room`}</span>
+              <span style={S.muted}>{tr("合计 {p1} 条 · {p2} 个 room", { p1: g.total, p2: g.entries.length })}</span>
               <div style={S.grow} />
               <button
                 type="button"
                 disabled={!hiPriv || busy}
-                title={`预填注册表单为 ${g.hall}/…(注册该 hall 下的小类)`}
+                title={tr("预填注册表单为 {p1}/…(注册该 hall 下的小类)", { p1: g.hall })}
                 onClick={(ev) => { ev.stopPropagation(); setRegSlug(g.hall + '/'); }}
                 style={btn}
-              >+小类</button>
+              >{tr("+小类")}</button>
             </div>
             {hallOpen ? g.entries.map((e) => {
               const standalone = e.slug === g.hall;
@@ -594,7 +595,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                   <div style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', gap: '2px 8px', alignItems: 'baseline' }}>
                     <button
                       type="button"
-                      title={expandedRooms.has(e.slug) ? '收起内容' : '展开查看该 Room 的记录内容(默认收起)'}
+                      title={expandedRooms.has(e.slug) ? tr("收起内容") : tr("展开查看该 Room 的记录内容(默认收起)")}
                       onClick={() => void toggleRoomExpand(e.slug)}
                       style={{ ...btn, borderRadius: 999, padding: '1px 7px', flexShrink: 0 }}
                     >{expandedRooms.has(e.slug) ? '▾' : '▸'}</button>
@@ -604,25 +605,25 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                       onPointerMove={onDragLabelMove}
                       onPointerUp={onDragLabelUp}
                       title={hiPriv && !busy
-                        ? '按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)'
+                        ? tr("按住拖到某个 hall 头上归类(major/minor;记录随迁,旧名进别名)")
                         : e.description ? `${e.slug} — ${e.description}` : e.slug}
                     >
                       {standalone ? e.slug : '· ' + e.slug.slice(g.hall.length + 1)}
                       {e.source === 'pre-registered' ? ' ⭐' : ''}
                     </span>
                     {e.label ? <span style={S.muted}>{e.label}</span> : null}
-                    <span style={S.muted}>{count + ' 条'}</span>
-                    {retired ? <span style={{ ...S.muted, color: 'var(--dsh-mem-danger)' }}>已退役</span> : null}
-                    {(e.aliases ?? []).length > 0 ? <span style={{ ...S.muted, wordBreak: 'break-all' }}>{'别名: ' + (e.aliases ?? []).join(', ')}</span> : null}
+                    <span style={S.muted}>{count + tr("条")}</span>
+                    {retired ? <span style={{ ...S.muted, color: 'var(--dsh-mem-danger)' }}>{tr("已退役")}</span> : null}
+                    {(e.aliases ?? []).length > 0 ? <span style={{ ...S.muted, wordBreak: 'break-all' }}>{tr("别名:") + (e.aliases ?? []).join(', ')}</span> : null}
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
                     {!hiPriv ? null : (
                       <>
-                        <button type="button" disabled={busy} title="编辑显示名/归类说明" onClick={() => { setEditing({ slug: e.slug, label: e.label ?? '', description: e.description ?? '' }); setForm(null); setPreview(null); setPicking(null); }} style={btn}>编辑</button>
+                        <button type="button" disabled={busy} title={tr("编辑显示名/归类说明")} onClick={() => { setEditing({ slug: e.slug, label: e.label ?? '', description: e.description ?? '' }); setForm(null); setPreview(null); setPicking(null); }} style={btn}>{tr("编辑")}</button>
                         <button
                           type="button"
                           disabled={busy}
-                          title={picking === e.slug ? '再点一次取消挑选;然后点击目标 hall 头完成归类' : '归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)'}
+                          title={picking === e.slug ? tr("再点一次取消挑选;然后点击目标 hall 头完成归类") : tr("归类到已有 hall 下:点击后选目标 hall(记录随迁,旧名进别名)")}
                           onClick={() => {
                             if (picking === e.slug) { setPicking(null); return; }
                             setForm({ action: 'rename', from: e.slug, to: '' });
@@ -631,16 +632,16 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                             setMsg(null); setError(null);
                           }}
                           style={{ ...btn, ...(picking === e.slug ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : {}) }}
-                        >{picking === e.slug ? '选 hall…' : '归类'}</button>
-                        <button type="button" disabled={busy} title={`改名(= merge 1:1 + 注册表改名)`} onClick={() => { setForm({ action: 'rename', from: e.slug, to: '' }); setPreview(null); }} style={btn}>改名</button>
-                        <button type="button" disabled={busy} title="合并到另一个 Room(dryRun 预览→确认实跑)" onClick={() => { setForm({ action: 'merge', from: e.slug, to: '' }); setPreview(null); }} style={btn}>合并</button>
-                        <button type="button" disabled={busy} title={retired ? '恢复该 Room 到词表' : '退役该 Room(存量 tags 不动)'} onClick={() => retire(e.slug, retired)} style={{ ...btn, ...(retired ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : { color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }) }}>{retired ? '恢复' : '退役'}</button>
+                        >{picking === e.slug ? tr("选 hall…") : tr("归类")}</button>
+                        <button type="button" disabled={busy} title={tr("改名(= merge 1:1 + 注册表改名)")} onClick={() => { setForm({ action: 'rename', from: e.slug, to: '' }); setPreview(null); }} style={btn}>{tr("改名")}</button>
+                        <button type="button" disabled={busy} title={tr("合并到另一个 Room(dryRun 预览→确认实跑)")} onClick={() => { setForm({ action: 'merge', from: e.slug, to: '' }); setPreview(null); }} style={btn}>{tr("合并")}</button>
+                        <button type="button" disabled={busy} title={retired ? tr("恢复该 Room 到词表") : tr("退役该 Room(存量 tags 不动)")} onClick={() => retire(e.slug, retired)} style={{ ...btn, ...(retired ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : { color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }) }}>{retired ? tr("恢复") : tr("退役")}</button>
                       {!retired ? (
-                        <button type="button" disabled={busy} title="退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)" onClick={() => retire(e.slug, false, true)} style={{ ...btn, color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }}>退场</button>
+                        <button type="button" disabled={busy} title={tr("退役并退场该 Room 下全部记忆(软删,可在「已退场」区恢复)")} onClick={() => retire(e.slug, false, true)} style={{ ...btn, color: 'var(--dsh-mem-danger)', borderColor: 'var(--dsh-mem-danger)' }}>{tr("退场")}</button>
                       ) : null}
                       </>
                     )}
-                    <button type="button" disabled={busy} title="导出该 Room 的记录清单 CSV" onClick={() => exportRecords(e.slug)} style={btn}>导出</button>
+                    <button type="button" disabled={busy} title={tr("导出该 Room 的记录清单 CSV")} onClick={() => exportRecords(e.slug)} style={btn}>{tr("导出")}</button>
                   </div>
                   </div>
                   {expandedRooms.has(e.slug) ? (
@@ -654,9 +655,9 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                           </div>
                         </div>
                       ))}
-                      {(roomRecords[e.slug]?.items.length ?? 0) === 0 ? <div style={S.muted}>该 Room 暂无记录。</div> : null}
+                      {(roomRecords[e.slug]?.items.length ?? 0) === 0 ? <div style={S.muted}>{tr("该 Room 暂无记录。")}</div> : null}
                       {(roomRecords[e.slug]?.total ?? 0) > (roomRecords[e.slug]?.items.length ?? 0) ? (
-                        <div style={{ ...S.muted, fontSize: 11 }}>{'共 ' + roomRecords[e.slug]!.total + ' 条,仅显示前 ' + roomRecords[e.slug]!.items.length + ' 条'}</div>
+                        <div style={{ ...S.muted, fontSize: 11 }}>{tr("共") + roomRecords[e.slug]!.total + tr("条,仅显示前") + roomRecords[e.slug]!.items.length + tr("条")}</div>
                       ) : null}
                     </div>
                   ) : null}
@@ -671,10 +672,10 @@ export function RoomsTab(props: { rpc: RpcFn }) {
       {/* 未注册自生长区 */}
       {visibleGrown.length > 0 ? (
         <div style={{ marginTop: 4 }}>
-          <button type="button" onClick={() => setGrownOpen(!grownOpen)} style={btn} title={grownOpen ? '收起未注册自生长 Room' : '展开未注册自生长 Room'}>
-            {grownOpen ? '▾' : '▸'} 自生长未注册 · 共 {visibleGrown.length}
+          <button type="button" onClick={() => setGrownOpen(!grownOpen)} style={btn} title={grownOpen ? tr("收起未注册自生长 Room") : tr("展开未注册自生长 Room")}>
+            {grownOpen ? '▾' : '▸'} {tr("自生长未注册 · 共")} {visibleGrown.length}
           </button>
-          <span style={S.muted}>{'(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)'}</span>
+          <span style={S.muted}>{tr("(只在 tags 里涌现,不在词表 —— 收编后标注器才会优先挂靠)")}</span>
           {grownOpen ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 6 }}>
               {visibleGrown.map((r) => (
@@ -684,15 +685,15 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                     onPointerDown={(ev) => onDragLabelDown(ev, r.room)}
                     onPointerMove={onDragLabelMove}
                     onPointerUp={onDragLabelUp}
-                    title={hiPriv && !busy ? '自生长 slug(未注册)——按住拖到某个 hall 头上 = 收编并归为其子类' : '自生长 slug(未注册)'}
+                    title={hiPriv && !busy ? tr("自生长 slug(未注册)——按住拖到某个 hall 头上 = 收编并归为其子类") : tr("自生长 slug(未注册)")}
                   >
                     {r.room + ' · ' + r.count}
                   </span>
-                  <button type="button" disabled={!hiPriv || busy} title="收编进注册表(source=grown,原地)" onClick={() => adopt(r.room)} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)', opacity: !hiPriv || busy ? 0.5 : 1 }}>收编</button>
+                  <button type="button" disabled={!hiPriv || busy} title={tr("收编进注册表(source=grown,原地)")} onClick={() => adopt(r.room)} style={{ ...btn, color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)', opacity: !hiPriv || busy ? 0.5 : 1 }}>{tr("收编")}</button>
                   <button
                     type="button"
                     disabled={!hiPriv || busy}
-                    title="归类到已有 hall 下:点击后选目标 hall(收编+子类一步,记录随迁)"
+                    title={tr("归类到已有 hall 下:点击后选目标 hall(收编+子类一步,记录随迁)")}
                     onClick={() => {
                       if (picking === r.room) { setPicking(null); return; }
                       setForm({ action: 'rename', from: r.room, to: '' });
@@ -701,7 +702,7 @@ export function RoomsTab(props: { rpc: RpcFn }) {
                       setMsg(null); setError(null);
                     }}
                     style={{ ...btn, opacity: !hiPriv || busy ? 0.5 : 1, ...(picking === r.room ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : {}) }}
-                  >{picking === r.room ? '选 hall…' : '归'}</button>
+                  >{picking === r.room ? tr("选 hall…") : tr("归")}</button>
                 </span>
               ))}
             </div>
