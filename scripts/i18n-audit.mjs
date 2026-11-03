@@ -124,6 +124,23 @@ for (const [loc, dict] of Object.entries(dicts)) {
   if (stale.length) errors.push(`${loc}: 字典含抽取集之外的 key ${stale.length} 个（如 ${JSON.stringify(stale[0]).slice(0, 50)}）`);
 }
 
+// spacing 策略必须真的落进字典（否则「6scene blocks」这类粘连只会被实机发现）
+const overridesFile = path.join(root, 'scripts/i18n-overrides.json');
+if (existsSync(overridesFile)) {
+  const spacing = JSON.parse(readFileSync(overridesFile, 'utf8')).spacing || {};
+  for (const [mode, list] of Object.entries(spacing)) {
+    for (const k of list) {
+      for (const [loc, dict] of Object.entries(dicts)) {
+        const v = dict[k];
+        if (typeof v !== 'string') continue;
+        const okLead = mode === 'leading' || mode === 'both' ? v.startsWith(' ') : true;
+        const okTrail = mode === 'trailing' || mode === 'both' ? v.endsWith(' ') : true;
+        if (!okLead || !okTrail) errors.push(`${loc}: spacing(${mode}) 未生效 ${JSON.stringify(k)}`);
+      }
+    }
+  }
+}
+
 // ── 4. 构建产物：是否带齐字典 ───────────────────────────────────────
 const bundlePath = path.join(root, 'dist/client.js');
 if (!existsSync(bundlePath)) {
