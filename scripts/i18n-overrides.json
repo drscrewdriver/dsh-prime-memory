@@ -55,6 +55,22 @@
     "BGE-M3 大杯": {
       "en": "BGE-M3 Large",
       "ru": "BGE-M3 Large"
+    },
+    "下载": {
+      "en": "Download",
+      "ru": "Скачать"
+    },
+    "继续下载": {
+      "en": "Resume download",
+      "ru": "Продолжить скачивание"
+    },
+    "删除已下载的": {
+      "en": "Delete downloaded ",
+      "ru": "Удалить скачанную "
+    },
+    "维 · 上下文": {
+      "en": "dim · context",
+      "ru": "разм. · контекст"
     }
   },
   "spacing": {
