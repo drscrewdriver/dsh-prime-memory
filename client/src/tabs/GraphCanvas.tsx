@@ -188,9 +188,13 @@ export function GraphCanvas(props: {
         // v5 实名 animation(v4 的 animated 在这儿不生效);true = 逐 tick 迭代过渡
         animation: true,
         iterations: 300,
-        // 持续"漂浮"而非死寂:alphaMin 调小让模拟晚些收敛
-        alphaMin: 0.005,
-        alphaDecay: 0.02,
+        // 分散够了就停摆：旧版故意把 alphaMin 调小维持“漂浮感”，但 manyBody 与
+        // collide 的残余能量每 tick 都给节点重新加速，观感是随机摆动（用户裁定限制它）。
+        // alphaMin 抬到停摆线、alphaDecay 稍快冷却、velocityDecay 加强阻尼（d3 默认 0.4）
+        // ——前半段扩散行为不变，后半段残差速度快速衰减到静。
+        alphaMin: 0.012,
+        alphaDecay: 0.028,
+        velocityDecay: 0.55,
         link: { distance: 90, strength: 0.6 },
         collide: { radius: 14, strength: 0.8 },
         manyBody: { strength: -60 },
