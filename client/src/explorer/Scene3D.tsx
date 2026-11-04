@@ -19,6 +19,7 @@
  *   单击 = 进入 ego（BFS 跳数 = 球壳层数，520ms 插值过渡，相机自动框住壳层）；
  *   ego 中再点焦点 = 回 cluster；双击/Enter = 打开该实体来源记录（onPick）；Esc 退出。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { GraphFull } from '../tabs/graph-canvas-data.js';
 import { clipByWidth, degreeMapOf, hash32 } from '../tabs/graph-canvas-data.js';
@@ -830,12 +831,10 @@ export function Scene3D(props: {
       >
         {mode === 'ego' ? (
           <span>
-            ego 壳层 · <b style={{ color: ui.accent }}>{(focusRef.current ? nodeById.get(focusRef.current)?.name : null) ?? '焦点'}</b> 在第 0 层，第 k 跳在第 k 层
-            <br />
-            点焦点/Esc 回全图 · 双击/Enter 打开记录
-          </span>
+            {tr("ego 壳层 ·")} <b style={{ color: ui.accent }}>{(focusRef.current ? nodeById.get(focusRef.current)?.name : null) ?? tr("焦点")}</b> {tr("在第 0 层，第 k 跳在第 k 层")} <br />
+            {tr("点焦点/Esc 回全图 · 双击/Enter 打开记录")} </span>
         ) : (
-          <span>左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录</span>
+          <span>{tr("左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录")}</span>
         )}
       </div>
 
@@ -859,9 +858,9 @@ export function Scene3D(props: {
         >
           <div style={{ fontWeight: 600, color: 'var(--dsh-mem-text-1)' }}>{hoverMeta.name}</div>
           <div>
-            {hoverMeta.type} · 关系 {hoverMeta.degree} 条{hoverMeta.aging != null ? ` · 老化 ${hoverMeta.aging.toFixed(2)}` : ''}
+            {hoverMeta.type} {tr("· 关系")} {hoverMeta.degree} {tr("条")}{hoverMeta.aging != null ? tr("· 老化 {p1}", { p1: hoverMeta.aging.toFixed(2) }) : ''}
           </div>
-          {hoverMeta.source ? <div style={{ color: 'var(--dsh-mem-text-3)' }}>出处：{hoverMeta.source}</div> : null}
+          {hoverMeta.source ? <div style={{ color: 'var(--dsh-mem-text-3)' }}>{tr("出处：")}{hoverMeta.source}</div> : null}
         </div>
       ) : null}
 
@@ -870,21 +869,19 @@ export function Scene3D(props: {
       <div
         style={{ position: 'absolute', bottom: 8, left: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', background: ui.barBg, border: ui.border, borderRadius: 10, padding: '4px 8px' }}
       >
-        {toggle('辉光', glowOn, setGlowOn)}
-        {toggle('边', edgesOn, setEdgesOn)}
-        {toggle('标签', labelsOn, setLabelsOn)}
-        {toggle('老化亮度', agingOn, setAgingOn)}
-        {toggle('呼吸', twinkleOn, setTwinkleOn)}
-        {toggle('漂移', driftOn, setDriftOn)}
-        {toggle(starry ? '星空底' : '白底', starry, setStarry)}
+        {toggle(tr("辉光"), glowOn, setGlowOn)}
+        {toggle(tr("边"), edgesOn, setEdgesOn)}
+        {toggle(tr("标签"), labelsOn, setLabelsOn)}
+        {toggle(tr("老化亮度"), agingOn, setAgingOn)}
+        {toggle(tr("呼吸"), twinkleOn, setTwinkleOn)}
+        {toggle(tr("漂移"), driftOn, setDriftOn)}
+        {toggle(starry ? tr("星空底") : tr("白底"), starry, setStarry)}
         <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          点
-          <input type="range" min={1.2} max={4} step={0.2} value={pointSize} onChange={(e) => setPointSize(Number(e.target.value))} />
+          {tr("点")} <input type="range" min={1.2} max={4} step={0.2} value={pointSize} onChange={(e) => setPointSize(Number(e.target.value))} />
         </label>
         {mode === 'ego' ? (
-          <NButton onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))} title="回到全图" style={{ color: ui.text, borderColor: ui.border }}>
-            回全图
-          </NButton>
+          <NButton onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))} title={tr("回到全图")} style={{ color: ui.text, borderColor: ui.border }}>
+            {tr("回全图")} </NButton>
         ) : null}
       </div>
     </div>

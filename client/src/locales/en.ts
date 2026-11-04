@@ -424,6 +424,7 @@ export const en: Record<string, string> = {
   "合并到另一个 Room(dryRun 预览→确认实跑)": "Merge into another Room (dryRun preview → confirm to run)",
   "合计 {p1} 条 · {p2} 个 room": "Total {p1} entries · {p2} rooms",
   "候选": "Candidate",
+  "呼吸": "Breathing",
   "画像": "Persona",
   "画像读取失败：": "Persona read failed:",
   "画像偏好": "Profile preference",
