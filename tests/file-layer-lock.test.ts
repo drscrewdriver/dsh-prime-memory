@@ -181,7 +181,10 @@ describe('T4.5 三种情形诊断可区分', () => {
     await forgeLock(f, process.pid, 1_000);
     const err = await withFileLock(f, async () => 3, { timeoutMs: 200, logger: log3.logger }).catch((e) => e);
     expect(err).toBeInstanceOf(FileLockTimeoutError);
-    expect((err as FileLockTimeoutError).waitMs).toBeGreaterThanOrEqual(200);
+    // CI runner 的 Date.now() 与 setTimeout 调度有 1-3 ms 拖动；
+    // 严格 `>= 200` 在 GitHub ubuntu runner 上会因 waitMs=199 偶发挂。
+    // 取 >= 190 保留 10 ms 宽容，同时仍能拦住远小于 timeoutMs 的提前返回。
+    expect((err as FileLockTimeoutError).waitMs).toBeGreaterThanOrEqual(190);
     expect(log3.warn.some((m) => m.includes('timeout=200'))).toBe(true);
   });
 });
