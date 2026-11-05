@@ -16,7 +16,7 @@ import { fmtTime } from '../format.js';
 
 /** 邻居行：一条关系一行（平行关系不合并，合并就丢关系）。 */
 function relLine(n: RecordLinksResponse['neighbors'][number]): string {
-  return tr("{p1}{p2} · {p3} 跳 · 经由 {p4}", { p1: n.relation, p2: n.causal ? tr('（因果）') : '', p3: n.hop, p4: n.viaEntityId });
+  return tr("{p1}{p2} · {p3} 跳 · 经由 {p4}", { p1: tr(n.relation), p2: n.causal ? tr('（因果）') : '', p3: n.hop, p4: n.viaEntityId });
 }
 
 export function LinkPane(props: {

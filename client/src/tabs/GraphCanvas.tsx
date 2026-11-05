@@ -103,7 +103,7 @@ export function GraphCanvas(props: {
     for (const e of full.edges) {
       const eid = `${e.from}\x00${e.to}\x00${e.relation}`;
       m.set(eid, {
-        title: e.relation,
+        title: tr(e.relation),
         sub: `${nameById.get(e.from) ?? e.from} → ${nameById.get(e.to) ?? e.to}${e.causal ? tr("· 因果边") : ''}`,
       });
     }
@@ -163,7 +163,7 @@ export function GraphCanvas(props: {
           stroke: (d: EdgeData) => (d.data?.causal ? causalColor : edgeColor),
           lineWidth: (d: EdgeData) => (d.data?.causal ? 1.8 : 1),
           strokeOpacity: 0.5,
-          labelText: (d: EdgeData) => (labelAll || d.data?.causal ? String(d.data?.relation ?? '') : ''),
+          labelText: (d: EdgeData) => (labelAll || d.data?.causal ? tr(String(d.data?.relation ?? '')) : ''),
           labelFill: (d: EdgeData) => (d.data?.causal ? causalColor : dimColor),
           labelFontSize: 9,
           // 字底垫一块半透背景:否则字压在弹簧线上、星点上一律读不出

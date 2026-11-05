@@ -36145,6 +36145,7 @@ var __create = Object.create;
 		  "裁决退场": "Retired by verdict",
 		  "裁决这一对？ 将要退场的记忆： 「{p1}」": 'Resolve this pair? Memory to be retired: "{p1}"',
 		  "裁决中…": "Resolving…",
+		  "参与": "participates in",
 		  "操作失败": "Operation failed",
 		  "侧栏「记忆库」入口": 'Sidebar "Memory store" entry',
 		  "测试规范": "Test conventions",
@@ -36183,6 +36184,7 @@ var __create = Object.create;
 		  "出处：": "Source:",
 		  "出行": "Travel",
 		  "串行": "Serial",
+		  "创建": "creates",
 		  "创建:": "Created:",
 		  "创作娱乐": "Creative & entertainment",
 		  "词表加载中": "Loading vocabulary",
@@ -36239,6 +36241,7 @@ var __create = Object.create;
 		  "导出为空": "Export is empty",
 		  "导出无 Room 绑定的孤儿清单 CSV(含候选)": "Export CSV list of orphans with no Room binding (including candidates)",
 		  "导出无 Room 绑定的孤儿清单(含候选)": "Export list of orphans with no Room binding (including candidates)",
+		  "导致": "causes",
 		  "地点": "Location",
 		  "登记来源": "Register source",
 		  "登记来源需要 id 与绝对路径 path": "Registering a source requires an id and an absolute path",
@@ -36316,6 +36319,7 @@ var __create = Object.create;
 		  "供应商": "Provider",
 		  "共": "Total ",
 		  "共 {p1} 条 ·": "Total {p1} entries ·",
+		  "贡献": "contributes to",
 		  "勾选以批量删除": "Check to delete in bulk",
 		  "沟通风格": "Communication style",
 		  "构建配置": "Build config",
@@ -36564,6 +36568,7 @@ var __create = Object.create;
 		  "情境:": "Context:",
 		  "情境：": "Context:",
 		  "请先在下方下载一个本地嵌入模型，再切换到本地档。": "Download a local embedding model below first, then switch to the local mode.",
+		  "取代": "supersedes",
 		  "取代本记录的新行，点击查看": "Newer row that supersedes this record; click to view",
 		  "取代链": "Supersede chain",
 		  "取消": "Cancel",
@@ -36643,6 +36648,7 @@ var __create = Object.create;
 		  "时间窗口总览": "Time window overview",
 		  "实际链": "Actual chain",
 		  "实践规范": "Practice conventions",
+		  "使用": "uses",
 		  "使用中": "In use",
 		  "事实层面直接互斥——两边不可能同时为真，必须由人给出结论。": "Directly mutually exclusive at the fact level — both cannot be true at once, so a human must give the verdict.",
 		  "事实源覆盖到：": "Fact source covers up to:",
@@ -36669,6 +36675,7 @@ var __create = Object.create;
 		  "输入按字符、输出/思考按 token 计；趋势图 Y 轴为输出 token，上方可切换层级与颗粒度。": "Input counts by characters, output/thinking by tokens; the trend chart's Y axis is output tokens, and the level and granularity can be switched above.",
 		  "输入预算": "Input budget",
 		  "输入预算须为 0 或 1000~256000 的整数（留空或 0 = 跟随配置）": "Input budget must be 0 or an integer from 1000 to 256000 (blank or 0 = follow configuration)",
+		  "属于": "belongs to",
 		  "数据目录": "Data directory",
 		  "刷新": "Refresh",
 		  "刷新图": "Refresh graph",
@@ -36767,6 +36774,7 @@ var __create = Object.create;
 		  "未写": "not written",
 		  "未知": "unknown",
 		  "未知错误": "unknown error",
+		  "位于": "located in",
 		  "文件 → 库：只有文件变过的回灌入库，`.disable` 后缀的退场；两边都变的那些两侧都不动，只挂账。会写库，因此需要高权限模式": "file → store: only files that changed are written back into the store, `.disable` suffixed ones are retired; those changed on both sides are left alone on both sides and only noted. Writes to the store, so high-permission mode is required",
 		  "文件缺失 {p1}": "file missing {p1}",
 		  "文字": "text",
@@ -36793,6 +36801,7 @@ var __create = Object.create;
 		  "显示名(可中文)": "display name (Chinese allowed)",
 		  "现有 L1 记忆 / L2 场景 / L3 画像会整体归档（*.bak.时间戳，可手工找回），随后清空重建；重建期间可正常对话，新对话的蒸馏优先进行；中途可取消，已重建部分保留。": "Existing L1 memories / L2 scenes / L3 persona are archived as a whole (*.bak.timestamp, recoverable by hand), then wiped and rebuilt; you can chat normally during the rebuild, and distillation of new conversations goes first; you can cancel midway and the rebuilt part is kept.",
 		  "线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。": "the evidence points to the new one being more credible and the old one should step aside — but the machine does not resolve automatically, a human still confirms.",
+		  "相关": "related to",
 		  "相关度": "relevance",
 		  "相关记忆": "related memories",
 		  "详情": "details",
@@ -36817,6 +36826,7 @@ var __create = Object.create;
 		  "星空底": "starfield background",
 		  "行为规范": "Behavior norms",
 		  "行重复": "duplicate row",
+		  "修复了": "fixed",
 		  "修复指引（可复制）": "repair guide (copyable)",
 		  "悬停星点 = 在浮层里看完整名称与类型 · 单击星点 = 改起点继续展开 · 拖拽钉位与全图一致": "hover a star = see the full name and type in a popover · click a star = change the origin and keep expanding · drag to pin, consistent with the full graph",
 		  "选 hall…": "select hall…",
@@ -36825,6 +36835,7 @@ var __create = Object.create;
 		  "一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。": 'how many projection files are updated per click at most (export writes + suffix renames both use quota). Ones that "never changed" do not use quota. 0 = follow the deployment default (2000); the cap is 10000.',
 		  "一次最多退场": "max retired per run",
 		  "一致 {p1}": "consistent {p1}",
+		  "依赖": "depends on",
 		  "依赖配置": "Dependency config",
 		  "已搬 {p1} · 失败 {p2} · 仍被认领 {p3}": "moved {p1} · failed {p2} · still claimed {p3}",
 		  "已不在已注册路由中：该路由调用会失败并被链跳过（不阻止保存）。": "no longer among the registered routes: calls to this route will fail and be skipped by the chain (saving is not blocked).",
@@ -36878,6 +36889,7 @@ var __create = Object.create;
 		  "已注册：memory_search_graph / memory_expand_graph_node": "Registered: memory_search_graph / memory_expand_graph_node",
 		  "已注册：memory_skill_list / _read / _pin / _archive（需先开启「技能结晶」）": 'Registered: memory_skill_list / _read / _pin / _archive (enable "Skill crystallization" first)',
 		  "以此为新起点": "Use this as the new starting point",
+		  "因为": "because of",
 		  "影响：蒸馏背景参考与跨会话检索会为空（记忆本身仍可捕获与检索本库）。": "Impact: distillation background reference and cross-session recall will be empty (memories themselves can still be captured and searched in this store).",
 		  "硬冲突（占额度）": "Hard conflict (counts toward quota)",
 		  "用": "Use",
@@ -37306,6 +37318,7 @@ var __create = Object.create;
 		  "裁决退场": "Отозвано по решению",
 		  "裁决这一对？ 将要退场的记忆： 「{p1}」": "Вынести решение по этой паре? Отзываемая запись: «{p1}»",
 		  "裁决中…": "Вынесение решения…",
+		  "参与": "участвует в",
 		  "操作失败": "Операция не удалась",
 		  "侧栏「记忆库」入口": "Вход в «Хранилище памяти» на боковой панели",
 		  "测试规范": "Соглашения по тестам",
@@ -37344,6 +37357,7 @@ var __create = Object.create;
 		  "出处：": "Источник:",
 		  "出行": "Поездки",
 		  "串行": "Последовательно",
+		  "创建": "создаёт",
 		  "创建:": "Создано:",
 		  "创作娱乐": "Творчество и развлечения",
 		  "词表加载中": "Загрузка словаря",
@@ -37400,6 +37414,7 @@ var __create = Object.create;
 		  "导出为空": "Экспорт пуст",
 		  "导出无 Room 绑定的孤儿清单 CSV(含候选)": "Экспорт CSV списка сирот без привязки к Room (с кандидатами)",
 		  "导出无 Room 绑定的孤儿清单(含候选)": "Экспорт списка сирот без привязки к Room (с кандидатами)",
+		  "导致": "вызывает",
 		  "地点": "Место",
 		  "登记来源": "Зарегистрировать источник",
 		  "登记来源需要 id 与绝对路径 path": "Для регистрации источника нужны id и абсолютный path",
@@ -37477,6 +37492,7 @@ var __create = Object.create;
 		  "供应商": "Провайдер",
 		  "共": "Всего ",
 		  "共 {p1} 条 ·": "Всего {p1} записей ·",
+		  "贡献": "вносит вклад",
 		  "勾选以批量删除": "Отметьте для массового удаления",
 		  "沟通风格": "Стиль общения",
 		  "构建配置": "Конфигурация сборки",
@@ -37725,6 +37741,7 @@ var __create = Object.create;
 		  "情境:": "Контекст:",
 		  "情境：": "Контекст:",
 		  "请先在下方下载一个本地嵌入模型，再切换到本地档。": "Сначала скачайте локальную модель эмбеддингов ниже, затем переключитесь на локальный режим.",
+		  "取代": "заменяет",
 		  "取代本记录的新行，点击查看": "Новая строка, заменяющая эту запись; нажмите, чтобы открыть",
 		  "取代链": "Цепочка замен",
 		  "取消": "Отмена",
@@ -37804,6 +37821,7 @@ var __create = Object.create;
 		  "时间窗口总览": "Обзор временного окна",
 		  "实际链": "Фактическая цепочка",
 		  "实践规范": "Соглашения по практике",
+		  "使用": "использует",
 		  "使用中": "Используется",
 		  "事实层面直接互斥——两边不可能同时为真，必须由人给出结论。": "Прямо взаимоисключающие на уровне фактов — оба не могут быть истинны одновременно, решение должен принять человек.",
 		  "事实源覆盖到：": "Источник фактов охватывает до:",
@@ -37830,6 +37848,7 @@ var __create = Object.create;
 		  "输入按字符、输出/思考按 token 计；趋势图 Y 轴为输出 token，上方可切换层级与颗粒度。": "Ввод считается по символам, вывод/размышления — по token; по оси Y графика трендов — выходные token, уровень и детализацию можно переключить выше.",
 		  "输入预算": "Бюджет ввода",
 		  "输入预算须为 0 或 1000~256000 的整数（留空或 0 = 跟随配置）": "Бюджет ввода должен быть 0 или целым числом 1000–256000 (пусто или 0 = по конфигурации)",
+		  "属于": "относится к",
 		  "数据目录": "Каталог данных",
 		  "刷新": "Обновить",
 		  "刷新图": "Обновить граф",
@@ -37928,6 +37947,7 @@ var __create = Object.create;
 		  "未写": "не записано",
 		  "未知": "неизвестно",
 		  "未知错误": "неизвестная ошибка",
+		  "位于": "находится в",
 		  "文件 → 库：只有文件变过的回灌入库，`.disable` 后缀的退场；两边都变的那些两侧都不动，只挂账。会写库，因此需要高权限模式": "файл → хранилище: в хранилище попадают только изменённые файлы, с суффиксом `.disable` отзываются; изменённые с обеих сторон не трогаются ни с одной стороны, только фиксируются. Пишет в хранилище, поэтому нужен режим с высокими правами",
 		  "文件缺失 {p1}": "файл отсутствует {p1}",
 		  "文字": "текст",
@@ -37954,6 +37974,7 @@ var __create = Object.create;
 		  "显示名(可中文)": "отображаемое имя (можно на китайском)",
 		  "现有 L1 记忆 / L2 场景 / L3 画像会整体归档（*.bak.时间戳，可手工找回），随后清空重建；重建期间可正常对话，新对话的蒸馏优先进行；中途可取消，已重建部分保留。": "Существующая память L1 / сцены L2 / профиль L3 целиком уходят в архив (*.bak.временная метка, можно найти вручную), затем очищаются и перестраиваются; во время перестройки можно нормально общаться, дистилляция новых диалогов идёт в первую очередь; можно отменить на полпути, перестроенная часть сохраняется.",
 		  "线索指向新的更可信、旧的应让位——但机器不自动裁决，仍由人确认。": "признаки указывают, что новая запись достовернее и старая должна уступить, — но машина не решает автоматически, подтверждает человек.",
+		  "相关": "связано с",
 		  "相关度": "релевантность",
 		  "相关记忆": "связанные воспоминания",
 		  "详情": "подробности",
@@ -37978,6 +37999,7 @@ var __create = Object.create;
 		  "星空底": "звёздный фон",
 		  "行为规范": "Нормы поведения",
 		  "行重复": "дубликат строки",
+		  "修复了": "исправил",
 		  "修复指引（可复制）": "инструкция по исправлению (можно скопировать)",
 		  "悬停星点 = 在浮层里看完整名称与类型 · 单击星点 = 改起点继续展开 · 拖拽钉位与全图一致": "наведение на звезду = полное имя и тип во всплывающем окне · клик по звезде = сменить точку отсчёта и продолжить раскрытие · перетаскивание закрепляет, как и на всём графе",
 		  "选 hall…": "выбрать hall…",
@@ -37986,6 +38008,7 @@ var __create = Object.create;
 		  "一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。": "сколько файлов проекций обновляется за один клик максимум (запись при экспорте и переименование по суффиксу расходуют квоту). «Не менявшиеся» квоту не расходуют. 0 = как в конфигурации развёртывания (2000); предел 10000.",
 		  "一次最多退场": "максимум отзывов за раз",
 		  "一致 {p1}": "совпадает {p1}",
+		  "依赖": "зависит от",
 		  "依赖配置": "Конфигурация зависимостей",
 		  "已搬 {p1} · 失败 {p2} · 仍被认领 {p3}": "перенесено {p1} · ошибок {p2} · всё ещё занято {p3}",
 		  "已不在已注册路由中：该路由调用会失败并被链跳过（不阻止保存）。": "больше нет среди зарегистрированных маршрутов: вызов этого маршрута завершится ошибкой и будет пропущен цепочкой (сохранение не блокируется).",
@@ -38039,6 +38062,7 @@ var __create = Object.create;
 		  "已注册：memory_search_graph / memory_expand_graph_node": "Зарегистрировано: memory_search_graph / memory_expand_graph_node",
 		  "已注册：memory_skill_list / _read / _pin / _archive（需先开启「技能结晶」）": "Зарегистрировано: memory_skill_list / _read / _pin / _archive (сначала включите «Кристаллизацию навыков»)",
 		  "以此为新起点": "Сделать новой точкой отсчёта",
+		  "因为": "из-за",
 		  "影响：蒸馏背景参考与跨会话检索会为空（记忆本身仍可捕获与检索本库）。": "Влияние: фоновая справка для дистилляции и межсессионное извлечение (recall) будут пустыми (саму память по-прежнему можно захватывать и искать в этом хранилище).",
 		  "硬冲突（占额度）": "Жёсткий конфликт (занимает квоту)",
 		  "用": "Использовать",
@@ -45266,7 +45290,7 @@ var __create = Object.create;
 		    for (const e of full.edges) {
 		      const eid = `${e.from}\0${e.to}\0${e.relation}`;
 		      m.set(eid, {
-		        title: e.relation,
+		        title: tr(e.relation),
 		        sub: `${nameById.get(e.from) ?? e.from} → ${nameById.get(e.to) ?? e.to}${e.causal ? tr("· 因果边") : ""}`
 		      });
 		    }
@@ -45320,7 +45344,7 @@ var __create = Object.create;
 		          stroke: (d) => d.data?.causal ? causalColor : edgeColor,
 		          lineWidth: (d) => d.data?.causal ? 1.8 : 1,
 		          strokeOpacity: 0.5,
-		          labelText: (d) => labelAll || d.data?.causal ? String(d.data?.relation ?? "") : "",
+		          labelText: (d) => labelAll || d.data?.causal ? tr(String(d.data?.relation ?? "")) : "",
 		          labelFill: (d) => d.data?.causal ? causalColor : dimColor,
 		          labelFontSize: 9,
 		          // 字底垫一块半透背景:否则字压在弹簧线上、星点上一律读不出
@@ -45712,7 +45736,7 @@ var __create = Object.create;
 		          ),
 		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("button", { className: "dsh-mem-tab", style: { border: "none", background: "none", cursor: "pointer", padding: 0 }, onClick: () => openEgo(r.id), title: tr("以此为新起点"), children: r.name }),
 		          /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: r.type }),
-		          r.relations.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: r.causal ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-3)", fontWeight: r.causal ? 600 : 400 }, children: r.relations.join("·") }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: hops > 1 ? tr("间接相连") : "" })
+		          r.relations.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: r.causal ? "var(--dsh-mem-accent)" : "var(--dsh-mem-text-3)", fontWeight: r.causal ? 600 : 400 }, children: r.relations.map((x) => tr(x)).join("·") }) : /* @__PURE__ */ (0, import_jsx_runtime24.jsx)("span", { style: { color: "var(--dsh-mem-text-3)" }, children: hops > 1 ? tr("间接相连") : "" })
 		        ] }, r.id)),
 		        rows.length > LIST_MAX ? /* @__PURE__ */ (0, import_jsx_runtime24.jsxs)("div", { style: S.muted, children: [
 		          tr("另有"),
@@ -47117,7 +47141,7 @@ var __create = Object.create;
 		// client/src/explorer/LinkPane.tsx
 		var import_jsx_runtime30 = require("react/jsx-runtime");
 		function relLine(n) {
-		  return tr("{p1}{p2} · {p3} 跳 · 经由 {p4}", { p1: n.relation, p2: n.causal ? tr("（因果）") : "", p3: n.hop, p4: n.viaEntityId });
+		  return tr("{p1}{p2} · {p3} 跳 · 经由 {p4}", { p1: tr(n.relation), p2: n.causal ? tr("（因果）") : "", p3: n.hop, p4: n.viaEntityId });
 		}
 		function LinkPane(props) {
 		  const { recordId, links, loading, error, onPickRecord, onEmphasisNode, labelOfRecord } = props;
@@ -48094,7 +48118,7 @@ var __create = Object.create;
 		            used.add(cell);
 		            c.fillStyle = e.causal ? causalC : edgeBase;
 		            c.globalAlpha = 0.92;
-		            c.fillText(e.relation, mx, my);
+		            c.fillText(tr(e.relation), mx, my);
 		          }
 		          c.globalAlpha = 1;
 		        }

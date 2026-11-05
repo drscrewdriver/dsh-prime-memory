@@ -608,7 +608,7 @@ export function Scene3D(props: {
             used.add(cell);
             c.fillStyle = e.causal ? causalC : edgeBase;
             c.globalAlpha = 0.92;
-            c.fillText(e.relation, mx, my);
+            c.fillText(tr(e.relation), mx, my);
           }
           c.globalAlpha = 1;
         }

@@ -313,7 +313,7 @@ export function GraphTab(props: { rpc: RpcFn }) {
                     <span style={{ color: 'var(--dsh-mem-text-3)' }}>{r.type}</span>
                     {r.relations.length > 0 ? (
                       <span style={{ color: r.causal ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-3)', fontWeight: r.causal ? 600 : 400 }}>
-                        {r.relations.join('·')}
+                        {r.relations.map((x) => tr(x)).join('·')}
                       </span>
                     ) : (
                       <span style={{ color: 'var(--dsh-mem-text-3)' }}>{hops > 1 ? tr("间接相连") : ''}</span>
