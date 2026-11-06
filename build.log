@@ -1,0 +1,9 @@
+
+> dsh-prime-memory@0.26.31 build
+> node -e "fs.rmSync('dist',{recursive:true,force:true})" && tsc -p tsconfig.json && node scripts/build-client.mjs && node scripts/copy-client.mjs
+
+client bundle built 鈫?dist/client.js (2654837 bytes)
+runtime lockfile copied 鈫?dist/runtime-package-lock.json
+embedding worker copied 鈫?dist/embedding-worker.cjs
+embedding child copied 鈫?dist/embedding-child.cjs
+embedding token guard copied 鈫?dist/embedding-token-guard.cjs
