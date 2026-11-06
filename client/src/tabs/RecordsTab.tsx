@@ -1,4 +1,5 @@
 /** Tab：L1 记忆浏览器（搜索/筛选/分页 + 展开详情 + 高权限**退场(软删)** + 已退场区恢复）。 */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { ListRecordsRequest, RetiredRecordView, UiRecord } from '../../../src/contract.js';
 import { fmtTime, registerTypeCatalog, tagClass, typeCatalogIds, typeLabel } from '../format.js';
@@ -162,12 +163,12 @@ export function RecordsTab(props: { rpc: RpcFn }) {
 
   const toggleHiPriv = () => {
     const next = !hiPriv;
-    if (next && !window.confirm('开启高权限模式：模型获得写入/删除记忆工具，记忆库可删除指定记忆。确定开启？')) return;
+    if (next && !window.confirm(tr("开启高权限模式：模型获得写入/删除记忆工具，记忆库可删除指定记忆。确定开启？"))) return;
     setHiPrivBusy(true);
     rpc('dsh-memory/settings-set', { memoryMutate: next })
       .then((r) => {
         if (r && r.ok) setHiPriv(next);
-        else if (r) setError(r.error ? r.error.message : '切换高权限模式失败');
+        else if (r) setError(r.error ? r.error.message : tr("切换高权限模式失败"));
         setHiPrivBusy(false);
         loadHiPriv();
       })
@@ -192,14 +193,14 @@ export function RecordsTab(props: { rpc: RpcFn }) {
     const ids = Array.from(sel);
     if (ids.length === 0) return;
     if (!hiPriv) {
-      setError('高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。');
+      setError(tr("高权限模式未开启：请在右上「高权限：关」或概览页开关中开启后，再退场记忆。"));
       return;
     }
     if (ids.length > DELETE_LIMIT) {
-      setError('一次最多退场 ' + DELETE_LIMIT + ' 条（当前勾选 ' + ids.length + ' 条），请分批操作。');
+      setError(tr("一次最多退场") + DELETE_LIMIT + tr("条（当前勾选") + ids.length + tr("条），请分批操作。"));
       return;
     }
-    if (!window.confirm('退场勾选的 ' + ids.length + ' 条记忆？\n\n它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。')) return;
+    if (!window.confirm(tr("退场勾选的") + ids.length + tr("条记忆？ 它们会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。"))) return;
     rpc('dsh-memory/records-delete', { ids })
       .then((r) => {
         if (r && r.ok) {
@@ -212,14 +213,14 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           setItems((prev) => prev.filter((m) => !ids.includes(m.id)));
           setTotal((t) => (t === null ? null : Math.max(0, t - removed)));
           if (showRetired) loadRetired();
-        } else if (r) setError(r.error ? r.error.message : '退场失败');
+        } else if (r) setError(r.error ? r.error.message : tr("退场失败"));
       })
       .catch((e: unknown) => setError(String((e && (e as Error).message) || e)));
   };
 
   /** 单条退场（软删，可恢复；host 侧同样有 memoryMutate 门兜底）。 */
   const deleteRecord = (id: string) => {
-    if (!window.confirm('退场该条记忆？\n\n它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。')) return;
+    if (!window.confirm(tr("退场该条记忆？ 它会移出检索面（不再被召回），但记录仍保留 —— 可在下方「已退场」区恢复。"))) return;
     rpc('dsh-memory/records-delete', { ids: [id] })
       .then((r) => {
         if (r && r.ok) {
@@ -233,7 +234,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           setItems((prev) => prev.filter((m) => m.id !== id));
           setTotal((t) => (t === null ? null : Math.max(0, t - 1)));
           if (showRetired) loadRetired();
-        } else if (r) setError(r.error ? r.error.message : '退场失败');
+        } else if (r) setError(r.error ? r.error.message : tr("退场失败"));
       })
       .catch((e: unknown) => setError(String((e && (e as Error).message) || e)));
   };
@@ -251,7 +252,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         if (r && r.ok) {
           setRetired(r.value.items);
           setRetiredTotal(r.value.total);
-        } else if (r) setError(r.error ? r.error.message : '已退场列表加载失败');
+        } else if (r) setError(r.error ? r.error.message : tr("已退场列表加载失败"));
       })
       .catch((e: unknown) => setError(String((e && (e as Error).message) || e)))
       .finally(() => setRetiredBusy(false));
@@ -275,21 +276,21 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           setItems((prev) =>
             prev.map((m) => (restored.has(m.id) ? { ...m, retired: false, retiredReason: undefined } : m)),
           );
-        } else if (r) setError(r.error ? r.error.message : '恢复失败');
+        } else if (r) setError(r.error ? r.error.message : tr("恢复失败"));
       })
       .catch((e: unknown) => setError(String((e && (e as Error).message) || e)))
       .finally(() => setRetiredBusy(false));
   };
 
   const RETIRE_REASON_LABEL: Record<string, string> = {
-    conflict: '裁决退场',
-    superseded: '被取代',
-    manual: '人工退场',
-    obsolete: '声明过时',
-    unknown: '已退场',
+    conflict: tr("裁决退场"),
+    superseded: tr("被取代"),
+    manual: tr("人工退场"),
+    obsolete: tr("声明过时"),
+    unknown: tr("已退场"),
   };
 
-  const countText = total !== null ? '共 ' + total + ' 条' : items.length + ' 条' + (hasMore ? '+' : '');
+  const countText = total !== null ? tr("共") + total + tr("条") : items.length + tr("条") + (hasMore ? '+' : '');
   // 召回使用汇总(首屏响应附带;进 topN 才算 used)
   const [usageSummary, setUsageSummary] = useState<{ tracked: number; attempted: number; used: number; rate: number } | null>(null);
   const selCount = sel.size;
@@ -299,7 +300,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       <div style={S.toolbar}>
         <NInput
           style={{ flex: 1, minWidth: 160 }}
-          placeholder="搜索记忆内容（BM25 关键词）…"
+          placeholder={tr("搜索记忆内容（BM25 关键词）…")}
           value={query}
           onChange={(e: { target: { value: string } }) => {
             setQuery(e.target.value);
@@ -321,9 +322,9 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         />
         <NSel
           style={{ maxWidth: 200 }}
-          options={([{ id: '', label: '全部类型' }] as NSelOption[]).concat(
+          options={([{ id: '', label: tr("全部类型") }] as NSelOption[]).concat(
             (typeCatalogIds().length > 0 ? typeCatalogIds() : [...new Set(items.map((m) => m.type))]).map((t) => {
-              return { id: t, label: typeLabel(t) };
+              return { id: t, label: tr(typeLabel(t)) };
             }),
           )}
           value={typeFilter}
@@ -331,7 +332,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         />
         <NSel
           style={{ maxWidth: 220 }}
-          options={([{ id: '', label: '全部情境' }] as NSelOption[]).concat(
+          options={([{ id: '', label: tr("全部情境") }] as NSelOption[]).concat(
             sceneOptions.map((s) => {
               return { id: s, label: s.length > 24 ? s.slice(0, 24) + '…' : s };
             }),
@@ -347,24 +348,24 @@ export function RecordsTab(props: { rpc: RpcFn }) {
           selected={hallFilter}
           onChange={setHallFilter}
         />
-        <NButton onClick={search}>搜索</NButton>
+        <NButton onClick={search}>{tr("搜索")}</NButton>
         <NButton
           style={{
             color: hiPriv ? 'var(--dsh-mem-danger)' : undefined,
             border: hiPriv ? '1px solid var(--dsh-mem-danger)' : undefined,
           }}
           disabled={hiPrivBusy}
-          title={hiPriv ? '关闭高权限模式（收回模型写删工具与删除权限）' : '开启高权限模式以写删记忆'}
+          title={hiPriv ? tr("关闭高权限模式（收回模型写删工具与删除权限）") : tr("开启高权限模式以写删记忆")}
           onClick={toggleHiPriv}
         >
-          {hiPriv ? '高权限：开' : '高权限：关'}
+          {hiPriv ? tr("高权限：开") : tr("高权限：关")}
         </NButton>
       </div>
       {/* ── 孤儿筛选(Room 标签/分类管理已分离至 Hall 页) ── */}
       <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <button
           type="button"
-          title={untaggedOnly ? '取消孤儿筛选' : '只看没有任何 Room 绑定的记忆'}
+          title={untaggedOnly ? tr("取消孤儿筛选") : tr("只看没有任何 Room 绑定的记忆")}
           onClick={() => {
             const next = !untaggedOnly;
             setUntaggedOnly(next);
@@ -380,14 +381,14 @@ export function RecordsTab(props: { rpc: RpcFn }) {
             color: untaggedOnly ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-2)',
           }}
         >
-          {'无绑定 · ' + orphanCount}
+          {tr("无绑定 ·") + orphanCount}
         </button>
         {(tagFilter || untaggedOnly) && (
           <span style={S.muted}>
-            筛选中:{untaggedOnly ? '无绑定' : tagFilter}
+            {tr("筛选中:")}{untaggedOnly ? tr("无绑定") : tagFilter}
             <button
               type="button"
-              title="清除 Room/孤儿筛选"
+              title={tr("清除 Room/孤儿筛选")}
               onClick={() => {
                 setTagFilter('');
                 setUntaggedOnly(false);
@@ -397,13 +398,12 @@ export function RecordsTab(props: { rpc: RpcFn }) {
               }}
               style={{ cursor: 'pointer', marginLeft: 6, background: 'transparent', border: 'none', color: 'var(--dsh-mem-accent)', fontSize: 12 }}
             >
-              ×清除
-            </button>
+              {tr("×清除")} </button>
           </span>
         )}
         <button
           type="button"
-          title="导出无 Room 绑定的孤儿清单 CSV(含候选)"
+          title={tr("导出无 Room 绑定的孤儿清单 CSV(含候选)")}
           onClick={() => {
             rpc('dsh-memory/rooms-export', { kind: 'orphans' })
               .then((r) => {
@@ -424,18 +424,17 @@ export function RecordsTab(props: { rpc: RpcFn }) {
             color: 'var(--dsh-mem-text-2)',
           }}
         >
-          导出孤儿
-        </button>
-        <span style={S.muted}>Room 标签/分类管理:见「Hall」「Room」标签页。</span>
+          {tr("导出孤儿")} </button>
+        <span style={S.muted}>{tr("Room 标签/分类管理:见「Hall」「Room」标签页。")}</span>
       </div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
-        <span style={S.muted}>{loading ? '加载中…' : countText}</span>
+        <span style={S.muted}>{loading ? tr("加载中…") : countText}</span>
         {usageSummary ? (
-          <span style={S.muted} title="老化权重效果口径:参与召回尝试的记忆中,进 topN(被注入上下文)的比例">{'召回使用 ' + usageSummary.used + '/' + usageSummary.attempted + '(' + usageSummary.rate + '%)'}</span>
+          <span style={S.muted} title={tr("老化权重效果口径:参与召回尝试的记忆中,进 topN(被注入上下文)的比例")}>{tr("召回使用") + usageSummary.used + '/' + usageSummary.attempted + '(' + usageSummary.rate + '%)'}</span>
         ) : null}
         {/* 退场筛查:三态分开看——软删记录不隐藏(可恢复),但混排时可一键分流 */}
-        <span style={S.muted}>退场筛查</span>
-        {([['', '全部'], ['active', '仅活跃'], ['retired', '仅退场']] as const).map(([val, label]) => {
+        <span style={S.muted}>{tr("退场筛查")}</span>
+        {([['', tr("全部")], ['active', tr("仅活跃")], ['retired', tr("仅退场")]] as const).map(([val, label]) => {
           const on = retiredFilter === val;
           return (
             <button
@@ -443,10 +442,10 @@ export function RecordsTab(props: { rpc: RpcFn }) {
               type="button"
               title={
                 val === ''
-                  ? '活跃与已退场混排（已退场的带徽标）'
+                  ? tr("活跃与已退场混排（已退场的带徽标）")
                   : val === 'active'
-                    ? '只看未退场的记忆'
-                    : '只看已退场（软删）的记忆，可在此恢复'
+                    ? tr("只看未退场的记忆")
+                    : tr("只看已退场（软删）的记忆，可在此恢复")
               }
               onClick={() => applyRetiredFilter(val)}
               style={{
@@ -467,10 +466,10 @@ export function RecordsTab(props: { rpc: RpcFn }) {
         <NButton
           style={selCount > 0 ? { color: 'var(--dsh-mem-danger)' } : undefined}
           disabled={selCount === 0}
-          title={hiPriv ? '删除勾选的记忆（一次最多 ' + DELETE_LIMIT + ' 条）' : '高权限模式未开启，删除不可用'}
+          title={hiPriv ? tr("删除勾选的记忆（一次最多") + DELETE_LIMIT + tr("条）") : tr("高权限模式未开启，删除不可用")}
           onClick={deleteSelected}
         >
-          {'删除选中' + (selCount > 0 ? '（' + selCount + '）' : '')}
+          {tr("删除选中") + (selCount > 0 ? '（' + selCount + '）' : '')}
         </NButton>
         {selCount > 0 ? (
           <NButton
@@ -478,8 +477,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
               setSel(new Set());
             }}
           >
-            清空选择
-          </NButton>
+            {tr("清空选择")} </NButton>
         ) : null}
         <div style={S.grow} />
         <NButton
@@ -488,16 +486,15 @@ export function RecordsTab(props: { rpc: RpcFn }) {
             loadRooms();
           }}
         >
-          刷新
-        </NButton>
+          {tr("刷新")} </NButton>
       </div>
-      {!hiPriv ? <div style={S.hint}>提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。</div> : null}
+      {!hiPriv ? <div style={S.hint}>{tr("提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。")}</div> : null}
       {error ? <div style={S.error}>{error}</div> : null}
       {truncated ? (
-        <div style={S.hint}>搜索分页已达检索上限（200 条），更早的结果未显示。请用更精确的关键词或类型/情境过滤。</div>
+        <div style={S.hint}>{tr("搜索分页已达检索上限（200 条），更早的结果未显示。请用更精确的关键词或类型/情境过滤。")}</div>
       ) : null}
       {items.length === 0 && !loading && !error ? (
-        <p style={S.intro}>暂无记忆。对话几轮后，蒸馏管线会自动抽取记忆。</p>
+        <p style={S.intro}>{tr("暂无记忆。对话几轮后，蒸馏管线会自动抽取记忆。")}</p>
       ) : (
         items.map((m) => {
           const open = expandedId === m.id;
@@ -517,7 +514,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                   type="checkbox"
                   checked={checked}
                   style={{ margin: 0, cursor: 'pointer', flexShrink: 0 }}
-                  title="勾选以批量删除"
+                  title={tr("勾选以批量删除")}
                   onClick={(e: { stopPropagation(): void }) => {
                     e.stopPropagation();
                   }}
@@ -525,15 +522,15 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                     toggleSel(m.id);
                   }}
                 />
-                <span className={tagClass(m.type)}>{typeLabel(m.type)}</span>
+                <span className={tagClass(m.type)}>{tr(typeLabel(m.type))}</span>
                 {m.hall ? (
                   <span className="dsh-mem-tag dsh-mem-tag-work-fact">
-                    {"Wing · " + (wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
+                    {"Wing · " + tr(wingCatalog?.find((h) => h.id === m.hall)?.label || m.hall)}
                   </span>
                 ) : null}
                 {m.retired ? (
                   <span
-                    title="该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除"
+                    title={tr("该记忆已退场（软删）：移出检索面但仍可恢复，并未真正删除")}
                     style={{
                       fontSize: 11,
                       padding: '1px 6px',
@@ -543,13 +540,13 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {'已退场' + (m.retiredReason ? ' · ' + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : '')}
+                    {tr("已退场") + (m.retiredReason ? ' · ' + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : '')}
                   </span>
                 ) : null}
-                <span style={S.muted}>{'优先级 ' + m.priority}</span>
+                <span style={S.muted}>{tr("优先级") + m.priority}</span>
                 {m.maturity ? (
                   <span
-                    title={'成熟度（优先级 + 被用次数 + 新鲜度合成）：' + m.maturity}
+                    title={tr("成熟度（优先级 + 被用次数 + 新鲜度合成）：") + m.maturity}
                     style={{
                       fontSize: 11,
                       padding: '1px 6px',
@@ -559,7 +556,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                       color: 'var(--dsh-mem-text-2)',
                     }}
                   >
-                    {m.maturity === 'high' ? '成熟·高' : m.maturity === 'mid' ? '成熟·中' : '成熟·低'}
+                    {m.maturity === 'high' ? tr("成熟·高") : m.maturity === 'mid' ? tr("成熟·中") : tr("成熟·低")}
                   </span>
                 ) : null}
                 {m.agingWeight != null ? (
@@ -569,27 +566,27 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                       border: '1px solid ' + (m.agingWeight <= 0.6 ? 'var(--dsh-mem-danger)' : 'var(--dsh-mem-border)'),
                       color: m.agingWeight <= 0.6 ? 'var(--dsh-mem-danger)' : 'var(--dsh-mem-text-2)',
                     }}
-                    title={'老化权重 ' + Math.round(m.agingWeight * 100) + '%(读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期)));越低越老'}
+                    title={tr("老化权重") + Math.round(m.agingWeight * 100) + tr("%(读路径衰减系数 max(0.5, 0.5^(Δ天/半衰期)));越低越老")}
                   >
-                    {'老化 ' + Math.round(m.agingWeight * 100) + '%'}
+                    {tr("老化") + Math.round(m.agingWeight * 100) + '%'}
                   </span>
                 ) : null}
                 {m.usage ? (
                   <span
                     style={S.muted}
-                    title={'召回使用 ' + m.usage.used + '/' + m.usage.attempts + '(进 topN 才算 used)'
-                      + (m.usage.lastUsedAt ? ';最近使用 ' + fmtTime(new Date(m.usage.lastUsedAt).toISOString()) : '')
-                      + (m.usage.lastAttemptAt ? ';最近尝试 ' + fmtTime(new Date(m.usage.lastAttemptAt).toISOString()) : '')}
+                    title={tr("召回使用") + m.usage.used + '/' + m.usage.attempts + tr("(进 topN 才算 used)")
+                      + (m.usage.lastUsedAt ? tr(";最近使用") + fmtTime(new Date(m.usage.lastUsedAt).toISOString()) : '')
+                      + (m.usage.lastAttemptAt ? tr(";最近尝试") + fmtTime(new Date(m.usage.lastAttemptAt).toISOString()) : '')}
                   >
-                    {'用 ' + m.usage.used + '/' + m.usage.attempts}
+                    {tr("用") + m.usage.used + '/' + m.usage.attempts}
                   </span>
                 ) : null}
                 {/* 名称（md 投射相）：投射文件名取它；缺省 = 还没名字（投射回落 mem-<id8>）。
                     放在卡头是为了核对“这条记忆对应哪个投射文件”，不是额外的存储字段。 */}
                 <span
                   title={m.name && m.name.length > 0
-                    ? '名称（名称蒸馏产物；投射文件的命名取它）：' + m.name
-                    : '尚未命名（名称蒸馏未产出）；投射回落 mem-' + m.id.slice(-8)}
+                    ? tr("名称（名称蒸馏产物；投射文件的命名取它）：") + m.name
+                    : tr("尚未命名（名称蒸馏未产出）；投射回落 mem-") + m.id.slice(-8)}
                   style={{
                     fontSize: 11,
                     padding: '1px 6px',
@@ -602,13 +599,13 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                     color: m.name && m.name.length > 0 ? 'var(--dsh-mem-text-2)' : 'var(--dsh-mem-danger)',
                   }}
                 >
-                  {'名称 ' + (m.name && m.name.length > 0 ? m.name : '未命名')}
+                  {tr("名称") + (m.name && m.name.length > 0 ? m.name : tr("未命名"))}
                 </span>
                 {/* 作用范围（§E）：用户默认 = global（任何工作区可见）；工作区 = 仅归属工作区可见。 */}
                 <span
                   title={m.scope === 'workspace'
-                    ? '作用范围：指定工作区（仅归属工作区可见）' + (m.workspaceId ? '：' + m.workspaceId : '')
-                    : '作用范围：用户默认（global，任何工作区可见）'}
+                    ? tr("作用范围：指定工作区（仅归属工作区可见）") + (m.workspaceId ? '：' + m.workspaceId : '')
+                    : tr("作用范围：用户默认（global，任何工作区可见）")}
                   style={{
                     fontSize: 11,
                     padding: '1px 6px',
@@ -618,28 +615,27 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                     color: 'var(--dsh-mem-text-2)',
                   }}
                 >
-                  {m.scope === 'workspace' ? '工作区' : '用户默认'}
+                  {m.scope === 'workspace' ? tr("工作区") : tr("用户默认")}
                 </span>
                 {m.score !== null && m.score !== undefined ? (
-                  <span style={S.muted}>{'相关度 ' + Number(m.score).toFixed(2)}</span>
+                  <span style={S.muted}>{tr("相关度") + Number(m.score).toFixed(2)}</span>
                 ) : null}
                 <div style={S.grow} />
                 <span style={S.muted}>{fmtTime(m.updatedAt)}</span>
                 {m.retired ? (
                   <NButton
                     style={{ padding: '0 7px', minWidth: 26, height: 26, fontSize: 12, color: 'var(--dsh-mem-accent)' }}
-                    title="恢复该记忆到检索面（可撤销退场）"
+                    title={tr("恢复该记忆到检索面（可撤销退场）")}
                     onClick={(e: { stopPropagation(): void }) => {
                       e.stopPropagation();
                       restoreRecords([m.id]);
                     }}
                   >
-                    恢复
-                  </NButton>
+                    {tr("恢复")} </NButton>
                 ) : hiPriv ? (
                   <NButton
                     style={{ padding: '0 7px', minWidth: 26, height: 26, fontSize: 12, color: 'var(--dsh-mem-danger)' }}
-                    title="删除该记忆（高权限）"
+                    title={tr("删除该记忆（高权限）")}
                     onClick={(e: { stopPropagation(): void }) => {
                       e.stopPropagation();
                       deleteRecord(m.id);
@@ -655,36 +651,36 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                   {'id: ' +
                     m.id +
                     '\n' +
-                    '名称: ' +
-                    (m.name && m.name.length > 0 ? m.name : '（未命名，投射回落 mem-' + m.id.slice(-8) + '）') +
+                    tr("名称:") +
+                    (m.name && m.name.length > 0 ? m.name : tr("（未命名，投射回落 mem-") + m.id.slice(-8) + '）') +
                     '\n' +
-                    '情境: ' +
+                    tr("情境:") +
                     (m.scene || '-') +
                     '\n' +
                     // 关键词：预留的检索轴（待关键词蒸馏上线）。当前无产出方 ⇒ 通常为空；
                     // “空白字段”本身就是如实陈述，所以照显示，不做隐藏。
-                    '关键词: ' +
-                    (m.keywords && m.keywords.length > 0 ? m.keywords.join('，') : '（暂无 · 预留检索轴）') +
+                    tr("关键词:") +
+                    (m.keywords && m.keywords.length > 0 ? m.keywords.join('，') : tr("（暂无 · 预留检索轴）")) +
                     '\n' +
-                    '作用范围: ' +
+                    tr("作用范围:") +
                     (m.scope === 'workspace'
-                      ? '指定工作区' + (m.workspaceId ? '：' + m.workspaceId : '（未记录路径）')
-                      : '用户默认（global，任何工作区可见）') +
+                      ? tr("指定工作区") + (m.workspaceId ? '：' + m.workspaceId : tr("（未记录路径）"))
+                      : tr("用户默认（global，任何工作区可见）")) +
                     '\n' +
-                    '版本: v' +
+                    tr("版本: v") +
                     m.version +
-                    '（去重合并次数 ' +
+                    tr("（去重合并次数") +
                     m.version +
                     '）\n' +
-                    '创建: ' +
+                    tr("创建:") +
                     fmtTime(m.createdAt) +
                     '\n' +
-                    '活跃时间: ' +
+                    tr("活跃时间:") +
                     (m.timestamps && m.timestamps.length > 0 ? m.timestamps.map(fmtTime).join(' → ') : '-') +
                     '\n' +
                     (m.sourceAnchors && m.sourceAnchors.length > 0
-                      ? '来源锚点: ' + m.sourceAnchors.join(', ')
-                      : '来源锚点: -')}
+                      ? tr("来源锚点:") + m.sourceAnchors.join(', ')
+                      : tr("来源锚点: -"))}
                 </div>
               ) : null}
             </div>
@@ -694,35 +690,34 @@ export function RecordsTab(props: { rpc: RpcFn }) {
       {/* 已退场（软删）区：与活动记忆**分开呈现**——"退场了"与"根本没这条"必须能分辨 */}
       <div style={{ ...S.flexRow, marginTop: 12 }}>
         <NButton onClick={() => setShowRetired((v) => !v)}>
-          {(showRetired ? '收起' : '展开') + '「已退场」（可恢复）'}
+          {(showRetired ? tr("收起") : tr("展开")) + tr("「已退场」（可恢复）")}
         </NButton>
-        {showRetired && retiredBusy ? <span style={S.muted}>加载中…</span> : null}
+        {showRetired && retiredBusy ? <span style={S.muted}>{tr("加载中…")}</span> : null}
         {showRetired && !retiredBusy && retiredTotal > 0 ? (
-          <span style={S.muted}>{'共 ' + retiredTotal + ' 条可恢复'}</span>
+          <span style={S.muted}>{tr("共") + retiredTotal + tr("条可恢复")}</span>
         ) : null}
       </div>
       {showRetired ? (
         <div style={{ marginTop: 8 }}>
           {retired.length === 0 ? (
-            <p style={S.hint}>{retiredBusy ? ' ' : '没有已退场的记忆。'}</p>
+            <p style={S.hint}>{retiredBusy ? ' ' : tr("没有已退场的记忆。")}</p>
           ) : (
             <div>
               {retired.map((m) => (
                 <div key={m.id} className="dsh-mem-card" style={S.card}>
                   <div style={S.cardHead}>
                     <span style={S.muted}>{RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason}</span>
-                    {m.verdict ? <span style={S.muted}>{'结论 ' + m.verdict}</span> : null}
+                    {m.verdict ? <span style={S.muted}>{tr("结论") + m.verdict}</span> : null}
                     <div style={S.grow} />
                     <span style={S.muted}>{fmtTime(m.retiredAt)}</span>
-                    <NButton disabled={retiredBusy} title="恢复到检索面" onClick={() => restoreRecords([m.id])}>
-                      恢复
-                    </NButton>
+                    <NButton disabled={retiredBusy} title={tr("恢复到检索面")} onClick={() => restoreRecords([m.id])}>
+                      {tr("恢复")} </NButton>
                   </div>
                   <div style={S.content}><MarkdownBody text={m.content} /></div>
                 </div>
               ))}
               {retiredTotal > retired.length ? (
-                <p style={S.hint}>{'共 ' + retiredTotal + ' 条，此处显示 ' + retired.length + ' 条'}</p>
+                <p style={S.hint}>{tr("共") + retiredTotal + tr("条，此处显示") + retired.length + tr("条")}</p>
               ) : null}
             </div>
           )}
@@ -737,7 +732,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
               if (!loading) fetchPage(last, items.length, true);
             }}
           >
-            {loading ? '加载中…' : '加载更多'}
+            {loading ? tr("加载中…") : tr("加载更多")}
           </NButton>
         </div>
       ) : null}
@@ -775,10 +770,10 @@ function WingMultiSelect(props: {
   const labelOf = (id: string) => props.options.find((o) => o.id === id)?.label ?? id;
   const summary =
     props.selected.length === 0
-      ? '全部 Wing'
+      ? tr("全部 Wing")
       : props.selected.length <= 2
         ? props.selected.map(labelOf).join(' + ')
-        : `${labelOf(props.selected[0]!)} 等 ${props.selected.length} 域`;
+        : tr("{p1} 等 {p2} 域", { p1: labelOf(props.selected[0]!), p2: props.selected.length });
   const toggle = (id: string) => {
     props.onChange(props.selected.includes(id) ? props.selected.filter((x) => x !== id) : [...props.selected, id]);
   };
@@ -798,20 +793,20 @@ function WingMultiSelect(props: {
       </button>
       {open ? (
         <div className="dsh-mem-pop" role="listbox" style={{ left: 0, right: 'auto', minWidth: 150 }}>
-          {props.options.length === 0 ? <div className="dsh-mem-pop-empty">暂无可筛 Hall</div> : null}
+          {props.options.length === 0 ? <div className="dsh-mem-pop-empty">{tr("暂无可筛 Hall")}</div> : null}
           {props.options.map((o) => {
             const active = props.selected.includes(o.id);
             return (
               <button key={o.id} type="button" className="dsh-mem-pop-opt" onClick={() => toggle(o.id)} aria-selected={active}>
                 <span className="dsh-mem-pop-check">{active ? '✓' : ''}</span>
-                <span className="dsh-mem-pop-label">{o.label}</span>
+                <span className="dsh-mem-pop-label">{tr(o.label)}</span>
               </button>
             );
           })}
           {props.selected.length > 0 ? (
             <button type="button" className="dsh-mem-pop-opt" onClick={() => props.onChange([])}>
               <span className="dsh-mem-pop-check" />
-              <span className="dsh-mem-pop-label">清除筛选</span>
+              <span className="dsh-mem-pop-label">{tr("清除筛选")}</span>
             </button>
           ) : null}
         </div>

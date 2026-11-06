@@ -6,6 +6,7 @@
  * 键盘 ↑↓ 移动（循环）、回车/空格开面板与选定、Esc/外点/焦点离开收起；
  * 焦点始终留在触发钮上（keydown 从钮冒泡到包装层统一处理）。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useRef, useState, type CSSProperties, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 
 export interface NSelOption {
@@ -129,13 +130,13 @@ export function NSel(props: {
           }
         }}
       >
-        <span className="dsh-mem-select-label">{selectedLabel || props.placeholder || '（请选择）'}</span>
+        <span className="dsh-mem-select-label">{selectedLabel || props.placeholder || tr("（请选择）")}</span>
         <span className={'dsh-mem-sel-chev' + (open ? ' dsh-mem-sel-chev-open' : '')} aria-hidden={true} />
       </button>
       {open && !disabled ? (
         <div className="dsh-mem-pop" ref={listRef} role="listbox">
           {options.length === 0 ? (
-            <div className="dsh-mem-pop-empty">无选项</div>
+            <div className="dsh-mem-pop-empty">{tr("无选项")}</div>
           ) : (
             options.map((o, i) => {
               return (
@@ -158,7 +159,7 @@ export function NSel(props: {
                     if (idx !== i) setIdx(i);
                   }}
                 >
-                  <span className="dsh-mem-pop-opt-label">{o.label}</span>
+                  <span className="dsh-mem-pop-opt-label">{tr(o.label)}</span>
                   {o.id === value ? <span className="dsh-mem-pop-check">✓</span> : null}
                 </button>
               );

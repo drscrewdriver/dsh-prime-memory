@@ -1,4 +1,6 @@
 /** 输入栏 pill：点击展开八边形域轮（WingWheel）；props 来自 conversation.input.left 的 zone 注入。 */
+import { tr } from '../i18n.js';
+import { useLocaleRevision } from '../i18n-react.js';
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { currentMeterSnapshot, initOccupancyIndicator, noteOccupancySession, watchContextMeter } from '../meter/occupancy-indicator.js';
 import { initPanelSection } from '../meter/panel-section.js';
@@ -13,6 +15,8 @@ export function MemoryModePill(props: {
   sessionId?: string;
   session?: { sessionId?: string };
 }) {
+  // 语言切换即重渲染（档位名、悬浮板文案都在渲染期解析）
+  useLocaleRevision();
   const rpc = props.rpc;
   const sessionId = props.sessionId || (props.session && props.session.sessionId);
   const [mode, setMode] = useState<string | null>(null);
@@ -116,13 +120,13 @@ export function MemoryModePill(props: {
         if (token !== seqRef.current) return;
         if (!r || !r.ok) {
           setMode(prev);
-          setError(r && r.error ? '档位写入失败：' + r.error.message : '档位写入失败');
+          setError(r && r.error ? tr("档位写入失败：") + r.error.message : tr("档位写入失败"));
         }
       })
       .catch((e: unknown) => {
         if (token !== seqRef.current) return;
         setMode(prev);
-        setError('档位写入失败：' + String((e && (e as Error).message) || e));
+        setError(tr("档位写入失败：") + String((e && (e as Error).message) || e));
       });
   };
 
@@ -143,7 +147,7 @@ export function MemoryModePill(props: {
         if (!r || !r.ok) {
           setRecall(prevRecall);
           setRecallResolved(prevResolved);
-          setError(r && r.error ? '注入设置失败：' + r.error.message : '注入设置失败');
+          setError(r && r.error ? tr("注入设置失败：") + r.error.message : tr("注入设置失败"));
         } else {
           setRecall(r.value.recall);
           setRecallResolved(r.value.recallResolved);
@@ -153,7 +157,7 @@ export function MemoryModePill(props: {
         if (token !== seqRef.current) return;
         setRecall(prevRecall);
         setRecallResolved(prevResolved);
-        setError('注入设置失败：' + String((e && (e as Error).message) || e));
+        setError(tr("注入设置失败：") + String((e && (e as Error).message) || e));
       });
   };
 
@@ -172,7 +176,7 @@ export function MemoryModePill(props: {
         if (token !== seqRef.current) return;
         if (!r || !r.ok) {
           setWings(prevHalls);
-          setError(r && r.error ? '域设置失败：' + r.error.message : '域设置失败');
+          setError(r && r.error ? tr("域设置失败：") + r.error.message : tr("域设置失败"));
         } else {
           setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
         }
@@ -180,7 +184,7 @@ export function MemoryModePill(props: {
       .catch((e: unknown) => {
         if (token !== seqRef.current) return;
         setWings(prevHalls);
-        setError('域设置失败：' + String((e && (e as Error).message) || e));
+        setError(tr("域设置失败：") + String((e && (e as Error).message) || e));
       });
   };
 
@@ -204,7 +208,7 @@ export function MemoryModePill(props: {
         if (!r || !r.ok) {
           setWingIncludeUnlabeled(prev.unlabeled);
           setWingIncludeGeneral(prev.general);
-          setError(r && r.error ? '域设置失败：' + r.error.message : '域设置失败');
+          setError(r && r.error ? tr("域设置失败：") + r.error.message : tr("域设置失败"));
         } else {
           setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
           setWingIncludeUnlabeled(r.value.hallIncludeUnlabeled);
@@ -215,7 +219,7 @@ export function MemoryModePill(props: {
         if (token !== seqRef.current) return;
         setWingIncludeUnlabeled(prev.unlabeled);
         setWingIncludeGeneral(prev.general);
-        setError('域设置失败：' + String((e && (e as Error).message) || e));
+        setError(tr("域设置失败：") + String((e && (e as Error).message) || e));
       });
   };
 
@@ -239,12 +243,12 @@ export function MemoryModePill(props: {
       ? '⚠'
       : '…'
     : isOff
-      ? info.label
+      ? tr(info.label)
       : !recallResolved
-        ? '只写'
+        ? tr("只写")
         : wingText
           ? wingText
-          : info.label;
+          : tr(info.label);
 
   ensureThemeStyle();
 
@@ -273,7 +277,7 @@ export function MemoryModePill(props: {
     <div ref={wrapRef} style={{ position: 'relative', display: 'inline-flex' }}>
       <button
         type="button"
-        title={error ? '档位读取失败：' + error + '（点击重试）' : '本会话记忆域与档位（点击切换）'}
+        title={error ? tr("档位读取失败：") + error + tr("（点击重试）") : tr("本会话记忆域与档位（点击切换）")}
         onClick={() => {
           if (error) load();
           setOpen(!open);
@@ -281,7 +285,7 @@ export function MemoryModePill(props: {
         className={(isFlow ? 'dsh-mem-flow' : 'dsh-mem-pill-off') + ' dsh-mem-pill-hit'}
         style={pillStyle}
       >
-        记忆 · <span>{faceLabel}</span>
+        {tr("记忆 ·")} <span>{faceLabel}</span>
       </button>
       {open ? (
         <div

@@ -11,6 +11,7 @@
  * settings 的 distillLayerChains.<层>；层链头行必须显式供应商+模型（不支持跟随
  * 默认模型）；跟随态展示静态 YAML 层链（只读）或全局链预览，「自定义链」开草稿。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { DistillChainEntry, EffortChoice, LayerRouteKey, LlmProvidersResponse, ModelWithEfforts } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
@@ -185,26 +186,26 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
     const seen: Record<string, number> = {};
     // 头行校验：层链必须显式；全局链允许双空（跟随默认）但半空非法
     if (isLayer && (!rows![0]!.provider || !rows![0]!.model)) {
-      errs[0] = '主路由行必须显式选择供应商与模型（层链不支持跟随默认模型）';
+      errs[0] = tr("主路由行必须显式选择供应商与模型（层链不支持跟随默认模型）");
     } else if ((rows![0]!.provider && !rows![0]!.model) || (!rows![0]!.provider && rows![0]!.model)) {
-      errs[0] = '主路由行供应商与模型须成对（双空 = 跟随默认模型）';
+      errs[0] = tr("主路由行供应商与模型须成对（双空 = 跟随默认模型）");
     }
     if (rows![0]!.provider && rows![0]!.model) seen[rows![0]!.provider + '::' + rows![0]!.model] = 0;
     for (let i = 1; i < rows!.length; i++) {
       if (!rows![i]!.provider || !rows![i]!.model) {
-        errs[i] = '回退路由必须显式选择供应商与模型';
+        errs[i] = tr("回退路由必须显式选择供应商与模型");
         continue;
       }
       const key = rows![i]!.provider + '::' + rows![i]!.model;
       if (seen[key] !== undefined) {
-        errs[i] = seen[key] === 0 ? '与主路由完全相同（运行时会跳过，请去重）' : '与第 ' + (seen[key] + 1) + ' 行重复';
+        errs[i] = seen[key] === 0 ? tr("与主路由完全相同（运行时会跳过，请去重）") : tr("与第") + (seen[key] + 1) + tr("行重复");
       } else {
         seen[key] = i;
       }
     }
     setRowErrs(errs);
     if (rows!.length > 8) {
-      setErr('路由链最多 8 行（含主路由行），请删除多余行');
+      setErr(tr("路由链最多 8 行（含主路由行），请删除多余行"));
       return;
     }
     if (Object.keys(errs).length) return;
@@ -231,12 +232,12 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
     rpc('dsh-memory/settings-set', payload as never)
       .then((r) => {
         pendingWrites.current -= 1;
-        setErr(!r || r.ok ? null : '路由链保存失败：' + ((r && r.error && r.error.message) || '未知错误'));
+        setErr(!r || r.ok ? null : tr("路由链保存失败：") + ((r && r.error && r.error.message) || tr("未知错误")));
         refreshInfo();
       })
       .catch((e: unknown) => {
         pendingWrites.current -= 1;
-        setErr('路由链保存失败：' + String((e && (e as Error).message) || e));
+        setErr(tr("路由链保存失败：") + String((e && (e as Error).message) || e));
         refreshInfo();
       });
   }
@@ -250,12 +251,12 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
           pendingWrites.current -= 1;
           setRows(null);
           setRowErrs({});
-          setErr(!r || r.ok ? null : '清空失败，请重试');
+          setErr(!r || r.ok ? null : tr("清空失败，请重试"));
           refreshInfo();
         })
         .catch((e: unknown) => {
           pendingWrites.current -= 1;
-          setErr('清空失败：' + String((e && (e as Error).message) || e));
+          setErr(tr("清空失败：") + String((e && (e as Error).message) || e));
           refreshInfo();
         });
       return;
@@ -268,12 +269,12 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
         pendingWrites.current -= 1;
         setRows(null);
         setRowErrs({});
-        setErr(!r || r.ok ? null : '清空失败，请重试');
+        setErr(!r || r.ok ? null : tr("清空失败，请重试"));
         refreshInfo();
       })
       .catch((e: unknown) => {
         pendingWrites.current -= 1;
-        setErr('清空失败：' + String((e && (e as Error).message) || e));
+        setErr(tr("清空失败：") + String((e && (e as Error).message) || e));
         refreshInfo();
       });
   }
@@ -291,10 +292,10 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
   function roRow(e: { provider: string; model: string; effort: string }, i: number) {
     return (
       <div key={'ro' + i} style={STY.roRow}>
-        <span style={STY.badge}>{i === 0 ? '主' : String(i + 1)}</span>
+        <span style={STY.badge}>{i === 0 ? tr("主") : String(i + 1)}</span>
         <span style={{ ...STY.mono, color: 'var(--dsh-mem-text-2)' }}>{e.provider + ' / ' + e.model}</span>
         <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
-          {e.effort ? '档位 ' + e.effort : '跟随部署配置'}
+          {e.effort ? tr("档位") + e.effort : tr("跟随部署配置")}
         </span>
       </div>
     );
@@ -306,7 +307,7 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
     return (
       <div style={STY.wrap}>
         {effPin.map(roRow)}
-        <div style={STY.note}>部署已锁定路由（pin），调整请修改 cordis.patch.yml 中 llm 的配置。</div>
+        <div style={STY.note}>{tr("部署已锁定路由（pin），调整请修改 cordis.patch.yml 中 llm 的配置。")}</div>
       </div>
     );
   }
@@ -322,8 +323,7 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
             {lv.static.map((e, i) => roRow({ provider: e.provider, model: e.model, effort: e.reasoningEffort || '' }, i))}
             <div style={{ marginTop: 6 }}>
               <NButton onClick={forkStatic} disabled={disabled}>
-                自定义本层链
-              </NButton>
+                {tr("自定义本层链")} </NButton>
             </div>
           </div>
         );
@@ -331,11 +331,10 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
       const previewRows = lv?.effectiveChain ?? [];
       return (
         <div style={STY.wrap}>
-          {previewRows.length === 0 ? <div style={S.switchDesc}>本层跟随全局链，暂无可用路由。</div> : previewRows.map(roRow)}
+          {previewRows.length === 0 ? <div style={S.switchDesc}>{tr("本层跟随全局链，暂无可用路由。")}</div> : previewRows.map(roRow)}
           <div style={{ marginTop: 6 }}>
             <NButton onClick={forkStatic} disabled={disabled}>
-              自定义本层链
-            </NButton>
+              {tr("自定义本层链")} </NButton>
           </div>
         </div>
       );
@@ -344,14 +343,13 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
     return (
       <div style={STY.wrap}>
         {effFollow.length === 0 ? (
-          <div style={S.switchDesc}>蒸馏跟随默认模型，未配置回退链。</div>
+          <div style={S.switchDesc}>{tr("蒸馏跟随默认模型，未配置回退链。")}</div>
         ) : (
           effFollow.map(roRow)
         )}
         <div style={{ marginTop: 6 }}>
           <NButton onClick={forkStatic} disabled={disabled}>
-            编辑为运行时链
-          </NButton>
+            {tr("编辑为运行时链")} </NButton>
         </div>
       </div>
     );
@@ -382,20 +380,20 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
       providerOptions = [
         {
           id: '',
-          label: info.default ? '跟随默认模型（' + info.default.provider + ' / ' + info.default.model + '）' : '跟随默认模型',
+          label: info.default ? tr("跟随默认模型（") + info.default.provider + ' / ' + info.default.model + '）' : tr("跟随默认模型"),
         },
       ].concat(providerOptions);
     }
     if (row.provider && !providersById[row.provider]) {
-      providerOptions.push({ id: row.provider, label: row.provider + '（已不在列表）' });
+      providerOptions.push({ id: row.provider, label: row.provider + tr("（已不在列表）") });
     }
     const modelOptions: NSelOption[] = modelList.map((m) => {
       return { id: m.id, label: m.name !== m.id ? m.name + '（' + m.id + '）' : m.id };
     });
     if (row.model && !modelList.some((m) => m.id === row.model)) {
-      modelOptions.push({ id: row.model, label: row.model + '（已不在列表）' });
+      modelOptions.push({ id: row.model, label: row.model + tr("（已不在列表）") });
     }
-    const effortOptions: NSelOption[] = [{ id: '', label: '跟随部署配置' }].concat(
+    const effortOptions: NSelOption[] = [{ id: '', label: tr("跟随部署配置") }].concat(
       curEfforts
         .filter((k) => EFFORT_VOCAB.indexOf(k) >= 0)
         .map((k) => ({ id: k, label: k })),
@@ -404,13 +402,13 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
     return (
       <div key={'row' + i} style={{ ...STY.row, ...(rowErrs[i] ? STY.rowErr : null) }}>
         <div style={STY.line}>
-          <span style={STY.badge}>{isPrimary ? '主' : String(i + 1)}</span>
+          <span style={STY.badge}>{isPrimary ? tr("主") : String(i + 1)}</span>
           <NSel
             style={{ flex: 1, minWidth: 150 }}
             options={providerOptions}
             value={row.provider}
             disabled={disabled}
-            placeholder={isPrimary ? '跟随默认模型' : '供应商'}
+            placeholder={isPrimary ? tr("跟随默认模型") : tr("供应商")}
             onChange={(v) => {
               updateRow(i, { provider: v, model: '', reasoningEffort: '' });
             }}
@@ -418,7 +416,7 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
           {!row.provider ? null : manualInput ? (
             <NInput
               style={{ flex: 1, minWidth: 150 }}
-              placeholder="模型 id（该供应商未提供列表，输入后回车）…"
+              placeholder={tr("模型 id（该供应商未提供列表，输入后回车）…")}
               // 非编辑态回填已存模型 id：该供应商无目录时 NSel 分支不渲染，
               // NInput 是行内唯一的模型展示位（提交后置空会让已设值不可见）
               value={manual.idx === i ? manual.text : row.model}
@@ -441,7 +439,7 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
               options={modelOptions}
               value={row.model}
               disabled={disabled || !modelsLoaded}
-              placeholder={modelsLoaded ? (isPrimary ? '（选择模型，可留空跟随默认）' : '（选择模型）') : '加载模型列表…'}
+              placeholder={modelsLoaded ? (isPrimary ? tr("（选择模型，可留空跟随默认）") : tr("（选择模型）")) : tr("加载模型列表…")}
               onChange={(v) => {
                 updateRow(i, { model: v });
               }}
@@ -453,7 +451,7 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
             options={effortOptions}
             value={row.reasoningEffort}
             disabled={disabled || !(row.provider && row.model)}
-            placeholder="跟随部署配置"
+            placeholder={tr("跟随部署配置")}
             onChange={(v) => {
               updateRow(i, { reasoningEffort: v as EffortChoice });
             }}
@@ -464,7 +462,7 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
           <NButton
             style={STY.ico}
             disabled={disabled || i === 0}
-            title={i === 1 ? '上移（与主路由互换/顶替为主路由）' : '上移'}
+            title={i === 1 ? tr("上移（与主路由互换/顶替为主路由）") : tr("上移")}
             onClick={() => {
               moveRow(i, -1);
             }}
@@ -474,7 +472,7 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
           <NButton
             style={STY.ico}
             disabled={disabled || i === rows.length - 1 || (i === 0 && !row.provider)}
-            title="下移"
+            title={tr("下移")}
             onClick={() => {
               moveRow(i, 1);
             }}
@@ -484,7 +482,7 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
           <NButton
             style={STY.ico}
             disabled={disabled}
-            title={isPrimary ? '重置为跟随默认' : '删除'}
+            title={isPrimary ? tr("重置为跟随默认") : tr("删除")}
             onClick={() => {
               removeRow(i);
             }}
@@ -494,13 +492,13 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
         </div>
         {isPrimary && !row.provider ? (
           <div style={STY.note}>
-            {'跟随默认模型' +
+            {tr("跟随默认模型") +
               (info.default ? '：' + info.default.provider + ' / ' + info.default.model : '') +
-              '（档位跟随部署配置，选定模型后可单独设置）'}
+              tr("（档位跟随部署配置，选定模型后可单独设置）")}
           </div>
         ) : null}
         {!known ? (
-          <div style={STY.warn}>{'⚠ 供应商 ' + row.provider + ' 已不在已注册路由中：该路由调用会失败并被链跳过（不阻止保存）。'}</div>
+          <div style={STY.warn}>{tr("⚠ 供应商") + row.provider + tr("已不在已注册路由中：该路由调用会失败并被链跳过（不阻止保存）。")}</div>
         ) : null}
         {rowErrs[i] ? <div style={STY.warn}>{'✕ ' + rowErrs[i]}</div> : null}
       </div>
@@ -513,13 +511,13 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
     <div style={STY.wrap}>
       <div
         style={{ ...S.switchDesc, marginBottom: 8 }}
-        title={isLayer ? '本层链失败只在层内降级，绝不落到全局链；每行档位独立' : '第 1 行主路由；失败（报错/掐断/网络异常/空输出）按序降级；每行档位独立'}
+        title={isLayer ? tr("本层链失败只在层内降级，绝不落到全局链；每行档位独立") : tr("第 1 行主路由；失败（报错/掐断/网络异常/空输出）按序降级；每行档位独立")}
       >
-        {isLayer ? '主路由失败，只降级到本层回退' : '主路由失败，按序降级'}
+        {isLayer ? tr("主路由失败，只降级到本层回退") : tr("主路由失败，按序降级")}
       </div>
       {rowEls}
       <NButton style={STY.add} disabled={disabled || capped} onClick={addRow}>
-        {capped ? '已达上限（8 条）' : '+ 添加回退路由'}
+        {capped ? tr("已达上限（8 条）") : tr("+ 添加回退路由")}
       </NButton>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
         {/* 层范围清除是破坏性动作（丢已存自定义链）：danger 描边；全局的
@@ -529,22 +527,21 @@ export function RouteChainEditor(props: { rpc: RpcFn; disabled?: boolean; scope?
           disabled={disabled}
           onClick={clearToFollow}
         >
-          {isLayer ? '清除自定义 · 跟随全局' : '清空并跟随部署配置'}
+          {isLayer ? tr("清除自定义 · 跟随全局") : tr("清空并跟随部署配置")}
         </NButton>
         <div style={S.grow} />
         <NButton variant="primary" disabled={disabled} onClick={save}>
-          保存
-        </NButton>
+          {tr("保存")} </NButton>
       </div>
       {err ? <div style={{ ...STY.warn, marginTop: 8 }}>{'✕ ' + err}</div> : null}
       <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--dsh-mem-border)' }}>
         <div style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)', marginBottom: 4 }}>
-          {'实际链' + (dirty ? '（保存后更新；当前显示已保存值）' : '')}
+          {tr("实际链") + (dirty ? tr("（保存后更新；当前显示已保存值）") : '')}
         </div>
         <div
           style={{ fontSize: 12, color: 'var(--dsh-mem-text-2)', wordBreak: 'break-all', fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace' }}
         >
-          {effChain.map((e) => e.provider + '/' + e.model + (e.effort ? '（' + e.effort + '）' : '')).join(' → ') || '（暂无可用路由）'}
+          {effChain.map((e) => e.provider + '/' + e.model + (e.effort ? '（' + e.effort + '）' : '')).join(' → ') || tr("（暂无可用路由）")}
         </div>
       </div>
     </div>

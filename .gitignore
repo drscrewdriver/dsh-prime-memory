@@ -41,3 +41,6 @@ _tmp-*/
 memory.db
 memory.db-shm
 memory.db-wal
+
+# i18n 抽取报告（一次性产物，keys.json 才是事实源）
+i18n-report.json

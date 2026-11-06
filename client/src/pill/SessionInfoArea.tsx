@@ -4,6 +4,7 @@
  * 自适应轮询：忙时（攒批/挂起/全局待蒸馏）2s、静默 5s，浮层卸载即停
  * （ModeSlider 只在 pill 展开期间挂载）。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { RecallDisabledReason, RecallSessionStats, SessionDistillView, SessionStatsResponse } from '../../../src/contract.js';
 import { fmtAgo, fmtTime } from '../format.js';
@@ -70,10 +71,10 @@ export function SessionInfoArea(props: { rpc: RpcFn; sessionId: string }) {
     return (
       <div className="dsh-mem-sinfo">
         <div className="dsh-mem-sinfo-grid">
-          {sinfoCell('…', '召回命中')}
-          {sinfoCell('…', '攒批进度')}
-          {sinfoCell('…', '本会话记忆')}
-          {sinfoCell('…', '会话消息')}
+          {sinfoCell('…', tr("召回命中"))}
+          {sinfoCell('…', tr("攒批进度"))}
+          {sinfoCell('…', tr("本会话记忆"))}
+          {sinfoCell('…', tr("会话消息"))}
         </div>
       </div>
     );
@@ -89,28 +90,28 @@ export function SessionInfoArea(props: { rpc: RpcFn; sessionId: string }) {
   let rcLabel: string;
   let rcTitle: string;
   if (rc.enabled === false) {
-    rcVal = '停用';
-    rcLabel = '召回命中';
+    rcVal = tr("停用");
+    rcLabel = tr("召回命中");
     // 停用原因由 host 短路判定带出（含「会话只写」）；旧宿主无 reason 时回退枚举文案
     const reasonText: Partial<Record<RecallDisabledReason, string>> = {
-      deploy: '部署未启用',
-      global: '全局开关关闭',
-      session: '会话只写',
-      mode: '档位关闭',
+      deploy: tr("部署未启用"),
+      global: tr("全局开关关闭"),
+      session: tr("会话只写"),
+      mode: tr("档位关闭"),
     };
     rcTitle = rc.reason
-      ? '召回已停用（' + (reasonText[rc.reason] ?? rc.reason) + '）'
-      : '召回已停用（开关关闭 / 档位关闭 / 部署未启用）';
+      ? tr("召回已停用（") + (reasonText[rc.reason] ?? rc.reason) + '）'
+      : tr("召回已停用（开关关闭 / 档位关闭 / 部署未启用）");
   } else {
     rcVal = (rc.hitTurns || 0) + '/' + (rc.injectedTurns || 0);
-    rcLabel = '召回命中 · ' + (rc.totalHits || 0) + ' 条';
+    rcLabel = tr("召回命中 ·") + (rc.totalHits || 0) + tr("条");
     rcTitle =
-      '最近一轮命中 ' +
+      tr("最近一轮命中") +
       (rc.lastHits || 0) +
-      ' 条，耗时 ' +
+      tr("条，耗时") +
       (rc.lastDurationMs || 0) +
       'ms' +
-      ((rc.timeouts || 0) > 0 ? '，超时跳过 ' + rc.timeouts + ' 次' : '');
+      ((rc.timeouts || 0) > 0 ? tr("，超时跳过") + rc.timeouts + tr("次") : '');
   }
 
   // 攒批进度（x/生效阈值，含 warmup 爬坡）；off 档显示挂起切片数
@@ -119,21 +120,21 @@ export function SessionInfoArea(props: { rpc: RpcFn; sessionId: string }) {
   let dTitle: string;
   if (isOff) {
     dVal = String(di.parkedSlices || 0);
-    dLabel = '挂起切片';
-    dTitle = '档位关闭：未蒸馏切片挂起，切回档位后继续';
+    dLabel = tr("挂起切片");
+    dTitle = tr("档位关闭：未蒸馏切片挂起，切回档位后继续");
   } else {
     dVal = (di.pendingSlice || 0) + '/' + (di.threshold != null ? di.threshold : '-');
-    dLabel = (di.parkedSlices || 0) > 0 ? '攒批 · 挂起 ' + di.parkedSlices : '攒批进度';
-    dTitle = '达到阈值后自动蒸馏（阈值随使用渐进爬坡到稳态）';
+    dLabel = (di.parkedSlices || 0) > 0 ? tr("攒批 · 挂起") + di.parkedSlices : tr("攒批进度");
+    dTitle = tr("达到阈值后自动蒸馏（阈值随使用渐进爬坡到稳态）");
   }
 
-  const pTitle = di.lastDistillAt ? '最近蒸馏 ' + fmtTime(di.lastDistillAt) : '本会话尚未蒸馏';
-  const warn = gl.degraded ? '⚠ 存储不可用，记忆功能已停用' : null;
+  const pTitle = di.lastDistillAt ? tr("最近蒸馏") + fmtTime(di.lastDistillAt) : tr("本会话尚未蒸馏");
+  const warn = gl.degraded ? tr("⚠ 存储不可用，记忆功能已停用") : null;
   // 检索通道降级注记（仅运行期提示，off 档无检索行为不提示）
   let note: string | null = null;
   if (!gl.degraded) {
-    if (stats.retrieval === 'keyword' && !isOff) note = '检索降级：纯关键词（向量不可用）';
-    else if (stats.retrieval === 'none') note = '检索不可用（FTS 与向量均失效）';
+    if (stats.retrieval === 'keyword' && !isOff) note = tr("检索降级：纯关键词（向量不可用）");
+    else if (stats.retrieval === 'none') note = tr("检索不可用（FTS 与向量均失效）");
   }
   const ago = fmtAgo(gl.lastExtractAt);
 
@@ -143,11 +144,11 @@ export function SessionInfoArea(props: { rpc: RpcFn; sessionId: string }) {
       <div className="dsh-mem-sinfo-grid">
         {sinfoCell(rcVal, rcLabel, rcTitle)}
         {sinfoCell(dVal, dLabel, dTitle)}
-        {sinfoCell(String(di.producedRecords || 0), '本会话记忆', pTitle)}
-        {sinfoCell(stats.l0Count != null ? String(stats.l0Count) : '…', '会话消息')}
+        {sinfoCell(String(di.producedRecords || 0), tr("本会话记忆"), pTitle)}
+        {sinfoCell(stats.l0Count != null ? String(stats.l0Count) : '…', tr("会话消息"))}
       </div>
       {note ? <div className="dsh-mem-sinfo-note">{note}</div> : null}
-      <div className="dsh-mem-sinfo-sum">{'待蒸馏 ' + (gl.pendingTotal || 0) + ' · 上次蒸馏 ' + (ago || '尚未蒸馏')}</div>
+      <div className="dsh-mem-sinfo-sum">{tr("待蒸馏") + (gl.pendingTotal || 0) + tr("· 上次蒸馏") + (ago || tr("尚未蒸馏"))}</div>
     </div>
   );
 }

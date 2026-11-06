@@ -1,3 +1,4 @@
+import { tr } from './i18n.js';
 /**
  * 维度输入 → 提交计划（纯函数，无副作用，可在 node 下单测）。
  *
@@ -38,7 +39,7 @@ export const DIMS_MAX = 100000;
 
 /** 校验失败时给用户看的文案。 */
 export function dimsRangeMessage(): string {
-  return `嵌入维度须为 ${DIMS_MIN}~${DIMS_MAX} 的整数（留空 = 跟随部署配置）`;
+  return tr("嵌入维度须为 {p1}~{p2} 的整数（留空 = 跟随部署配置）", { p1: DIMS_MIN, p2: DIMS_MAX });
 }
 
 /** 提交计划的两个出口（注入以便单测观察调用顺序与次数）。 */

@@ -16,6 +16,8 @@
  *   3. 查询走 `list-records`，与设置页「记忆」tab 同口径。
  * 本页**只读**：不写图、不改投影、不删记忆——写操作仍归各 tab 自己。
  */
+import { tr } from '../i18n.js';
+import { useLocaleRevision } from '../i18n-react.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GraphPreviewResponse, RecordLinksResponse } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
@@ -35,14 +37,16 @@ const DETAIL_MAX_RATIO = 0.55;
 /** 类型图例（与 2D/3D 同一族令牌五色）：只列当前图里真实出现的类型；
  *  令牌按**全表索引**配（先配后筛），筛掉前面的类型不得让后面的变色。 */
 const LEGEND_TYPES: Array<[string, string, string]> = [
-  ['person', '人', '--dsh-mem-chart-1'],
-  ['project', '项目', '--dsh-mem-chart-2'],
-  ['organization', '组织', '--dsh-mem-chart-3'],
-  ['tool', '工具', '--dsh-mem-chart-4'],
-  ['place', '地点', '--dsh-mem-chart-5'],
+  ['person', "人", '--dsh-mem-chart-1'],
+  ['project', "项目", '--dsh-mem-chart-2'],
+  ['organization', "组织", '--dsh-mem-chart-3'],
+  ['tool', "工具", '--dsh-mem-chart-4'],
+  ['place', "地点", '--dsh-mem-chart-5'],
 ];
 
 export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHeight?: number }) {
+  // 语言切换即重渲染
+  useLocaleRevision();
   const { rpc, onClose, canvasHeight = 620 } = props;
   const [full, setFull] = useState<GraphFull | null>(null);
   const [stats, setStats] = useState<GraphPreviewResponse['stats'] | null>(null);
@@ -260,21 +264,21 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
 
   const building = stats && stats.jobsTotal > 0 && stats.pendingJobs > 0;
   const summary = useMemo(() => {
-    if (!stats) return '统计未到';
+    if (!stats) return tr("统计未到");
     const drawn = graphData ? graphData.nodes.length : 0;
-    const egoNote = egoRoot ? ` · ego ≤3 跳（${drawn} 节点）` : '';
-    const cut = graphData?.truncated ? '（已截断，仅画部分）' : '';
-    return `节点 ${drawn}/${stats.nodes} · 边 ${graphData ? graphData.edges.length : 0}/${stats.edges} · 因果边 ${stats.causalEdges}${cut}${egoNote}`;
+    const egoNote = egoRoot ? tr("· ego ≤3 跳（{p1} 节点）", { p1: drawn }) : '';
+    const cut = graphData?.truncated ? tr("（已截断，仅画部分）") : '';
+    return tr("节点 {p1}/{p2} · 边 {p3}/{p4} · 因果边 {p5}{p6}{p7}", { p1: drawn, p2: stats.nodes, p3: graphData ? graphData.edges.length : 0, p4: stats.edges, p5: stats.causalEdges, p6: cut, p7: egoNote });
   }, [stats, graphData, egoRoot]);
 
   return (
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, height: 'calc(100vh - 48px)', minHeight: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: 16 }}>记忆库</h2>
+        <h2 style={{ margin: 0, fontSize: 16 }}>{tr("记忆库")}</h2>
         <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{summary}</span>
         {building ? (
-          <span style={{ fontSize: 12, color: 'var(--dsh-mem-accent)' }} title="图谱投影进行中">
-            构建中 {stats ? stats.jobsTotal - stats.pendingJobs : 0}/{stats?.jobsTotal ?? 0}
+          <span style={{ fontSize: 12, color: 'var(--dsh-mem-accent)' }} title={tr("图谱投影进行中")}>
+            {tr("构建中")} {stats ? stats.jobsTotal - stats.pendingJobs : 0}/{stats?.jobsTotal ?? 0}
           </span>
         ) : null}
         {view === '3d' && full && full.nodes.length > 0 ? (
@@ -284,10 +288,10 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
                 <span
                   style={{ width: 8, height: 8, borderRadius: 8, display: 'inline-block', marginRight: 3, background: `var(${token})` }}
                 />
-                {zh}
+                {tr(zh)}
               </span>
             ))}
-            <span title="亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧">亮度=老化</span>
+            <span title={tr("亮度=老化权重（来源记录新鲜度），拉近后依然分得出新旧")}>{tr("亮度=老化")}</span>
           </span>
         ) : null}
         <span style={{ flex: 1 }} />
@@ -296,11 +300,11 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
           <span
             onClick={() => setMode('query')}
             style={{ padding: '3px 12px', cursor: 'pointer', background: mode === 'query' ? 'var(--dsh-mem-accent)' : 'transparent', color: mode === 'query' ? '#fff' : 'var(--dsh-mem-text-2)' }}
-          >查询</span>
+          >{tr("查询")}</span>
           <span
             onClick={() => setMode('graph')}
             style={{ padding: '3px 12px', cursor: 'pointer', background: mode === 'graph' ? 'var(--dsh-mem-accent)' : 'transparent', color: mode === 'graph' ? '#fff' : 'var(--dsh-mem-text-2)' }}
-          >图</span>
+          >{tr("图")}</span>
         </span>
         {/* 图模式专属控件 */}
         {mode === 'graph' ? (
@@ -319,7 +323,7 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
                   if (e.key === 'Enter') locateFirstHit();
                   if (e.key === 'Escape') setSearchOpen(false);
                 }}
-                placeholder={searchMiss ? '未命中该实体' : '搜实体名…'}
+                placeholder={searchMiss ? tr("未命中该实体") : tr("搜实体名…")}
                 style={{ width: 160, fontSize: 12 }}
               />
               {searchOpen && searchText.trim() && searchHits.length > 0 ? (
@@ -345,7 +349,7 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => locateNode(n.id)}
                       style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}
-                      title={`${n.type}${n.aging != null ? ` · 老化 ${n.aging.toFixed(2)}` : ''}`}
+                      title={`${n.type}${n.aging != null ? tr("· 老化 {p1}", { p1: n.aging.toFixed(2) }) : ''}`}
                     >
                       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
                       <span style={{ fontSize: 10, color: 'var(--dsh-mem-text-3)' }}>{n.type}</span>
@@ -369,18 +373,16 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
                     color: 'var(--dsh-mem-text-3)',
                   }}
                 >
-                  图里没有匹配的实体
-                </div>
+                  {tr("图里没有匹配的实体")} </div>
               ) : null}
             </span>
             {view === '2d' && egoRoot ? (
               <NButton
                 onClick={() => setEgoRoot(null)}
-                title="退出 ego 聚焦，重新渲染全图"
+                title={tr("退出 ego 聚焦，重新渲染全图")}
                 style={{ color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' }}
               >
-                回全图
-              </NButton>
+                {tr("回全图")} </NButton>
             ) : null}
             <NButton
               onClick={() => {
@@ -390,23 +392,22 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
                 }
                 setDetailOpen((v) => !v);
               }}
-              title="展开/收起右侧详情"
+              title={tr("展开/收起右侧详情")}
               style={detailOpen ? { color: 'var(--dsh-mem-accent)', borderColor: 'var(--dsh-mem-accent)' } : undefined}
             >
-              详情
-            </NButton>
+              {tr("详情")} </NButton>
             {/* 2D/3D 段控件：与查询/图滑块同形，不再用互斥按钮 */}
             <span style={{ display: 'inline-flex', border: '1px solid var(--dsh-mem-border)', borderRadius: 6, overflow: 'hidden', fontSize: 12 }}>
               <span
                 onClick={() => setView('2d')}
-                title="G6 力导星图"
+                title={tr("G6 力导星图")}
                 style={{ padding: '3px 10px', cursor: 'pointer', background: view === '2d' ? 'var(--dsh-mem-accent)' : 'transparent', color: view === '2d' ? '#fff' : 'var(--dsh-mem-text-2)' }}
               >
                 2D
               </span>
               <span
                 onClick={() => setView('3d')}
-                title="Canvas 三维投影记忆海"
+                title={tr("Canvas 三维投影记忆海")}
                 style={{ padding: '3px 10px', cursor: 'pointer', background: view === '3d' ? 'var(--dsh-mem-accent)' : 'transparent', color: view === '3d' ? '#fff' : 'var(--dsh-mem-text-2)' }}
               >
                 3D
@@ -414,8 +415,8 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
             </span>
           </>
         ) : null}
-        <NButton onClick={loadGraph} title="重新拉取图与统计">刷新图</NButton>
-        {onClose ? <NButton onClick={onClose} title="关闭">关闭</NButton> : null}
+        <NButton onClick={loadGraph} title={tr("重新拉取图与统计")}>{tr("刷新图")}</NButton>
+        {onClose ? <NButton onClick={onClose} title={tr("关闭面板")}>{tr("关闭面板")}</NButton> : null}
       </div>
 
       {/* 主体：查询模式 = 列表 + 条目展开（点记录就地展开，跳图是面板里的显式动作） */}
@@ -441,15 +442,13 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
             >
               {/* 显式跳图：选定 2D/3D 才切视图并定位到首实体（无实体时不可点） */}
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>在图中定位本条目的实体：</span>
-                <NButton onClick={() => jumpToGraph('2d')} disabled={!links || links.entities.length === 0} title="切到 2D 力导星图并 ego 聚焦首实体">
-                  2D 图
-                </NButton>
-                <NButton onClick={() => jumpToGraph('3d')} disabled={!links || links.entities.length === 0} title="切到 3D 记忆海并 ego 聚焦首实体">
-                  3D 图
-                </NButton>
+                <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{tr("在图中定位本条目的实体：")}</span>
+                <NButton onClick={() => jumpToGraph('2d')} disabled={!links || links.entities.length === 0} title={tr("切到 2D 力导星图并 ego 聚焦首实体")}>
+                  {tr("2D 图")} </NButton>
+                <NButton onClick={() => jumpToGraph('3d')} disabled={!links || links.entities.length === 0} title={tr("切到 3D 记忆海并 ego 聚焦首实体")}>
+                  {tr("3D 图")} </NButton>
                 <span style={{ flex: 1 }} />
-                <NButton onClick={() => setEntryPane(false)} title="收起条目面板">收起</NButton>
+                <NButton onClick={() => setEntryPane(false)} title={tr("收起条目面板")}>{tr("收起")}</NButton>
               </div>
               <LinkPane
                 recordId={recordId}
@@ -469,14 +468,13 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
           <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           {graphError ? (
             <div style={{ fontSize: 12, color: 'var(--dsh-mem-accent)', padding: 8 }}>
-              图数据读取失败：{graphError} <NButton onClick={loadGraph}>重试</NButton>
+              {tr("图数据读取失败：")}{graphError} <NButton onClick={loadGraph}>{tr("重试")}</NButton>
             </div>
           ) : graphLoading ? (
-            <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)', padding: 8 }}>图加载中…</div>
+            <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)', padding: 8 }}>{tr("图加载中…")}</div>
           ) : full && full.nodes.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)', padding: 8 }}>
-              图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。
-            </div>
+              {tr("图里还没有节点。图谱投影默认关闭——在设置页「概览 → 知识图谱」打开开关后，存量记忆会逐批投影成实体与关系。")} </div>
           ) : full ? (
             view === '3d' ? (
               <Scene3D full={full} onPick={onPickNode} emphasisId={emphasisId} height={canvasHeight} />
@@ -492,15 +490,14 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
               <div
                 onMouseDown={startDrag}
                 style={{ width: 5, cursor: 'col-resize', flexShrink: 0, background: 'var(--dsh-mem-border)', borderRadius: 2, margin: '0 2px', alignSelf: 'stretch' }}
-                title="拖动调整详情宽度"
+                title={tr("拖动调整详情宽度")}
               />
               <div style={{ width: detailW, minWidth: DETAIL_MIN, flexShrink: 0, overflow: 'auto', minHeight: 0, borderLeft: '1px solid var(--dsh-mem-border)', paddingLeft: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {/* 与查询侧条目面板同构的头排（同槽位同样式）：带选点切回按条目展示。 */}
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>本条目：</span>
-                  <NButton onClick={backToEntry} disabled={!recordId} title="切回查询视图并展开本条目（保留当前选点）">
-                    按条目展示
-                  </NButton>
+                  <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{tr("本条目：")}</span>
+                  <NButton onClick={backToEntry} disabled={!recordId} title={tr("切回查询视图并展开本条目（保留当前选点）")}>
+                    {tr("按条目展示")} </NButton>
                 </div>
                 <LinkPane
                   recordId={recordId}

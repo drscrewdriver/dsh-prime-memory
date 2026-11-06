@@ -4,6 +4,7 @@
  * model / dimensions / apiKeySet——运行时覆盖优先于部署），经 settings-set 的
  * embedRemote* 键写运行时覆盖；API Key 写后不回显，只显示「已设置」。
  */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EmbeddingStateView, SettingsSetRequest } from '../../../src/contract.js';
 import { commitDimensions } from '../dimensions.js';
@@ -110,13 +111,13 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
   const commitRemote = (patch: SettingsSetRequest) => {
     rpc('dsh-memory/settings-set', patch)
       .then((r) => {
-        if (!r || !r.ok) setErr(r && r.error ? '远程连接保存失败：' + r.error.message : '远程连接保存失败');
+        if (!r || !r.ok) setErr(r && r.error ? tr("远程连接保存失败：") + r.error.message : tr("远程连接保存失败"));
         else {
           setErr(null);
           load();
         }
       })
-      .catch((e: unknown) => setErr('远程连接保存失败：' + String((e && (e as Error).message) || e)));
+      .catch((e: unknown) => setErr(tr("远程连接保存失败：") + String((e && (e as Error).message) || e)));
   };
 
   const onRemoteBase = (v: string) => {
@@ -160,7 +161,7 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
     if (confirmText && !window.confirm(confirmText)) return;
     loose(endpoint, payload)
       .then((r) => {
-        if (!r || !r.ok) setErr(r && r.error ? r.error.message : '操作失败');
+        if (!r || !r.ok) setErr(r && r.error ? r.error.message : tr("操作失败"));
         else {
           setErr(null);
           load();
@@ -174,31 +175,31 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
   if (err === '__unsupported__') {
     return (
       <div className="dsh-mem-rb-card">
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>语义检索（嵌入）</div>
-        <div className="dsh-mem-rb-muted">存储处于降级状态，嵌入管理不可用。</div>
+        <div style={{ fontWeight: 600, marginBottom: 4 }}>{tr("语义检索（嵌入）")}</div>
+        <div className="dsh-mem-rb-muted">{tr("存储处于降级状态，嵌入管理不可用。")}</div>
       </div>
     );
   }
   if (!st) {
     return (
       <div className="dsh-mem-rb-card">
-        <div className="dsh-mem-rb-muted">{err ? '嵌入状态读取失败：' + err : '嵌入状态读取中…'}</div>
+        <div className="dsh-mem-rb-muted">{err ? tr("嵌入状态读取失败：") + err : tr("嵌入状态读取中…")}</div>
         {err ? (
-          <NButton style={{ marginTop: 8 }} onClick={load}>重试</NButton>
+          <NButton style={{ marginTop: 8 }} onClick={load}>{tr("重试")}</NButton>
         ) : null}
       </div>
     );
   }
 
   const switchConfirm =
-    '切换嵌入源后将按新模型重建向量索引（期间语义检索暂退化为关键词匹配，不影响对话）。确定切换？';
+    tr("切换嵌入源后将按新模型重建向量索引（期间语义检索暂退化为关键词匹配，不影响对话）。确定切换？");
   const onSource = (key: string) => {
     if (key === 'local') {
       // 本地档需要具体模型：有已下载模型直接取最新的启用；否则提示先下载
       const ready: string[] = [];
       for (let i = 0; i < st.models.length; i++) if (st.models[i]!.state === 'downloaded') ready.push(st.models[i]!.id);
       if (ready.length === 0) {
-        setErr('请先在下方下载一个本地嵌入模型，再切换到本地档。');
+        setErr(tr("请先在下方下载一个本地嵌入模型，再切换到本地档。"));
         return;
       }
       // 默认取目录序首个已下载模型（目录按轻→重排序，避免默认选中最大最慢的）
@@ -221,44 +222,43 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
     runtimeRow = (
       <div style={{ marginTop: 8, fontSize: 12 }}>
         <div style={S.flexRow}>
-          <span>{'安装推理运行时中… 已耗时 ' + Math.round(rt.elapsedMs / 1000) + 's（约 100~200MB，视网络）'}</span>
+          <span>{tr("安装推理运行时中… 已耗时") + Math.round(rt.elapsedMs / 1000) + tr("s（约 100~200MB，视网络）")}</span>
           <div style={S.grow} />
-          <NButton onClick={() => call('dsh-memory/embedding-runtime-cancel', {})}>取消</NButton>
+          <NButton onClick={() => call('dsh-memory/embedding-runtime-cancel', {})}>{tr("取消")}</NButton>
         </div>
         <pre style={{ ...S.pre, maxHeight: 68, marginTop: 6, fontSize: 11, opacity: 0.85 }}>
-          {(rt.lastLines || []).join('\n') || '等待 npm 输出…'}
+          {(rt.lastLines || []).join('\n') || tr("等待 npm 输出…")}
         </pre>
       </div>
     );
   } else if (rt.phase === 'error') {
     runtimeRow = (
       <div style={{ marginTop: 8, fontSize: 12, color: 'var(--dsh-mem-danger)' }}>
-        {'运行时安装失败：' + (rt.error || '未知') + '（重新切换嵌入源可重试）'}
+        {tr("运行时安装失败：") + (rt.error || tr("未知")) + tr("（重新切换嵌入源可重试）")}
       </div>
     );
   } else if (rt.phase === 'ready') {
     runtimeRow = (
       <div className="dsh-mem-rb-muted" style={{ marginTop: 8 }}>
-        {'推理运行时就绪（transformers.js v' + rt.installedVersion + '）'}
+        {tr("推理运行时就绪（transformers.js v") + rt.installedVersion + '）'}
       </div>
     );
   } else if (st.source === 'local') {
     runtimeRow = (
       <div className="dsh-mem-rb-muted" style={{ marginTop: 8 }}>
-        首次启用本地嵌入时会自动安装推理运行时（约 100~200MB）。
-      </div>
+        {tr("首次启用本地嵌入时会自动安装推理运行时（约 100~200MB）。")} </div>
     );
   }
 
   let applyRow: React.ReactNode = null;
   if (ap.phase === 'warming') {
-    applyRow = <div className="dsh-mem-rb-muted" style={{ marginTop: 8 }}>加载嵌入模型中…（首次需数秒）</div>;
+    applyRow = <div className="dsh-mem-rb-muted" style={{ marginTop: 8 }}>{tr("加载嵌入模型中…（首次需数秒）")}</div>;
   } else if (ap.phase === 'switching') {
-    applyRow = <div className="dsh-mem-rb-muted" style={{ marginTop: 8 }}>切换嵌入源中…</div>;
+    applyRow = <div className="dsh-mem-rb-muted" style={{ marginTop: 8 }}>{tr("切换嵌入源中…")}</div>;
   } else if (ap.phase === 'error') {
     applyRow = (
       <div style={{ marginTop: 8, fontSize: 12, color: 'var(--dsh-mem-danger)' }}>
-        {'切换失败：' + ap.message + '（已保存的嵌入源不变，重启后仍按原源运行）'}
+        {tr("切换失败：") + ap.message + tr("（已保存的嵌入源不变，重启后仍按原源运行）")}
       </div>
     );
   } else if (st.reindex && st.reindex.running) {
@@ -270,10 +270,10 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
       <div style={{ marginTop: 8 }}>
         <div style={S.flexRow}>
           <span className="dsh-mem-rb-muted">
-            {'重嵌入中 L1 ' + rj.l1Done + '/' + rj.l1Total + ' · L0 ' + rj.l0Done + '/' + rj.l0Total + '（' + rPct + '%）'}
+            {tr("重嵌入中 L1") + rj.l1Done + '/' + rj.l1Total + ' · L0 ' + rj.l0Done + '/' + rj.l0Total + '（' + rPct + '%）'}
           </span>
           <div style={S.grow} />
-          <NButton onClick={() => call('dsh-memory/embedding-reindex-cancel', {})}>取消</NButton>
+          <NButton onClick={() => call('dsh-memory/embedding-reindex-cancel', {})}>{tr("取消")}</NButton>
         </div>
         <div style={{ ...S.flexRow, marginTop: 6 }}>
           <div className="dsh-mem-rb-bar">
@@ -294,11 +294,11 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
         <div style={{ flex: 1, minWidth: 200 }}>
           <div style={S.flexRow}>
             <span className="dsh-mem-rb-muted" style={{ whiteSpace: 'nowrap' }}>
-              {(dl!.phase === 'verifying' ? '校验中 ' : '') +
+              {(dl!.phase === 'verifying' ? tr("校验中") : '') +
                 fmtMB(dl!.overallReceived) +
                 ' / ' +
                 fmtMB(dl!.overallTotal) +
-                '（文件 ' +
+                tr("（文件") +
                 dl!.fileIndex +
                 '/' +
                 dl!.fileCount +
@@ -309,7 +309,7 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
                 '）'}
             </span>
             <div style={S.grow} />
-            <NButton onClick={() => call('dsh-memory/embedding-download-cancel', {})}>取消</NButton>
+            <NButton onClick={() => call('dsh-memory/embedding-download-cancel', {})}>{tr("取消")}</NButton>
           </div>
           <div style={{ ...S.flexRow, marginTop: 6 }}>
             <div className="dsh-mem-rb-bar">
@@ -321,12 +321,12 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
     } else if (isActive) {
       action = (
         <div style={S.flexRow}>
-          <span className="dsh-mem-tag dsh-mem-tag-work-task">使用中</span>
-          {localInfo && localInfo.state === 'loading' ? <span className="dsh-mem-rb-muted">模型加载中…</span> : null}
+          <span className="dsh-mem-tag dsh-mem-tag-work-task">{tr("使用中")}</span>
+          {localInfo && localInfo.state === 'loading' ? <span className="dsh-mem-rb-muted">{tr("模型加载中…")}</span> : null}
           {localInfo && localInfo.state === 'failed' ? (
-            <span style={{ fontSize: 12, color: 'var(--dsh-mem-danger)' }}>{'加载失败：' + (localInfo.error || '')}</span>
+            <span style={{ fontSize: 12, color: 'var(--dsh-mem-danger)' }}>{tr("加载失败：") + (localInfo.error || '')}</span>
           ) : null}
-          {localInfo && localInfo.state === 'ready' ? <span className="dsh-mem-rb-muted">已就绪</span> : null}
+          {localInfo && localInfo.state === 'ready' ? <span className="dsh-mem-rb-muted">{tr("已就绪")}</span> : null}
         </div>
       );
     } else if (m.state === 'downloaded') {
@@ -336,26 +336,24 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
             disabled={ap.busy}
             onClick={() => call('dsh-memory/embedding-source-set', { source: 'local', activeModel: m.id }, switchConfirm)}
           >
-            启用
-          </NButton>
+            {tr("启用")} </NButton>
           <NButton
             disabled={dlActive}
             onClick={() =>
-              call('dsh-memory/embedding-model-delete', { modelId: m.id }, '删除已下载的 ' + m.name + '（' + fmtMB(m.totalBytes) + '）？')
+              call('dsh-memory/embedding-model-delete', { modelId: m.id }, tr("删除已下载的") + m.name + '（' + fmtMB(m.totalBytes) + '）？')
             }
           >
-            删除
-          </NButton>
+            {tr("删除")} </NButton>
         </div>
       );
     } else {
       action = (
         <NButton
           disabled={dlActive || !st.ceilings.local}
-          title={!st.ceilings.local ? '部署已禁用本地嵌入模型' : ''}
+          title={!st.ceilings.local ? tr("部署已禁用本地嵌入模型") : ''}
           onClick={() => call('dsh-memory/embedding-download-start', { modelId: m.id })}
         >
-          {(m.state === 'partial' ? '继续下载 ' : '下载 ') + fmtMB(m.totalBytes)}
+          {(m.state === 'partial' ? tr("继续下载") : tr("下载")) + fmtMB(m.totalBytes)}
         </NButton>
       );
     }
@@ -365,10 +363,10 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
         style={{ ...S.flexRow, padding: '8px 0', borderBottom: '1px solid var(--dsh-mem-border)', flexWrap: 'wrap' }}
       >
         <div style={{ minWidth: 150 }}>
-          <div style={{ fontWeight: 600 }}>{m.name}</div>
-          <div className="dsh-mem-rb-muted">{m.tags.join(' · ') + ' · ' + m.dims + ' 维 · 上下文 ' + m.contextTokens}</div>
+          <div style={{ fontWeight: 600 }}>{tr(m.name)}</div>
+          <div className="dsh-mem-rb-muted">{m.tags.map((tag) => tr(tag)).join(' · ') + ' · ' + m.dims + tr("维 · 上下文") + m.contextTokens}</div>
         </div>
-        <div style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>{m.description}</div>
+        <div style={{ flex: 1, minWidth: 180, fontSize: 12, color: 'var(--dsh-mem-text-2)' }}>{tr(m.description)}</div>
         {action}
       </div>
     );
@@ -385,54 +383,54 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
   const lastRun = st.reindex ? st.reindex.last : undefined;
   const lastNote = !lastRun
     ? ''
-    : ' · 上次重建：处理 ' + lastRun.processed + '/' + lastRun.planned + ' 条' +
-      (lastRun.failed > 0 ? '、失败 ' + lastRun.failed : '') +
-      (lastRun.cancelled ? '（被取消）' : '') +
-      '，待补 ' + (lastRun.missingBefore.l1 + lastRun.missingBefore.l0) +
+    : tr("· 上次重建：处理") + lastRun.processed + '/' + lastRun.planned + tr("条") +
+      (lastRun.failed > 0 ? tr("、失败") + lastRun.failed : '') +
+      (lastRun.cancelled ? tr("（被取消）") : '') +
+      tr("，待补") + (lastRun.missingBefore.l1 + lastRun.missingBefore.l0) +
       ' → ' + (lastRun.missingAfter.l1 + lastRun.missingAfter.l0) +
-      '，用时 ' + (lastRun.durationMs / 1000).toFixed(1) + 's';
+      tr("，用时") + (lastRun.durationMs / 1000).toFixed(1) + 's';
   const vecNote = !vec
-    ? '向量索引：宿主版本较旧，未上报计数'
+    ? tr("向量索引：宿主版本较旧，未上报计数")
     : !vecOk
-      ? '向量索引不可用（sqlite-vec 扩展缺失或检索库降级），重建无从谈起'
-      : '已嵌入 L1 ' + vec.l1.embedded + '/' + vec.l1.total +
+      ? tr("向量索引不可用（sqlite-vec 扩展缺失或检索库降级），重建无从谈起")
+      : tr("已嵌入 L1") + vec.l1.embedded + '/' + vec.l1.total +
         ' · L0 ' + vec.l0.embedded + '/' + vec.l0.total +
-        (vec.l1.missing + vec.l0.missing > 0 ? '（待补 ' + (vec.l1.missing + vec.l0.missing) + ' 条）' : '') +
-        (vec.l1.skipped + vec.l0.skipped > 0 ? '（' + (vec.l1.skipped + vec.l0.skipped) + ' 条内容不可嵌入，已跳过）' : '') +
+        (vec.l1.missing + vec.l0.missing > 0 ? tr("（待补") + (vec.l1.missing + vec.l0.missing) + tr("条）") : '') +
+        (vec.l1.skipped + vec.l0.skipped > 0 ? '（' + (vec.l1.skipped + vec.l0.skipped) + tr("条内容不可嵌入，已跳过）") : '') +
         lastNote;
   const reindexRunning = !!(st.reindex && st.reindex.running);
   const canRebuild = vecOk && st.source !== 'off' && !reindexRunning && !st.apply.busy;
   const rebuildHint = !vecOk
-    ? '向量能力不可用'
+    ? tr("向量能力不可用")
     : st.source === 'off'
-      ? '嵌入源已关闭，请先启用'
+      ? tr("嵌入源已关闭，请先启用")
       : reindexRunning
-        ? '重建已在进行中'
+        ? tr("重建已在进行中")
         : st.apply.busy
-          ? '嵌入源切换进行中'
-          : '只补缺失向量；已有向量不动。零向量内容会被跳过（重试无意义）';
+          ? tr("嵌入源切换进行中")
+          : tr("只补缺失向量；已有向量不动。零向量内容会被跳过（重试无意义）");
 
   return (
     <div className="dsh-mem-rb-card">
       <div style={S.flexRow}>
-        <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>语义检索（嵌入源）</div>
+        <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{tr("语义检索（嵌入源）")}</div>
         <div style={S.grow} />
         <Segmented
           value={st.source}
           options={[
-            { key: 'off', label: '关闭' },
-            { key: 'local', label: '本地', disabled: !st.ceilings.local, disabledTitle: '部署已禁用本地嵌入模型' },
-            { key: 'remote', label: '远程', disabled: !st.ceilings.remote, disabledTitle: '部署未配置远程嵌入（baseUrl/apiKey/model/dimensions）' },
+            { key: 'off', label: tr("关闭") },
+            { key: 'local', label: tr("本地"), disabled: !st.ceilings.local, disabledTitle: tr("部署已禁用本地嵌入模型") },
+            { key: 'remote', label: tr("远程"), disabled: !st.ceilings.remote, disabledTitle: tr("部署未配置远程嵌入（baseUrl/apiKey/model/dimensions）") },
           ]}
           onChange={onSource}
         />
       </div>
       <div className="dsh-mem-rb-muted" style={{ marginTop: 4 }}>
         {st.source === 'off'
-          ? '当前：关键词（BM25）检索，不做向量嵌入'
+          ? tr("当前：关键词（BM25）检索，不做向量嵌入")
           : st.source === 'remote'
-            ? '当前：远程嵌入（' + (remote.model || '未配置模型') + (remote.baseURL ? ' · ' + remote.baseURL : '') + '）'
-            : '当前：本地嵌入' + (st.activeModel ? '（' + st.activeModel + '）' : '')}
+            ? tr("当前：远程嵌入（") + (remote.model || tr("未配置模型")) + (remote.baseURL ? ' · ' + remote.baseURL : '') + '）'
+            : tr("当前：本地嵌入") + (st.activeModel ? '（' + st.activeModel + '）' : '')}
       </div>
       {st.activeNote ? (
         <div style={{ marginTop: 4, fontSize: 12, color: 'var(--dsh-mem-danger)' }}>{st.activeNote}</div>
@@ -441,21 +439,21 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
         <div style={{ marginTop: 6, fontSize: 12, color: 'var(--dsh-mem-danger)' }}>{err}</div>
       ) : null}
       {dl && dl.phase === 'error' ? (
-        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--dsh-mem-danger)' }}>{'下载失败：' + (dl.error || '')}</div>
+        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--dsh-mem-danger)' }}>{tr("下载失败：") + (dl.error || '')}</div>
       ) : null}
       {runtimeRow}
       {applyRow}
       {/* 远程连接（生效值 + 运行时覆盖编辑）：切换到远程档即按此连接请求 */}
       <div style={RSTY.block}>
-        <div style={RSTY.title}>远程连接（生效值；运行时覆盖优先于部署 YAML）</div>
+        <div style={RSTY.title}>{tr("远程连接（生效值；运行时覆盖优先于部署 YAML）")}</div>
         <div style={RSTY.note}>
-          {'生效端点 ' + (remote.baseURL || '（未配置）') + ' · 模型 ' + (remote.model || '（未配置）') + ' · ' + (remote.dimensions > 0 ? remote.dimensions + ' 维' : '维度跟随部署') + (remote.apiKeySet ? ' · 密钥已设置' : ' · 密钥未设置')}
+          {tr("生效端点") + (remote.baseURL || tr("（未配置）")) + tr("· 模型") + (remote.model || tr("（未配置）")) + ' · ' + (remote.dimensions > 0 ? remote.dimensions + tr("维") : tr("维度跟随部署")) + (remote.apiKeySet ? tr("· 密钥已设置") : tr("· 密钥未设置"))}
         </div>
         <div style={RSTY.row}>
-          <span style={RSTY.label}>端点 URL</span>
+          <span style={RSTY.label}>{tr("端点 URL")}</span>
           <NInput
             style={RSTY.input}
-            placeholder="如 https://api.xxx/v1/embeddings 的服务基址"
+            placeholder={tr("如 https://api.xxx/v1/embeddings 的服务基址")}
             value={rBase}
             onChange={(e: { target: { value: string } }) => onRemoteBase(e.target.value)}
             onKeyDown={(e: { key: string }) => {
@@ -468,10 +466,10 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
           />
         </div>
         <div style={RSTY.row}>
-          <span style={RSTY.label}>模型名</span>
+          <span style={RSTY.label}>{tr("模型名")}</span>
           <NInput
             style={RSTY.input}
-            placeholder="如 text-embedding-3-small"
+            placeholder={tr("如 text-embedding-3-small")}
             value={rModel}
             onChange={(e: { target: { value: string } }) => onRemoteModel(e.target.value)}
             onKeyDown={(e: { key: string }) => {
@@ -482,15 +480,15 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
               }
             }}
           />
-          <span style={RSTY.label}>维度</span>
+          <span style={RSTY.label}>{tr("维度")}</span>
           <NInput
             // 定宽 90 但在 flex 行里可收缩：minWidth:0 解除 flex item 的 min-content 下限，
             // 否则窄容器下 90px 固定的输入框会把整行顶出卡片
             style={{ width: 90, minWidth: 0, flex: '0 1 90px' }}
             type="number"
             min={0}
-            placeholder="跟随部署"
-            title="向量维度（留空/0 = 跟随部署配置）"
+            placeholder={tr("跟随部署")}
+            title={tr("向量维度（留空/0 = 跟随部署配置）")}
             value={rDims}
             onChange={(e: { target: { value: string } }) => {
               remoteDirty.current.dims = true;
@@ -508,7 +506,7 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
             style={RSTY.input}
             type="password"
             autoComplete="new-password"
-            placeholder={remote.apiKeySet ? '••••••••（已设置；输入新值提交可覆盖）' : '远程服务需要密钥时填写'}
+            placeholder={remote.apiKeySet ? tr("••••••••（已设置；输入新值提交可覆盖）") : tr("远程服务需要密钥时填写")}
             value={rKey}
             onChange={(e: { target: { value: string } }) => setRKey(e.target.value)}
             onKeyDown={(e: { key: string }) => {
@@ -516,19 +514,18 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
             }}
             onBlur={commitRemoteKey}
           />
-          {remote.apiKeySet ? <span style={RSTY.chipAccent}>已设置</span> : <span style={RSTY.chipMuted}>未设置</span>}
+          {remote.apiKeySet ? <span style={RSTY.chipAccent}>{tr("已设置")}</span> : <span style={RSTY.chipMuted}>{tr("未设置")}</span>}
           <NButton
-            title="写入空串清除运行时密钥（部署 YAML 的密钥不受影响）"
+            title={tr("写入空串清除运行时密钥（部署 YAML 的密钥不受影响）")}
             onClick={() => commitRemote({ embedRemoteApiKey: '' })}
           >
-            清除
-          </NButton>
+            {tr("清除")} </NButton>
         </div>
       </div>
-      <div style={S.panelLabel}>本地模型目录（下载后离线可用，不随插件分发）</div>
+      <div style={S.panelLabel}>{tr("本地模型目录（下载后离线可用，不随插件分发）")}</div>
       {modelCards}
       <div style={RSTY.block}>
-        <div style={RSTY.title}>向量索引</div>
+        <div style={RSTY.title}>{tr("向量索引")}</div>
         <div style={RSTY.note}>{vecNote}</div>
         <div style={RSTY.row}>
           <NButton
@@ -536,8 +533,7 @@ export function EmbeddingSection(props: { rpc: RpcFn }) {
             title={rebuildHint}
             onClick={() => call('dsh-memory/embedding-reindex', {})}
           >
-            重建索引
-          </NButton>
+            {tr("重建索引")} </NButton>
         </div>
       </div>
     </div>

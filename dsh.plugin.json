@@ -3,8 +3,9 @@
   "name": "dsh-prime-memory",
   "version": "0.26.37",
   "description": {
-    "en": "Layered distilled memory plugin (L0 capture → L1 atomic memory → L2 scenes → L3 persona) with automatic recall injection before each model step.",
-    "zh": "L0~L3 分层蒸馏记忆插件:自动捕获对话、抽取原子记忆、整合场景块、蒸馏核心画像,并在模型步骤前自动召回注入。"
+    "en": "Layered distilled memory plugin for DeepSeek Harness: captures conversations (L0), extracts atomic memories (L1), consolidates scenes (L2), distils persona/team methodology (L3), and injects relevant memories before each model step. Pipeline design ported from MemoryCore (TencentDB Agent Memory).",
+    "zh": "L0~L3 分层蒸馏记忆插件:自动捕获对话、抽取原子记忆、整合场景块、蒸馏核心画像,并在模型步骤前自动召回注入。",
+    "ru": "Плагин послойной дистилляции памяти для DeepSeek Harness: захватывает диалог (L0), извлекает атомарные факты (L1), собирает сцены (L2), дистиллирует профиль и командную методологию (L3) и подмешивает релевантные воспоминания перед каждым шагом модели. Дизайн конвейера перенесён из MemoryCore (TencentDB Agent Memory)."
   },
   "homepage": "https://github.com/drscrewdriver/dsh-prime-memory",
   "repository": {

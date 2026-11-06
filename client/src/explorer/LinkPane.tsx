@@ -9,13 +9,14 @@
  * 取代链方向容易写反：`dsh_superseded` marker 写在**退场的旧行**上、`by` 指向新行，
  * 故 `prevIds`（本记录取代掉的旧行）是数组、`nextId`（取代本记录的新行）是单值。
  */
+import { tr } from '../i18n.js';
 import type { RecordLinksResponse } from '../../../src/contract.js';
 import { NButton } from '../ui/primitives.js';
 import { fmtTime } from '../format.js';
 
 /** 邻居行：一条关系一行（平行关系不合并，合并就丢关系）。 */
 function relLine(n: RecordLinksResponse['neighbors'][number]): string {
-  return `${n.relation}${n.causal ? '（因果）' : ''} · ${n.hop} 跳 · 经由 ${n.viaEntityId}`;
+  return tr("{p1}{p2} · {p3} 跳 · 经由 {p4}", { p1: tr(n.relation), p2: n.causal ? tr('（因果）') : '', p3: n.hop, p4: n.viaEntityId });
 }
 
 export function LinkPane(props: {
@@ -33,15 +34,14 @@ export function LinkPane(props: {
   if (!recordId) {
     return (
       <div style={{ padding: 14, fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>
-        从左侧选一条记忆，这里会列出它涉及的实体、这些实体的关系邻居、以及邻居们的来源记忆——可以一路跳下去。
-      </div>
+        {tr("从左侧选一条记忆，这里会列出它涉及的实体、这些实体的关系邻居、以及邻居们的来源记忆——可以一路跳下去。")} </div>
     );
   }
   if (error) {
-    return <div style={{ padding: 14, fontSize: 12, color: 'var(--dsh-mem-accent)' }}>关联查询失败：{error}</div>;
+    return <div style={{ padding: 14, fontSize: 12, color: 'var(--dsh-mem-accent)' }}>{tr("关联查询失败：")}{error}</div>;
   }
   if (loading || !links) {
-    return <div style={{ padding: 14, fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{loading ? '加载中…' : ' '}</div>;
+    return <div style={{ padding: 14, fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{loading ? tr("加载中…") : ' '}</div>;
   }
 
   const { record, entities, neighbors, records, supersede, truncated } = links;
@@ -74,7 +74,7 @@ export function LinkPane(props: {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', paddingRight: 2 }}>
-      {sec('层1 · 当前记录')}
+      {sec(tr("层1 · 当前记录"))}
       {record ? (
         <div
           style={{
@@ -91,45 +91,44 @@ export function LinkPane(props: {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: 'var(--dsh-mem-text-3)', marginTop: 6 }}>
             <span>{record.type}</span>
             {record.scene ? <span>{record.scene}</span> : null}
-            {record.agingWeight != null ? <span>老化 {Math.round(record.agingWeight * 100)}%</span> : null}
-            {record.maturity ? <span>成熟 {record.maturity}</span> : null}
+            {record.agingWeight != null ? <span>{tr("老化")} {Math.round(record.agingWeight * 100)}%</span> : null}
+            {record.maturity ? <span>{tr("成熟")} {record.maturity}</span> : null}
             <span>{fmtTime(record.updatedAt)}</span>
-            {record.retired ? <span>已退场{record.retiredReason ? `·${record.retiredReason}` : ''}</span> : null}
+            {record.retired ? <span>{tr("已退场")}{record.retiredReason ? `·${record.retiredReason}` : ''}</span> : null}
           </div>
         </div>
       ) : (
         <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>
-          这条记忆还没有被投影进图（图谱未开启，或投影尚未跑到）——所以暂时查不到它的关联。
-        </div>
+          {tr("这条记忆还没有被投影进图（图谱未开启，或投影尚未跑到）——所以暂时查不到它的关联。")} </div>
       )}
 
-      {supersede.prevIds.length > 0 || supersede.nextId ? sec('取代链') : null}
+      {supersede.prevIds.length > 0 || supersede.nextId ? sec(tr("取代链")) : null}
       <div>
         {supersede.nextId
-          ? chip(supersede.nextId, `→ 被新记忆取代`, '取代本记录的新行，点击查看', () => onPickRecord(supersede.nextId!))
+          ? chip(supersede.nextId, tr("→ 被新记忆取代"), tr("取代本记录的新行，点击查看"), () => onPickRecord(supersede.nextId!))
           : null}
-        {supersede.prevIds.map((id) => chip(id, `← 取代了旧记忆`, '本记录取代掉的旧行，点击查看', () => onPickRecord(id)))}
+        {supersede.prevIds.map((id) => chip(id, tr("← 取代了旧记忆"), tr("本记录取代掉的旧行，点击查看"), () => onPickRecord(id)))}
       </div>
 
-      {sec('层2 · 涉及实体', entities.length)}
+      {sec(tr("层2 · 涉及实体"), entities.length)}
       {entities.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>无（该记录没有抽出实体）。</div>
+        <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{tr("无（该记录没有抽出实体）。")}</div>
       ) : (
         <div>
           {entities.map((e) => (
             <span key={e.id}>
-              {chip(e.id, `${e.name}`, `度 ${e.degree} · 因果 ${e.causalDegree} · 点击在图上强调`, () => onEmphasisNode(e.id))}
+              {chip(e.id, `${e.name}`, tr("度 {p1} · 因果 {p2} · 点击在图上强调", { p1: e.degree, p2: e.causalDegree }), () => onEmphasisNode(e.id))}
               {e.recordIds.map((rid) =>
-                chip(rid, `↳ ${labelOfRecord(rid).slice(0, 12)}`, '该实体的其它来源记忆，点击查看', () => onPickRecord(rid)),
+                chip(rid, `↳ ${labelOfRecord(rid).slice(0, 12)}`, tr("该实体的其它来源记忆，点击查看"), () => onPickRecord(rid)),
               )}
             </span>
           ))}
         </div>
       )}
 
-      {sec('层3 · 关系邻居', neighbors.length)}
+      {sec(tr("层3 · 关系邻居"), neighbors.length)}
       {neighbors.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>无（这些实体目前没有 active 关系的邻居）。</div>
+        <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{tr("无（这些实体目前没有 active 关系的邻居）。")}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {neighbors.map((n, i) => (
@@ -142,13 +141,12 @@ export function LinkPane(props: {
                 <span style={{ fontSize: 11, color: n.causal ? 'var(--dsh-mem-accent)' : 'var(--dsh-mem-text-3)' }}>
                   {relLine(n)}
                 </span>
-                <NButton onClick={() => onEmphasisNode(n.id)} title="在图上强调该节点">
-                  看图
-                </NButton>
+                <NButton onClick={() => onEmphasisNode(n.id)} title={tr("在图上强调该节点")}>
+                  {tr("看图")} </NButton>
               </div>
               <div style={{ marginTop: 4 }}>
                 {n.recordIds.map((rid) =>
-                  chip(rid, `↳ ${labelOfRecord(rid).slice(0, 14)}`, '跳到这条邻居的来源记忆', () => onPickRecord(rid)),
+                  chip(rid, `↳ ${labelOfRecord(rid).slice(0, 14)}`, tr("跳到这条邻居的来源记忆"), () => onPickRecord(rid)),
                 )}
               </div>
             </div>
@@ -156,9 +154,9 @@ export function LinkPane(props: {
         </div>
       )}
 
-      {sec('相关记忆', records.length)}
+      {sec(tr("相关记忆"), records.length)}
       {records.length === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>无。</div>
+        <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{tr("无。")}</div>
       ) : (
         records.map((r) => (
           <button
@@ -183,7 +181,7 @@ export function LinkPane(props: {
             </div>
             <div style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
               {r.type}
-              {r.agingWeight != null ? ` · 老化 ${Math.round(r.agingWeight * 100)}%` : ''} · {fmtTime(r.updatedAt)}
+              {r.agingWeight != null ? tr("· 老化 {p1}%", { p1: Math.round(r.agingWeight * 100) }) : ''} · {fmtTime(r.updatedAt)}
             </div>
           </button>
         ))
@@ -191,8 +189,7 @@ export function LinkPane(props: {
 
       {truncated ? (
         <div style={{ fontSize: 11, color: 'var(--dsh-mem-accent)', marginTop: 8 }}>
-          邻居或相关记忆过多，此处已截断（不是没有更多）。
-        </div>
+          {tr("邻居或相关记忆过多，此处已截断（不是没有更多）。")} </div>
       ) : null}
     </div>
   );

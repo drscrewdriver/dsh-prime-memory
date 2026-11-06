@@ -1,0 +1,337 @@
+{
+  "entries": {
+    "2D 图": {
+      "en": "2D graph",
+      "ru": "2D-граф"
+    },
+    "3D 图": {
+      "en": "3D graph",
+      "ru": "3D-граф"
+    },
+    "关闭面板": {
+      "en": "Close",
+      "ru": "Закрыть"
+    },
+    "关闭窗口": {
+      "en": "Close",
+      "ru": "Закрыть"
+    },
+    "中文专用小模型：约 25MB，CPU 嵌入最快，适合先体验语义检索。": {
+      "en": "Chinese-only small model: ~25 MB, fastest CPU embedding — good for trying semantic search first.",
+      "ru": "Небольшая модель только для китайского: ~25 МБ, самая быстрая на CPU — подойдёт, чтобы сначала попробовать семантический поиск."
+    },
+    "Google 官方嵌入模型：100+ 语言含中文，约 295MB，质量与开销均衡（上游 MemoryCore 同款）。": {
+      "en": "Google's embedding model: 100+ languages including Chinese, ~295 MB, balanced quality and cost (the same one upstream MemoryCore uses).",
+      "ru": "Официальная модель эмбеддингов Google: 100+ языков, включая китайский, ~295 МБ, баланс качества и затрат (та же, что в upstream MemoryCore)."
+    },
+    "中文质量最强：8192 token 上下文，约 543MB，CPU 嵌入较慢（单条可达秒级）。": {
+      "en": "Best Chinese quality: 8192-token context, ~543 MB, slower on CPU (a single item can take seconds).",
+      "ru": "Лучшее качество для китайского: контекст 8192 токена, ~543 МБ, медленнее на CPU (один элемент может занять секунды)."
+    },
+    "中文": {
+      "en": "Chinese",
+      "ru": "китайский"
+    },
+    "轻量": {
+      "en": "lightweight",
+      "ru": "лёгкая"
+    },
+    "多语言": {
+      "en": "multilingual",
+      "ru": "многоязычная"
+    },
+    "均衡": {
+      "en": "balanced",
+      "ru": "сбалансированная"
+    },
+    "长上下文": {
+      "en": "long context",
+      "ru": "длинный контекст"
+    },
+    "BGE small 中文": {
+      "en": "BGE small (Chinese)",
+      "ru": "BGE small (кит.)"
+    },
+    "BGE-M3 大杯": {
+      "en": "BGE-M3 Large",
+      "ru": "BGE-M3 Large"
+    },
+    "下载": {
+      "en": "Download",
+      "ru": "Скачать"
+    },
+    "继续下载": {
+      "en": "Resume download",
+      "ru": "Продолжить скачивание"
+    },
+    "删除已下载的": {
+      "en": "Delete downloaded ",
+      "ru": "Удалить скачанную "
+    },
+    "维 · 上下文": {
+      "en": "dim · context",
+      "ru": "разм. · контекст"
+    },
+    "矛盾冻结是**opt-in**：它把裁决权交还给人，代价是冲突会一直停着等你处理。 确认要接手这些裁决，再去「概览」打开它 —— 打开后已停放的队列会立刻显示在这里。": {
+      "en": "Conflict freeze is opt-in: it hands the verdict back to a human, at the cost of conflicts sitting there until you deal with them. If you are ready to take on those verdicts, turn it on in Overview — once on, already-parked pairs show up here right away.",
+      "ru": "Заморозка конфликтов работает по желанию: она возвращает решение человеку, ценой того, что конфликты висят, пока вы ими не займётесь. Готовы взять это на себя — включите её в «Обзоре»: уже отложенные пары сразу появятся здесь."
+    },
+    "· 对**下一次点击**生效（正在跑的那轮不会改道）": {
+      "en": "· takes effect on the next click (the running round will not be redirected)",
+      "ru": "· действует со следующего нажатия (текущий прогон не перенаправится)"
+    },
+    "画像偏好": {
+      "en": "Profile preference",
+      "ru": "Предпочтения профиля"
+    },
+    "客观事件": {
+      "en": "Objective event",
+      "ru": "Объективное событие"
+    },
+    "全局指令": {
+      "en": "Global instruction",
+      "ru": "Глобальная инструкция"
+    },
+    "工作事实": {
+      "en": "Work fact",
+      "ru": "Рабочий факт"
+    },
+    "工作任务": {
+      "en": "Work task",
+      "ru": "Рабочая задача"
+    },
+    "工作方法": {
+      "en": "Work method",
+      "ru": "Рабочий метод"
+    },
+    "工作资产": {
+      "en": "Work asset",
+      "ru": "Рабочий артефакт"
+    },
+    "用户信息": {
+      "en": "User info",
+      "ru": "Данные пользователя"
+    },
+    "用户爱好": {
+      "en": "User hobby",
+      "ru": "Увлечения пользователя"
+    },
+    "沟通风格": {
+      "en": "Communication style",
+      "ru": "Стиль общения"
+    },
+    "行为规范": {
+      "en": "Behavior norms",
+      "ru": "Нормы поведения"
+    },
+    "项目介绍": {
+      "en": "Project intro",
+      "ru": "Описание проекта"
+    },
+    "技术栈": {
+      "en": "Tech stack",
+      "ru": "Технологический стек"
+    },
+    "架构设计": {
+      "en": "Architecture",
+      "ru": "Архитектура"
+    },
+    "构建配置": {
+      "en": "Build config",
+      "ru": "Конфигурация сборки"
+    },
+    "依赖配置": {
+      "en": "Dependency config",
+      "ru": "Конфигурация зависимостей"
+    },
+    "IDE 配置": {
+      "en": "IDE config",
+      "ru": "Настройки IDE"
+    },
+    "版本控制配置": {
+      "en": "VCS config",
+      "ru": "Конфигурация VCS"
+    },
+    "环境配置": {
+      "en": "Environment config",
+      "ru": "Конфигурация окружения"
+    },
+    "项目规则": {
+      "en": "Project rules",
+      "ru": "Правила проекта"
+    },
+    "代码规范": {
+      "en": "Code conventions",
+      "ru": "Соглашения по коду"
+    },
+    "实践规范": {
+      "en": "Practice conventions",
+      "ru": "Соглашения по практике"
+    },
+    "测试规范": {
+      "en": "Test conventions",
+      "ru": "Соглашения по тестам"
+    },
+    "注释规范": {
+      "en": "Comment conventions",
+      "ru": "Соглашения по комментариям"
+    },
+    "任务总结": {
+      "en": "Task summary",
+      "ru": "Итоги задачи"
+    },
+    "任务拆解": {
+      "en": "Task breakdown",
+      "ru": "Декомпозиция задачи"
+    },
+    "任务流程": {
+      "en": "Task flow",
+      "ru": "Процесс задачи"
+    },
+    "任务经验": {
+      "en": "Task experience",
+      "ru": "Опыт задачи"
+    },
+    "工具经验": {
+      "en": "Tool experience",
+      "ru": "Опыт с инструментами"
+    },
+    "MCP 经验": {
+      "en": "MCP experience",
+      "ru": "Опыт с MCP"
+    },
+    "技能经验": {
+      "en": "Skill experience",
+      "ru": "Опыт навыка"
+    },
+    "习得技能": {
+      "en": "Learned skill",
+      "ru": "Освоенный навык"
+    },
+    "专家经验": {
+      "en": "Expert experience",
+      "ru": "Экспертный опыт"
+    },
+    "重要决策": {
+      "en": "Key decision",
+      "ru": "Ключевое решение"
+    },
+    "常见陷阱": {
+      "en": "Common pitfall",
+      "ru": "Частая ловушка"
+    },
+    "历史参考文件": {
+      "en": "Historical reference",
+      "ru": "Историческая справка"
+    },
+    "未分类": {
+      "en": "Unclassified",
+      "ru": "Без категории"
+    },
+    "[memory] type '{p1}' 不在词表，family 按旧前缀规则回落（请核对来源）": {
+      "en": "[memory] type '{p1}' is not in the vocabulary; family falls back to the legacy prefix rule (check the source)",
+      "ru": "[memory] тип '{p1}' отсутствует в словаре; семейство определяется по старому правилу префикса (проверьте источник)"
+    },
+    "字符": {
+      "en": "characters",
+      "ru": "символов"
+    },
+    "呼吸": {
+      "en": "Breathing",
+      "ru": "Дыхание"
+    },
+    "使用": {
+      "en": "uses",
+      "ru": "использует"
+    },
+    "属于": {
+      "en": "belongs to",
+      "ru": "относится к"
+    },
+    "创建": {
+      "en": "creates",
+      "ru": "создаёт"
+    },
+    "参与": {
+      "en": "participates in",
+      "ru": "участвует в"
+    },
+    "贡献": {
+      "en": "contributes to",
+      "ru": "вносит вклад"
+    },
+    "依赖": {
+      "en": "depends on",
+      "ru": "зависит от"
+    },
+    "位于": {
+      "en": "located in",
+      "ru": "находится в"
+    },
+    "相关": {
+      "en": "related to",
+      "ru": "связано с"
+    },
+    "导致": {
+      "en": "causes",
+      "ru": "вызывает"
+    },
+    "因为": {
+      "en": "because of",
+      "ru": "из-за"
+    },
+    "修复了": {
+      "en": "fixed",
+      "ru": "исправил"
+    },
+    "取代": {
+      "en": "supersedes",
+      "ru": "заменяет"
+    }
+  },
+  "spacing": {
+    "trailing": [
+      "· 疑似冲突",
+      "· 近重复",
+      "· 重复",
+      "上次重建：已取消（完成",
+      "下载",
+      "产出",
+      "优先级",
+      "会话（",
+      "共",
+      "召回使用",
+      "探针：",
+      "更新",
+      "热度",
+      "继续下载",
+      "老化",
+      "：新"
+    ],
+    "leading": [
+      "· 总输出 token",
+      "个会话 ·",
+      "个场景块",
+      "个来源",
+      "个节点 /",
+      "分",
+      "分钟前",
+      "天",
+      "天前",
+      "字符",
+      "条",
+      "条 · 原样保留",
+      "条可恢复",
+      "条消息",
+      "条记录",
+      "条边",
+      "次",
+      "次 · 输出",
+      "秒"
+    ],
+    "both": [
+      "包 ·",
+      "维 · 上下文"
+    ]
+  }
+}

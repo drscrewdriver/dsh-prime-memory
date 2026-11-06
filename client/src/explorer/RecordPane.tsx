@@ -9,6 +9,7 @@
  *   2. 词表不手抄：类型目录随首屏（offset===0）由服务端下发，缺席时从已加载项派生；
  *   3. 列表只在**表单提交**时变化，不做输入即查（动态重发会把软超时打满）。
  */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { ListRecordsRequest, UiRecord } from '../../../src/contract.js';
@@ -106,14 +107,16 @@ export function RecordPane(props: {
   };
 
   /** 类型显示名：词表优先，缺席回落原值（旧服务端不下发词表时不至于显示空白）。 */
-  const labelOf = (t: string) => typeCatalog.find((c) => c.id === t)?.label ?? t;
+  // 类型标签由 host 的 typeCatalog 下发（值是 type id，标签是中文）：显示期翻译，
+  // 存储值与筛选值都不动。自定义/未知类型原样透传（key 不匹配）。
+  const labelOf = (t: string) => tr(typeCatalog.find((c) => c.id === t)?.label ?? t);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
         <NInput
           style={{ flex: '1 1 160px', minWidth: 140 }}
-          placeholder="搜索记忆内容（关键词）…"
+          placeholder={tr("搜索记忆内容（关键词）…")}
           value={input}
           onChange={(e: { target: { value: string } }) => setInput(e.target.value)}
           onKeyDown={onKey}
@@ -122,13 +125,13 @@ export function RecordPane(props: {
           className="dsh-mem-input"
           value={typeSel}
           onChange={(e) => setTypeSel(e.target.value)}
-          title="类型筛选"
+          title={tr("类型筛选")}
           style={{ maxWidth: 120 }}
         >
-          <option value="">全部类型</option>
+          <option value="">{tr("全部类型")}</option>
           {typeCatalog.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.label}
+              {tr(c.label)}
             </option>
           ))}
         </select>
@@ -136,36 +139,33 @@ export function RecordPane(props: {
           className="dsh-mem-input"
           value={retiredSel}
           onChange={(e) => setRetiredSel(e.target.value as '' | 'active' | 'retired')}
-          title="退场筛选"
+          title={tr("退场筛选")}
           style={{ maxWidth: 96 }}
         >
-          <option value="">全部</option>
-          <option value="active">仅活跃</option>
-          <option value="retired">仅退场</option>
+          <option value="">{tr("全部")}</option>
+          <option value="active">{tr("仅活跃")}</option>
+          <option value="retired">{tr("仅退场")}</option>
         </select>
-        <NButton onClick={search} title="查询（Enter）">
-          查询
-        </NButton>
+        <NButton onClick={search} title={tr("查询（Enter）")}>
+          {tr("查询")} </NButton>
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)', padding: '6px 2px' }}>
-        {total != null ? `共 ${total} 条 · ` : ''}已列 {items.length} 条
-        {truncated ? ' · 检索结果可能不完整' : ''}
-        {loading ? ' · 加载中…' : ''}
+        {total != null ? tr("共 {p1} 条 ·", { p1: total }) : ''}{tr("已列")} {items.length} {tr("条")} {truncated ? tr("· 检索结果可能不完整") : ''}
+        {loading ? tr("· 加载中…") : ''}
       </div>
 
       {error && (
         <div style={{ fontSize: 12, color: 'var(--dsh-mem-accent)', padding: '4px 0' }}>
-          查询失败：{error}{' '}
-          <NButton onClick={() => fetchPage(conds, Math.max(0, offsetRef.current - items.length), false)}>重试</NButton>
+          {tr("查询失败：")}{error}{' '}
+          <NButton onClick={() => fetchPage(conds, Math.max(0, offsetRef.current - items.length), false)}>{tr("重试")}</NButton>
         </div>
       )}
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', border: '1px solid var(--dsh-mem-border)', borderRadius: 8 }}>
         {items.length === 0 && !loading && !error ? (
           <div style={{ padding: 16, fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>
-            没有符合条件的记忆。
-          </div>
+            {tr("没有符合条件的记忆。")} </div>
         ) : null}
         {items.map((r) => {
           const on = r.id === activeId;
@@ -173,7 +173,7 @@ export function RecordPane(props: {
             <button
               key={r.id}
               onClick={() => onPick(r.id)}
-              title={r.retired ? '已退场（软删，可恢复）' : undefined}
+              title={r.retired ? tr("已退场（软删，可恢复）") : undefined}
               style={{
                 display: 'block',
                 width: '100%',
@@ -202,11 +202,11 @@ export function RecordPane(props: {
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: 'var(--dsh-mem-text-3)', marginTop: 4 }}>
                 <span>{labelOf(r.type)}</span>
                 {r.scene ? <span>{r.scene}</span> : null}
-                {r.agingWeight != null ? <span title="老化权重（读路径衰减系数）">老化 {Math.round(r.agingWeight * 100)}%</span> : null}
-                {r.maturity ? <span>成熟 {r.maturity}</span> : null}
-                {r.usage && r.usage.used > 0 ? <span>被用 {r.usage.used}</span> : null}
+                {r.agingWeight != null ? <span title={tr("老化权重（读路径衰减系数）")}>{tr("老化")} {Math.round(r.agingWeight * 100)}%</span> : null}
+                {r.maturity ? <span>{tr("成熟")} {r.maturity}</span> : null}
+                {r.usage && r.usage.used > 0 ? <span>{tr("被用")} {r.usage.used}</span> : null}
                 <span>{fmtTime(r.updatedAt)}</span>
-                {r.retired ? <span>已退场</span> : null}
+                {r.retired ? <span>{tr("已退场")}</span> : null}
               </div>
             </button>
           );
@@ -214,8 +214,7 @@ export function RecordPane(props: {
         {hasMore ? (
           <div style={{ padding: 8, textAlign: 'center' }}>
             <NButton onClick={() => fetchPage(conds, offsetRef.current, true)} disabled={loading}>
-              加载更多
-            </NButton>
+              {tr("加载更多")} </NButton>
           </div>
         ) : null}
       </div>

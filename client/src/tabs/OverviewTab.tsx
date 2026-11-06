@@ -1,4 +1,5 @@
 /** Tab：概览。记忆模式开关组 + 蒸馏参数 + 嵌入源 + 重建 + 计数瓦片/明细行。 */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { MemoryStats, SettingsGetResponse, SettingsSetRequest } from '../../../src/contract.js';
 import { fmtTime } from '../format.js';
@@ -66,7 +67,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
       .then((r) => {
         if (!r || !r.ok) {
           setSettingsData(prev);
-          setError(r && r.error ? '开关写入失败：' + r.error.message : '开关写入失败');
+          setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
           // 入口开关写失败：挂载状态跟着 UI 一起回滚（否则行没了、面板却显示已关）。
           if (key === 'explorerEnabled') explorerEntryState.set(prev.settings.explorerEnabled !== false);
         } else {
@@ -77,7 +78,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
       })
       .catch((e: unknown) => {
         setSettingsData(prev);
-        setError('开关写入失败：' + String((e && (e as Error).message) || e));
+        setError(tr("开关写入失败：") + String((e && (e as Error).message) || e));
         if (key === 'explorerEnabled') explorerEntryState.set(prev.settings.explorerEnabled !== false);
       });
   };
@@ -110,14 +111,14 @@ export function OverviewTab(props: { rpc: RpcFn }) {
       .then((r) => {
         if (!r || !r.ok) {
           setSettingsData(prev);
-          setError(r && r.error ? '并行度写入失败：' + r.error.message : '并行度写入失败');
+          setError(r && r.error ? tr("并行度写入失败：") + r.error.message : tr("并行度写入失败"));
         } else {
           setError(null);
         }
       })
       .catch((e: unknown) => {
         setSettingsData(prev);
-        setError('并行度写入失败：' + String((e && (e as Error).message) || e));
+        setError(tr("并行度写入失败：") + String((e && (e as Error).message) || e));
       });
   };
 
@@ -126,20 +127,20 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   const infos: Array<[string, string]> = [];
   if (stats) {
     const th = stats.thresholds || { l2MinNewMemories: 5, l3Interval: 20 };
-    tiles.push({ num: String(stats.l0Today), label: 'L0 今日消息' });
-    tiles.push({ num: String(stats.l1Count), label: 'L1 原子记忆' });
-    tiles.push({ num: String(stats.sceneCount), label: 'L2 场景块' });
-    tiles.push({ num: String(stats.pendingExtract), label: '待重试消息' });
-    infos.push(['数据目录', stats.dataDir]);
-    infos.push(['插件版本', 'v' + stats.version]);
-    infos.push(['默认档', modeLabel(stats.family)]);
-    infos.push(['L1 累计抽取', String(stats.l1TotalExtracted)]);
-    infos.push(['L3 画像', stats.personaChars > 0 ? stats.personaChars + ' 字符' : '未生成']);
-    infos.push(['上次 L1 抽取', fmtTime(stats.lastExtractAt)]);
-    infos.push(['上次 L2 整合', fmtTime(stats.lastL2At)]);
-    infos.push(['上次 L3 蒸馏', fmtTime(stats.lastL3At)]);
-    infos.push(['待 L2 新记忆', stats.memoriesSinceL2 + ' / ' + (th.l2MinNewMemories != null ? th.l2MinNewMemories : 5)]);
-    infos.push(['待 L3 新记忆', stats.memoriesSinceL3 + ' / ' + (th.l3Interval != null ? th.l3Interval : 20)]);
+    tiles.push({ num: String(stats.l0Today), label: tr("L0 今日消息") });
+    tiles.push({ num: String(stats.l1Count), label: tr("L1 原子记忆") });
+    tiles.push({ num: String(stats.sceneCount), label: tr("L2 场景块") });
+    tiles.push({ num: String(stats.pendingExtract), label: tr("待重试消息") });
+    infos.push([tr("数据目录"), stats.dataDir]);
+    infos.push([tr("插件版本"), 'v' + stats.version]);
+    infos.push([tr("默认档"), modeLabel(stats.family)]);
+    infos.push([tr("L1 累计抽取"), String(stats.l1TotalExtracted)]);
+    infos.push([tr("L3 画像"), stats.personaChars > 0 ? stats.personaChars + tr("字符") : tr("未生成")]);
+    infos.push([tr("上次 L1 抽取"), fmtTime(stats.lastExtractAt)]);
+    infos.push([tr("上次 L2 整合"), fmtTime(stats.lastL2At)]);
+    infos.push([tr("上次 L3 蒸馏"), fmtTime(stats.lastL3At)]);
+    infos.push([tr("待 L2 新记忆"), stats.memoriesSinceL2 + ' / ' + (th.l2MinNewMemories != null ? th.l2MinNewMemories : 5)]);
+    infos.push([tr("待 L3 新记忆"), stats.memoriesSinceL3 + ' / ' + (th.l3Interval != null ? th.l3Interval : 20)]);
   }
   // message 非 running = 管线降级（数据为最后一次成功读取）
   const degraded = stats && stats.message && stats.message !== 'running';
@@ -149,10 +150,10 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   let ceilingNote = '';
   if (settingsData && settingsData.ceilings) {
     const off: string[] = [];
-    if (!settingsData.ceilings.capture) off.push('捕获');
-    if (!settingsData.ceilings.distill) off.push('蒸馏');
-    if (!settingsData.ceilings.recall) off.push('召回');
-    if (off.length > 0) ceilingNote = '注意：部署配置已停用 ' + off.join('、') + '（运行时开关无法开启）';
+    if (!settingsData.ceilings.capture) off.push(tr("捕获"));
+    if (!settingsData.ceilings.distill) off.push(tr("蒸馏"));
+    if (!settingsData.ceilings.recall) off.push(tr("召回"));
+    if (off.length > 0) ceilingNote = tr("注意：部署配置已停用") + off.join('、') + tr("（运行时开关无法开启）");
   }
   const mutate = settingsData && settingsData.settings ? !!settingsData.settings.memoryMutate : false;
   const cfEnabled = settingsData && settingsData.settings ? !!settingsData.settings.conflictFreeze : false;
@@ -178,22 +179,22 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   return (
     <div>
       {settingsData && settingsData.supported === false ? (
-        <p style={S.hint}>settings 服务不可用，记忆模式开关未启用（记忆保持全开）。</p>
+        <p style={S.hint}>{tr("settings 服务不可用，记忆模式开关未启用（记忆保持全开）。")}</p>
       ) : settingsData ? (
         <div style={S.switchPanel}>
           {/* 分组一：记忆模式（总闸 + 三个分项；总闸关闭时分项置灰） */}
-          <div style={S.panelLabel}>记忆模式</div>
+          <div style={S.panelLabel}>{tr("记忆模式")}</div>
           <SwitchRow
-            label="记忆模式"
-            desc={master ? '已开启：捕获对话并蒸馏记忆' : '已关闭：不捕获、不蒸馏、不注入（数据保留）'}
+            label={tr("记忆模式")}
+            desc={master ? tr("已开启：捕获对话并蒸馏记忆") : tr("已关闭：不捕获、不蒸馏、不注入（数据保留）")}
             checked={master}
             onChange={(v) => {
               toggle('enabled', v);
             }}
           />
           <SwitchRow
-            label="捕获"
-            desc="L0：记录原始对话（关闭后蒸馏也无输入）"
+            label={tr("捕获")}
+            desc={tr("L0：记录原始对话（关闭后蒸馏也无输入）")}
             checked={settingsData.settings.capture}
             disabled={!master}
             onChange={(v) => {
@@ -201,8 +202,8 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             }}
           />
           <SwitchRow
-            label="蒸馏"
-            desc="L1 抽取 + L2 场景 + L3 画像"
+            label={tr("蒸馏")}
+            desc={tr("L1 抽取 + L2 场景 + L3 画像")}
             checked={settingsData.settings.distill}
             disabled={!master}
             onChange={(v) => {
@@ -210,8 +211,8 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             }}
           />
           <SwitchRow
-            label="召回"
-            desc="对话时注入相关记忆与画像"
+            label={tr("召回")}
+            desc={tr("对话时注入相关记忆与画像")}
             checked={settingsData.settings.recall}
             disabled={!master}
             onChange={(v) => {
@@ -219,13 +220,13 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             }}
           />
           {/* 分组二：高权限模式（写删门）——模型侧写删工具与面板删除记录共用的总闸 */}
-          <div style={S.panelLabel}>高权限模式</div>
+          <div style={S.panelLabel}>{tr("高权限模式")}</div>
           <SwitchRow
-            label="高权限模式"
+            label={tr("高权限模式")}
             desc={
               mutate
-                ? '已开启：模型获得记忆写入/删除工具，记忆 Tab 可删除指定记忆'
-                : '默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除'
+                ? tr("已开启：模型获得记忆写入/删除工具，记忆 Tab 可删除指定记忆")
+                : tr("默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除")
             }
             checked={mutate}
             onChange={(v) => {
@@ -233,10 +234,10 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             }}
           />
           {/* 分组：技能结晶（轨2）——看板可拨总开关，控工具注册/注入/端点；工具注册随 volatile 热更生效 */}
-          <div style={S.panelLabel}>技能结晶</div>
+          <div style={S.panelLabel}>{tr("技能结晶")}</div>
           <SwitchRow
-            label="技能（程序性记忆）"
-            desc={skillsEnabled ? '已开启：重复工作方法会结晶为技能候选，注入活跃技能，可在「技能」页审阅晋升' : '默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）'}
+            label={tr("技能（程序性记忆）")}
+            desc={skillsEnabled ? tr("已开启：重复工作方法会结晶为技能候选，注入活跃技能，可在「技能」页审阅晋升") : tr("默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）")}
             checked={skillsEnabled}
             onChange={(v) => {
               toggle('skillsEnabled', v);
@@ -247,9 +248,9 @@ export function OverviewTab(props: { rpc: RpcFn }) {
            * 与下方「图谱读工具」（能否向模型注册读图工具）是两个独立的面；
            * 旧版只有后者，而“图谱投影”四个字落在蒸馏预算输入框旁边（那是预算分层标签）。
            */}
-          <div style={S.panelLabel}>{GRAPH_FEATURE_LABEL}</div>
+          <div style={S.panelLabel}>{tr(GRAPH_FEATURE_LABEL)}</div>
           <SwitchRow
-            label={`${GRAPH_FEATURE_LABEL}投影`}
+            label={tr("{p1}投影", { p1: tr(GRAPH_FEATURE_LABEL) })}
             desc={graphSwitchDesc(graphEnabled)}
             checked={graphEnabled}
             disabled={!master}
@@ -264,60 +265,60 @@ export function OverviewTab(props: { rpc: RpcFn }) {
           />
           {/* 分组：记忆库入口（单开一节重点显示）——入口开关与投影写面无关，
               默认激活；即时显隐不靠重启（同 bundle 状态单例，market 同款通道）。 */}
-          <div style={S.panelLabel}>记忆库入口</div>
+          <div style={S.panelLabel}>{tr("记忆库入口")}</div>
           <SwitchRow
-            label="侧栏「记忆库」入口"
-            desc={explorerEnabled ? '已开启：左侧栏显示「记忆库」（L1 查询 + 关联跳转 + 2D/3D 记忆图）；关闭即时隐藏，无需重启' : '已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启'}
+            label={tr("侧栏「记忆库」入口")}
+            desc={explorerEnabled ? tr("已开启：左侧栏显示「记忆库」（L1 查询 + 关联跳转 + 2D/3D 记忆图）；关闭即时隐藏，无需重启") : tr("已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启")}
             checked={explorerEnabled}
             onChange={(v) => { toggle('explorerEnabled', v); }}
           />
           {/* 分组：工具封印（v0.21.0）——false = 该组工具不注册,从模型工具列表消失;
               核心读(memory_search / read_scene / receipts / conversation_search)与槽位三件不受控 */}
-          <div style={S.panelLabel}>工具封印</div>
+          <div style={S.panelLabel}>{tr("工具封印")}</div>
           <SwitchRow
-            label="Room 管理工具"
-            desc={toolRoom ? '已注册：memory_room_admin / memory_room_review（目录治理）' : '已封印：两个工具从模型工具列表移除'}
+            label={tr("Room 管理工具")}
+            desc={toolRoom ? tr("已注册：memory_room_admin / memory_room_review（目录治理）") : tr("已封印：两个工具从模型工具列表移除")}
             checked={toolRoom}
             onChange={(v) => { toggle('toolRoom', v); }}
           />
           <SwitchRow
-            label={GRAPH_TOOL_LABEL}
-            desc={toolGraph ? '已注册：memory_search_graph / memory_expand_graph_node' : '已封印：图谱读工具从模型工具列表移除'}
+            label={tr(GRAPH_TOOL_LABEL)}
+            desc={toolGraph ? tr("已注册：memory_search_graph / memory_expand_graph_node") : tr("已封印：图谱读工具从模型工具列表移除")}
             checked={toolGraph}
             onChange={(v) => { toggle('toolGraph', v); }}
           />
           <SwitchRow
-            label="反刍工具"
-            desc={toolRuminate ? '已注册：memory_ruminate / _cancel / _status' : '已封印：反刍三件从模型工具列表移除'}
+            label={tr("反刍工具")}
+            desc={toolRuminate ? tr("已注册：memory_ruminate / _cancel / _status") : tr("已封印：反刍三件从模型工具列表移除")}
             checked={toolRuminate}
             onChange={(v) => { toggle('toolRuminate', v); }}
           />
           <SwitchRow
-            label="冲突工具"
-            desc={toolConflict ? '已注册：memory_conflicts / _rejected / resolve_conflict' : '已封印：冲突三件从模型工具列表移除'}
+            label={tr("冲突工具")}
+            desc={toolConflict ? tr("已注册：memory_conflicts / _rejected / resolve_conflict") : tr("已封印：冲突三件从模型工具列表移除")}
             checked={toolConflict}
             onChange={(v) => { toggle('toolConflict', v); }}
           />
           <SwitchRow
-            label="写删工具"
-            desc={toolMutate ? '已注册：memory_add / memory_import / memory_delete（仍需高权限模式）' : '已封印：L1 写删工具从模型工具列表移除（槽位三件不受此开关影响）'}
+            label={tr("写删工具")}
+            desc={toolMutate ? tr("已注册：memory_add / memory_import / memory_delete（仍需高权限模式）") : tr("已封印：L1 写删工具从模型工具列表移除（槽位三件不受此开关影响）")}
             checked={toolMutate}
             onChange={(v) => { toggle('toolMutate', v); }}
           />
           <SwitchRow
-            label="技能工具"
-            desc={toolSkills ? '已注册：memory_skill_list / _read / _pin / _archive（需先开启「技能结晶」）' : '已封印：技能四件从模型工具列表移除（技能功能关闭时本就零表面积）'}
+            label={tr("技能工具")}
+            desc={toolSkills ? tr("已注册：memory_skill_list / _read / _pin / _archive（需先开启「技能结晶」）") : tr("已封印：技能四件从模型工具列表移除（技能功能关闭时本就零表面积）")}
             checked={toolSkills}
             onChange={(v) => { toggle('toolSkills', v); }}
           />
           {/* 分组三：人工冲突裁决（§C 冻结开关）——开启后冲突对停放到待人工裁决区 */}
-          <div style={S.panelLabel}>人工冲突裁决</div>
+          <div style={S.panelLabel}>{tr("人工冲突裁决")}</div>
           <SwitchRow
-            label="人工冲突裁决"
+            label={tr("人工冲突裁决")}
             desc={
               cfEnabled
-                ? '已开启：去重判定"两边都像对的"时冻结冲突对，停放到待人工裁决区'
-                : '默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决'
+                ? tr("已开启：去重判定\"两边都像对的\"时冻结冲突对，停放到待人工裁决区")
+                : tr("默认关闭；开启后冲突按 LLM 的 winner/loser 自动了结变为冻结，需人工裁决")
             }
             checked={cfEnabled}
             onChange={(v) => {
@@ -326,16 +327,16 @@ export function OverviewTab(props: { rpc: RpcFn }) {
           />
           {/* 分组：存量回填与整形的启用开关——与下方 BackfillSection / ArchiveSection 的按钮同区；
               这些面默认关，不开则按钮点了只报“未开启”。 */}
-          <div style={S.panelLabel}>存量回填与整形</div>
+          <div style={S.panelLabel}>{tr("存量回填与整形")}</div>
           <SwitchRow
-            label="关键词回填"
-            desc={keywordEnabled ? '已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）' : '默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）'}
+            label={tr("关键词回填")}
+            desc={keywordEnabled ? tr("已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）") : tr("默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）")}
             checked={keywordEnabled}
             onChange={(v) => { toggle('keywordEnabled', v); }}
           />
           <SwitchRow
-            label="重蒸馏整形"
-            desc={redistillEnabled ? '已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）' : '默认关闭；开启后才能跑重蒸馏整形（改正文会重算向量+覆盖 .memory.md）'}
+            label={tr("重蒸馏整形")}
+            desc={redistillEnabled ? tr("已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）") : tr("默认关闭；开启后才能跑重蒸馏整形（改正文会重算向量+覆盖 .memory.md）")}
             checked={redistillEnabled}
             onChange={(v) => { toggle('redistillEnabled', v); }}
           />
@@ -343,7 +344,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
               诊断时需要的常常是“立刻降到 1 串行再看一遍”——为此改 YAML + 重启不现实。
               诚实提示：并发度在启动那一轮就读定了，拖滑块不影响**正在跑**的那次。 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13 }}>回填并行度</span>
+            <span style={{ fontSize: 13 }}>{tr("回填并行度")}</span>
             <input
               type="range"
               min={0}
@@ -354,25 +355,24 @@ export function OverviewTab(props: { rpc: RpcFn }) {
               style={{ width: 120 }}
             />
             <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>
-              {bfConcurrency === 0 ? '0·跟随配置（默认 1=串行）' : bfConcurrency === 1 ? '1·串行逐条' : `${bfConcurrency} 路并发`}
-              · 对**下一次点击**生效（正在跑的那轮不会改道）
-            </span>
+              {bfConcurrency === 0 ? tr("0·跟随配置（默认 1=串行）") : bfConcurrency === 1 ? tr("1·串行逐条") : tr("{p1} 路并发", { p1: bfConcurrency })}
+              {tr("· 对**下一次点击**生效（正在跑的那轮不会改道）")} </span>
           </div>
           <SwitchRow
-            label="md 反向同步"
-            desc={mdSyncEnabled ? '已开启：可将 .memory.md 文件侧修改回灌入库（需先开 md 投射 + 高权限）' : '默认关闭；风险高于导出（会写库），需先开 md 投射再开本项'}
+            label={tr("md 反向同步")}
+            desc={mdSyncEnabled ? tr("已开启：可将 .memory.md 文件侧修改回灌入库（需先开 md 投射 + 高权限）") : tr("默认关闭；风险高于导出（会写库），需先开 md 投射再开本项")}
             checked={mdSyncEnabled}
             onChange={(v) => { toggle('mdSyncEnabled', v); }}
           />
           <SwitchRow
-            label="外部记忆来源 Connect"
-            desc={memportEnabled ? '已开启：可登记/扫描外部记忆源并导入' : '默认关闭；开启后 memport 相关端点可用'}
+            label={tr("外部记忆来源 Connect")}
+            desc={memportEnabled ? tr("已开启：可登记/扫描外部记忆源并导入") : tr("默认关闭；开启后 memport 相关端点可用")}
             checked={memportEnabled}
             onChange={(v) => { toggle('memportEnabled', v); }}
           />
           {/* 分组三：蒸馏参数（B 形态分段：全局默认链 + 按层路由 l1/l2/l3 + 预算随层归组；
               旧「蒸馏思考」全局切换器与「蒸馏模型」单路由选择器已并入 RouteChainEditor） */}
-          <div style={S.panelLabel}>蒸馏参数</div>
+          <div style={S.panelLabel}>{tr("蒸馏参数")}</div>
           <DistillSettings rpc={rpc} disabled={!master} data={settingsData} setData={setSettingsData} onError={setError} />
           {ceilingNote ? <p style={S.hint}>{ceilingNote}</p> : null}
         </div>
@@ -383,27 +383,27 @@ export function OverviewTab(props: { rpc: RpcFn }) {
       <BackfillSection rpc={rpc} />
       {degraded ? (
         <div style={{ ...S.error, marginBottom: 10 }}>
-          {'⚠ ' + stats!.message + '。上方数据为最后一次成功读取的值，记忆功能当前未工作。'}
+          {'⚠ ' + stats!.message + tr("。上方数据为最后一次成功读取的值，记忆功能当前未工作。")}
         </div>
       ) : null}
       {error ? (
-        <div style={S.error}>{'获取状态失败：' + error}</div>
+        <div style={S.error}>{tr("获取状态失败：") + error}</div>
       ) : !stats ? (
-        <p style={S.intro}>正在读取记忆状态…</p>
+        <p style={S.intro}>{tr("正在读取记忆状态…")}</p>
       ) : (
         <div>
-          <div style={S.panelLabel}>记忆概况</div>
+          <div style={S.panelLabel}>{tr("记忆概况")}</div>
           <div style={S.statGrid}>
             {tiles.map((t) => {
               return (
                 <div key={t.label} className="dsh-mem-card" style={S.statTile}>
                   <div style={S.statNum}>{t.num}</div>
-                  <div style={S.statLabel}>{t.label}</div>
+                  <div style={S.statLabel}>{tr(t.label)}</div>
                 </div>
               );
             })}
           </div>
-          <div style={S.panelLabel}>运行状态</div>
+          <div style={S.panelLabel}>{tr("运行状态")}</div>
           {infos.map((row) => {
             return (
               <div key={row[0]} style={S.infoRow}>
@@ -417,7 +417,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
       {/* 外部存档节（用户要求拉到概览页）：导出/对账/同步/清理这四个动作与上面的
           「重建记忆」「反刍整理」是同一类运维动作，放两个页里人找不到。 */}
       <ArchiveSection rpc={rpc} />
-      <p style={S.hint}>浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。</p>
+      <p style={S.hint}>{tr("浏览各层记忆内容请切换上方 Tab；原始对话（L0）不入浏览器，可由模型侧 conversation_search 工具查询。")}</p>
       {/* 首次开启投影的成本确认（issue #16）：先给数，再让人决定。 */}
       {graphConfirm ? (
         <NModal
@@ -425,7 +425,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
           onClose={() => {
             setGraphConfirm(null);
           }}
-          title={`开启${GRAPH_FEATURE_LABEL}投影？`}
+          title={tr("开启{p1}投影？", { p1: tr(GRAPH_FEATURE_LABEL) })}
           footer={[
             <NButton
               key="cancel"
@@ -433,8 +433,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
                 setGraphConfirm(null);
               }}
             >
-              取消
-            </NButton>,
+              {tr("取消")} </NButton>,
             <NButton
               key="confirm"
               variant="primary"
@@ -443,25 +442,24 @@ export function OverviewTab(props: { rpc: RpcFn }) {
                 toggle('graphEnabled', true);
               }}
             >
-              开启
-            </NButton>,
+              {tr("开启")} </NButton>,
           ]}
         >
           {graphConfirm.missing > 0 ? (
             <div>
-              {'待投影记忆 '}
+              {tr("待投影记忆")}
               <b>{graphConfirm.missing}</b>
-              {' 条，按每批 8 条约 '}
+              {tr("条，按每批 8 条约")}
               <b>{Math.ceil(graphConfirm.missing / 8)}</b>
-              {' 个作业；每个作业一次 LLM 抽取（单批约 2 分钟），预计总计 '}
+              {tr("个作业；每个作业一次 LLM 抽取（单批约 2 分钟），预计总计")}
               <b>{Math.max(1, Math.round((Math.ceil(graphConfirm.missing / 8) * 2) / 60))}</b>
-              {' 小时量级。'}
+              {tr("小时量级。")}
             </div>
           ) : (
-            <div>{'当前没有待投影的记忆，开启后新蒸馏的记忆会陆续进图。'}</div>
+            <div>{tr("当前没有待投影的记忆，开启后新蒸馏的记忆会陆续进图。")}</div>
           )}
           <div style={{ marginTop: 8 }}>
-            {'投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。'}
+            {tr("投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。")}
           </div>
         </NModal>
       ) : null}
