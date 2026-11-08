@@ -245,8 +245,9 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   // 表达式逐位一致)。图谱不可用时 searchLaneRecords 自带空返回,不影响双路。
   // eslint-disable-next-line prefer-const -- 声明早于创建,后续单点赋值(与 embedManagerRef 同款惰性缝;TS 不允许 const 无初值)
   let laneEmbedQuery: ((q: string) => Promise<Float32Array | undefined>) | undefined;
-  const graphLaneProvider: GraphLaneProvider = async (query, limit, family) => {
-    const vec = laneEmbedQuery ? await laneEmbedQuery(query).catch(() => undefined) : undefined;
+  const graphLaneProvider: GraphLaneProvider = async (query, limit, family, vecHint) => {
+    // vecHint：l1.search 已算好的同一查询向量（省二次嵌入）；未给时维持旧行为自己算。
+    const vec = vecHint !== undefined ? vecHint : (laneEmbedQuery ? await laneEmbedQuery(query).catch(() => undefined) : undefined);
     return db.graphStore.searchLaneRecords(query, vec, limit, family ? [family] : undefined);
   };
 
@@ -646,6 +647,22 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       storageOk && config.capture.enabled
     } | 蒸馏=${storageOk && config.extract.enabled} | 召回=${config.recall.enabled})`,
   );
+  // 读路缓存预热（2026-11-09 召回延迟修复）：fresh 进程的首次召回若要现场分词全图，
+  // 会一次吃掉 ~2.9s（4764 节点 × 6 字段 + 12026 边）。这里在后台分片预热，每片 128 节点
+  //（≈104ms 同步切片）、片间让出事件循环。首条消息若在预热完成前到达，turn→step 会排队等片
+  //（实测 2.5–3.1s，召回本身仍 ~0.27s）；warm 只填缓存，不改检索语义。
+  if (storageOk && config.recall.enabled && db.graphStore.ready) {
+    void (async () => {
+      const t0 = Date.now();
+      try {
+        const warmed = await db.graphStore.warmSearchCache(() => disposed || !db.graphStore.ready);
+        if (!disposed)
+          logger.info(`[memory] 图谱读路缓存预热完成(${warmed.nodes} 节点 / ${warmed.edges} 边, ${Date.now() - t0}ms)`);
+      } catch (err) {
+        logger.warn(`[memory] 图谱读路缓存预热失败(不影响检索,冷路径照常分词): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    })();
+  }
 
   // 停机顺序:置停机标志(后台 embeddings 不再发起)→ 停蒸馏取新任务 →
   // 冲刷 L0 串行链(排队消息先落盘)→ 关库。cordis disposer 为 LIFO 逐个 await,

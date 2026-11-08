@@ -38,6 +38,9 @@ export type GraphLaneProvider = (
   query: string,
   limit: number,
   family?: MemoryFamily,
+  /** 查询向量提示：hybrid 主路已算好的同一向量，图谱路复用可省一次重复嵌入
+   *  （同一 helper.query、同一输入 → 同一向量，检索语义不变）；缺省时自己算。 */
+  vecHint?: Float32Array,
 ) => readonly string[] | Promise<readonly string[]>;
 
 export interface L1SearchOptions {
@@ -896,7 +899,10 @@ export class L1Store {
     // 第 3 路(图谱)仅在接线时**结构性存在**:未接线不占路数名额,故既有调用方
     // 仍走 2 路、得分与改动前逐位一致(见 findings.md §12.1 的路数语义)
     const lanes: Array<[RecallLane, L1Hit[]]> = [['fts', ftsList], ['vec', vecList]];
-    if (this.graphLaneProvider) lanes.push(['graph', await this.graphLane(query, candidateK, opts?.family, opts?.workspaceId)]);
+    if (this.graphLaneProvider)
+      // 复用本函数已算出的查询向量 vecRaw：图谱路的向量种子与 hybrid 主路同一次嵌入结果，
+      // 语义不变（同一 helper.query 的同一向量），省掉一次重复嵌入调用（实测 ~100-150ms/轮）。
+      lanes.push(['graph', await this.graphLane(query, candidateK, opts?.family, opts?.workspaceId, vecRaw)]);
     // 第 4 路(时效)在衰减开启时**结构性存在**;关掉衰减 = 该路不存在
     if (this.decayHalfLifeDays > 0) lanes.push(['recency', this.recencyLane([...ftsList, ...vecList])]);
     const laneLists = lanes.map(([, list]) => list);
@@ -974,12 +980,13 @@ export class L1Store {
     limit: number,
     family?: MemoryFamily,
     workspaceId?: string,
+    vecHint?: Float32Array,
   ): Promise<L1Hit[]> {
     const provider = this.graphLaneProvider;
     if (!provider) return [];
     let ids: readonly string[];
     try {
-      ids = await provider(query, limit, family);
+      ids = await provider(query, limit, family, vecHint);
     } catch (err) {
       this.logger?.warn(
         `[memory] 图谱路检索失败,本轮退回双路: ${err instanceof Error ? err.message : String(err)}`,

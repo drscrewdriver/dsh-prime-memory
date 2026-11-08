@@ -20,7 +20,7 @@
 import { randomBytes } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { applyGraphProjection } from '../graph/apply.js';
-import { expandHitRecordIds, searchGraphNodes } from '../graph/search.js';
+import { buildRelationTokenAdjacency, expandHitRecordIds, searchGraphNodes, warmNodeTokens } from '../graph/search.js';
 import { buildFullView, buildGraphPreview } from '../graph/preview.js';
 import type { GraphPreviewResult, GraphPreviewStats } from '../graph/preview.js';
 import { buildRecordLinks } from '../graph/record-links.js';
@@ -212,6 +212,26 @@ export class GraphStore {
   private stmtInsertNodeVec?: ReturnType<DatabaseSync['prepare']>;
   private stmtDeleteNodeVec?: ReturnType<DatabaseSync['prepare']>;
   private stmtSearchNodeVec?: ReturnType<DatabaseSync['prepare']>;
+  /**
+   * 全图读缓存（2026-11-09 召回延迟修复）：召回路径每轮都调 loadGraph()，
+   * 4764 节点 + 12026 边的全量行 + JSON 解析实测 ~0.33s，重复解析同一份数据是纯浪费。
+   *
+   * 失效条件（两条，缺一不可）：
+   *  ① 写侧主动失效：所有写事务经 tx() 提交，COMMIT 后无条件置空（不依赖任何脏标记）；
+   *  ② 读侧兜底指纹：命中缓存前比对两表 (COUNT(*), MAX(updated_time))，
+   *     防"绕过 tx 的写入"造成永久陈旧。
+   * 已知窗口与兜底：updated_time 是 ISO 毫秒串，同一毫秒内的第二次写不会抬高 MAX——
+   * 该毫秒级竞态由 ① 覆盖（本进程内的写一律走 tx）。跨进程写入另由 SQLite 的
+   * PRAGMA data_version 兜底（别的连接提交事务即递增；本连接写入不变），
+   * 所以"外部连接把 updated_time 写成与 MAX 相同"也不会 stale（审查用 stale-probe 实测）。
+   * 前置条件仍是 dataDir 单写者（同一记忆库只允许一个 daemon 实例）。
+   * 缓存值只读消费：searchGraphNodes / expandHitRecordIds / buildPreview 均不改写节点/边对象。
+   */
+  private graphCache: {
+    fp: string;
+    value: { nodes: GraphNode[]; edges: GraphEdge[] };
+    adjacency?: Map<string, Set<string>>;
+  } | null = null;
 
   /** init 是否就绪(未就绪 = 图谱域整体 no-op,不抛错不传染)。 */
   get ready(): boolean {
@@ -439,6 +459,10 @@ export class GraphStore {
     try {
       const result = fn();
       db.exec('COMMIT');
+      // 图是派生投影：任何写事务提交后读侧缓存立即作废（主失效路径；指纹只是兜底）。
+      // 刻意不区分「是否真写了图」：job-only 事务也清，代价是蒸馏入队后多一次 ~0.3–0.5s 重载，
+      // 换来「任何写路径漏标记都不会 stale」的确定性（脏标记方案曾因漏置位而更差，已回退）。
+      this.graphCache = null;
       return result;
     } catch (err) {
       try {
@@ -475,7 +499,11 @@ export class GraphStore {
   loadGraph(): { nodes: GraphNode[]; edges: GraphEdge[] } {
     if (!this.db) return { nodes: [], edges: [] };
     try {
-      return this.loadGraphInTx();
+      const fp = this.graphFingerprint();
+      if (this.graphCache !== null && this.graphCache.fp === fp) return this.graphCache.value;
+      const value = this.loadGraphInTx();
+      this.graphCache = { fp, value };
+      return value;
     } catch (err) {
       this.logger?.warn(`${TAG} 图谱读取失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
       return { nodes: [], edges: [] };
@@ -488,6 +516,59 @@ export class GraphStore {
     const nodes = (db.prepare('SELECT * FROM graph_nodes').all() as Array<Record<string, unknown>>).map(rowToNode);
     const edges = (db.prepare('SELECT * FROM graph_edges').all() as Array<Record<string, unknown>>).map(rowToEdge);
     return { nodes, edges };
+  }
+
+  /**
+   * 图谱指纹（缓存失效判据）：两表行数 + 最新 updated_time。
+   * 实测 2.3ms/次（4764 节点 / 12026 边），换掉 ~330ms 的全量解析。
+   * 可靠性依据：upsert 语句一律写 excluded.updated_time，归档/恢复/状态变更也都带
+   * updated_time = now，删行改变 COUNT；故任何内容变更都会改变指纹（同毫秒竞态见
+   * graphCache 注释，由写事务置空覆盖）。
+   */
+  private graphFingerprint(): string {
+    const n = this.db!.prepare('SELECT COUNT(*) AS c, MAX(updated_time) AS m FROM graph_nodes').get() as { c: number; m: string | null };
+    const e = this.db!.prepare('SELECT COUNT(*) AS c, MAX(updated_time) AS m FROM graph_edges').get() as { c: number; m: string | null };
+    // data_version：别的连接提交事务即递增、本连接写入不变——防"外部写但 updated_time 与 MAX 相同"的 stale
+    const dv = this.db!.prepare('PRAGMA data_version').get() as { data_version?: number } | undefined;
+    return `${n.c}|${n.m}|${e.c}|${e.m}|${dv?.data_version ?? 0}`;
+  }
+
+  /**
+   * 关系词邻接表复用：默认路径(asOf 缺省)缓存到 graphCache 上一次装载结果里；
+   * asOf 回放路径每次都按当时成立的边重建（回放组合不固定，缓存没有收益）。
+   */
+  private relationAdjacency(edges: readonly GraphEdge[], asOf?: string): Map<string, Set<string>> {
+    if (asOf !== undefined) return buildRelationTokenAdjacency(edges, asOf);
+    if (this.graphCache !== null && this.graphCache.adjacency !== undefined) return this.graphCache.adjacency;
+    const adjacency = buildRelationTokenAdjacency(edges);
+    // 只在"真有边"时缓存：空边可能来自 loadGraph 的瞬时失败路径（返回空图），
+    // 把它写进已缓存的图会让关系字段永久失效（审查 adjacency-probe 场景）。
+    if (this.graphCache !== null && edges.length > 0) this.graphCache.adjacency = adjacency;
+    return adjacency;
+  }
+
+  /**
+   * 读路缓存预热（可选加速；中断/异常都不影响正确性——冷路径照常现场分词）。
+   *
+   * 为什么需要：fresh 进程第一次召回要现场分词全图（4764 节点 × 6 字段 + 12026 边，
+   * 实测 ~2.9s）。这里在插件就绪后**后台分片**预填分词缓存与关系词邻接表：
+   * 每片 chunk=128 个节点 ≈104ms 同步切片，片间 setImmediate 让出事件循环。
+   * 注意：切片之间能处理宿主事件，但**不能消除抢占**——首条消息若落在预热期间，
+   * turn→step 会排队等片（实测 2.5–3.1s，其中召回本身仍 0.27s）。
+   * 与检索语义零关系：查询侧仍逐节点按内容签名校验，预热只填缓存。
+   */
+  async warmSearchCache(aborted: () => boolean = () => false, chunk = 128): Promise<{ nodes: number; edges: number }> {
+    if (!this.db) return { nodes: 0, edges: 0 };
+    const { nodes, edges } = this.loadGraph();
+    this.relationAdjacency(edges);
+    let warmed = 0;
+    for (let i = 0; i < nodes.length; i += chunk) {
+      if (aborted()) break;
+      // 只累计**实际建了分词**的节点数（archived/superseded 被状态闸跳过，不计入）
+      warmed += warmNodeTokens(nodes, i, Math.min(i + chunk, nodes.length));
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    return { nodes: warmed, edges: edges.length };
   }
 
   /** 事务内按 id 装载 L1 记录(claim 与 complete 共用;调用方负责事务)。 */
@@ -544,7 +625,7 @@ export class GraphStore {
       families && families.length > 0
         ? nodes.filter((n) => n.families.some((f) => families.includes(f)))
         : nodes;
-    return searchGraphNodes(filtered, edges, query, limit);
+    return searchGraphNodes(filtered, edges, query, limit, { adjacency: this.relationAdjacency(edges) });
   }
 
   /**
@@ -574,7 +655,7 @@ export class GraphStore {
       families && families.length > 0
         ? nodes.filter((n) => n.families.some((f) => families.includes(f)))
         : nodes;
-    const lexical = searchGraphNodes(visible, edges, query, limit);
+    const lexical = searchGraphNodes(visible, edges, query, limit, { adjacency: this.relationAdjacency(edges) });
     let hits = lexical;
     if (embedding && embedding.length > 0) {
       const visibleIds = new Set(visible.map((n) => n.id));
