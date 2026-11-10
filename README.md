@@ -7,7 +7,9 @@
 **DeepSeek Harness 的分层蒸馏记忆插件：对话在后台自动完成 L0 捕获 → L1 原子记忆 → L2 场景整合 → L3 画像蒸馏，模型每一步前自动把相关记忆注入上下文。**
 
 [English](README.en.md) · [最新发行版](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [反馈问题](https://github.com/drscrewdriver/dsh-prime-memory/issues)
-
+<p align="center" dir="auto">
+  <a href="https://dshfind.com/zh/plugins/drscrewdriver/dsh-prime-memory?ref=badge" rel="nofollow"><img src="https://raw.githubusercontent.com/drscrewdriver/dsh-prime-memory/f3e4aa83231be912c72adb15271bfe6b3330dc8e/assets/dshfind-card.svg" alt="dshfind - dsh-browser-cdp" data-canonical-src="https://dshfind.com/api/badge/drscrewdriver/dsh-prime-memory" style="max-width: 100%;"></a>
+</p>
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
