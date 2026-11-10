@@ -1,7 +1,6 @@
 <div align="center">
 
-<img src="./assets/img/Hero.png" width="100%"
-alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型每步前自动召回注入——右侧对话气泡逐层溶解为三层渐亮光带，流入带发光圆球与渐变轨道的玻璃胶囊（下有 日常·工作·智能·关闭 四档刻度），光丝回流示意召回注入">
+
 
 # dsh-prime-memory
 
@@ -12,9 +11,13 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 [![MIT License](https://img.shields.io/badge/license-MIT-536990?style=flat-square)](LICENSE)
-
+[![dsh.so risk](https://cdn.dsh.so/badge/dsh-prime-memory.svg)](https://www.dsh.so/artifact/dsh-prime-memory/?ref=badge)
+[![dsh.so install · dsh 0.2.2-rc.1](https://cdn.dsh.so/badge/install/dsh-prime-memory@0.2.2-rc.1.svg)](https://www.dsh.so/artifact/dsh-prime-memory/?ref=badge-install)
+[![dsh.so install · dsh 0.2.1-rc.5](https://cdn.dsh.so/badge/install/dsh-prime-memory@0.2.1-rc.5.svg)](https://www.dsh.so/artifact/dsh-prime-memory/?ref=badge-install)
+[![dsh.so install · dsh 0.2.1-rc.2](https://cdn.dsh.so/badge/install/dsh-prime-memory@0.2.1-rc.2.svg)](https://www.dsh.so/artifact/dsh-prime-memory/?ref=badge-install)
 </div>
-
+<img src="./assets/img/Hero.png" width="100%"
+alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型每步前自动召回注入——右侧对话气泡逐层溶解为三层渐亮光带，流入带发光圆球与渐变轨道的玻璃胶囊（下有 日常·工作·智能·关闭 四档刻度），光丝回流示意召回注入">
 <details open>
 <summary>🌐 语言 / Language</summary>
 
