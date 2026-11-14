@@ -1,3 +1,8 @@
+# Changelog
+
+## 0.26.41
+
+- 终端面（dsh-tui / Desktop 命令面板同源）：转正号（原 package.json 0.26.40-local.4 / dsh.plugin.json 0.26.39-local.3 双清单不一致，本次统一）；/memory 终端面。
 # 更新日志（Changelog）
 
 ## [0.26.40-local.4] — 2026-11-13
