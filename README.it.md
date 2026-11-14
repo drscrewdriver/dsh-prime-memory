@@ -61,7 +61,7 @@ alt="Banner hero di DeepSeek Harness: le conversazioni vengono distillate automa
 > Meccanismo di compatibilità: la registrazione delle impostazioni passa per tre rami a runtime
 > (`register` → ponte `installSection` → degrado a sempre-attivo),
 > vedi la voce 0.11.0 del [CHANGELOG.md](./CHANGELOG.md). `dsh.plugin.json` dichiara
-> `engines.dsh` 为逐 rc 精确枚举串（0.1.0-rc.2 → 0.2.1-rc.5，20 rc）.
+> `engines.dsh` 与全部 dsh peer 同串为有界区间 `>=0.1.0-rc.2 <0.3.0-0`（20 档 rc 均在区间内，上限 `-0` 挡住未验证线）.
 
 ## Avvio rapido
 
