@@ -10,7 +10,7 @@
  */
 import * as path from 'node:path';
 import type { Context } from '@deepseek-ai/cordis';
-import { memorySchema, resolveDataDir, type MemoryConfig } from './config.js';
+import { memorySchema, resolveDataDir, readExtMemory, type MemoryConfig } from './config.js';
 import { registerBenchControl } from './bench-control.js';
 import { registerCapture } from './hooks/capture.js';
 import { registerRecall } from './hooks/recall.js';
@@ -19,6 +19,18 @@ import { MemoryRunner } from './pipeline/runner.js';
 import { RebuildController } from './pipeline/rebuild.js';
 import { RuminateController } from './pipeline/ruminate.js';
 import { registerMemoryRpc, PLUGIN_VERSION } from './stats.js';
+import { buildExtAssembly } from './ext-memory/assembly.js';
+import { makeExtPusher } from './ext-memory/pusher.js';
+import { makeExtPuller } from './ext-memory/puller.js';
+import { DatabaseSync } from 'node:sqlite';
+import { registerMemoryCommand } from './tui-command.js';
+import { makeExtImporter } from './ext-memory/importer.js';
+import { makeExtGraphHints } from './ext-memory/graph-bridge.js';
+import { createSecretStore } from './ext-memory/secrets.js';
+import { scrubSecretsForLog } from './ext-memory/redact-gate.js';
+import { normCsv, normCsvNumbers, sha256Hex } from './ext-memory/util.js';
+import { applyCoexistGate } from './ext-memory/types.js';
+import { readTombstones, type TombstoneSet } from './store/retire-journal.js';
 import { registerLiveSettings, suppressAutoSettingsForm } from './settings.js';
 import { NoopEmbeddingService, type EmbeddingProviderInfo } from './store/embedding.js';
 import {
@@ -211,12 +223,75 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
 
   // ── 检索引擎(memory.db)与向量服务 ──
   const embed = initial.svc;
-  const db = new MemoryDb(path.join(dataDir, 'memory.db'), initial.dims, logger);
+  const memoryDbPath = path.join(dataDir, 'memory.db');
+  const db = new MemoryDb(memoryDbPath, initial.dims, logger);
   initTokenCost(db, config.tokenCost.retentionDays);
   // §F 追踪(trace.enabled=false 时保持未初始化,埋点零副作用)
   if (config.trace?.enabled) initTraceStore(dataDir, { retentionDays: config.trace.retentionDays });
   // 插件卸载时关闭连接(WAL 落盘),注册一次即可
   ctx.effect(() => () => db.close());
+
+  // ── dsh-tui 终端面：`/memory` ─────────────────────────────────────
+  // TUI 不加载 11 个 tab（Graph/Records/Rooms/Scenes/Conflicts/…）→ 记忆库不可见。
+  // 命令层只读：另开一条 readOnly 连接查计数/最近记录，不碰插件自己的写链。
+  ;(ctx as unknown as {
+    inject?: (deps: string[], cb: (scope: Context) => void) => void
+  }).inject?.(['commands'], (scope) => {
+    let ro: DatabaseSync | null = null
+    const reader = (): DatabaseSync | null => {
+      if (ro !== null) return ro
+      try {
+        ro = new DatabaseSync(memoryDbPath, { readOnly: true })
+      } catch { ro = null }
+      return ro
+    }
+    const count = (sql: string): number => {
+      try {
+        const row = reader()?.prepare(sql).get() as { c?: number } | undefined
+        return typeof row?.c === 'number' ? row.c : 0
+      } catch { return 0 }
+    }
+    const rows = (sql: string, limit: number): Array<Record<string, unknown>> => {
+      try { return (reader()?.prepare(sql).all(limit) ?? []) as Array<Record<string, unknown>> } catch { return [] }
+    }
+    registerMemoryCommand(scope, {
+      status: () => ({
+        dbPath: memoryDbPath,
+        dims: initial.dims,
+        l0: count('SELECT COUNT(*) AS c FROM l0_conversations'),
+        l1: count('SELECT COUNT(*) AS c FROM l1_records'),
+        receipts: count('SELECT COUNT(*) AS c FROM l1_receipts'),
+        conflicts: count('SELECT COUNT(*) AS c FROM conflict_pending'),
+      }),
+      records: (limit) => rows(
+        'SELECT record_id, content, type, priority, scene_name, updated_time, family FROM l1_records ORDER BY updated_time DESC LIMIT ?',
+        limit,
+      ) as never,
+      conflicts: (limit) => rows(
+        'SELECT record_id, content FROM conflict_pending ORDER BY rowid DESC LIMIT ?',
+        limit,
+      ) as never,
+      // 外部记忆驱动：配置是事实源（ext_drivers 表只是运行态镜像）。
+      ext: () => {
+        const value = readExtMemory(config.extMemory) as
+          | { enabled?: boolean; syncMode?: string; drivers?: Array<{ id?: string }> }
+          | undefined
+        return {
+          enabled: value?.enabled === true,
+          syncMode: String(value?.syncMode ?? 'shadow-read'),
+          drivers: (value?.drivers ?? []).map((driver) => String(driver?.id ?? '')).filter(Boolean),
+        }
+      },
+      // Room 注册表（roomRegistry 在本作用域稍后创建；闭包在命令执行时才读）。
+      rooms: () => roomRegistry.list().map((room) => ({ slug: room.slug, label: room.label, status: room.status })),
+      // L2/L3 分族场景文件（chat / work 各自目录）。
+      scenes: async () => {
+        const chat = await stores.scenes.chat.listFiles()
+        const work = await stores.scenes.work.listFiles()
+        return { chat: chat.length, work: work.length, sample: [...chat, ...work].slice(0, 10) }
+      },
+    })
+  })
 
   let dbInit: StoreInitResult = { needsReindex: false };
   if (storageOk) {
@@ -250,6 +325,32 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     return db.graphStore.searchLaneRecords(query, vec, limit, family ? [family] : undefined);
   };
 
+  // 外部记忆装配(计划 Phase 1):cfg.extMemory → registry + 第 5 路 provider。
+  // **总闸关(默认)时 extAssembly.extLane 为 undefined** → L1Store 第 5 路结构性
+  // 不存在、零驱动零网络——既有 hybrid 融合分逐位不变(零漂移)。
+  // 凭据库(T3.5):Windows 用户级 DPAPI 优先,apiKey 可写 `secret://ref`;日志 sink
+  // 统一包裹脱敏——外部链路的日志文本一律先过词表再出境(与推送闸门同词表)。
+  const extSecrets = createSecretStore({ dataDir, logger });
+  // extMemory 节已标 volatile(真机实测：宿主拒写未标节，`Config field "extMemory" is not volatile`)，
+  // 读侧统一经 readExtMemory 兼容两形(新线给引用、老线给冻结值)。现取现用：
+  // 面板写入后下一轮就能读到新值(装配仍只在启动跑，所以写后需重载)。
+  const extSection = () => readExtMemory(config.extMemory);
+  // 共存门控(T4.2):md 投射 × 外部 two-way 同开 → 降 shadow-read + 明说原因(不静默降能力)。
+  // 档位热覆盖:live.extSyncMode 非空则优先(面板三档单选),空 = 跟随部署配置。
+  const syncGate = applyCoexistGate({
+    extMemoryEnabled: extSection()?.enabled === true,
+    syncMode: live.get().extSyncMode || (extSection()?.syncMode ?? 'shadow-read'),
+    memExportEnabled: config.memExport?.enabled === true,
+  });
+  if (syncGate.notice !== undefined) logger.warn(`[memory] ${syncGate.notice}`);
+  const extLogger = {
+    info: (m: string) => logger.info(scrubSecretsForLog(m)),
+    warn: (m: string) => logger.warn(scrubSecretsForLog(m)),
+    error: (m: string) => logger.error(scrubSecretsForLog(m)),
+    debug: (m: string) => logger.debug?.(scrubSecretsForLog(m)),
+  };
+  const extAssembly = await buildExtAssembly({ cfg: config, logger: extLogger, secretStore: extSecrets, syncModeOverride: syncGate.syncMode });
+
   const stores = {
     usage: undefined as RecallUsageStore | undefined, // 装配于下方(依赖 dataDir 就绪)
     routeHealth: undefined as RouteHealthStore | undefined, // R9 路由健康学习，装配于下方
@@ -274,6 +375,8 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       // 投射开着才给没名字的新记录起名（“关时零动作”这条承诺不改）。
       // 传函数而不是布尔：读的是当前配置对象，不把启动那一刻的值钉进 store。
       () => config.memExport?.enabled === true,
+      // 第 5 路(外部记忆,Phase 1):未开启 = undefined = 该路不存在(零漂移)。
+      extAssembly.extLane,
     ),
     // L2/L3 分族隔离:各自目录与文件(scenes/chat|work、persona-chat|work.md)
     scenes: {
@@ -470,7 +573,22 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       : undefined;
   embedManagerRef = embedManager;
 
-  const runner = new MemoryRunner(ctx, config, stores, logger, live, modes);
+  // 外部图提示桥(T3.6):三家外部图 → 投影 prompt 的关系线索(60s 缓存,不落库)
+  const extGraphHints = makeExtGraphHints({
+    registry: extAssembly.registry,
+    spacesOf: (driverId: string) => {
+      const entry = (extSection()?.drivers ?? []).find((d) => d.id === driverId);
+      const externalId = entry !== undefined && entry.space !== '' ? entry.space : 'main';
+      return [{ spaceId: `${driverId}:${externalId}`, driverId, externalId, name: externalId, description: '' }];
+    },
+    cfg: () => ({
+      maxLinesPerDriver: 12,
+      timeoutMs: extSection()?.requestTimeoutMs ?? 15_000,
+      cacheMs: 60_000,
+    }),
+    logger: extLogger,
+  });
+  const runner = new MemoryRunner(ctx, config, stores, logger, live, modes, extGraphHints);
   await runner.init();
   // 档位切换同步(ADR-0003):切走按捕获档位落袋 / 切 off 挂起 / 切回清挂起
   modes.setModeChangeHandler((sessionId, oldMode, newMode) => runner.onModeChange(sessionId, oldMode, newMode));
@@ -507,6 +625,25 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   // 外部记忆来源注册表（轨3 Connect；默认由 cfg.memport.enabled 关门控，sidecar 本身无条件加载）
   const memorySources = new MemorySourceStore(dataDir, logger);
   await memorySources.init();
+  // 外部记忆驱动(计划 ext-mem-drivers-sync T0.8 装配面):配置登记项单向镜像进
+  // ext_drivers——**配置是事实源,表只是面板与后续 pusher 的运行态镜像**。总闸关时
+  // 什么都不写(默认关部署零旁路行为);apiKey 不入表(secrets 只落键名位)。
+  // Phase 0 **不创建活实例**(驱动装配/探活在 Phase 1),镜像仅供面板列得出登记态。
+  if (extSection()?.enabled === true) {
+    for (const d of extSection()!.drivers) {
+      if (!d.id || !d.type) {
+        logger.warn('[memory] ext_memory.drivers 有缺 id/type 的条目,已跳过镜像');
+        continue;
+      }
+      stores.l1.ext.upsertDriver({
+        driverId: d.id,
+        typeId: d.type,
+        enabled: d.enabled,
+        connJson: JSON.stringify({ endpoint: d.endpoint, space: d.space, extra: d.extra }),
+        secretRefs: d.apiKey ? 'apiKey' : '',
+      });
+    }
+  }
   // 技能存储（轨2；sidecar 无条件加载，但工具/注入均由 cfg.skills.enabled 默认关自 no-op）
   const skillStore = new SkillStore(dataDir, logger);
   await skillStore.init();
@@ -574,6 +711,126 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   });
   // 晚绑定：`stores.l1` 在 md 账本之前就建好了，这里只把钩子接上去。
   stores.l1.setFileSyncHook(fileSync);
+  // ── 外部记忆推送泵(计划 Phase 2)──────────────────────────────
+  // 双闸(装配 enabled && push.enabled)+ syncMode 闸在 pusher 内部判;这里只管接线
+  // 与调度:hook 入队 → wake 单飞投 runner 'ext-sync' 任务(永远让位 live/graph);
+  // 退避中的到票时刻用一次性定时器重臂(不建常驻轮询——"不新建定时器"的底线是
+  // 不拿 interval 空转,未来到票只能靠 one-shot 唤醒)。
+  let extPumpQueued = false;
+  let extWakeTimer: ReturnType<typeof setTimeout> | null = null;
+  const extWakeArm = (): void => {
+    if (extWakeTimer !== null) clearTimeout(extWakeTimer);
+    const due = stores.l1.ext.earliestPendingWake();
+    if (due <= 0) return;
+    const delay = Math.min(Math.max(due - Date.now(), 1_000), 15 * 60_000);
+    extWakeTimer = setTimeout(() => {
+      extWakeTimer = null;
+      extWake();
+    }, delay);
+  };
+  const extSpacesOf = (driverId: string): Array<{ spaceId: string; driverId: string; externalId: string; name: string; description: string }> => {
+    const entry = (extSection()?.drivers ?? []).find((d: { id: string }) => d.id === driverId);
+    const externalId = entry !== undefined && entry.space !== '' ? entry.space : 'main';
+    return [{ spaceId: `${driverId}:${externalId}`, driverId, externalId, name: externalId, description: '' }];
+  };
+  const extPusher = makeExtPusher({
+    registry: extAssembly.registry,
+    spacesOf: extSpacesOf,
+    ext: stores.l1.ext,
+    l1: stores.l1,
+    cfg: () => {
+      const p = extSection()?.push;
+      return {
+        masterEnabled: extAssembly.enabled,
+        // 运行时热阀与部署配置**取或**(仓库既定约定:graphEnabled/keywordEnabled 同款)——
+        // 面板开关是“显式追加开闸”,部署 YAML 是安装面默认;两者任一开即开。
+        enabled: p?.enabled === true || live.get().extPushEnabled,
+        syncMode: syncGate.syncMode,
+        families: normCsv(p?.families),
+        maxItems: p?.maxItems ?? 200,
+        timeBudgetMs: p?.timeBudgetMs ?? 120_000,
+        settleTimeoutMs: p?.settleTimeoutMs ?? 180_000,
+        maxAttempts: p?.maxAttempts ?? 3,
+        backoffMs: normCsvNumbers(p?.backoffMs, [1000, 3000, 10000]),
+        // 不可逆远端删的运行时热阀:与部署配置取或(面板上带警示文案)
+        allowHardDelete: p?.allowHardDelete === true || live.get().extAllowHardDelete,
+        settleScanLimit: p?.settleScanLimit ?? 100,
+      };
+    },
+    wake: extWake,
+    logger: extLogger,
+  });
+  function extWake(): void {
+    if (extPumpQueued) return;
+    extPumpQueued = true;
+    runner.enqueueExtSyncTask(async () => {
+      try {
+        await extPusher.runBatch();
+      } finally {
+        extPumpQueued = false;
+        extWakeArm();
+      }
+    });
+  }
+  stores.l1.setExtSyncHook(extPusher.hook);
+
+  // ── 外部记忆拉取泵(计划 T3.1)──────────────────────────────
+  // 墓碑硬闸:每轮拉取前重读一次退场台账(读文件 async、判据 sync → 这里缓存)。
+  let tombstones: TombstoneSet = { reasonFor: () => undefined, size: 0 };
+  const extPuller = makeExtPuller({
+    registry: extAssembly.registry,
+    spacesOf: extSpacesOf,
+    ext: stores.l1.ext,
+    l1: stores.l1,
+    isTombstoned: (norm) => tombstones.size > 0 && tombstones.reasonFor(sha256Hex(norm)) !== undefined,
+    beforeBatch: async () => {
+      tombstones = await readTombstones(dataDir, logger);
+    },
+    cfg: () => {
+      const p = extSection()?.pull;
+      return {
+        masterEnabled: extAssembly.enabled,
+        enabled: p?.enabled === true || live.get().extPullEnabled,
+        syncMode: syncGate.syncMode,
+        maxItems: p?.maxItems ?? 2000,
+        timeBudgetMs: p?.timeBudgetMs ?? 120_000,
+        families: normCsv(p?.families),
+      };
+    },
+    logger: extLogger,
+  });
+  // 外源导入任务编排（计划 ext-to-l1-import）：面板“导入到本地库”的后台任务层。
+  // 护栏默认沿用 pull 那一对（maxItems / timeBudgetMs）：不另建一套旋钮，
+  // 否则“对账一轮拉多少”与“导入一次拉多少”会变成两个各自演化、互相说不清的数字。
+  const extImporter = makeExtImporter({
+    puller: extPuller,
+    ext: stores.l1.ext,
+    logger: extLogger,
+    l1Total: () => stores.l1.list({ limit: 1, offset: 0 }).total,
+    cfg: () => {
+      const p = extSection()?.pull;
+      return { maxItems: p?.maxItems ?? 2000, timeBudgetMs: p?.timeBudgetMs ?? 120_000 };
+    },
+  });
+  let extPullQueued = false;
+  const extPullOnce = (): void => {
+    if (extPullQueued) return;
+    extPullQueued = true;
+    runner.enqueueExtSyncTask(async () => {
+      try {
+        await extPuller.runBatch();
+      } finally {
+        extPullQueued = false;
+      }
+    });
+  };
+  // interval 轮询是显式配置的入站节奏(默认 15min;0/关闸不建定时器)
+  const pullNow = extSection()?.pull;
+  const pullIntervalMs = pullNow?.enabled === true ? (pullNow.intervalMs ?? 0) : 0;
+  if (extAssembly.enabled && pullIntervalMs > 0) {
+    const timer = setInterval(extPullOnce, pullIntervalMs);
+    ctx.effect(() => () => clearInterval(timer));
+  }
   const recall = registerRecall(ctx, config, stores, logger, live, modes, dataDir, recallUsage);
   runner.setAfterRun(recall.invalidateProfile);
   const toolSeals = registerMemoryTools(ctx, config, stores, logger, modes, live, ruminate, storageOk ? roomRegistry : undefined, {
@@ -631,6 +888,10 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     skillStore,
     // 技能生产者：面板「立即检测历史」与 producer 健康态的数据源。
     stores.skills,
+    // 外部记忆装配体(Phase 1):ext-* 面板端点读实驱动态/真探活。
+    extAssembly,
+    // 外源导入任务编排（计划 ext-to-l1-import）：ext-import-* 三端点的数据源。
+    extImporter,
   );
 
   // bench 控制服务(config.benchControl 门控,默认关):仅基准/调试部署注册,
@@ -658,6 +919,10 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
     // 后台记忆后端:worker 实现要 terminate 线程,否则宿主关不掉(process 挂住)。
     // 必须在 db.close() **之前**——worker 还持有自己的连接。
     void stores.backend?.dispose();
+    // 外部驱动:关 fetch/终止子进程(registry.disposeAll);不关 db,与主链拆除互不依赖。
+    void extAssembly.dispose();
+    // 推送泵重臂定时器:不留孤儿回调(到期后会去碰已关的 ext 账本,no-op 但脏)。
+    if (extWakeTimer !== null) clearTimeout(extWakeTimer);
     return (async () => {
       await flushL0?.();
       db.close();
