@@ -14,7 +14,10 @@ export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
  * 并让「未接线 = 恰为 2 路」成为默认行为(既有调用方零行为变化)。允许返回 Promise
  * 是给向量种子的 embed 查询(装配层惰性取嵌入源);异常由 graphLane 吞并降级。
  */
-export type GraphLaneProvider = (query: string, limit: number, family?: MemoryFamily) => readonly string[] | Promise<readonly string[]>;
+export type GraphLaneProvider = (query: string, limit: number, family?: MemoryFamily, 
+/** 查询向量提示：hybrid 主路已算好的同一向量，图谱路复用可省一次重复嵌入
+ *  （同一 helper.query、同一输入 → 同一向量，检索语义不变）；缺省时自己算。 */
+vecHint?: Float32Array) => readonly string[] | Promise<readonly string[]>;
 export interface L1SearchOptions {
     /** 按记忆类型精确过滤(后置过滤,官方做法)。 */
     type?: string;

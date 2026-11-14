@@ -777,7 +777,9 @@ export class L1Store {
         // 仍走 2 路、得分与改动前逐位一致(见 findings.md §12.1 的路数语义)
         const lanes = [['fts', ftsList], ['vec', vecList]];
         if (this.graphLaneProvider)
-            lanes.push(['graph', await this.graphLane(query, candidateK, opts?.family, opts?.workspaceId)]);
+            // 复用本函数已算出的查询向量 vecRaw：图谱路的向量种子与 hybrid 主路同一次嵌入结果，
+            // 语义不变（同一 helper.query 的同一向量），省掉一次重复嵌入调用（实测 ~100-150ms/轮）。
+            lanes.push(['graph', await this.graphLane(query, candidateK, opts?.family, opts?.workspaceId, vecRaw)]);
         // 第 4 路(时效)在衰减开启时**结构性存在**;关掉衰减 = 该路不存在
         if (this.decayHalfLifeDays > 0)
             lanes.push(['recency', this.recencyLane([...ftsList, ...vecList])]);
@@ -847,13 +849,13 @@ export class L1Store {
      * - **墓碑边界**:图谱行可能回链到已被删除的 L1 记录 → 取不到就跳过,
      *   不补空占位(占位会在 RRF 里凭空加分)。
      */
-    async graphLane(query, limit, family, workspaceId) {
+    async graphLane(query, limit, family, workspaceId, vecHint) {
         const provider = this.graphLaneProvider;
         if (!provider)
             return [];
         let ids;
         try {
-            ids = await provider(query, limit, family);
+            ids = await provider(query, limit, family, vecHint);
         }
         catch (err) {
             this.logger?.warn(`[memory] 图谱路检索失败,本轮退回双路: ${err instanceof Error ? err.message : String(err)}`);

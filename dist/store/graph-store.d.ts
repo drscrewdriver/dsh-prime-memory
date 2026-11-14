@@ -37,6 +37,22 @@ export declare class GraphStore {
     private stmtInsertNodeVec?;
     private stmtDeleteNodeVec?;
     private stmtSearchNodeVec?;
+    /**
+     * 全图读缓存（2026-11-09 召回延迟修复）：召回路径每轮都调 loadGraph()，
+     * 4764 节点 + 12026 边的全量行 + JSON 解析实测 ~0.33s，重复解析同一份数据是纯浪费。
+     *
+     * 失效条件（两条，缺一不可）：
+     *  ① 写侧主动失效：所有写事务经 tx() 提交，COMMIT 后无条件置空（不依赖任何脏标记）；
+     *  ② 读侧兜底指纹：命中缓存前比对两表 (COUNT(*), MAX(updated_time))，
+     *     防"绕过 tx 的写入"造成永久陈旧。
+     * 已知窗口与兜底：updated_time 是 ISO 毫秒串，同一毫秒内的第二次写不会抬高 MAX——
+     * 该毫秒级竞态由 ① 覆盖（本进程内的写一律走 tx）。跨进程写入另由 SQLite 的
+     * PRAGMA data_version 兜底（别的连接提交事务即递增；本连接写入不变），
+     * 所以"外部连接把 updated_time 写成与 MAX 相同"也不会 stale（审查用 stale-probe 实测）。
+     * 前置条件仍是 dataDir 单写者（同一记忆库只允许一个 daemon 实例）。
+     * 缓存值只读消费：searchGraphNodes / expandHitRecordIds / buildPreview 均不改写节点/边对象。
+     */
+    private graphCache;
     /** init 是否就绪(未就绪 = 图谱域整体 no-op,不抛错不传染)。 */
     get ready(): boolean;
     /**
@@ -91,6 +107,33 @@ export declare class GraphStore {
     };
     /** 事务内的全图读取(complete 用;调用方负责事务)。 */
     private loadGraphInTx;
+    /**
+     * 图谱指纹（缓存失效判据）：两表行数 + 最新 updated_time。
+     * 实测 2.3ms/次（4764 节点 / 12026 边），换掉 ~330ms 的全量解析。
+     * 可靠性依据：upsert 语句一律写 excluded.updated_time，归档/恢复/状态变更也都带
+     * updated_time = now，删行改变 COUNT；故任何内容变更都会改变指纹（同毫秒竞态见
+     * graphCache 注释，由写事务置空覆盖）。
+     */
+    private graphFingerprint;
+    /**
+     * 关系词邻接表复用：默认路径(asOf 缺省)缓存到 graphCache 上一次装载结果里；
+     * asOf 回放路径每次都按当时成立的边重建（回放组合不固定，缓存没有收益）。
+     */
+    private relationAdjacency;
+    /**
+     * 读路缓存预热（可选加速；中断/异常都不影响正确性——冷路径照常现场分词）。
+     *
+     * 为什么需要：fresh 进程第一次召回要现场分词全图（4764 节点 × 6 字段 + 12026 边，
+     * 实测 ~2.9s）。这里在插件就绪后**后台分片**预填分词缓存与关系词邻接表：
+     * 每片 chunk=128 个节点 ≈104ms 同步切片，片间 setImmediate 让出事件循环。
+     * 注意：切片之间能处理宿主事件，但**不能消除抢占**——首条消息若落在预热期间，
+     * turn→step 会排队等片（实测 2.5–3.1s，其中召回本身仍 0.27s）。
+     * 与检索语义零关系：查询侧仍逐节点按内容签名校验，预热只填缓存。
+     */
+    warmSearchCache(aborted?: () => boolean, chunk?: number): Promise<{
+        nodes: number;
+        edges: number;
+    }>;
     /** 事务内按 id 装载 L1 记录(claim 与 complete 共用;调用方负责事务)。 */
     private loadRecordsInTx;
     /** 单节点详情(expand 用;不存在/未就绪返回 null)。 */
