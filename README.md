@@ -66,7 +66,7 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 
 > 兼容机制：settings 注册走运行时三分支（`register` → `installSection` 桥接 → 恒开降级），
 > 详见 [CHANGELOG.md](./CHANGELOG.md) 的 0.11.0 条目。`dsh.plugin.json` 声明
-> `engines.dsh` 为逐 rc 精确枚举串（0.1.0-rc.2 → 0.2.1-rc.5，20 rc）。
+> `engines.dsh` 为**有界区间** `>=0.1.0-rc.2 <0.3.0-0`（下限＝0.1.0 线起点，上限带 `-0` 堵住在下一条未验证宿主线），与全部 `@deepseek-ai/dsh-*` peer 同串。
 
 ## 快速开始
 
