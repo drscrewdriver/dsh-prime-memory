@@ -133,6 +133,76 @@ export interface MemoryConfig {
      *  **0 = 不做超时降级**(显式关闭,而非"立刻全部超时")。 */
     timeoutDays: number;
   };
+  /**
+   * 外部记忆驱动(计划 ext-mem-drivers-sync,Phase 0 只建骨架)。**默认全关**——
+   * `enabled=false` 时注册表空转、第 5 路结构性不存在、零网络零同步,行为与未引入
+   * 本段逐字一致。全部扁平 boolean/number/string,**禁 union**(ADR-0008 条 4:
+   * schemastery 对非法值抛错的故障半径是整棵配置树);驱动专有字段走 `extra`
+   * (JSON 串,消费侧归一),不用嵌套对象——`cordis.patch.yml` 按行整体替换不深合并。
+   */
+  extMemory: VolatileRef<{
+    enabled: boolean;
+    /** 'shadow-read'(默认,只融合不落库) | 'push-only' | 'two-way';消费侧 `normSyncMode` 归一。 */
+    syncMode: string;
+    /** 驱动实例登记(配置是事实源;`ext_drivers` 表只是运行态镜像)。 */
+    drivers: Array<{
+      id: string;
+      /** 九类之一(mem0/hindsight/...;非法值装配期拒绝,见 registry.assertRuntime)。 */
+      type: string;
+      enabled: boolean;
+      /** HTTP baseUrl / CLI 可执行路径 / 本地 store 路径。 */
+      endpoint: string;
+      /** 明文密钥(部署 YAML 侧;不回显 UI、不进日志,与 embedding.apiKey 同款约定)。 */
+      apiKey: string;
+      /** 服务端 namespace(bankId / userId:agentId / containerTag / uri / 目录)。 */
+      space: string;
+      /** 厂商专有字段(JSON 串,消费侧自解析;空串 = 无)。 */
+      extra: string;
+    }>;
+    lane: {
+      /** 单驱动在 ext 路内最多贡献条数(防一家灌满整路)。 */
+      maxItemsPerDriver: number;
+    };
+    push: {
+      /** 推送引擎总闸(计划 Phase 2):默认关——shadow-read 融合可以开,但**任何写外流
+       *  需要这里也显式开**(双闸:enabled 装驱动 + push.enabled 才真推)。 */
+      enabled: boolean;
+      maxItems: number;
+      timeBudgetMs: number;
+      /** awaiting-settle → orphan 的时限(异步抽取家回捞 externalId 的窗口)。 */
+      settleTimeoutMs: number;
+      /** Phase 2 硬闸:false = 只派 soft-delete 驱动(hindsight/supermemory/native),
+       *  hard 家任务挂 pending 不派发(不可逆远端删的传导要等 Phase 3 面板/tombstone 闭环验收)。 */
+      allowHardDelete: boolean;
+      /** 推送族白名单(逗号列,消费侧归一;默认只推 work——个人 chat 记忆默认不出机)。 */
+      families: string;
+      /** 单任务失败重试上限,达限转 dead(面板可查)。 */
+      maxAttempts: number;
+      /** 退避阶梯 ms(逗号列,消费侧归一;超出末项取末项)。 */
+      backoffMs: string;
+      /** awaiting-settle 回捞扫描每空间条数上限。 */
+      settleScanLimit: number;
+    };
+    pull: {
+      /** 入站拉取闸(Phase 3):与 push.enabled 分开,双向的两个方向各自显式开。 */
+      enabled: boolean;
+      intervalMs: number;
+      maxItems: number;
+      timeBudgetMs: number;
+      /** 回灌族白名单(逗号列,消费侧归一;空串 = 全量)。 */
+      families: string;
+    };
+    /** 单次驱动请求超时(ms,对齐参考实现 HttpMemoryProvider 默认 15s)。 */
+    requestTimeoutMs: number;
+    health: {
+      /** 探测结果缓存 ms。 */
+      cacheMs: number;
+      /** 连续失败到阈值开熔断。 */
+      failureThreshold: number;
+      /** 熔断开路时长 ms。 */
+      openMs: number;
+    };
+  }>;
   /** 轨3 memport Connect:外部记忆来源登记与只读扫描。**默认关**——
    *  scan 仅预览(不写库)，写库仍走 memory_import；enabled 关时 memory-sources 与 memport-scan 端点均不可用。 */
   memport: {
@@ -563,6 +633,20 @@ export function liveSettingsSchema(): VolatileRef<MemoryLiveSettings> {
     embedRemoteDimensions: Schema.number().min(0).max(8192).default(0),
     // 记忆写删权限门:默认 false(模型写删风险高,须显式在面板开启高权限模式)
     memoryMutate: Schema.boolean().default(false),
+    // 外部同步运行时开关(T4.2 后补):档位 '' = 跟随部署 ext_memory.syncMode;
+    // 三个布尔为安装面热闸(与部署配置的 push/pull/allowHardDelete 双闸任一关即停)。
+    extSyncMode: Schema.union(['', 'shadow-read', 'push-only', 'two-way']).default(''),
+    extPushEnabled: Schema.boolean().default(false),
+    extPullEnabled: Schema.boolean().default(false),
+    extAllowHardDelete: Schema.boolean().default(false),
+    /**
+     * 污染隔离闸（计划 ext-to-l1-import）：true = 反刍/重建取数时排除外源导入条目。
+     *
+     * 本仓第一个**默认开**的 live 闸，与其余“默认关 + 取或追加开”的惯例相反：
+     * 它防的是污染（灌 N 条外源会把本地记忆的蒸馏窗口占满），默认应防；
+     * 且判据是“排除”不是“追加”，所以归一用 `!== false`（异常值视为开）。见 settings.ts 归一点。
+     */
+    extImportIsolate: Schema.boolean().default(true),
     /**
      * md 投射/后缀收敛的**单次文件更新预算**运行时覆盖（`0` = 跟随启动配置 `memExport.maxRecords`）。
      * 面板上就叫这个名字（设置页入口在 `client/src/tabs/ArchiveSection.tsx`）。
@@ -629,6 +713,38 @@ export function liveSettingsSchema(): VolatileRef<MemoryLiveSettings> {
   // 开关仍然生效（取宿主注入的冻结值），只是改值需要重启而不是热更。
   const maybe = node as unknown as { volatile?: () => unknown };
   return (typeof maybe.volatile === 'function' ? maybe.volatile() : node) as VolatileRef<MemoryLiveSettings>;
+}
+
+/**
+ * 节级 volatile 标记(带能力探测),照 `liveSettingsSchema` 的实测先例：
+ * 旧 schemastery(4.0.2)无 `.volatile()`，直接调用会让**整插件 load-failure**。
+ *
+ * 为什么 `extMemory` 必须标 volatile：真机实测发现宿主拒写未标的节
+ * （`Config field "extMemory" is not volatile`），而面板的驱动接入写入口就写这一节——
+ * 不标则「新增驱动」在真宿主上永远失败（本仓库集成测用 fake forms 测不出这一条）。
+ */
+function volatileSection<T extends object>(node: T): VolatileRef<T> {
+  const maybe = node as unknown as { volatile?: () => unknown };
+  return (typeof maybe.volatile === 'function' ? maybe.volatile() : node) as VolatileRef<T>;
+}
+
+/** `extMemory` 节的值形状（从 VolatileRef 里揭出来，供读侧与 RPC 写侧复用）。 */
+export type ExtMemoryValue = MemoryConfig['extMemory'] extends VolatileRef<infer V> ? V : never;
+
+/**
+ * 读 `extMemory`：兼容两形（已标 volatile → 宿主给引用；能力缺席/老线 → 给冻结值）。
+ * 不兼容这一形就是在老线报 `ref.get is not a function`（把加载期崩换成运行期崩）。 */
+export function readExtMemory(ref: VolatileRef<ExtMemoryValue> | ExtMemoryValue | undefined): ExtMemoryValue | undefined {
+  if (ref === undefined || ref === null) return undefined;
+  const maybe = ref as { get?: () => ExtMemoryValue };
+  if (typeof maybe.get === 'function') {
+    try {
+      return maybe.get();
+    } catch {
+      return undefined;
+    }
+  }
+  return ref as ExtMemoryValue;
 }
 
 /**
@@ -706,6 +822,53 @@ export const memorySchema: ConfigSchema = Schema.object({
     // 30 天:足够跨过假期与项目间歇,又不至于让互相矛盾的两条记忆长期并列召回。
     timeoutDays: Schema.number().min(0).max(3650).default(30),
   }),
+  // 外部记忆驱动(计划 T0.5):默认全关(新功能默认关铁律)。本段只建配置形状与
+  // 零漂移地基,驱动实现/同步引擎在 Phase 1+;全部扁平键,禁 union/禁嵌套覆盖面。
+  extMemory: volatileSection(Schema.object({
+    enabled: Schema.boolean().default(false),
+    // string + 消费侧 normSyncMode 归一(与 scope 同先例):非法值不抛、回默认档。
+    syncMode: Schema.string().default('shadow-read'),
+    drivers: Schema.array(Schema.object({
+      id: Schema.string().default(''),
+      type: Schema.string().default(''),
+      enabled: Schema.boolean().default(true),
+      endpoint: Schema.string().default(''),
+      apiKey: Schema.string().default(''),
+      space: Schema.string().default(''),
+      extra: Schema.string().default(''),
+    })).default([]),
+    lane: Schema.object({
+      maxItemsPerDriver: Schema.number().min(1).max(50).default(10),
+    }),
+    push: Schema.object({
+      // 双闸中的推送闸:默认关(写外流必须显式 opt-in)。
+      enabled: Schema.boolean().default(false),
+      maxItems: Schema.number().min(1).max(5000).default(200),
+      timeBudgetMs: Schema.number().min(1000).max(3_600_000).default(120_000),
+      settleTimeoutMs: Schema.number().min(10_000).max(86_400_000).default(180_000),
+      // Phase 2 硬闸:hard-delete 驱动的不可逆传导要等 Phase 3。
+      allowHardDelete: Schema.boolean().default(false),
+      families: Schema.string().default('work'),
+      maxAttempts: Schema.number().min(1).max(20).default(3),
+      backoffMs: Schema.string().default('1000,3000,10000'),
+      settleScanLimit: Schema.number().min(10).max(1000).default(100),
+    }),
+    pull: Schema.object({
+      // 入站拉取闸(Phase 3):双向的两个方向各自显式开(默认关)。
+      enabled: Schema.boolean().default(false),
+      intervalMs: Schema.number().min(0).max(86_400_000).default(900_000),
+      maxItems: Schema.number().min(1).max(50_000).default(2000),
+      timeBudgetMs: Schema.number().min(1000).max(3_600_000).default(120_000),
+      // 回灌族白名单(Comma列,消费侧归一;空串 = 全量)。
+      families: Schema.string().default('work'),
+    }),
+    requestTimeoutMs: Schema.number().min(1000).max(120_000).default(15_000),
+    health: Schema.object({
+      cacheMs: Schema.number().min(0).max(3_600_000).default(60_000),
+      failureThreshold: Schema.number().min(1).max(20).default(3),
+      openMs: Schema.number().min(0).max(3_600_000).default(300_000),
+    }),
+  })),
   // 轨3 memport Connect:默认关(新功能默认关)。scan 为**只读预览**，写库仍走 memory_import。
   memport: Schema.object({
     enabled: Schema.boolean().default(false),

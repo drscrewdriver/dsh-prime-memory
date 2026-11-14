@@ -55,6 +55,12 @@ export declare function writeNodeVectorsAfterComplete(graphs: GraphStore, touche
  */
 export declare function runGraphProjection(ctx: Context, cfg: MemoryConfig, graphs: GraphStore, logger: MemoryLogger, 
 /** 节点向量补算的嵌入缝(runner 接 stores.l1.embedText;缺席/未就绪 = 不补)。 */
-embedNode?: (text: string) => Promise<Float32Array | undefined>): Promise<boolean>;
+embedNode?: (text: string) => Promise<Float32Array | undefined>, 
+/**
+ * 外部图提示缝(计划 T3.6):返回"节点—关系→节点"行(带 [driver] 前缀)。
+ * 只进投影 prompt 作关系线索,**不落库**——外部数据不取得本地事实库的席位。
+ * 缺席/抛错 = 空提示,投影行为逐字不变。
+ */
+externalHints?: () => Promise<string[]>): Promise<boolean>;
 /** 投影输出解析与形状归一:非对象/缺数组字段回空结构(校验侧再逐条把关)。 */
 export declare function parseProjection(raw: string, logger?: MemoryLogger): GraphProjectionResult;

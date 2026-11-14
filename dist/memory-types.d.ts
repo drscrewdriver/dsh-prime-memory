@@ -20,6 +20,22 @@ export declare const HOST_MEMORY_TYPES: readonly string[];
 /** 插件早期 7 类（蒸馏管线现役词表；库里存量正带着，永久保留）。 */
 export declare const LEGACY_MEMORY_TYPES: readonly string[];
 /**
+ * 外源导入条目的类型（计划 ext-to-l1-import）。
+ *
+ * 它必须进词表：否则面板类型下拉筛不到它、md 目录归属落到 unclassified，
+ * 用户会认为“导入没生效”。但它**不得进抽取/去重 prompt 枚举**（见 NON_EXTRACT_TYPES）。
+ */
+export declare const EXTERNAL_MEMORY_TYPES: readonly string[];
+/**
+ * 不可由 LLM 赋值的类型：它们只由代码写入（外源导入），不该出现在 prompt 枚举里。
+ *
+ * 不隔离的后果很具体：抽取与去重 prompt 的类型枚举串由词表派生（`typesOfFamily` /
+ * `typeEnumSep`），外源类型一旦进了枚举，LLM 就会给**本地**记忆打上这个标——
+ * 而隔离谓词按 `ext_key` 判外源，误打标的本地记录不会被误排除，但面板上的
+ * “这是外部记忆”语义就被污染了，而且去重会把本地与外源当同类比较。
+ */
+export declare const NON_EXTRACT_TYPES: ReadonlySet<string>;
+/**
  * 兜底目录名（不是可赋值类型）：不在词表的 `type` 原值照旧写进 frontmatter，
  * 只在**目录层**归这里。归进某个 `work_*` 会静默把这批记录的 family 挑到 work 侧
  * （family 决定共享面），所以它自成一桶、族取 chat。
@@ -30,7 +46,8 @@ export declare const UNCLASSIFIED_DIR = "unclassified";
  * 当字面量散写；集中到这里，降级行为至少有一个可 grep 的名字。
  */
 export declare const DOWNGRADE_TARGET = "episodic";
-/** 可赋值类型全集（宿主 29 + 旧 7 = 36；`unclassified` 不在其中——它是目录，不是类型）。 */
+/** 可赋值类型全集（宿主 29 + 旧 7 = 36；`unclassified` 不在其中——它是目录，不是类型）。
+ *  另加 `external_fact`（代码写入、不可由 LLM 赋值，见 NON_EXTRACT_TYPES）供面板筛选与目录归属。 */
 export declare const MEMORY_TYPE_VOCABULARY: ReadonlySet<string>;
 /**
  * 族映射（新旧同放）。旧 `familyForType` 靠 `type.startsWith('work')` 前缀猜族，
@@ -38,7 +55,8 @@ export declare const MEMORY_TYPE_VOCABULARY: ReadonlySet<string>;
  * 前缀判定会把它们静默归进 chat，而 family 决定召回/浏览/去重的共享面。
  */
 export declare const TYPE_FAMILY_MAP: Readonly<Record<string, TypeFamily>>;
-/** 类型 → 面板中文标签（真源；client 侧经 `list-records` 的 `typeCatalog` 下发消费）。 */
+/** 类型 → 面板中文标签（真源；client 侧经 `list-records` 的 `typeCatalog` 下发消费）。
+ *  本插件无 i18n 机制，标签单语——不得把它当成“9 语齐全”的验收项。 */
 export declare const MEMORY_TYPE_LABELS: Readonly<Record<string, string>>;
 /** 投射目录全集 = 可赋值类型 + 兜底桶（37 个）。`memory-md.ts` 的白名单从这里派生。 */
 export declare function memoryTypeDirs(): ReadonlySet<string>;
@@ -54,12 +72,14 @@ export declare function familyOf(type: string): TypeFamily;
  * 拼接点统一走这里，判据只有一份。
  */
 export declare function slugOf(type: string): string;
-/** 面板词表目录（下发给 client 的 `typeCatalog`；含兜底桶，顺序 = 旧 7 → 宿主 29 → 兜底）。 */
+/** 面板词表目录（下发给 client 的 `typeCatalog`；含兜底桶，顺序 = 旧 7 → 宿主 29 → 外源 → 兜底）。
+ *  注意这里**不**排除 NON_EXTRACT_TYPES：外源条目必须能在面板上被筛出来。 */
 export declare function typeCatalogEntries(): Array<{
     id: string;
     label: string;
 }>;
-/** chat / work 族的可赋值类型（prompt 枚举串从这里渲染，不再手抄）。 */
+/** chat / work 族的可赋值类型（prompt 枚举串从这里渲染，不再手抄）。
+ *  排除 `NON_EXTRACT_TYPES`：外源类型对面板可见，但不得进 prompt 供 LLM 选择。 */
 export declare function typesOfFamily(family: TypeFamily): string[];
 /** prompt/工具描述用的枚举串（`|` 或 `/` 连接，顺序稳定：旧 7 在前）。 */
 export declare function typeEnumSep(sep: string, family?: TypeFamily): string;

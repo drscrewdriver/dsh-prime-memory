@@ -72,6 +72,7 @@ export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
+import { ExtSyncStore } from '../ext-memory/schema.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
 import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
@@ -150,6 +151,9 @@ export class MemoryDb {
   readonly graphStore = new GraphStore();
   /** L0 水位表(T8.4 写停;§A 恢复幂等判据的数据源,init 内建表+基线物化)。 */
   readonly l0Watermark = new L0WatermarkStore();
+  /** ext_* 外部同步账本表族(计划 ext-mem-drivers-sync T0.3;init 自带 try/catch,
+   *  失败仅外部同步 no-op。这三张表**不进快照哈希投影**(T0.10 守卫钉死)。 */
+  readonly extSync = new ExtSyncStore();
 
   private stmtUpsertL0!: StatementLike;
   private stmtGetL0!: StatementLike;
@@ -640,6 +644,8 @@ export class MemoryDb {
     // `prepareL1VecStatements` 之前的探测决定），不新增一套能力探测。探测未通过 →
     // 不传 → 图谱向量路结构性不存在（不建表、不告警、不抛）。
     this.graphStore.init(this.db, this.logger, this.vecLoaded && this.dimensions > 0 ? { dimensions: this.dimensions } : undefined);
+    // ── ext_*:外部同步账本(ExtSyncStore.init 自带 try/catch,失败仅外部同步 no-op) ──
+    this.extSync.init(this.db, this.logger);
 
     // ── FTS5 全文索引(建表失败仅停用 FTS,不降级整个库) ──
     try {
@@ -2189,6 +2195,14 @@ export class MemoryDb {
      * 筛查只是把混排的两种态**分开看**,不改变"浏览路径不隐藏退场记录"的设计。
      */
     retired?: boolean;
+    /**
+     * 排除外源导入条目（计划 ext-to-l1-import 的污染隔离）。
+     *
+     * 必须下推到 SQL，不能取回后再筛：反刍/重建都是 `limit:500` 窗口取数，
+     * 外源条目一旦多于窗口，外层筛筛完就什么都不剩——本地记忆反而一条进不了蒸馏。
+     * 口径用 `ext_key = ''`：该列是 `TEXT NOT NULL DEFAULT ''`，写 `IS NULL` 会恒假而返回空集。
+     */
+    excludeExternal?: boolean;
     limit: number;
     offset: number;
   }): { items: MemoryRecord[]; total: number } {
@@ -2240,6 +2254,11 @@ export class MemoryDb {
         where.push(`NOT (${retiredL1Sql()})`);
       } else if (opts.retired === true) {
         where.push(retiredL1Sql());
+      }
+      // 污染隔离：ext_key 非空 = 外源导入条目（puller 必写）。内部记录恒为空串，
+      // 所以这里是 `= ''` 而不是 `IS NULL`（后者在 NOT NULL 列上恒假 → 空结果集）。
+      if (opts.excludeExternal === true) {
+        where.push(`ext_key = ''`);
       }
       const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
       const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params) as { n: number };
@@ -3164,6 +3183,7 @@ export class MemoryDb {
 
   close(): void {
     this.l0Watermark.close();
+    this.extSync.close();
     try {
       this.db.close();
     } catch {

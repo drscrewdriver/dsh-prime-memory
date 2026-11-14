@@ -109,6 +109,11 @@ async function run(ctx) {
       // git SHA：版本号之外的代码指纹（profile 链接指向哪个工作树、代码是否与
       // 场景库同源，版本号反映不了——2026-08-21 实测被旧 runner 静默咬过）
       gitSha: process.env.DSH_BENCH_GIT_SHA || '',
+      // 外部记忆形态指纹(计划 T0.7):缺省 'off'/0/''——旧基线没有这三键时新旧同归
+      // 'off',环境一致性判据不被新字段破坏(只有真跑了外部同步形态才会翻告警)。
+      extMode: process.env.DSH_BENCH_EXT_MODE || 'off',
+      extDrivers: Number(process.env.DSH_BENCH_EXT_DRIVERS) || 0,
+      extSnapshot: process.env.DSH_BENCH_EXT_SNAPSHOT || '',
       scenarioFiles: files,
     },
     scenarios: [],

@@ -11,6 +11,8 @@
 
 2 通りの呼び出し方式から選べます（`npx` 接頭辞は以下のどの `dsh` コマンドも置き換え可能）：
 
+> 以下のコマンドは DSH CLI ホストと `--profile web` のみ対象です。**DSH Desktop（Electron デスクトップ版）ユーザーは pnpm/npm をインストール不要**——デスクトップ profile はアプリが排他的に管理するため、アプリ内プラグインページから本プラグインをインストールしてください。
+
 ```bash
 # 方法1：npx で公式 CLI を直接実行（dsh の事前導入不要。バージョン固定可、例: dsh-prime-memory@0.8.4）
 npx -y @deepseek-ai/dsh plugin --profile web add dsh-prime-memory
@@ -50,6 +52,19 @@ dsh plugin --profile web update dsh-prime-memory@0.8.11
 
 アップグレードはプラグインコードと `dist/` 成果物のみを置換し、データディレクトリ `~/.dsh/memory/` には影響しません。
 
+## Windows：インストール／更新前に DSH ランタイムを終了
+
+Windows では DSH デスクトップホストが起動している限り、プラグインページから**任意の**プラグインをインストール／更新すると pnpm（hoisted 構成）がトップレベルの `node_modules` 全体を再リンクし、本プラグインのネイティブ依存 `@node-rs/jieba` / `sqlite-vec` のディレクトリをリネームして新コピーに差し替えようとします。ホストプロセスが `jieba.*.node` / `vec0.dll` を開いており、Windows は読み込み済みイメージに排他ロックをかけるため、リネームが失敗して更新がロールバックされます（EPERM、`previous build is incomplete`）。
+
+対処：**pnpm / `dsh plugin add|update` を実行する前に DSH を完全に終了**し、残留プロセスがないことを確認してからインストールし、その後再起動します：
+
+```powershell
+# インストール／更新前に必ず空になることを確認
+Get-Process | Where-Object { $_.ProcessName -match 'dsh|deepseek|electron' }
+```
+
+これはプラグイン自体の問題ではなく、原因はホストのプラグイン更新フローと Windows のファイルロックです。ランタイムを終了すればロックが外れ、任意のプラグインの更新に有効です。
+
 ## 検証
 
 DSH Web Host を再起動後、以下を確認：
@@ -88,5 +103,6 @@ dsh plugin --profile web remove dsh-prime-memory
 | 「コンテキスト注入 · memory」行がない | 蒸留未実行 / 想起オフ | モードが off でなく `recall.enabled=true` を確認。`memory.log` の `L1 段完了` を確認 |
 | ローカル埋め込みダウンロードが止まる | ミラー直結が不可 | `embedding.proxy` でプロキシを設定、または `embedding.mirror` を公式 `huggingface.co` へ |
 | リモート埋め込み 401 エラー | apiKey 誤り / 免キー服務に key 不要 | `embedding.apiKey` を確認。自己ホスト免キー服務は apiKey を空に |
+| Windows で任意のプラグイン更新が EPERM / `previous build is incomplete` で失敗 | 起動中のホストが `jieba.*.node` / `vec0.dll` を開いており、pnpm のネイティブ依存の再リンクがファイルロックに阻まれる | インストール／更新前に DSH を完全終了（`Get-Process ... -match 'dsh|deepseek|electron'` が空）し、その後再起動 |
 
 詳細は [README.ja.md](./README.ja.md) と [CHANGELOG.ja.md](./CHANGELOG.ja.md) を参照。

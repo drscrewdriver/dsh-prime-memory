@@ -264,7 +264,7 @@ export interface SceneSummary {
  * 本联合的取值里(如图谱路未注入 provider 时无 'graph')。
  * 单路检索分支(纯 fts/纯 vec)不挂归因——无歧义可归,lanes 保持 undefined。
  */
-export type RecallLane = 'fts' | 'vec' | 'graph' | 'recency';
+export type RecallLane = 'fts' | 'vec' | 'graph' | 'recency' | 'ext';
 /** L1 检索命中。 */
 export interface L1Hit {
     id: string;

@@ -231,8 +231,12 @@ function emptyMetrics() {
     dbReps: 0,
     missingReps: 0,
     vector: false,
+    // 外部同步形态(计划 T0.7,M7):非 'off' 时本层指标只复现本地 keyword 路,
+    // 外部 lane 不在离线复现口径内——必须显式告警,不能默哀式失明。
+    ext: 'off',
+    extDrivers: 0,
     byType: new Map(),
-    injection: { probes: 0, linesTotal: 0, goldLines: 0, precisionSum: 0, staleLeak: 0 },
+    injection: { probes: 0, linesTotal: 0, goldLines: 0, precisionSum: 0, staleLeak: 0, extLines: 0, extGoldLines: 0 },
   };
 }
 
@@ -243,6 +247,9 @@ export function retrievalMetricsForRun(runDir) {
     const result = readResult(runDir, rep);
     if (!result) continue;
     if (result.arm !== 'A') continue; // B 组本就无记忆库，不算缺库
+    // 外部形态取环境头(计划 T0.7):旧基线无此键 → 默认 'off',与无外部路时一致。
+    if (result.environment?.extMode) m.ext = result.environment.extMode;
+    if (result.environment?.extDrivers) m.extDrivers = Math.max(m.extDrivers, Number(result.environment.extDrivers) || 0);
     const dbPath = path.join(runDir, rep, 'memory', 'memory.db');
     if (!fs.existsSync(dbPath)) {
       m.missingReps++;
@@ -276,6 +283,11 @@ export function retrievalMetricsForRun(runDir) {
         m.injection.linesTotal += lines.length;
         m.injection.goldLines += goldLines;
         m.injection.precisionSum += goldLines / lines.length;
+        // 外部注入行归因(计划 T0.7 尾巴/T1.12):召回行带 `（via external:<driver>）` 前缀的
+        // 单独计数——外部 lane 不在 recall@5 口径内,这是它在注入层的可见性信号。
+        const ext = lines.filter((l) => l.includes('(via external:') || l.includes('（via external:'));
+        m.injection.extLines += ext.length;
+        m.injection.extGoldLines += ext.filter((l) => gold.some((g) => l.includes(g))).length;
         if (Array.isArray(p.stale) && p.stale.some((s) => lines.some((l) => l.includes(s)))) {
           m.injection.staleLeak++;
         }
@@ -290,12 +302,14 @@ export function mergeRetrieval(into, from) {
   into.dbReps += from.dbReps;
   into.missingReps += from.missingReps;
   into.vector = into.vector || from.vector;
+  if (from.ext && from.ext !== 'off') into.ext = from.ext;
+  into.extDrivers = Math.max(into.extDrivers, from.extDrivers);
   for (const [type, b] of from.byType) {
     const t = into.byType.get(type) ?? emptyTypeBucket();
     t.hit += b.hit; t.total += b.total; t.coverage += b.coverage; t.mrr += b.mrr;
     into.byType.set(type, t);
   }
-  for (const k of ['probes', 'linesTotal', 'goldLines', 'precisionSum', 'staleLeak']) {
+  for (const k of ['probes', 'linesTotal', 'goldLines', 'precisionSum', 'staleLeak', 'extLines', 'extGoldLines']) {
     into.injection[k] += from.injection[k];
   }
   return into;
@@ -313,6 +327,11 @@ export function renderRetrievalSection(m, typeLabel = (t) => t) {
   if (m.dbReps > 0) {
     lines.push(`### recall@5（FTS 受控复现，${m.dbReps} 个 rep 库${m.missingReps > 0 ? `，${m.missingReps} 个缺库跳过` : ''}）`);
     if (m.vector) lines.push('> ⚠ 该跑启用了向量（运行时为 hybrid 检索），此处 FTS-only 为近似口径。');
+    // 外部路盲点显式化(计划 T0.7,M7):recall@5 只用本地 keyword 受控复现，**根本不
+    // 碰外部 lane**——开了外部同步却不声明，就是把最敏感的第一信号对外部改动完全关闭。
+    if (m.ext && m.ext !== 'off') {
+      lines.push(`> ⚠ 该跑启用了外部记忆同步（形态 ${m.ext}，驱动数 ${m.extDrivers}）：下方 recall@5 仅复现本地 keyword 路，**外部 lane 不在本层口径内**；外部命中质量看注入行归因（via external）与端到端准确率。`);
+    }
     lines.push('');
     if (m.byType.size > 0) {
       lines.push('| 题型 | recall@5 | gold 覆盖 | MRR | 题数 |');
@@ -341,6 +360,11 @@ export function renderInjectionLines(m) {
   return [
     `- 注入精度（行级，微观）：注入的记忆行里 **${micro}** 含当题 gold 要点（${inj.goldLines}/${inj.linesTotal} 行，${inj.probes} 题有注入）；`,
     `- 注入精度（按题平均）：**${macro}**；注入含已作废信息（update 类 stale 进注入）**${inj.staleLeak} 题**——非 0 即更新失败在注入层可见。`,
+    // 外部 lane 的注入层可见性(计划 T0.7 尾巴):开了外部同步但 extLines=0 = 外部路从未命中,
+    // 两种成因(服务不可用/内容不相关)都要能从这里起步归因(熔断计数/驱动日志)。
+    ...(inj.extLines > 0
+      ? [`- 外部注入行（via external）：**${inj.extLines}** 行，含 gold ${inj.extGoldLines} 行（${pct(inj.extGoldLines, inj.extLines)}）——不计入本地 recall@5 口径；`]
+      : (m.ext && m.ext !== 'off' ? ['- 外部注入行（via external）：0——外部同步已开但本轮无外部命中入注，检查驱动健康/内容相关性。'] : [])),
   ];
 }
 

@@ -34,13 +34,25 @@ export function NButton(props: NPrimitiveProps) {
 
 /** 原生 Input 优先；回退 .dsh-mem-input 类输入框。
  * 原生 Input 是 span>input 结构且 rest 摊给内层 input——布局属性（flex/minWidth
- * 等）必须路由到外层 span，否则搜索框在 flex 工具栏里不再撑满。 */
+ * 等）必须路由到外层 span，否则搜索框在 flex 工具栏里不再撑满。
+ *
+ * 外层显式 `inline-flex + box-sizing:border-box`：裸 `<span>` 是 inline，`width`
+ * 根本不生效，内层原生 input 会按默认尺寸（≈20 字符）溢出容器，把右侧相邻
+ * 按钮（如“回全图”）盖掉——2026-11-10 记忆库工具栏实拍回归。内层同时钉
+ * `width:100% + border-box`，保证 padding 不再把总宽推过外层。 */
 export function NInput(props: NPrimitiveProps) {
   if (P && P.Input) {
     const inner = { ...props };
     const layoutStyle = inner.style;
     delete inner.style;
-    return createElement('span', { style: layoutStyle }, createElement(P.Input, inner));
+    return createElement(
+      'span',
+      { style: { display: 'inline-flex', minWidth: 0, boxSizing: 'border-box', ...layoutStyle } },
+      createElement(P.Input, {
+        ...inner,
+        style: { width: '100%', minWidth: 0, boxSizing: 'border-box' },
+      }),
+    );
   }
   const rest = { ...props };
   rest.className = 'dsh-mem-input' + (rest.className ? ' ' + rest.className : '');

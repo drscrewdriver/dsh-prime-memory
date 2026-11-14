@@ -63,6 +63,14 @@ const MEMORY_LIVE_SETTINGS_KEYS = [
   // 0.26.11（issue #16）:知识图谱**投影**开关；与部署 cfg.graph.enabled 取或。
   // 与 toolGraph（图谱**读**工具封印）是两件事，别混。
   'graphEnabled',
+  // 0.27.x(T4.2 后补):外部同步运行时开关——档位覆盖 + 推送/拉取/hard-delete 三热阀。
+  // 热生效(pusher/puller 每轮读 live)，但档位仍过共存门控。
+  'extSyncMode',
+  'extPushEnabled',
+  'extPullEnabled',
+  'extAllowHardDelete',
+  // 污染隔离闸（计划 ext-to-l1-import）：本仓第一个默认开的 live 闸
+  'extImportIsolate',
 ] as const;
 
 /** 端点全集(41 个;含 records-delete / 图谱四端点(含记忆库入口的 record-links) / receipts / §C 冲突队列读写+丢弃留痕三端点 / ruminate 三端点 / 退场与快照五端点)。 */
@@ -135,6 +143,20 @@ const ENDPOINTS = [
   'dsh-memory/mem-sync',
   'dsh-memory/mem-orphans',
   'dsh-memory/skills-action',
+  'dsh-memory/ext-drivers-list',
+  'dsh-memory/ext-driver-probe',
+  'dsh-memory/ext-sync-status',
+  'dsh-memory/ext-conflicts-list',
+  'dsh-memory/ext-conflict-resolve',
+  // 0.27.x(ext-driver-config-ui):驱动配置写入口(用户专属:nonce + 宿主写能力双门)
+  'dsh-memory/ext-config-arm',
+  'dsh-memory/ext-config-enable',
+  // 0.28.x(ext-to-l1-import):首次全量导入三端点（走 scope:'import' 票，不要求 configWritable）
+  'dsh-memory/ext-import-start',
+  'dsh-memory/ext-import-status',
+  'dsh-memory/ext-import-cancel',
+  'dsh-memory/ext-driver-upsert',
+  'dsh-memory/ext-driver-remove',
 ] as const;
 
 describe('effort vocabulary', () => {
@@ -176,12 +198,21 @@ describe('wing catalog', () => {
 });
 
 describe('endpoint surface', () => {
-  it('exposes exactly the 68 contracted endpoints, records-delete and graph included', () => {
-    // 68 = 67 + `record-links`（记忆库入口的关联跳转：记录 → 实体 → 关系 → 其它记录）。
-    // 上一阶 67 = 66 + `drsc-health`（设置面板 DRSC 依赖 banner 的探针端点）；
+  it('exposes exactly the 80 contracted endpoints, records-delete and graph included', () => {
+    // 80 = 77 + 首次全量导入三端点(ext-import-start / -status / -cancel，计划 ext-to-l1-import：
+    // 导入走 scope:'import' 分票，不写 profile 所以不要求 configWritable)。
+    // 77 = 76 + 外部记忆总闸开关(ext-config-enable)：总闸此前无任何面板入口（不在 live 键集，
+    // 装配又只在启动期跑），面板上的同步开关在关闭态是“可拨但行为零变更”的暗示器。
+    // 76 = 73 + 驱动配置写入口三端点(ext-config-arm / ext-driver-upsert / ext-driver-remove,
+    // 计划 ext-driver-config-ui:面板写 profile,无热重载通道所以响应带 needsReload)。
+    // 73 = 71 + 冲突面板两端点(ext-conflicts-list / ext-conflict-resolve,计划 T3.3)。
+    // 71 = 68 + 外部记忆驱动三端点(ext-drivers-list / ext-driver-probe / ext-sync-status,
+    // 计划 ext-mem-drivers-sync T0.8)。
+    // 上一阶 68 = 67 + `record-links`（记忆库入口的关联跳转：记录 → 实体 → 关系 → 其它记录）。
+    // 67 = 66 + `drsc-health`（设置面板 DRSC 依赖 banner 的探针端点）；
     // 66 = 65 + `skills-detect`；65 = 64 + `graph-cleanup-dead`。
-    expect(ENDPOINTS.length).toBe(68);
-    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(68);
+    expect(ENDPOINTS.length).toBe(80);
+    expect(ENDPOINTS.filter((e) => e.startsWith('dsh-memory/')).length).toBe(80);
   });
 
   it('本地清单与 src/stats.ts 的 MEMORY_ENDPOINTS **逐项一致**', () => {
@@ -217,11 +248,32 @@ describe('endpoint surface', () => {
 });
 
 describe('memory live settings key registry', () => {
-  it('registers 25 keys incl. the v0.9.0 reverse-engineered ones', () => {
-    expect(MEMORY_LIVE_SETTINGS_KEYS.length).toBe(25);
+  it('registers 30 keys incl. the v0.9.0 reverse-engineered ones', () => {
+    // 25 → 29:T4.2 后补外部同步运行时开关四键（档位 + 推/拉/hard-delete 三热阀）
+    // 29 → 30:ext-to-l1-import 补污染隔离闸（默认开）
+    expect(MEMORY_LIVE_SETTINGS_KEYS.length).toBe(30);
     for (const k of ['embedRemoteBaseURL', 'embedRemoteApiKey', 'embedRemoteModel', 'embedRemoteDimensions', 'memoryMutate']) {
       expect(MEMORY_LIVE_SETTINGS_KEYS).toContain(k);
     }
+  });
+
+  it('清单里每个键都必须在 live schema 真源存在（防“登记了但 schema 没这个键→写了丢”）', () => {
+    // 方向要说清：这份清单有意只是 live 节的**子集**（不含 distillChain/distillBudgets 等嵌套键），
+    // 所以“逐项相等”是错的前提。真正会坑人的是反方向：清单里有、schema 里没——
+    // 那等于面板写了一个会被 schemastery 静默透传丢弃的键，用户已存值永远读不回。
+    const defaults = (memorySchema as unknown as (v: unknown) => Record<string, unknown>)({});
+    // live 节标了 volatile()，拿到的是 VolatileRef（只有 get）而不是值对象——直接 Object.keys 会只得 ['get']。
+    const liveNode = defaults.live as { get?: () => Record<string, unknown> } | Record<string, unknown>;
+    const liveObj = typeof (liveNode as { get?: unknown }).get === 'function'
+      ? (liveNode as { get: () => Record<string, unknown> }).get()
+      : (liveNode as Record<string, unknown>);
+    const schemaKeys = new Set(Object.keys(liveObj ?? {}));
+    expect(schemaKeys.size, 'live 节必须能揭出多键（拿不到值就是取错了形状）').toBeGreaterThan(10);
+    const orphan = MEMORY_LIVE_SETTINGS_KEYS.filter((k) => !schemaKeys.has(k));
+    expect(orphan, `清单有而 live schema 无的键: ${orphan.join(', ')}`).toEqual([]);
+    // 新增的隔离闸必须两面都在：只加 schema 不加清单，或反之，都是半接状态。
+    expect(schemaKeys.has('extImportIsolate'), 'live schema 缺 extImportIsolate').toBe(true);
+    expect(MEMORY_LIVE_SETTINGS_KEYS).toContain('extImportIsolate');
   });
 
   it('static config schema keeps every deploy key with defaults', () => {

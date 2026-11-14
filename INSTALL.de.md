@@ -11,6 +11,8 @@ Dieses Plugin wird als **offizielles DSH-Bundle** ausgeliefert: Nach der Install
 
 Wählen Sie eine der folgenden Aufrufarten (das Präfix `npx` kann in jedem der folgenden Befehle `dsh` ersetzen):
 
+> Die folgenden Befehle gelten nur für den DSH-CLI-Host und `--profile web`; **DSH Desktop (Electron)-Benutzer benötigen kein pnpm/npm** — das Desktop-Profil wird ausschließlich von der App verwaltet, installieren Sie dieses Plugin über die Plugin-Seite in der App.
+
 ```bash
 # Variante 1: offizielle CLI direkt per npx ausführen (kein vorinstalliertes dsh nötig; Version kann gepinnt werden, z. B. dsh-prime-memory@0.8.4)
 npx -y @deepseek-ai/dsh plugin --profile web add dsh-prime-memory
@@ -50,6 +52,19 @@ dsh plugin --profile web update dsh-prime-memory@0.8.11
 
 Ein Update ersetzt nur den Plugin-Code und die `dist/`-Artefakte; das Datenverzeichnis `~/.dsh/memory/` bleibt unberührt.
 
+## Windows: DSH-Laufzeit vor Installation / Update beenden
+
+Unter Windows kann, solange der DSH-Desktop-Host läuft, das Installieren / Aktualisieren **jedes** Plugins über die Plugins-Seite dazu führen, dass pnpm (hoisted-Layout) den gesamten Top-Level-`node_modules`-Baum neu verlinkt und die nativen Abhängigkeiten dieses Plugins, `@node-rs/jieba` / `sqlite-vec`, umbenennt, um neue Kopien einzusetzen. Der Host hält `jieba.*.node` / `vec0.dll` offen, und Windows legt eine exklusive Sperre auf geladene Images – das Umbenennen schlägt fehl, das Update rollt zurück (EPERM, gemeldet als `previous build is incomplete`).
+
+Vorgehen: **DSH vollständig beenden, bevor pnpm / `dsh plugin add|update` läuft**, keine Restprozesse zulassen, dann installieren und neu starten:
+
+```powershell
+# muss leer sein, bevor installiert / aktualisiert wird
+Get-Process | Where-Object { $_.ProcessName -match 'dsh|deepseek|electron' }
+```
+
+Das ist kein Plugin-Fehler – Ursache ist der Plugin-Update-Ablauf des Hosts plus Windows-Dateisperren; die Laufzeit zu beenden hebt die Sperre auf und gilt für Updates beliebiger Plugins.
+
 ## Verifikation
 
 Prüfen Sie nach der Installation und dem Neustart des DSH Web Host:
@@ -88,5 +103,6 @@ Die Daten bleiben in `~/.dsh/memory/`; löschen Sie bei Bedarf das gesamte Verze
 | Keine Zeile „Kontextinjektion · memory" | Destillation nicht gelaufen / Recall deaktiviert | Prüfen, dass der Modus nicht off und `recall.enabled=true` ist; in `memory.log` nach `L1 阶段完成` suchen |
 | Download des lokalen Embedding-Modells hängt | Mirror direkt nicht erreichbar | `embedding.proxy` setzen, um über einen Proxy zu gehen; oder `embedding.mirror` auf das offizielle `huggingface.co` umstellen |
 | Remote-Embedding meldet 401 | apiKey falsch / schlüsselloser Dienst darf keinen Key erhalten | `embedding.apiKey` prüfen; bei einem selbst gehosteten Dienst ohne Key apiKey leer lassen |
+| Update eines Plugins unter Windows schlägt mit EPERM / `previous build is incomplete` fehl | Der laufende Host hält `jieba.*.node` / `vec0.dll` offen, pnpm-Umverlinken der nativen Abhängigkeiten läuft in eine Dateisperre | DSH vor Installation / Update vollständig beenden (`Get-Process ... -match 'dsh|deepseek|electron'` leer), danach installieren und neu starten |
 
 Mehr dazu in [README.md](./README.md) und [CHANGELOG.md](./CHANGELOG.md).

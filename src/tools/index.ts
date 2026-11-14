@@ -1835,7 +1835,9 @@ export function registerMemoryTools(
         }
         return listConflictPairs(
           { l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true, decayHalfLifeDays: cfg.recall?.decayHalfLifeDays, feedback: stores.feedback },
-          { limit: typeof args.limit === 'number' ? args.limit : undefined },
+          // T0.9:项目 A 冻结的对不在项目 B 展示(scope=global 时 scopeFilterOf 恒返
+          // undefined = 不过滤,既有部署零漂移;判据单源在 workspace.ts)。
+          { limit: typeof args.limit === 'number' ? args.limit : undefined, workspaceId: scopeFilterOf(cfg.scope, exec) },
         );
       },
     }),
@@ -1954,7 +1956,8 @@ export function registerMemoryTools(
         const outcome = typeof args.outcome === 'string' ? args.outcome.trim() : '';
         if (!pairId) return { ...empty, notice: '需要 pair_id:待裁决对没有"全部裁决"这种用法。' };
         return resolveConflictPair(
-          { l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true },
+          // T0.9:裁决侧与展示侧同一判据——展示过滤了而裁决不过滤等于门禁白装。
+          { l1: stores.l1, conflictFreezeEnabled: live.get().conflictFreeze === true, workspaceId: scopeFilterOf(cfg.scope, exec) },
           pairId,
           outcome,
         );

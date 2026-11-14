@@ -18,7 +18,7 @@ import { registerMemoryTools } from '../src/tools/index.js';
 import { MEMORY_TYPE_DIRS, UNSORTED_DIR } from '../src/store/memory-md.js';
 import {
   HOST_MEMORY_TYPES, LEGACY_MEMORY_TYPES, MEMORY_TYPE_LABELS, MEMORY_TYPE_VOCABULARY,
-  UNCLASSIFIED_DIR, familyOf, isKnownType, memoryTypeDirs, slugOf, typeCatalogEntries,
+  NON_EXTRACT_TYPES, UNCLASSIFIED_DIR, familyOf, isKnownType, memoryTypeDirs, slugOf, typeCatalogEntries,
   resetFamilyWarned, setFamilyWarnSink,
 } from '../src/memory-types.js';
 import { familyForType } from '../src/types.js';
@@ -42,13 +42,15 @@ afterEach(() => {
 });
 
 describe('词表规模与派生', () => {
-  it('宿主 29 + 旧 7 = 36 可赋值类；目录集 = 36 + 兜底桶 = 37', () => {
+  it('宿主 29 + 旧 7 + 外源 1 = 37 可赋值类；目录集 = 37 + 兜底桶 = 38', () => {
     expect(HOST_MEMORY_TYPES).toHaveLength(29);
     expect(LEGACY_MEMORY_TYPES).toHaveLength(7);
-    expect(MEMORY_TYPE_VOCABULARY.size).toBe(36);
+    // external_fact 进词表（计划 ext-to-l1-import）：否则面板筛不到、md 目录落 unclassified。
+    // 但它不在 prompt 枚举里（见下方“prompt 枚举由真源渲染”与 NON_EXTRACT_TYPES）。
+    expect(MEMORY_TYPE_VOCABULARY.size).toBe(37);
     // 两套命名空间字面交集为空（findings 第一节实测；若将来重合说明改名了，须重新裁决）
     expect(HOST_MEMORY_TYPES.filter((t) => LEGACY_MEMORY_TYPES.includes(t))).toEqual([]);
-    expect(memoryTypeDirs().size).toBe(37);
+    expect(memoryTypeDirs().size).toBe(38);
   });
 
   it('投射白名单 MEMORY_TYPE_DIRS 恰等于真源派生（含 unclassified）', () => {
@@ -63,7 +65,7 @@ describe('词表规模与派生', () => {
     for (const t of [...MEMORY_TYPE_VOCABULARY, UNCLASSIFIED_DIR]) {
       expect((MEMORY_TYPE_LABELS[t] ?? '').length, t).toBeGreaterThan(0);
     }
-    expect(typeCatalogEntries()).toHaveLength(37);
+    expect(typeCatalogEntries()).toHaveLength(38);
   });
 });
 
@@ -130,9 +132,17 @@ describe('memory_add 白名单派生 + 降级可观测', () => {
 });
 
 describe('prompt 枚举串由真源渲染', () => {
-  it('auto 抽取 prompt 含真源全部 36 类类名', () => {
+  it('auto 抽取 prompt 含全部可赋值类类名（排除 NON_EXTRACT_TYPES）', () => {
     for (const t of MEMORY_TYPE_VOCABULARY) {
+      if (NON_EXTRACT_TYPES.has(t)) continue;
       expect(EXTRACT_ALL_MEMORIES_SYSTEM_PROMPT.includes(t), t).toBe(true);
+    }
+    // 反向硬断言（审计 P4）：外源类型一旦进 prompt，LLM 会给本地记忆打外源标，
+    // 面板上“这是外部记忆”的语义就被污染——所以它必须对 prompt 不可见、对面板可见。
+    for (const t of NON_EXTRACT_TYPES) {
+      expect(EXTRACT_ALL_MEMORIES_SYSTEM_PROMPT.includes(t), t).toBe(false);
+      expect(MEMORY_TYPE_VOCABULARY.has(t), t).toBe(true);
+      expect(typeCatalogEntries().some((e) => e.id === t), t).toBe(true);
     }
   });
 
@@ -142,9 +152,13 @@ describe('prompt 枚举串由真源渲染', () => {
     expect(EXTRACT_WORK_MEMORIES_SYSTEM_PROMPT.includes('user_info')).toBe(false);
   });
 
-  it('chat/all 两份 dedup prompt 含真源全部类名；work 份含全 work 族不含 chat 族', () => {
+  it('chat/all 两份 dedup prompt 含全部可赋值类名（排除 NON_EXTRACT）；work 份含全 work 族不含 chat 族', () => {
     for (const [name, p] of [['all', ALL_CONFLICT_DETECTION_SYSTEM_PROMPT], ['chat', CONFLICT_DETECTION_SYSTEM_PROMPT]] as const) {
       for (const t of MEMORY_TYPE_VOCABULARY) {
+        if (NON_EXTRACT_TYPES.has(t)) {
+          expect(p.includes(t), `${name}:不应含${t}`).toBe(false);
+          continue;
+        }
         expect(p.includes(t), `${name}:${t}`).toBe(true);
       }
     }
@@ -181,7 +195,10 @@ describe('词表 → CSS 类覆盖（F11）', () => {
 describe('memport 双实现 TYPE_CODES 同表', () => {
   it('宿主 29 类全部有码；TS 侧每个 (码,type) 对逐字出现在 memport.py', () => {
     expect(Object.keys(TYPE_CODES)).toHaveLength(36);
-    for (const t of [...MEMORY_TYPE_VOCABULARY]) {
+    for (const t of MEMORY_TYPE_VOCABULARY) {
+      // 外源类型不经 memport 写入（memport 是 .mem 文件包导入），所以它不在码表里：
+      // 给个假码反而会让两侧码表出现“能写不能导”的错配。
+      if (NON_EXTRACT_TYPES.has(t)) continue;
       expect(Object.values(TYPE_CODES)).toContain(t);
     }
     const py = readFileSync(join(HERE, '..', 'skills', 'memport', 'scripts', 'memport.py'), 'utf8');

@@ -87,9 +87,9 @@ export interface MemoryStores {
   skills?: SkillProducer;
 }
 
-/** 管线任务(优先级调度:live > graph > rebuild)。 */
+/** 管线任务(优先级调度:live > graph > ext-sync > rebuild)。 */
 export interface PipelineTask {
-  kind: 'live' | 'rebuild' | 'graph';
+  kind: 'live' | 'rebuild' | 'graph' | 'ext-sync';
   run: () => Promise<unknown>;
   /** 任务跑完后的回调(携带 run 的产出)——供反刍统计真实产出记录数。 */
   onDone?: (result: unknown) => void;
@@ -97,7 +97,8 @@ export interface PipelineTask {
 
 /**
  * 选取下一个要执行的任务下标:最早的 live 优先,其次 graph(图谱投影单批短、
- * 让位用户轮次但优先于重建分块),否则队首。
+ * 让位用户轮次但优先于重建分块),再次 ext-sync(外部推送单批有界、同样让位
+ * 重建分块之上的短任务),否则队首(重建分块)。
  */
 export function pickNextTaskIndex(tasks: PipelineTask[]): number {
   for (let i = 0; i < tasks.length; i++) {
@@ -105,6 +106,9 @@ export function pickNextTaskIndex(tasks: PipelineTask[]): number {
   }
   for (let i = 0; i < tasks.length; i++) {
     if (tasks[i].kind === 'graph') return i;
+  }
+  for (let i = 0; i < tasks.length; i++) {
+    if (tasks[i].kind === 'ext-sync') return i;
   }
   return 0;
 }
@@ -320,6 +324,8 @@ export class MemoryRunner {
     private readonly live: LiveSettingsHandle,
     /** 会话档位只读句柄(闲置扫描跳过 off 档会话;挂起语义)。 */
     private readonly modes?: { get(sessionId: string): string },
+    /** 外部图提示缝(计划 T3.6;缺席 = 外部图不参与投影,零行为差)。 */
+    private readonly extGraphHints?: () => Promise<string[]>,
   ) {
     this.pendingFile = pendingPathFor(resolveDataDir(cfg));
   }
@@ -492,6 +498,11 @@ export class MemoryRunner {
   /** 重建任务入队(低优先级:让位于正常轮次;由 RebuildController 分块驱动)。 */
   enqueueRebuildTask(run: () => Promise<unknown>): void {
     this.pushTask({ kind: 'rebuild', run });
+  }
+
+  /** 外部同步泵入队(计划 Phase 2;优先级在 graph 后 rebuild 前,单飞由调用方的占位标志保证)。 */
+  enqueueExtSyncTask(run: () => Promise<unknown>): void {
+    this.pushTask({ kind: 'ext-sync', run });
   }
 
   /** 重建蒸馏轮:统一 auto 档,全量强制蒸馏(不受阈值约束)、不受缓冲 200 上限。 */
@@ -700,6 +711,9 @@ export class MemoryRunner {
           // G-vec 缺陷修的嵌入缝:惰性取 L1 同一嵌入源(活切换不被钉死),
           // 未就绪/失败 embedText 回 undefined = 不补写(词法路不受影响)。
           (t) => this.stores.l1.embedText(t),
+          // T3.6 外部图提示缝:三家 capabilities.graph 的外部图经 bridge 汇总,
+          // 缺席/抛错 = 空提示;只进 prompt 不落库。
+          this.extGraphHints,
         );
         // 有实际投影(说明队列还有积压)才续排;claim 落空则停泵,等下一个触发源
         if (had) this.maybeQueueGraphTask();

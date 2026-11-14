@@ -69,6 +69,20 @@ export function liveSettingsSchema() {
         embedRemoteDimensions: Schema.number().min(0).max(8192).default(0),
         // 记忆写删权限门:默认 false(模型写删风险高,须显式在面板开启高权限模式)
         memoryMutate: Schema.boolean().default(false),
+        // 外部同步运行时开关(T4.2 后补):档位 '' = 跟随部署 ext_memory.syncMode;
+        // 三个布尔为安装面热闸(与部署配置的 push/pull/allowHardDelete 双闸任一关即停)。
+        extSyncMode: Schema.union(['', 'shadow-read', 'push-only', 'two-way']).default(''),
+        extPushEnabled: Schema.boolean().default(false),
+        extPullEnabled: Schema.boolean().default(false),
+        extAllowHardDelete: Schema.boolean().default(false),
+        /**
+         * 污染隔离闸（计划 ext-to-l1-import）：true = 反刍/重建取数时排除外源导入条目。
+         *
+         * 本仓第一个**默认开**的 live 闸，与其余“默认关 + 取或追加开”的惯例相反：
+         * 它防的是污染（灌 N 条外源会把本地记忆的蒸馏窗口占满），默认应防；
+         * 且判据是“排除”不是“追加”，所以归一用 `!== false`（异常值视为开）。见 settings.ts 归一点。
+         */
+        extImportIsolate: Schema.boolean().default(true),
         /**
          * md 投射/后缀收敛的**单次文件更新预算**运行时覆盖（`0` = 跟随启动配置 `memExport.maxRecords`）。
          * 面板上就叫这个名字（设置页入口在 `client/src/tabs/ArchiveSection.tsx`）。
@@ -136,6 +150,35 @@ export function liveSettingsSchema() {
     const maybe = node;
     return (typeof maybe.volatile === 'function' ? maybe.volatile() : node);
 }
+/**
+ * 节级 volatile 标记(带能力探测),照 `liveSettingsSchema` 的实测先例：
+ * 旧 schemastery(4.0.2)无 `.volatile()`，直接调用会让**整插件 load-failure**。
+ *
+ * 为什么 `extMemory` 必须标 volatile：真机实测发现宿主拒写未标的节
+ * （`Config field "extMemory" is not volatile`），而面板的驱动接入写入口就写这一节——
+ * 不标则「新增驱动」在真宿主上永远失败（本仓库集成测用 fake forms 测不出这一条）。
+ */
+function volatileSection(node) {
+    const maybe = node;
+    return (typeof maybe.volatile === 'function' ? maybe.volatile() : node);
+}
+/**
+ * 读 `extMemory`：兼容两形（已标 volatile → 宿主给引用；能力缺席/老线 → 给冻结值）。
+ * 不兼容这一形就是在老线报 `ref.get is not a function`（把加载期崩换成运行期崩）。 */
+export function readExtMemory(ref) {
+    if (ref === undefined || ref === null)
+        return undefined;
+    const maybe = ref;
+    if (typeof maybe.get === 'function') {
+        try {
+            return maybe.get();
+        }
+        catch {
+            return undefined;
+        }
+    }
+    return ref;
+}
 export const memorySchema = Schema.object({
     dataDir: Schema.string().default(''),
     family: Schema.union(['auto', 'chat', 'work']).default('auto'),
@@ -200,6 +243,53 @@ export const memorySchema = Schema.object({
         // 30 天:足够跨过假期与项目间歇,又不至于让互相矛盾的两条记忆长期并列召回。
         timeoutDays: Schema.number().min(0).max(3650).default(30),
     }),
+    // 外部记忆驱动(计划 T0.5):默认全关(新功能默认关铁律)。本段只建配置形状与
+    // 零漂移地基,驱动实现/同步引擎在 Phase 1+;全部扁平键,禁 union/禁嵌套覆盖面。
+    extMemory: volatileSection(Schema.object({
+        enabled: Schema.boolean().default(false),
+        // string + 消费侧 normSyncMode 归一(与 scope 同先例):非法值不抛、回默认档。
+        syncMode: Schema.string().default('shadow-read'),
+        drivers: Schema.array(Schema.object({
+            id: Schema.string().default(''),
+            type: Schema.string().default(''),
+            enabled: Schema.boolean().default(true),
+            endpoint: Schema.string().default(''),
+            apiKey: Schema.string().default(''),
+            space: Schema.string().default(''),
+            extra: Schema.string().default(''),
+        })).default([]),
+        lane: Schema.object({
+            maxItemsPerDriver: Schema.number().min(1).max(50).default(10),
+        }),
+        push: Schema.object({
+            // 双闸中的推送闸:默认关(写外流必须显式 opt-in)。
+            enabled: Schema.boolean().default(false),
+            maxItems: Schema.number().min(1).max(5000).default(200),
+            timeBudgetMs: Schema.number().min(1000).max(3_600_000).default(120_000),
+            settleTimeoutMs: Schema.number().min(10_000).max(86_400_000).default(180_000),
+            // Phase 2 硬闸:hard-delete 驱动的不可逆传导要等 Phase 3。
+            allowHardDelete: Schema.boolean().default(false),
+            families: Schema.string().default('work'),
+            maxAttempts: Schema.number().min(1).max(20).default(3),
+            backoffMs: Schema.string().default('1000,3000,10000'),
+            settleScanLimit: Schema.number().min(10).max(1000).default(100),
+        }),
+        pull: Schema.object({
+            // 入站拉取闸(Phase 3):双向的两个方向各自显式开(默认关)。
+            enabled: Schema.boolean().default(false),
+            intervalMs: Schema.number().min(0).max(86_400_000).default(900_000),
+            maxItems: Schema.number().min(1).max(50_000).default(2000),
+            timeBudgetMs: Schema.number().min(1000).max(3_600_000).default(120_000),
+            // 回灌族白名单(Comma列,消费侧归一;空串 = 全量)。
+            families: Schema.string().default('work'),
+        }),
+        requestTimeoutMs: Schema.number().min(1000).max(120_000).default(15_000),
+        health: Schema.object({
+            cacheMs: Schema.number().min(0).max(3_600_000).default(60_000),
+            failureThreshold: Schema.number().min(1).max(20).default(3),
+            openMs: Schema.number().min(0).max(3_600_000).default(300_000),
+        }),
+    })),
     // 轨3 memport Connect:默认关(新功能默认关)。scan 为**只读预览**，写库仍走 memory_import。
     memport: Schema.object({
         enabled: Schema.boolean().default(false),

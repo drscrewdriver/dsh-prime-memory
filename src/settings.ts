@@ -89,8 +89,29 @@ export interface LiveSettingsHandle {
   /** 读取面是否可用(0.1.7 起 volatile 引用恒在,恒为 true;写面缺失时 update 抛错) */
   supported: boolean;
   get(): MemoryLiveSettings;
-  /** UI 写入入口;写面缺失或宿主拒绝时抛错,由 RPC 层转成业务错误 */
+  /** UI 写入入口;写面缺失或宿主拒绍时抛错,由 RPC 层转成业务错误 */
   update(patch: Partial<MemoryLiveSettings>): Promise<void>;
+  /**
+   * 非 live 配置段写面(计划 ext-driver-config-ui T2.1)。**只在代 1(settings.forms)可用时真能写**。
+   *
+   * 与 `update` 的分工:update 只提交 live 节(热生效、可部分键);本面提交**完整配置节**
+   * 给 configEditor 落 profile——装配期静态的键改完必须重载才生效(无热重载通道),
+   * 因此调用方必须回 `needsReload`。
+   *
+   * 可选而非必填:老宿主、降级句柄与测试 fake 都没有这个能力,把缺失建成 undefined
+   * 比"必填但永远抛错"诚实——调用方一律先查 `configWritable`。
+   */
+  updateConfig?(patch: Record<string, unknown>): Promise<void>;
+  /** 配置写面是否可用(现取:settings 服务可能晚于插件上线)。 */
+  readonly configWritable?: boolean;
+  /**
+   * 写后读回配置节(能力探测型:宿主不供 `forms.get` = undefined)。
+   *
+   * 存在的理由：`forms.update` 对 **数组** 的合并语义在宿主侧未知——若它是按下标
+   * 深合并，写短了的 drivers 数组会残留尾部旧元素（面板显示已删、profile 里还在）。
+   * 调用方拿读回值与刚提交的值比对，不一致就必得报告“未完全生效”，而不是假定成功。
+   */
+  readConfig?(key: string): unknown;
 }
 
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
@@ -100,6 +121,12 @@ export const MEMORY_ENTRY_ID = 'dsh-memory';
 interface SettingsFormsLike {
   /** 合并可编辑字段进 entry 的 profile patch(0.1.7 SettingsForms.update)。 */
   update(ns: string, patch: object, expectedRevision?: number): Promise<void>;
+  /**
+   * 读回 entry 当前生效的配置对象(部分宿主提供;缺席 = 不可用)。
+   * 有了它,写后能立即校对"profile 里真长什么样"——把对 `forms.update` 合并语义的
+   * 猜测变成运行时自检(详见 `readConfig`)。
+   */
+  get?(ns: string): unknown;
   /** 登记本实例的页面策略;自带自定义页的插件用它关掉自动生成的表单页。 */
   configure?(presentation: { auto?: boolean }, owner?: unknown): () => void;
 }
@@ -141,6 +168,13 @@ const ALWAYS_ON: MemoryLiveSettings = {
   mdExportMaxRecords: 0,
   // 回填并行度运行时覆盖:0 = 跟随部署 cfg.backfill.concurrency（概览页滑块可改）
   backfillConcurrency: 0,
+  // 外部同步运行时开关(T4.2 后补):档位 '' = 跟随部署;三布尔为双闸的热阀
+  extSyncMode: '',
+  extPushEnabled: false,
+  extPullEnabled: false,
+  extAllowHardDelete: false,
+  // 污染隔离闸：默认**开**（本仓第一个默认开的 live 闸，理由见 config.ts 注释）
+  extImportIsolate: true,
   toolRoom: true,
   toolGraph: true,
   toolRuminate: true,
@@ -223,6 +257,10 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
     supported: false,
     get: () => ({ ...ALWAYS_ON, distillChain: [] }),
     update: () => Promise.reject(new Error('settings 服务不可用,记忆开关无法写入')),
+    // 降级句柄:两个写面都不可用(live 写不了、配置节更写不了)
+    configWritable: false,
+    updateConfig: () => Promise.reject(new Error('settings 服务不可用,配置无法写入')),
+    readConfig: () => undefined,
   };
 
   const wireScope = (scope: SettingsScopeLike): LiveSettingsHandle => {
@@ -232,6 +270,10 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
       update: async (patch) => {
         await scope.update(patch);
       },
+      // 代 2/2' 的 scope 只认 live 节,不开放任意配置节写入——面板据此置灰而非伪装成功。
+      configWritable: false,
+      updateConfig: () => Promise.reject(new Error('当前宿主不支持配置写入(旧 scope 只认 live 节):请改在 profile.yaml 里维护 ext_memory')),
+      readConfig: () => undefined,
     };
   };
 
@@ -302,6 +344,9 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
       supported: false,
       get: () => ({ ...ALWAYS_ON, distillChain: [] }),
       update: () => Promise.reject(new Error('settings 服务不可用,记忆开关无法写入')),
+      configWritable: false,
+      updateConfig: () => Promise.reject(new Error('settings 服务不可用,配置无法写入')),
+      readConfig: () => undefined,
     };
     tryAttachOld();
   });
@@ -314,6 +359,28 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
   return {
     supported: true,
     get: () => (modernWrite() ? read() : inner.get()),
+    /** 面板据此置灰:把"写不了"伪装成"写成功"比明确不支持更坑。 */
+    get configWritable() {
+      return modernWrite();
+    },
+    updateConfig: async (patch: Record<string, unknown>) => {
+      const f = forms as SettingsFormsLike | undefined;
+      if (f === undefined || typeof f.update !== 'function') {
+        throw new Error('当前宿主不支持配置写入(settings.forms 缺席);请改在 profile.yaml 里维护 ext_memory');
+      }
+      await f.update(MEMORY_ENTRY_ID, patch);
+    },
+    readConfig: (key: string) => {
+      const f = forms as SettingsFormsLike | undefined;
+      if (f === undefined || typeof f.get !== 'function') return undefined;
+      try {
+        const all = f.get(MEMORY_ENTRY_ID) as Record<string, unknown> | undefined;
+        return all?.[key];
+      } catch {
+        // 读回失败不能顶掉写入结果:调用方按"未校验"处理即可
+        return undefined;
+      }
+    },
     update: async (patch) => {
       if (modernWrite()) {
         if (!forms) throw new Error('settings 服务不可用,记忆开关无法写入');
@@ -420,5 +487,15 @@ function resolveSettings(value: unknown): MemoryLiveSettings {
     toolConflict: v.toolConflict !== false,
     toolMutate: v.toolMutate !== false,
     toolSkills: v.toolSkills !== false,
+    // 外部同步运行时开关:档位白名单与 schema 同源（非法值 = 跟随部署）;三布尔严格 === true
+    extSyncMode:
+      v.extSyncMode === 'shadow-read' || v.extSyncMode === 'push-only' || v.extSyncMode === 'two-way'
+        ? v.extSyncMode
+        : '',
+    extPushEnabled: v.extPushEnabled === true,
+    extPullEnabled: v.extPullEnabled === true,
+    extAllowHardDelete: v.extAllowHardDelete === true,
+    // 隔离闸方向相反：关才关（!== false），缺字段/异常值都视为开——防污染应当默认生效。
+    extImportIsolate: v.extImportIsolate !== false,
   };
 }

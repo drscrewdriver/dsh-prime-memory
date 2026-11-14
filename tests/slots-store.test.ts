@@ -148,6 +148,36 @@ describe('SlotStore CRUD 与不变式', () => {
     expect(store.list().map((s) => s.title)).toEqual(['A', 'B']);
   });
 
+  it('#33 关闭槽位释放额度:达上限后 close 一条即可再新增(open 口径)', async () => {
+    const { store } = await newStore({ maxSlots: 2 });
+    const a = await store.upsert({ title: 'A' });
+    await store.upsert({ title: 'B' });
+    await expect(store.upsert({ title: 'C' })).rejects.toThrow(/上限/);
+    // 关闭 A(open 数降到 1),新增应成功
+    expect(await store.close(a.id, 'dropped')).toBe(true);
+    const c = await store.upsert({ title: 'C' });
+    expect(c.title).toBe('C');
+    expect(store.open().map((s) => s.title)).toEqual(['B', 'C']);
+    // 已关闭尾迹仍留在全量数组,但不再阻塞
+    expect(store.openCount()).toBe(2);
+    expect(store.count()).toBe(3);
+  });
+
+  it('#33 已关闭尾迹有界留存:closed 不超过 maxClosedTrail,open 不受裁', async () => {
+    const { store } = await newStore({ maxSlots: 2 });
+    const keep = await store.upsert({ title: 'KEEP' });
+    for (let i = 0; i < 6; i++) {
+      const s = await store.upsert({ title: `T${i}` });
+      await store.close(s.id, 'dropped');
+    }
+    // open 始终只有 KEEP(每轮新增后立刻关闭,openCount 从未达 2)
+    expect(store.open().map((s) => s.title)).toEqual(['KEEP']);
+    // 尾迹有界:closed ≤ maxClosedTrail(默认 = maxSlots = 2)
+    const closed = store.list().filter((s) => s.status !== 'open');
+    expect(closed.length).toBeLessThanOrEqual(2);
+    expect(store.list().some((s) => s.id === keep.id)).toBe(true);
+  });
+
   it('空标题拒绝写入', async () => {
     const { store } = await newStore();
     await expect(store.upsert({ title: '   ' })).rejects.toThrow(/title/);

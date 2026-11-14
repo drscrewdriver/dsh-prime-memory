@@ -25,6 +25,7 @@ import { errDetail } from '../util/filelog.js';
 import { runSceneConsolidation } from './l2.js';
 import { runPersona } from './l3.js';
 import { describePlan, gateClear, planPreserve, readFactSource, restorePreserved } from './rebuild-preserve.js';
+import { tombstoneResweep } from '../store/retire-journal.js';
 import { effectiveCfg } from './runner.js';
 import { DrscFactSource, LocalL0FactSource, } from './fact-source.js';
 export { DrscFactSource, groupL0Sessions, LocalL0FactSource } from './fact-source.js';
@@ -96,6 +97,13 @@ export class RebuildController {
         this.runner = runner;
         this.logger = logger;
         this.live = live;
+    }
+    /**
+     * 污染隔离闸（计划 ext-to-l1-import）：为真时，重建收尾的 L2 取数排除外源导入条目。
+     * 方向与其余 live 闸相反：关才关（`!== false`），缺值视为开——防污染应当默认生效。
+     */
+    externalIsolated() {
+        return this.live.get().extImportIsolate !== false;
     }
     /** 状态快照(idle 时附带实时预估与事实源水位,供确认弹窗讲清"会发生什么")。 */
     getStatus() {
@@ -326,6 +334,24 @@ export class RebuildController {
             const cfg = effectiveCfg(this.cfg, this.live);
             const liveNow = this.live.get();
             const distillOn = liveNow.enabled && liveNow.distill;
+            // ── T0.4 遗忘重压(计划 ext-mem-drivers-sync):按墓碑账本把重蒸回来的
+            // 「用户已删除/已裁决败方」重新压回退场。必须在 L2/L3 之前——否则复活体
+            // 会渗进场景整合与画像,那才是真正的泄漏。旁路面失败只 warn,不阻断收尾。──
+            try {
+                const candidates = [...this.collectRebuildRecords('chat'), ...this.collectRebuildRecords('work')];
+                const sweep = await tombstoneResweep({
+                    dataDir: resolveDataDir(this.cfg),
+                    candidates,
+                    retire: (ids, info) => this.stores.l1.retire(ids, info),
+                    logger: this.logger,
+                });
+                if (sweep.repressed > 0) {
+                    this.status.preserveNote = `${this.status.preserveNote ?? ''};遗忘重压 ${sweep.repressed} 条`.replace(/^;/, '');
+                }
+            }
+            catch (err) {
+                this.logger.warn(`[memory] 遗忘重压失败(不阻断收尾;已退记忆可能以活跃态回归): ${errDetail(err)}`);
+            }
             // 强制 L2:把重建窗口内该族尚未整合的残余记录补一轮(正常轮次语义里差几条
             // 不触发是常态,但"重建"应把已有记录全部落进场景)
             if (cfg.l2.enabled && distillOn) {
@@ -333,7 +359,7 @@ export class RebuildController {
                     const fstate = this.runner.states[family];
                     if (fstate.newMemoriesSinceL2 <= 0)
                         continue;
-                    const leftovers = this.collectRebuildRecords(family);
+                    const leftovers = this.collectRebuildRecords(family, this.externalIsolated());
                     if (leftovers.length === 0)
                         continue;
                     try {
@@ -374,12 +400,16 @@ export class RebuildController {
     /**
      * 收集重建窗口内某族的记录:重建产物全部是新插入(updated==created),
      * 按 updated_time 倒序翻页、越过 rebuildStartMs 即停。
+     *
+     * `excludeExternal` 只在喂 L2 场景整合时给 true：外源条目不该占掉蒸馏窗口；
+     * 但进度候选（L394）不能排除它们——否则“本轮处理了多少条”会少算，
+     * 而少算的进度比多算更难发现（用户会以为重建比预期快）。
      */
-    collectRebuildRecords(family) {
+    collectRebuildRecords(family, excludeExternal = false) {
         const out = [];
         const PAGE = 200;
         for (let offset = 0;; offset += PAGE) {
-            const { items } = this.stores.l1.list({ family, limit: PAGE, offset });
+            const { items } = this.stores.l1.list({ family, limit: PAGE, offset, excludeExternal });
             if (items.length === 0)
                 break;
             let beyond = 0;

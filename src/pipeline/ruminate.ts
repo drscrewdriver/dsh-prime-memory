@@ -152,6 +152,17 @@ export class RuminateController {
     this.roomRegistry = roomRegistry;
   }
 
+  /**
+   * 污染隔离闸（计划 ext-to-l1-import）：为真时，反刍的 L2 取数排除外源导入条目。
+   *
+   * 方向与其余 live 闸相反：关才关（`!== false`），缺值视为开——防污染应当默认生效。
+   * 不隔离的后果很具体：反刍只取 `limit:500/200` 窗口，外源条目多于窗口时
+   * 本地记忆一条都进不了场景整合，而且不报错。
+   */
+  private externalIsolated(): boolean {
+    return this.live.get().extImportIsolate !== false;
+  }
+
   /** 状态快照 */
   getStatus(): RuminateStatus {
     return { ...this.status };
@@ -276,7 +287,8 @@ export class RuminateController {
           const fstate = this.runner.states?.[family];
           if (!fstate) continue;
           // 收集本族所有记录(反刍后全部未整合)
-          const records = this.stores.l1.list({ family, limit: 500, offset: 0 }).items;
+          // 污染隔离：外源条目不得占掉这个 500 条窗口——否则本地记忆反而一条进不了 L2。
+          const records = this.stores.l1.list({ family, limit: 500, offset: 0, excludeExternal: this.externalIsolated() }).items;
           if (records.length === 0) continue;
           try {
             const t = Date.now();
@@ -406,7 +418,7 @@ export class RuminateController {
       for (const family of ['chat', 'work'] as const) {
         const fstate = this.runner.states?.[family];
         if (!fstate || fstate.newMemoriesSinceL2 <= 0) continue;
-        const records = this.stores.l1.list({ family, limit: 200, offset: 0 }).items;
+        const records = this.stores.l1.list({ family, limit: 200, offset: 0, excludeExternal: this.externalIsolated() }).items;
         if (records.length === 0) continue;
         l2Targets.push(family);
       }
@@ -441,7 +453,7 @@ export class RuminateController {
       if (this.cancelRequested) break;
       this.status.detail = `L2 场景整合(${family})`;
       const fstate = this.runner.states?.[family];
-      const records = this.stores.l1.list({ family, limit: 200, offset: 0 }).items;
+      const records = this.stores.l1.list({ family, limit: 200, offset: 0, excludeExternal: this.externalIsolated() }).items;
       try {
         await runSceneConsolidation(this.ctx, this.cfg, this.stores.scenes[family], records, this.logger, family);
         // 仅成功后归零:失败时保留计数,留给下一次触发重试(原先先归零会静默吞掉失败)

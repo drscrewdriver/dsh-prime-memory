@@ -74,6 +74,8 @@ export interface SessionInfoSource {
     };
 }
 import type { MemoryOccupancy, UiRecord } from './contract.js';
+import type { ExtAssembly } from './ext-memory/assembly.js';
+import type { ExtImporter } from './ext-memory/importer.js';
 export type { MemoryStats } from './contract.js';
 /** registerMemoryRpc 形参中需要落入端点 deps 的部分。 */
 interface MemoryRpcSources {
@@ -92,6 +94,10 @@ interface MemoryRpcSources {
     skillStore?: SkillStore;
     /** 技能结晶生产者（未装配 = skills-detect 不可用、skills-list 不带 producer 态）。 */
     skillProducer?: SkillProducer;
+    /** 外部记忆装配体(计划 Phase 1；未装配/未开启 = 端点回退注册态镜像)。 */
+    extAssembly?: ExtAssembly;
+    /** 外源导入编排（计划 ext-to-l1-import）：未注入 = ext-import-* 报“未装配”。 */
+    importer?: ExtImporter;
 }
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
 export type EndpointDepsInput = Omit<EndpointDeps, 'ctx' | 'cfg' | 'stores' | 'logger'>;
@@ -123,7 +129,11 @@ memorySources?: MemorySourceStore,
 /** 技能存储（轨2；经 buildEndpointDeps 落入 deps.skillStore）。 */
 skillStore?: SkillStore, 
 /** 技能结晶生产者（轨2；经 buildEndpointDeps 落入 deps.skillProducer）。 */
-skillProducer?: SkillProducer): void;
+skillProducer?: SkillProducer, 
+/** 外部记忆装配体(计划 Phase 1；经 buildEndpointDeps 落入 deps.extAssembly)。 */
+extAssembly?: ExtAssembly, 
+/** 外源导入编排（计划 ext-to-l1-import；经 buildEndpointDeps 落入 deps.importer）。 */
+importer?: ExtImporter): void;
 export interface EndpointDeps {
     ctx: Context;
     cfg: MemoryConfig;
@@ -164,6 +174,10 @@ export interface EndpointDeps {
     skillStore?: SkillStore;
     /** 技能结晶生产者（轨2；未装配 = skills-detect 不可用，面板据此区分新旧版）。 */
     skillProducer?: SkillProducer;
+    /** 外部记忆装配体(计划 Phase 1)：在场且 enabled = 面板列实驱动态；否则回退注册态镜像。 */
+    extAssembly?: ExtAssembly;
+    /** 外源导入任务编排（计划 ext-to-l1-import）：未装配 = ext-import-* 不可用。 */
+    importer?: ExtImporter;
 }
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export declare function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown>;

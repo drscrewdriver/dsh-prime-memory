@@ -12,11 +12,15 @@ import type { L1Store } from './store/l1.js';
 import type { ConflictPairView, ConflictsResponse as ConflictsView, ConflictResolveResponse as ConflictResolutionView } from './contract.js';
 export type { ConflictPairView, ConflictsView, ConflictResolutionView };
 export interface ConflictResolveDeps {
-    l1: Pick<L1Store, 'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed' | 'markConflictReviewed'>;
+    l1: Pick<L1Store, 'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed' | 'markConflictReviewed' | 'getByIds'>;
     /** `conflictFreeze.enabled`。未开启时队列恒空,直接给出提示而非静默无操作。
      *  退场/恢复的文件跟随不在本模块点火：裁决败方走 `l1.retire()`，投射挂钩已收口在
      *  `L1Store` 的汇流口（`store/memory-md-sync.ts`），这里再挂一刀就是第二事实源。 */
     conflictFreezeEnabled: boolean;
+    /** 可见范围过滤(计划 T0.9):`undefined` = 不过滤(与改前逐字一致,零漂移)。
+     *  调用方经 `scopeFilterOf` 产出——既有部署(scope=global)在任何调用点
+     *  都不可能意外传进来。 */
+    workspaceId?: string;
 }
 /**
  * 裁决一条待裁决对。
@@ -66,6 +70,7 @@ export interface ConflictListDeps {
  */
 export declare function listConflictPairs(deps: ConflictListDeps, opts?: {
     limit?: number;
+    workspaceId?: string;
 }): ConflictsView;
 /** 列表结果的人类可读渲染(工具路径用)。 */
 export declare function renderConflicts(v: ConflictsView): string;

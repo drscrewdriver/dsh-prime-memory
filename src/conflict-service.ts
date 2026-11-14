@@ -11,6 +11,8 @@
 import type { L1Store } from './store/l1.js';
 import { DEFER_MAX } from './store/conflicts.js';
 import type { ConflictResolution } from './store/conflicts.js';
+import { isScopeVisible } from './types.js';
+import { normalizeWorkspacePath } from './workspace.js';
 import { computeMaturity } from './util/maturity.js';
 // 对外形状的唯一事实源在 contract.ts(它没有任何 import,客户端那档类型检查以
 // `types: []` 拉它)。这里**只引用、不重声明** —— 重声明就会与端点/面板用的形状
@@ -35,12 +37,18 @@ export interface ConflictResolveDeps {
     // `markConflictReviewed`:task_2.0 建立的 `defer` 写入口(只写 reviewed_at/deferred_at/defer_count,
     // **不写 resolved_at**)。漏了它,`defer` 分支会在调用处报 TS 错——
     // 第 2 轮复查 R-N2,与 N4 同类:都是"只建了方法、没改消费侧类型"。
-    'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed' | 'markConflictReviewed'
+    // `getByIds`(计划 T0.9):裁决前的可见性核验——项目 A 冻结的对不得在项目 B 被裁决
+    // (ADR-0008 条 82-84;与展示侧同一判据,外部同步前的登记欠账)。
+    'listConflictPending' | 'resolveConflictPending' | 'retire' | 'syncGraphDisputed' | 'markConflictReviewed' | 'getByIds'
   >;
   /** `conflictFreeze.enabled`。未开启时队列恒空,直接给出提示而非静默无操作。
    *  退场/恢复的文件跟随不在本模块点火：裁决败方走 `l1.retire()`，投射挂钩已收口在
    *  `L1Store` 的汇流口（`store/memory-md-sync.ts`），这里再挂一刀就是第二事实源。 */
   conflictFreezeEnabled: boolean;
+  /** 可见范围过滤(计划 T0.9):`undefined` = 不过滤(与改前逐字一致,零漂移)。
+   *  调用方经 `scopeFilterOf` 产出——既有部署(scope=global)在任何调用点
+   *  都不可能意外传进来。 */
+  workspaceId?: string;
 }
 
 /**
@@ -82,6 +90,21 @@ export async function resolveConflictPair(
       outcome: clean,
       notice: '找不到该待裁决对:pair_id 有误,或它已被裁决(resolved_at 非空的不再接受二次裁决)。',
     });
+  }
+
+  // T0.9 裁决侧可见性闸(与展示侧同一判据):任一方记录在场且对当前工作区不可见
+  // 即拒——展示过滤了而裁决不过滤等于把门禁装在门框上、钥匙插在门上。
+  // 取不到的记录(已物理清理)不拦:那没有内容可泄,拦了反而把存量对锁死。
+  // want 过 normalizeWorkspacePath:库侧 workspace_id 写入时就走这条归一
+  // (win32 小写),拿原样字符串比会让本项目自己的对被判不可见。
+  if (deps.workspaceId !== undefined) {
+    const want = normalizeWorkspacePath(deps.workspaceId) ?? deps.workspaceId;
+    const recs = deps.l1.getByIds([pair.winnerId, pair.loserId]);
+    for (const r of recs) {
+      if (!isScopeVisible(r.scope, r.workspaceId, want)) {
+        return view({ pair_id: pairId, outcome: clean, notice: '该待裁决对不属于当前工作区的可见范围,未生效。' });
+      }
+    }
   }
 
   // ── R1 未决态(task_2.2):`defer` = 「看过、暂不裁决」──
@@ -192,7 +215,6 @@ export interface ConflictListDeps {
   /** 人工打分面（可选）：成熟度旁注要吃“最近一笔”，与面板/召回同一口径。 */
   feedback?: { lastOf(id: string): number | undefined };
 }
-
 /**
  * 列出待裁决对。
  *
@@ -203,7 +225,10 @@ export interface ConflictListDeps {
  * 未开启冻结时返回 `enabled:false` + 空列表 + `notice`,**不抛错**:开关没开是
  * 部署状态,不是调用错误(与 `resolveConflictPair` 对同一情形的处理一致)。
  */
-export function listConflictPairs(deps: ConflictListDeps, opts: { limit?: number } = {}): ConflictsView {
+export function listConflictPairs(
+  deps: ConflictListDeps,
+  opts: { limit?: number; workspaceId?: string } = {},
+): ConflictsView {
   const raw = Math.floor(Number(opts.limit));
   const limit = Number.isFinite(raw) && raw > 0 ? Math.min(raw, CONFLICT_LIST_LIMIT_MAX) : CONFLICT_LIST_LIMIT_DEFAULT;
 
@@ -216,7 +241,28 @@ export function listConflictPairs(deps: ConflictListDeps, opts: { limit?: number
     };
   }
 
-  const pending = deps.l1.listConflictPending({ limit });
+  // T0.9 可见范围过滤(ADR-0008 登记的欠账):不带 workspaceId = 不过滤,与改前逐字
+  // 一致(零漂移)。带过滤时**过量扫到上限再筛再截**——先截 limit 再过滤会把
+  // 本应可见的对顶出窗口;过滤态下 total 只能诚实报告扫描窗内的可见数。
+  // 可见性逐对判:任一方记录在场且不可见 → 整对隐去(双方正文在同一视图里连带
+  // 呈现,按单条过滤会把一对拆开仍泄露对手方内容)。取不到的记录(已物理清理)
+  // 视为可见:那没有内容可泄,拦住反而把存量对锁死。
+  // want 走 normalizeWorkspacePath:库侧 workspace_id 写入时就归一(win32 小写),
+  // 拿原样串比会把本项目自己的对误判为不可见(与 resolve 侧同源)。
+  const wantRaw = opts.workspaceId;
+  const want = wantRaw === undefined ? undefined : normalizeWorkspacePath(wantRaw) ?? wantRaw;
+  const scanned = deps.l1.listConflictPending({ limit: want !== undefined ? CONFLICT_LIST_LIMIT_MAX : limit });
+  const scanRecById = want !== undefined
+    ? new Map(deps.l1.getByIds([...new Set(scanned.flatMap((p) => [p.winnerId, p.loserId]))]).map((r) => [r.id, r]))
+    : null;
+  const pending = scanned.filter((p) => {
+    if (want === undefined || scanRecById === null) return true;
+    for (const rid of [p.winnerId, p.loserId]) {
+      const r = scanRecById.get(rid);
+      if (r !== undefined && !isScopeVisible(r.scope, r.workspaceId, want)) return false;
+    }
+    return true;
+  });
   const ids = new Set<string>();
   for (const p of pending) {
     ids.add(p.winnerId);
@@ -254,7 +300,7 @@ export function listConflictPairs(deps: ConflictListDeps, opts: { limit?: number
     });
   };
 
-  const items: ConflictPairView[] = pending.map((p) => {
+  const items: ConflictPairView[] = pending.slice(0, limit).map((p) => {
     const w = axisOf(p.winnerId);
     const l = axisOf(p.loserId);
     return {
@@ -284,7 +330,12 @@ export function listConflictPairs(deps: ConflictListDeps, opts: { limit?: number
     };
   });
 
-  return { enabled: true, total: deps.l1.countConflictPendingUnresolved(), items };
+  // 过滤态下不能用全库计数当 total(那会把别的项目的对算进来)；未过滤态保持旧口径。
+  return {
+    enabled: true,
+    total: want !== undefined ? items.length : deps.l1.countConflictPendingUnresolved(),
+    items,
+  };
 }
 
 /** 列表结果的人类可读渲染(工具路径用)。 */

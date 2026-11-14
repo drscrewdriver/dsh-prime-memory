@@ -2,7 +2,7 @@
  * 类型目录骨架 `_index.md`（pm-name-distill Phase 4 / task_4.1）——真磁盘临时目录。
  *
  * 每条用例钉一个会坏掉的形状：
- *   - 目录集合恰等于词表真源（37 类），不多抄、不少抄；
+ *   - 目录集合恰等于词表真源（38 类），不多抄、不少抄；
  *   - 每类目录就一个 `_index.md`，含类名标签 + 条数，条数为 0 也写（否则"没目录"与"0 条"仍分不出）；
  *   - 幂等：第二次调用零写入，且不刷 mtime（刷了会让下一轮对账把"我们没动过"误判成"文件被改过"）；
  *   - 内容变化才原子重写；
@@ -32,11 +32,11 @@ async function tmpBase(prefix: string): Promise<string> {
 const noopLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
 describe('ensureTypeSkeleton', () => {
-  it('目录集合恰等于词表 37 类，每类目录只放一个 _index.md', async () => {
+  it('目录集合恰等于词表 38 类，每类目录只放一个 _index.md', async () => {
     const base = await tmpBase('dsh-memskeleton-set-');
     const root = resolveMemoriesRoot(undefined, base);
     const vocab = [...memoryTypeDirs()];
-    expect(vocab.length).toBe(37);
+    expect(vocab.length).toBe(38);
 
     await ensureTypeSkeleton({ roots: [root], countsByType: new Map([['work_fact', 3]]), logger: noopLogger });
 
@@ -77,7 +77,7 @@ describe('ensureTypeSkeleton', () => {
     const st2 = await stat(probe);
     expect(st2.mtimeMs).toBe(mtime1);
     // 二次调用不该新增任何目录。
-    expect((await readdir(root)).length).toBe(37);
+    expect((await readdir(root)).length).toBe(38);
   });
 
   it('内容变化才重写：条数变了 → 反映新条数', async () => {

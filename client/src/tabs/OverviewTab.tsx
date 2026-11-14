@@ -366,7 +366,9 @@ export function OverviewTab(props: { rpc: RpcFn }) {
           />
           <SwitchRow
             label="外部记忆来源 Connect"
-            desc={memportEnabled ? '已开启：可登记/扫描外部记忆源并导入' : '默认关闭；开启后 memport 相关端点可用'}
+            desc={memportEnabled
+              ? '已开启：可登记/扫描记忆文件源并入库（「来源」页）。注意：这不是「外部记忆」页那 9 家服务驱动的总闸（那个在 profile 的 ext_memory.enabled，也可在该页直接开启）。'
+              : '默认关闭；开启后 memport 相关端点可用（仅影响文件源导入，不影响外部记忆服务驱动）。'}
             checked={memportEnabled}
             onChange={(v) => { toggle('memportEnabled', v); }}
           />

@@ -1,5 +1,32 @@
 # 更新日志（Changelog）
 
+## [0.26.40-local.4] — 2026-11-13
+
+- **GBK 解码构造失败兜底补全（spec D 字面对齐）**：默认 spawnImpl 的 `new TextDecoder('gbk')` 加 try/catch——ICU 无 gbk 的定制运行时下降级回旧 `String(buffer)` 行为，解码面不把安装链弄炸。新增 `tests/runtime-installer-gbk-fallback.test.ts`（mock node:util 使 gbk 构造必抛，真 cmd.exe 全链走通）。
+
+## [0.26.40-local.3] — 2026-11-13
+
+- **计划对齐修正（接 local.1）**：按既定决策（spec §C / findings F-3，marker **不短路**存在性检查）把 local.1 实现拉回：`isReady()` 永远跑 sharp 存在性判据，marker 只做"已验证"记录——判据全过自愈补写、半装时删除（保持"marker 存在⇔最近一次完整判据通过"不变式）；短路方案会掩盖后续版本的半装状态，而重装风暴的根因是判据错非缺 marker 短路。pnpm 分支命令改计划形态 `install --node-linker=hoisted --ignore-scripts --config.confirmModulesPurge=false`（依赖锚定 package.json 声明精确版本，与 npm-install/手工复制三处同构）；宿主安装根发现补 `%ProgramFiles%` 一档；双缺失报错文案含数据目录与完整手工命令；探测结论流入进度尾行。R3 用例改非短路语义（半装→false+清 marker；陈旧→补写）。
+
+## [0.26.40-local.1] — 2026-11-13
+
+- **Windows 桌面端本地嵌入运行时开不起来根治（两独立缺陷叠加）**：DSH Desktop 的 profile 由 Electron 托管、运行时目录只发 `node.exe + pnpm.cjs + python`（无 npm），且 `isReady()` 的 sharp 判据在 win32 恒 false——两者叠加导致「手动装好仍判未就绪、每次点启用又重装、而它调不到 npm 于是永远失败」。
+  - **缺陷1（无 npm 必失败）**：`RuntimeInstaller` 不再写死 `npm`。新增包管理器探测链 `PATH npm → PATH pnpm → 宿主自带 pnpm`（宿主 node.exe 直跑 `pnpm.cjs`，不依赖 PATH；安装根经 `DSH_RUNTIME_DIR`/`process.execPath` 上溯/默认安装根启发式定位）。pnpm 路径强制 `--node-linker=hoisted`（默认 isolated 符号链接树下 `node_modules/@img` 顶层判据路径不存在、原生件加载也不稳——不走 ci，因 pnpm 吃 `pnpm-lock.yaml` 而非随包的 npm 格式 lockfile）。全缺时不白跑安装子进程，直接报可复制的手工安装命令。构造新增 `pmProbe` 注入缝供单测。
+  - **缺陷2（win32 恒未就绪）**：`sharpNativeCandidates()` 加 win32 分支——Windows 的 libvips DLL 与 binding 同目录（`@img/sharp-win32-<arch>/lib/`，`libvips-42.dll`），sharp 从不发 `@img/sharp-libvips-win32-*`；原统一找 `sharp-libvips-win32-*/lib` 永不被创建。方法参数化为 `(platform, arch)` 以便单测驱动三平台形态。
+  - **改进3（ready marker）**：`isReady()` 完整判据通过后落 `.ready-marker.json`（target+platform+arch），作为"已验证"记录与后续诊断依据（短路语义在 local.3 回退为记录+自愈，见上条）。**注**：`installOnce()` 成功不写 marker，只验版本不验 sharp。
+  - **改进4（GBK 乱码）**：默认 spawnImpl 对走 shell 的 cmd.exe 子进程按 GBK 有状态解码（`TextDecoder('gbk')` + `stream:true`），进度条/报错里的中文 stderr 不再乱码；绝对路径 node.exe 直起进程改走 `shell:false`（免带空格安装路径被 cmd 拆断），仍按 UTF-8。
+- **验证**：全量 vitest 全绿（新增 `tests/runtime-installer-win.test.ts` 14 例：三平台候选形态 / 场景 B 复验 / 探测链 npm+宿主 pnpm+全缺 / marker 记录+自愈 / GBK 解码）；typecheck(3 config)、lint(0 error)、build 全绿。
+
+## [0.26.39-local.3] — 2026-11-10
+
+- **记忆库深链恒静默（修）**：`ctx.get('layout')` 在宿主严格代理下拿不到布局服务，`条目/2D/3D` 跳转实际什么都没切（旧实现抛错被 catch 吞掉，看着像成功）。改为四路解析（`inject(['layout'])` → `ctx.layout` → `ctx.get` → `ctx.reflect.get`），回执加 `detail` 供消费方挂 tooltip。实机验证：从对话页点 2D/3D 真的切到记忆库（`leftConversation: true`）。
+
+## [0.26.39-local.2] — 2026-11-10
+
+- **记忆库深链**：监听 `dsh-prime-memory:open-explorer` 事件，由面板主人按 `entry | 2d | 3d` 打开「记忆库」整页（复用左侧 `sidebar.panellist → layout.selectPanel('dsh-memory-explorer')` 同一机制），并同步回执 `ok / disabled / unmounted / unregistered`。
+- **ExplorerPage 接意图**：`explorerIntent` 模块单例承载 `{mode, recordId?}`；挂载前 `take()`、已挂载时 `subscribe`，带 `recordId` 时复用既有 `openRecord()` 聚焦实体。
+- 消费方是 `dsh-brief-sidebar` 的「详细展示 ▾」（条目 / 2D / 3D）；不改既有 2D/3D 渲染与既有投影。
+
 ## [0.26.33] — 2026-11-04
 
 - **根治 3D 记忆海「闪一下变暗」：不是掉帧，是 `resize()` 清空 canvas 位图后，空帧被合成器取样**

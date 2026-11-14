@@ -41,6 +41,24 @@ export const LEGACY_MEMORY_TYPES: readonly string[] = [
 ];
 
 /**
+ * 外源导入条目的类型（计划 ext-to-l1-import）。
+ *
+ * 它必须进词表：否则面板类型下拉筛不到它、md 目录归属落到 unclassified，
+ * 用户会认为“导入没生效”。但它**不得进抽取/去重 prompt 枚举**（见 NON_EXTRACT_TYPES）。
+ */
+export const EXTERNAL_MEMORY_TYPES: readonly string[] = ['external_fact'];
+
+/**
+ * 不可由 LLM 赋值的类型：它们只由代码写入（外源导入），不该出现在 prompt 枚举里。
+ *
+ * 不隔离的后果很具体：抽取与去重 prompt 的类型枚举串由词表派生（`typesOfFamily` /
+ * `typeEnumSep`），外源类型一旦进了枚举，LLM 就会给**本地**记忆打上这个标——
+ * 而隔离谓词按 `ext_key` 判外源，误打标的本地记录不会被误排除，但面板上的
+ * “这是外部记忆”语义就被污染了，而且去重会把本地与外源当同类比较。
+ */
+export const NON_EXTRACT_TYPES: ReadonlySet<string> = new Set<string>(EXTERNAL_MEMORY_TYPES);
+
+/**
  * 兜底目录名（不是可赋值类型）：不在词表的 `type` 原值照旧写进 frontmatter，
  * 只在**目录层**归这里。归进某个 `work_*` 会静默把这批记录的 family 挑到 work 侧
  * （family 决定共享面），所以它自成一桶、族取 chat。
@@ -53,9 +71,10 @@ export const UNCLASSIFIED_DIR = 'unclassified';
  */
 export const DOWNGRADE_TARGET = 'episodic';
 
-/** 可赋值类型全集（宿主 29 + 旧 7 = 36；`unclassified` 不在其中——它是目录，不是类型）。 */
+/** 可赋值类型全集（宿主 29 + 旧 7 = 36；`unclassified` 不在其中——它是目录，不是类型）。
+ *  另加 `external_fact`（代码写入、不可由 LLM 赋值，见 NON_EXTRACT_TYPES）供面板筛选与目录归属。 */
 export const MEMORY_TYPE_VOCABULARY: ReadonlySet<string> = new Set<string>([
-  ...LEGACY_MEMORY_TYPES, ...HOST_MEMORY_TYPES,
+  ...LEGACY_MEMORY_TYPES, ...HOST_MEMORY_TYPES, ...EXTERNAL_MEMORY_TYPES,
 ]);
 
 /**
@@ -68,13 +87,18 @@ export const TYPE_FAMILY_MAP: Readonly<Record<string, TypeFamily>> = Object.free
     const map: Record<string, TypeFamily> = {};
     for (const t of LEGACY_MEMORY_TYPES) map[t] = t.startsWith('work') ? 'work' : 'chat';
     for (const t of HOST_MEMORY_TYPES) map[t] = t.startsWith('user_') ? 'chat' : 'work';
+    // 外源条目固定 work 族（与 puller 入库时的 family 一致）：它不靠族做隔离，
+    // 靠 ext_key；但 family 决定召回/浏览的共享面，必须给确定值而非前缀猜。
+    for (const t of EXTERNAL_MEMORY_TYPES) map[t] = 'work';
     map[UNCLASSIFIED_DIR] = 'chat';
     return map;
   })(),
 );
 
-/** 类型 → 面板中文标签（真源；client 侧经 `list-records` 的 `typeCatalog` 下发消费）。 */
+/** 类型 → 面板中文标签（真源；client 侧经 `list-records` 的 `typeCatalog` 下发消费）。
+ *  本插件无 i18n 机制，标签单语——不得把它当成“9 语齐全”的验收项。 */
 export const MEMORY_TYPE_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  external_fact: '外部记忆',
   persona: '画像偏好',
   episodic: '客观事件',
   instruction: '全局指令',
@@ -143,22 +167,26 @@ export function slugOf(type: string): string {
   return type.replace(/_/g, '-');
 }
 
-/** 面板词表目录（下发给 client 的 `typeCatalog`；含兜底桶，顺序 = 旧 7 → 宿主 29 → 兜底）。 */
+/** 面板词表目录（下发给 client 的 `typeCatalog`；含兜底桶，顺序 = 旧 7 → 宿主 29 → 外源 → 兜底）。
+ *  注意这里**不**排除 NON_EXTRACT_TYPES：外源条目必须能在面板上被筛出来。 */
 export function typeCatalogEntries(): Array<{ id: string; label: string }> {
-  return [...LEGACY_MEMORY_TYPES, ...HOST_MEMORY_TYPES, UNCLASSIFIED_DIR].map((id) => ({
+  return [...LEGACY_MEMORY_TYPES, ...HOST_MEMORY_TYPES, ...EXTERNAL_MEMORY_TYPES, UNCLASSIFIED_DIR].map((id) => ({
     id,
     label: MEMORY_TYPE_LABELS[id] ?? id,
   }));
 }
 
-/** chat / work 族的可赋值类型（prompt 枚举串从这里渲染，不再手抄）。 */
+/** chat / work 族的可赋值类型（prompt 枚举串从这里渲染，不再手抄）。
+ *  排除 `NON_EXTRACT_TYPES`：外源类型对面板可见，但不得进 prompt 供 LLM 选择。 */
 export function typesOfFamily(family: TypeFamily): string[] {
-  return [...MEMORY_TYPE_VOCABULARY].filter((t) => TYPE_FAMILY_MAP[t] === family);
+  return [...MEMORY_TYPE_VOCABULARY].filter((t) => TYPE_FAMILY_MAP[t] === family && !NON_EXTRACT_TYPES.has(t));
 }
 
 /** prompt/工具描述用的枚举串（`|` 或 `/` 连接，顺序稳定：旧 7 在前）。 */
 export function typeEnumSep(sep: string, family?: TypeFamily): string {
-  const list = family === undefined ? [...LEGACY_MEMORY_TYPES, ...HOST_MEMORY_TYPES] : typesOfFamily(family);
+  const list = family === undefined
+    ? [...LEGACY_MEMORY_TYPES, ...HOST_MEMORY_TYPES].filter((t) => !NON_EXTRACT_TYPES.has(t))
+    : typesOfFamily(family);
   return list.join(sep);
 }
 

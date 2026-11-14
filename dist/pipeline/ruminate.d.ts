@@ -105,6 +105,14 @@ export declare class RuminateController {
             description?: string;
         }>;
     });
+    /**
+     * 污染隔离闸（计划 ext-to-l1-import）：为真时，反刍的 L2 取数排除外源导入条目。
+     *
+     * 方向与其余 live 闸相反：关才关（`!== false`），缺值视为开——防污染应当默认生效。
+     * 不隔离的后果很具体：反刍只取 `limit:500/200` 窗口，外源条目多于窗口时
+     * 本地记忆一条都进不了场景整合，而且不报错。
+     */
+    private externalIsolated;
     /** 状态快照 */
     getStatus(): RuminateStatus;
     /**

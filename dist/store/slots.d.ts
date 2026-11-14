@@ -42,6 +42,8 @@ export interface SlotStoreOptions {
     maxSlots: number;
     maxBodyChars: number;
     maxTitleChars: number;
+    /** 已关闭槽位(done/dropped/expired)的历史留痕留存上限;超出按 updatedAt 降序裁旧。默认 = maxSlots(issue #33)。 */
+    maxClosedTrail?: number;
 }
 /** 投影 view 的单条槽位(不含 body —— 判定与生成正交,正文按需再取)。 */
 export interface SlotView {
@@ -67,6 +69,8 @@ export declare class SlotStore {
     private readonly maxSlots;
     private readonly maxBodyChars;
     private readonly maxTitleChars;
+    /** 关闭尾迹留存上限(见 pruneClosedTrail;issue #33)。 */
+    private readonly maxClosedTrail;
     constructor(file: string, logger: MemoryLogger, opts?: Partial<SlotStoreOptions>);
     /**
      * 读回持久态。**读侧分类**(文件层加固 T2):
@@ -98,7 +102,8 @@ export declare class SlotStore {
      * 受管刷新(服务端自动化写,非工具面):按精确标题找既有槽位,存在则**原地**
      * 更新 body/updatedAt(其余字段不动——pinned/kind/priority 由首次写入定形),
      * 不存在则按 insert-only 新建。todo 参考这类"同一主体反复刷新"的高频写必须
-     * 走这里:逐次 upsert 会在 ≤8 槽上限里堆出一条关闭槽位尾迹。
+     * 走这里:逐次 upsert 每次都新增一条 open、挤占工作集上限并产生待裁剪的关闭尾迹,
+     * 原地刷新可避免这种 churn。
      * @returns 刷新/新建的槽位;超限新建失败时抛错(调用方转日志,不打断事件流)。
      */
     refreshByTitle(title: string, patch: {
@@ -106,6 +111,13 @@ export declare class SlotStore {
         pinned?: boolean;
     }): Promise<Slot | undefined>;
     close(id: string, status: 'done' | 'dropped'): Promise<boolean>;
+    /**
+     * 裁掉超额的历史留痕:保留全部 open + 最近 maxClosedTrail 条非 open(按 updatedAt 降序)。
+     * issue #33:close 只做软删(status),不裁会让留痕无限堆;上限判据改数 open 后,
+     * 此方法把总量界定在 maxSlots(open) + maxClosedTrail(closed) 内。
+     * 原地改 this.slots;未超额时直接返回,不打乱既有顺序(幂等)。
+     */
+    private pruneClosedTrail;
     /**
      * 常驻注入选材:pinned && open,按 priority 降序,累计字节 ≤ maxBytes。
      * 至少保留 1 条(即便单条超预算,避免"写了却永远看不到");其余超预算的计入

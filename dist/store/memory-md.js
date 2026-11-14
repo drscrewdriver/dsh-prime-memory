@@ -21,6 +21,7 @@ import { memoryTypeDirs, UNCLASSIFIED_DIR } from '../memory-types.js';
 import { deriveName } from '../util/md-name.js';
 import { normalizeContentMd } from '../util/md-normalize.js';
 import { sanitizeFilename } from './scenes.js';
+import { contentDigest } from './digest.js';
 import { readSupersedeMarker } from './supersede.js';
 /**
  * 允许当目录名的 type 值（pm-name-distill task_1.3：由词表单一真源派生，不再手抄）。
@@ -170,7 +171,10 @@ export function contentHash(content) {
 }
 /** 记录内容指纹：正文字段（不含 metadata——轴变了不算内容变）。 */
 export function recordDigest(r) {
-    return digest(r.content);
+    // 单源迁移(T4.1):由 `digest()`(sha1/NormText 文件面口径)改为 `contentDigest`
+    // (sha256/空白折叠+小写)。存量账本的 dbDigest 首轮一次性失配 → 全部判"只库变"
+    // 重写一遍文件(渲染幂等),自愈无人工成本;文件面 `digest()` 保持不动(见 digest.ts 头注)。
+    return contentDigest(r);
 }
 /**
  * 文件名干：有 `name` 用 `name`；没有则回落 `mem-<id 后 8 位>`。

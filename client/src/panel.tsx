@@ -8,6 +8,7 @@ import { DrscHealthBanner } from './components/DrscHealthBanner.js';
 import { ensureThemeStyle } from './theme.js';
 import { ConflictsTab } from './tabs/ConflictsTab.js';
 import { ConnectTab } from './tabs/ConnectTab.js';
+import { ExtMemoryTab } from './tabs/ExtMemoryTab.js';
 import { SkillsTab } from './tabs/SkillsTab.js';
 import { CostTab } from './tabs/CostTab.js';
 import { LogTab } from './tabs/LogTab.js';
@@ -38,6 +39,7 @@ const TABS: Array<[string, string]> = [
   ['cost', '成本'],
   ['log', '日志'],
   ['connect', '来源'],
+  ['ext', '外部记忆'],
   ['skills', '技能'],
 ];
 
@@ -78,6 +80,7 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
   else if (tab === 'persona') body = <PersonaTab rpc={rpc} />;
   else if (tab === 'cost') body = <CostTab rpc={rpc} />;
   else if (tab === 'connect') body = <ConnectTab rpc={rpc} />;
+  else if (tab === 'ext') body = <ExtMemoryTab rpc={rpc} />;
   else if (tab === 'skills') body = <SkillsTab rpc={rpc} />;
   else body = <LogTab rpc={rpc} />;
 

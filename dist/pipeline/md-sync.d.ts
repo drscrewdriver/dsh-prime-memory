@@ -45,6 +45,11 @@ export interface MdSyncDeps {
     logger?: MemoryLogger;
     /** 注入时钟（测试用）。 */
     now?: () => number;
+    /**
+     * 三侧账本的 remote 输入面(T4.1):该记录的影子内容列表(无外部映射 = 空数组/不注入)。
+     * 只在 both-changed 分支参与裁决——把"两边都变"里"文件=远端"那部分自动收敛成回灌。
+     */
+    remoteContents?: (recordId: string) => string[];
 }
 /**
  * 越界判据：`resolved` 必须就是根，或者是根的子目录。

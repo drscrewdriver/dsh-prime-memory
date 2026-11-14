@@ -15,7 +15,8 @@ import { exportThenPurge, readSnapshotManifest, readSnapshotRecords, restoreL1Sn
 import { EmbedHelper, NoopEmbeddingService } from './embedding.js';
 import { appendJsonl, dayKey, ensureDir, readJsonl } from '../util/io.js';
 import { allocUniqueName, deriveName } from '../util/md-name.js';
-import { applyDecayWeight, normalizeRrf, rrfMerge, markDedupPath } from './search-utils.js';
+import { applyDecayWeight, normalizeRrf, rrfMerge, markDedupPath, assertNotDedupPath } from './search-utils.js';
+import { appendRetireJournal, appendRestoreJournal } from './retire-journal.js';
 import { isZeroVector } from './sqlite.js';
 /** Room 计数缓存 TTL(tags 只在反刍标签段变化;面板常开也不必每次敲库)。 */
 const ROOM_CACHE_TTL_MS = 30_000;
@@ -36,9 +37,16 @@ export class L1Store {
     decayHalfLifeDays;
     /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
     graphLaneProvider;
+    /** 第 5 路(外部记忆);缺省 = 不接,该路结构性不存在(T0.6 零漂移判据)。 */
+    extLaneProvider;
     /** 孤儿记忆计数(没有任何 Room 的记录;rooms-get 面板「无绑定」chip 用)。 */
     untaggedL1Count() {
         return this.db.untaggedL1Count();
+    }
+    /** 外部同步账本(ext_* 三表;面板只读面与后续 pusher/puller 的共用入口。
+     *  未就绪时各方法自带 no-op,这里不另判空——避免第二套降级判据)。 */
+    get ext() {
+        return this.db.extSync;
     }
     /** Room 计数缓存(见 `listRooms()`:tags 仅随反刍变化,不必每次敲库)。 */
     roomCache = null;
@@ -51,6 +59,14 @@ export class L1Store {
      * 与构造函数里的 `autoName: () => cfg.memExport.enabled` 同一先例:只拿判据,不拿配置快照。
      */
     fileSync;
+    /**
+     * 外部同步入队钩子(计划 Phase 2;未注入 = 零动作)。
+     *
+     * 与 fileSync 同一收口纪律:改变记录身份/有效性的写路径全部汇流在本类,
+     * 在这里点火意味着新增调用点不会漏(上游 8 处 retire 调用点的教训不重演)。
+     * 注意 rename **不**点火:文件身份键是本地投射面的概念,外部服务不感知。
+     */
+    extSync;
     constructor(dataDir, db, embed = new NoopEmbeddingService(), strategy = 'hybrid', logger, 
     /** 时效衰减半衰期(天;0=关)。缺省 30 与 config 默认一致。 */
     decayHalfLifeDays, 
@@ -63,7 +79,10 @@ export class L1Store {
      * 不传 = 不主动起名（“投射关着时零动作”这条既有承诺不改），但**别人占着的名字照样修**
      * ——那是防丢数据，与开关无关。
      */
-    autoName) {
+    autoName, 
+    /** 外部记忆路提供者(T0.6 第 5 路);不传则该路结构性不存在,既有分数逐位不变。
+     *  位序刻意在 autoName **之后**:既有装配按位置参递 autoName,插中间会静默换槽。 */
+    extLane) {
         this.db = db;
         this.strategy = strategy;
         this.autoName = autoName;
@@ -75,6 +94,7 @@ export class L1Store {
         this.logger = logger;
         this.decayHalfLifeDays = decayHalfLifeDays ?? 30;
         this.graphLaneProvider = graphLane;
+        this.extLaneProvider = extLane;
     }
     /** 读路径时效半衰期(天;0=关)。老化权重展示与召回衰减同一事实源。 */
     get decayHalfLife() {
@@ -88,6 +108,21 @@ export class L1Store {
      */
     setFileSyncHook(hook) {
         this.fileSync = hook;
+    }
+    /** 晚绑定外部同步钩子(runner/推送泵晚于 stores.l1 创建,构造期拿不到)。 */
+    setExtSyncHook(hook) {
+        this.extSync = hook;
+    }
+    /** 外部同步点火(旁路:入队失败/未注入都不影响库侧结果;实现侧自己判双闸/族白名单)。 */
+    fireExtSync(records, intent, why) {
+        if (this.extSync === undefined || records.length === 0)
+            return;
+        try {
+            this.extSync.enqueue(records, intent, why);
+        }
+        catch (err) {
+            this.logger?.warn(`[memory] 外部同步入队失败(${why},库侧结果不受影响): ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
     /** 有效性变更点火(增/退场/恢复共用一个入口:钩子内部自己跑「导出→后缀收敛」)。 */
     fireFileSync(ids, why) {
@@ -414,6 +449,28 @@ export class L1Store {
         return this.db.findRecordIdByExtKey(extKey);
     }
     /**
+     * 外部回灌的同 id 改写(计划 T3.1):远端真相覆盖本地正文。
+     *
+     * 与 `upsert` 的关键区别在**事实源**:upsert 是去重合并的内部演进(官方语义不动
+     * JSONL),这里跨源覆盖必须追加版本行——只改检索库而事实源留旧文的活,下次
+     * 「重建记忆」replay 会把外部真值静默回滚,且无从察觉。
+     *
+     * 回推一环不靠这里关门:改写后 fireExtSync 会入队 add,但 pusher 的写放大闸
+     * (digest 相同已链→skip/digest 已同步)接住——调用方把影子 dbDigest 同步成新指纹即可。
+     */
+    async reviseInPlace(record) {
+        if (!record.family)
+            record.family = familyForType(record.type);
+        stampValidity(record, Date.now());
+        const vec = (await this.helper.batch([record.content]))[0];
+        if (!this.db.upsertL1(record, vec)) {
+            this.logger?.error(`[memory] L1 外部回灌改写失败 id=${record.id}(JSONL 事实源将留版本行),重建可修复`);
+        }
+        await appendJsonl(path.join(this.recordsDir, `${dayKey(record.createdAt || Date.now())}.jsonl`), [record]);
+        this.fireFileSync([record.id], 'appendNew');
+        this.fireExtSync([record], 'add', 'pull-revise');
+    }
+    /**
      * §B 决策凭证落盘(L1Store 的薄缝)。
      * 刻意放在 store 上:`runExtraction` 已经持有 L1Store,凭证写入因此无需新增
      * 构造参数或改动签名;同时它也是「写入失败不中断蒸馏」**可注入的测试缝**——
@@ -538,6 +595,8 @@ export class L1Store {
         }
         // 写对称:新增也即时上盘(不阻塞、失败只 warn)——否则「文件树 = 库当前状态」只对删成立。
         this.fireFileSync(records.map((r) => r.id), 'appendNew');
+        // 外部同步同一收口(Phase 2):新记录入出站队列(钩子侧按双闸/族白名单/驱动集扇出)。
+        this.fireExtSync(records, 'add', 'appendNew');
     }
     /** 去重 update/merge 产出的记录:只更新检索库(JSONL 事实源不改写,官方语义)。
      *  `opts.vector`:同 `appendNew`，merge 产出的**新正文**通常不复用（调用方不传即现嵌）。 */
@@ -552,6 +611,8 @@ export class L1Store {
         if (!this.db.upsertL1(record, vec)) {
             this.logger?.error(`[memory] L1 检索库写入失败 id=${record.id}(JSONL 事实源完好),该记忆暂不可检索,重建可修复`);
         }
+        // 去重 update/merge 产出的新行同样入队(旧行 retire 已在 retire 汇流口另入 forget 队)。
+        this.fireExtSync([record], 'add', 'upsert');
     }
     /** 活切换嵌入源:同步换底层服务(嵌入源三态切换用)。 */
     setEmbeddingService(svc) {
@@ -577,10 +638,17 @@ export class L1Store {
      * 而那种不一致只有在误删发生时才暴露。
      */
     retire(ids, info) {
+        // 墓碑账本要在**退场标记落库前**拿到内容与 extKey(主表行会留着,但取在写前
+        // 语义更干净:指纹记的是退场那一刻的内容态,与后续 marker 写入互不干扰)。
+        const tombstoneRecords = new Map(this.db.getL1ByIds(ids).map((r) => [r.id, r]));
         const n = this.db.retireL1Batch(ids, info);
         // 退场汇流口(人工软删 / 合并取代 / 冲突判负 都经这里)——所以机器侧自动退场也自动有文件跟随。
         // 不 await:库侧结果先成立,投射是旁路(见 `setFileSyncHook` 的注释)。
         this.fireFileSync(ids, 'retire');
+        // T0.4 墓碑同一汇流口落账:新增退场调用点不会漏(与 fileSync 同一收口纪律)。
+        appendRetireJournal(this.dataDir, ids, info, tombstoneRecords, this.logger);
+        // 外部同步(Phase 2):退场传导 forget(钩子侧只对**已在账影子**入队,未推过的不造队)。
+        this.fireExtSync([...tombstoneRecords.values()], 'forget', 'retire');
         return n;
     }
     /** 已退场(可恢复)记录列表(面板用)。 */
@@ -612,6 +680,10 @@ export class L1Store {
         }
         // 恢复活跃 = 有效性变更,后缀该从 `.disable` 掉回去(与 `retire` 对称的那一半)。
         this.fireFileSync(records.map((r) => r.id), 'restore');
+        // T0.4:恢复同样落反向事件(replay 后到者胜 = 墓碑撤销)。
+        appendRestoreJournal(this.dataDir, records.map((r) => r.id), this.logger);
+        // 外部同步(Phase 2):恢复 = 重新活跃,走 add(若远端已 forget 过则重新落一条)。
+        this.fireExtSync(records, 'add', 'restore');
         return { restored: records.length, vectorsWritten };
     }
     /**
@@ -781,9 +853,14 @@ export class L1Store {
         // 第 4 路(时效)在衰减开启时**结构性存在**;关掉衰减 = 该路不存在
         if (this.decayHalfLifeDays > 0)
             lanes.push(['recency', this.recencyLane([...ftsList, ...vecList])]);
+        // 第 5 路(外部记忆,T0.6):接线即**恒占名额**(含全挂时的空列表)——分母不随
+        // 网络状态抖动,否则召回结果会随 provider 健康度振荡(与向量源不可用时
+        // 「传空列表占名额」同一纪律);未接线 = 结构性不存在 = 既有分数逐位一致。
+        if (this.extLaneProvider)
+            lanes.push(['ext', await this.extLane(query, candidateK, opts)]);
         const laneLists = lanes.map(([, list]) => list);
         // 路归因(与融合并行,不改 rrfMerge 本体):id → 命中路集合,按路构造序
-        // 去重追加(fts→vec→graph→recency,确定性输出)。命中对象在下方 map 里
+        // 去重追加(fts→vec→graph→recency→ext,确定性输出)。命中对象在下方 map 里
         // 新建(不往变回路的列表元素上写),挂 lanes 后随 postProcess/applyDecay 透传。
         const lanesById = new Map();
         for (const [name, list] of lanes) {
@@ -885,6 +962,28 @@ export class L1Store {
             });
         }
         return out;
+    }
+    /**
+     * 第 5 路(外部记忆,T0.6):provider 直接返回已排序命中列表(多驱动并发、
+     * rank 归一、注入截断都在 ext-memory/lane.ts 侧完成),本缝只做三件事:
+     * - **异常降级**:全挂 → 空列表 + warn——接线即恒占路数名额,分母不随网络抖;
+     * - **红线自证**:`assertNotDedupPath` 哨兵——外部命中进了去重候选路径即显式
+     *   崩溃(dev/test 抛、生产 no-op),与 recencyLane 同款护栏而理由更硬:
+     *   外部正文由别家 agent 产生,不受本地 type 白名单/族/判据面约束;
+     * - 未接线 = 直接返回空(provider 不存在时调用方本就不会把该路推进 lanes)。
+     */
+    async extLane(query, limit, opts) {
+        assertNotDedupPath('extLane(外部记忆路)');
+        const provider = this.extLaneProvider;
+        if (!provider)
+            return [];
+        try {
+            return await provider(query, limit, { family: opts?.family, workspaceId: opts?.workspaceId });
+        }
+        catch (err) {
+            this.logger?.warn(`[memory] 外部记忆路检索失败(空列表占位,不拖垮主检索): ${err instanceof Error ? err.message : String(err)}`);
+            return [];
+        }
     }
     /**
      * 时效衰减加权(#29):三路共用的读路径后处理——阈值过滤之后、截断之前

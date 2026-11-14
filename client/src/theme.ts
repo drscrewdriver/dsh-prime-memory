@@ -14,7 +14,7 @@
  *     `html[data-dsh-mem-skin]` 属性（未传 skin 时回落到 skin.ts 的持久化偏好）。
  */
 import { effectiveSkin, getSkin } from './skin.js';
-import { HOST_MEMORY_TYPES, slugOf, UNCLASSIFIED_DIR } from '../../src/memory-types.js';
+import { HOST_MEMORY_TYPES, EXTERNAL_MEMORY_TYPES, slugOf, UNCLASSIFIED_DIR } from '../../src/memory-types.js';
 
 export const THEME_STYLE_ID = 'dsh-mem-theme-style';
 
@@ -109,13 +109,17 @@ const DARK_TOK: string[] = [
  * 扩展类别标签配色（pm-name-distill task_1.8）：类名由词表单一真源派生（`slugOf`），
  * 颜色按 8 色相轮换——不再手抄一份类型→类的清单；新类型进词表即自动有 CSS 类，
  * 不会出现“标签有字无色”。主线七类的既有配色不动。
+ *
+ * 派生范必须等于“非主线七类的全部词表项”（宿主 29 + 外源）：只遍历 HOST_MEMORY_TYPES 时，
+ * 往词表加新数组（如 external_fact）会静默没有配色——注释里的承诺与实际不符。
  */
 const EXT_LIGHT = ['#8a5a00', '#0757b4', '#116629', '#6f42c1', '#b43a6f', '#076f6b', '#7a5c00', '#4a6fa5'];
 const EXT_DARK = ['#e3b341', '#6cb2ff', '#6fca74', '#c297ff', '#f077b6', '#56d4c8', '#d9b64a', '#9db8e8'];
-const EXT_TAG_RULES: string[] = HOST_MEMORY_TYPES.map((t, i) =>
+const EXT_TAG_SOURCE: readonly string[] = [...HOST_MEMORY_TYPES, ...EXTERNAL_MEMORY_TYPES];
+const EXT_TAG_RULES: string[] = EXT_TAG_SOURCE.map((t, i) =>
   `.dsh-mem-tag-${slugOf(t)} { --dsh-mem-tag-c: ${EXT_LIGHT[i % EXT_LIGHT.length]}; }`,
 ).concat(
-  HOST_MEMORY_TYPES.map((t, i) =>
+  EXT_TAG_SOURCE.map((t, i) =>
     `body[data-ds-dark-theme] .dsh-mem-tag-${slugOf(t)} { --dsh-mem-tag-c: ${EXT_DARK[i % EXT_DARK.length]}; }`,
   ),
   // 兜底桶固定中性灰：它代表“没归类”，不该带族色暗示。

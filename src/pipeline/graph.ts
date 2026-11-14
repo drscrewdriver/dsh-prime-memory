@@ -158,6 +158,12 @@ export async function runGraphProjection(
   logger: MemoryLogger,
   /** 节点向量补算的嵌入缝(runner 接 stores.l1.embedText;缺席/未就绪 = 不补)。 */
   embedNode?: (text: string) => Promise<Float32Array | undefined>,
+  /**
+   * 外部图提示缝(计划 T3.6):返回"节点—关系→节点"行(带 [driver] 前缀)。
+   * 只进投影 prompt 作关系线索,**不落库**——外部数据不取得本地事实库的席位。
+   * 缺席/抛错 = 空提示,投影行为逐字不变。
+   */
+  externalHints?: () => Promise<string[]>,
 ): Promise<boolean> {
   const claim = graphs.claimNext();
   if (!claim) return false;
@@ -166,9 +172,14 @@ export async function runGraphProjection(
     const graph = graphs.loadGraph();
     const ctxNodes = selectContextNodes(records, graph.nodes);
     const ctxEdges = selectContextEdges(ctxNodes, graph.edges);
+    const hints = externalHints === undefined ? [] : await externalHints().catch(() => []);
+    const basePrompt = buildGraphProjectionPrompt({ records, nodes: ctxNodes, edges: ctxEdges });
+    const userPrompt = hints.length === 0
+      ? basePrompt
+      : `${basePrompt}\n\n## 外部图谱参考(其他记忆服务;只作关系线索,节点/边仍须由本地记录支撑)\n${hints.join('\n')}`;
     const raw = await callLLM(ctx, cfg, {
       system: getGraphProjectionSystemPrompt(),
-      user: buildGraphProjectionPrompt({ records, nodes: ctxNodes, edges: ctxEdges }),
+      user: userPrompt,
       maxTokens: resolveLayerTokens(cfg, 'graph'),
       layer: 'graph',
       logger,

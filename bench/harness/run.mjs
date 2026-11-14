@@ -97,6 +97,20 @@ if (arm === 'B' && repeats > 1) {
 }
 const distillTimeout = String(arg('distill-timeout', 120000));
 
+// ── 外部记忆形态指纹(计划 T0.7,M7 bench 可见性)──────────────────
+// 背景:compare 的 envKey 原本不含同步配置——基线跑「同步关」、新跑「同步开」
+// 会被判为环境一致,结论被当作插件改动回归(归因错位)。这三个旋钮随环境头
+// 落盘并进 envKey:跑了什么形态从此可审计。--ext-snapshot 是远端库快照标识
+// (记录数摘要/日期皆可),同形态不同库也能分辨。
+const EXT_MODES = ['off', 'shadow-read', 'push-only', 'two-way'];
+const extMode = String(arg('ext-mode', 'off'));
+if (!EXT_MODES.includes(extMode)) {
+  console.error(`--ext-mode 必须是 ${EXT_MODES.join('|')} 之一`);
+  process.exit(2);
+}
+const extDrivers = Math.max(0, Number(arg('ext-drivers', 0)) || 0);
+const extSnapshot = String(arg('ext-snapshot', ''));
+
 const dshBin = [
   process.env.DSH_BIN,
   // rc.8 起全局安装；旧布局兜底
@@ -272,6 +286,9 @@ function runSingleArm(a, outRoot) {
       DSH_BENCH_DISTILL_PROVIDER: distillProvider,
       DSH_BENCH_DISTILL_MODEL: distillModel,
       DSH_BENCH_DISTILL_REASONING_EFFORT: distillEffort,
+      DSH_BENCH_EXT_MODE: extMode,
+      DSH_BENCH_EXT_DRIVERS: String(extDrivers),
+      DSH_BENCH_EXT_SNAPSHOT: extSnapshot,
       ...(judgeProvider ? { DSH_BENCH_JUDGE_PROVIDER: judgeProvider, DSH_BENCH_JUDGE_MODEL: judgeModel || model, DSH_BENCH_JUDGE_REASONING_EFFORT: judgeEffort } : {}),
     };
     console.log(`[run] 第 ${i}/${repeats} 次 → ${outDir}`);
@@ -299,7 +316,7 @@ function patchFileOf(a) {
 // ── AB 并行：两组互不依赖，双进程并发跑，父进程等齐后出联合报告 ──
 if (arm === 'AB') {
   const passThrough = [];
-  for (const opt of ['scenarios', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'distill-provider', 'distill-model', 'distill-effort', 'repeats', 'distill-timeout', 'noise']) {
+  for (const opt of ['scenarios', 'provider', 'model', 'effort', 'judge-provider', 'judge-model', 'judge-effort', 'distill-provider', 'distill-model', 'distill-effort', 'repeats', 'distill-timeout', 'noise', 'ext-mode', 'ext-drivers', 'ext-snapshot']) {
     const v = arg(opt, undefined);
     if (typeof v === 'string') passThrough.push(`--${opt}`, v);
   }

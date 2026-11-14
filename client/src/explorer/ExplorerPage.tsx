@@ -26,6 +26,8 @@ import { NButton, NInput } from '../ui/primitives.js';
 import { LinkPane } from './LinkPane.js';
 import { RecordPane } from './RecordPane.js';
 import { Scene3D } from './Scene3D.js';
+import { explorerIntent } from './intent.js';
+import type { ExplorerIntentRequest } from './intent.js';
 
 // ── 图模式下右侧详情面板常量 ──
 const DETAIL_MIN = 260;
@@ -161,6 +163,36 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
     },
     [rpc, remember],
   );
+
+  /**
+   * 侧栏深链：把 `{mode, recordId?}` 落成内部视图状态。
+   *
+   * 挂载前积压的意图在首个 effect 里 `take()`；已挂载时靠 `subscribe` 当场切。
+   * `seenIntent` 防止同一 token 被重复应用（take 与 subscribe 可能同时到达）。
+   */
+  const seenIntent = useRef(0);
+  const applyIntent = useCallback((request: ExplorerIntentRequest): void => {
+    if (seenIntent.current === request.token) return;
+    seenIntent.current = request.token;
+    const { mode, recordId } = request.intent;
+    if (mode === 'entry') {
+      setMode('query');
+      setEntryPane(true);
+      setDetailOpen(false);
+    } else {
+      setMode('graph');
+      setView(mode);
+      // openRecord 内部的 modeRef 可能还停在旧值，这里显式开详情，不赌它。
+      setDetailOpen(true);
+    }
+    if (recordId !== undefined && recordId !== '') openRecord(recordId);
+  }, [openRecord]);
+
+  useEffect(() => {
+    const pendingIntent = explorerIntent.take();
+    if (pendingIntent !== undefined) applyIntent(pendingIntent);
+    return explorerIntent.subscribe(applyIntent);
+  }, [applyIntent]);
 
   /** 图上点实体：优先用已下发的 recordIds（省一次往返），否则回查节点详情。 */
   const onPickNode = useCallback(

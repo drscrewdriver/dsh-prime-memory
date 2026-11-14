@@ -56,7 +56,13 @@ try {
   console.error(`[compare] 检索层指标不可用（跳过）：${err?.message ?? err}`);
 }
 
-function envKey(e) { return `${e.provider}/${e.model}|${e.judgeProvider}/${e.judgeModel}|${(e.scenarioFiles ?? []).join(',')}`; }
+// 外部记忆形态指纹(计划 T0.7,M7)进 envKey:基线「同步关」vs 新跑「同步开」
+// 必须触发环境不一致告警——否则差异被归因为插件改动回归(旧版盲区)。
+// 旧基线无这三键 → 同归 'off'/0/'' 串,不影响既有基线对比的一致性判定。
+function envKey(e) {
+  const ext = `ext=${e.extMode ?? 'off'}/${e.extDrivers ?? 0}/${e.extSnapshot ?? ''}`;
+  return `${e.provider}/${e.model}|${e.judgeProvider}/${e.judgeModel}|${(e.scenarioFiles ?? []).join(',')}|${ext}`;
+}
 const envConsistent = envKey(oldA.env) === envKey(newA.env)
   && (!oldB || envKey(oldB.env) === envKey(newB.env))
   && oldA.env.scenarioFiles?.length === newA.env.scenarioFiles?.length;
@@ -71,7 +77,13 @@ lines.push(`基线：${oldA.dir}（插件 ${oldA.env.pluginVersion || '?'}，${o
 lines.push(`新跑：${newA.dir}（插件 ${newA.env.pluginVersion || '?'}，${newA.reps} 次）`);
 if (versionChanged) lines.push(`插件版本变化：${oldA.env.pluginVersion || '?'} → ${newA.env.pluginVersion || '?'}`);
 lines.push('');
-if (!envConsistent) lines.push('> ⚠ **环境不一致**（模型/判卷/场景清单有差异），以下对比仅供参考，不构成回归结论。\n');
+if (!envConsistent) lines.push('> ⚠ **环境不一致**（模型/判卷/场景清单/外部记忆形态有差异），以下对比仅供参考，不构成回归结论。\n');
+{
+  // 外部形态单独点名:混在其他差异里会被忽略,而它恰好是"差异最容易被误归因"的一项。
+  const oldExt = `${oldA.env.extMode ?? 'off'}/${oldA.env.extDrivers ?? 0}`;
+  const newExt = `${newA.env.extMode ?? 'off'}/${newA.env.extDrivers ?? 0}`;
+  if (oldExt !== newExt) lines.push(`> ⚠ **外部记忆形态变化**：基线 ${oldExt} → 新跑 ${newExt}。检索层离线指标**不覆盖外部路**，差异请结合注入行的 external 归因另判。\n`);
+}
 if (Math.max(oldA.reps, newA.reps) < 3) lines.push(`> ⚠ 单次运行噪声大（基线 ${oldA.reps} 次 / 新跑 ${newA.reps} 次），建议每格 ≥3 次重复后再判定方向。\n`);
 
 lines.push('## A 组（记忆开）对比');

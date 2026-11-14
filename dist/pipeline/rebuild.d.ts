@@ -54,6 +54,11 @@ export declare class RebuildController {
     /** 快照时刻(收尾时按它区分重建产物与重建后新对话的记录)。 */
     private rebuildStartMs;
     constructor(ctx: Context, cfg: MemoryConfig, stores: RebuildStores, db: MemoryDb, runner: Pick<MemoryRunner, 'enqueueRebuildTask' | 'runRebuildTurn' | 'states'>, logger: MemoryLogger, live: LiveSettingsHandle);
+    /**
+     * 污染隔离闸（计划 ext-to-l1-import）：为真时，重建收尾的 L2 取数排除外源导入条目。
+     * 方向与其余 live 闸相反：关才关（`!== false`），缺值视为开——防污染应当默认生效。
+     */
+    private externalIsolated;
     /** 状态快照(idle 时附带实时预估与事实源水位,供确认弹窗讲清"会发生什么")。 */
     getStatus(): RebuildStatus;
     /** 尚未处理的会话块数（流式下为估算 `total - done`；未运行时为 0，诊断/冒烟用）。 */
@@ -87,6 +92,10 @@ export declare class RebuildController {
     /**
      * 收集重建窗口内某族的记录:重建产物全部是新插入(updated==created),
      * 按 updated_time 倒序翻页、越过 rebuildStartMs 即停。
+     *
+     * `excludeExternal` 只在喂 L2 场景整合时给 true：外源条目不该占掉蒸馏窗口；
+     * 但进度候选（L394）不能排除它们——否则“本轮处理了多少条”会少算，
+     * 而少算的进度比多算更难发现（用户会以为重建比预期快）。
      */
     private collectRebuildRecords;
     private finish;

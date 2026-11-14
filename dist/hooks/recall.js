@@ -510,6 +510,9 @@ usage) {
                     return decision;
                 }
                 const lines = applyRecallBudget(fresh.map((h) => `- [${h.scene_name ? `${h.type}|${h.scene_name}` : h.type}] ${h.content}` +
+                    // 外部记忆行归因(Phase 1 T1.12):id 形如 `ext:<driver>:<space>:<ext>` → 标来源驱动,
+                    // 让模型知道这是"借来的记忆"而非本地蒸馏产物(bench 注入行归因也吃这个前缀)。
+                    (h.id.startsWith('ext:') ? `（via external:${h.id.slice(4, h.id.indexOf(':', 4))}）` : '') +
                     // 门2 task_3.4:疑而不隐——valid_to 来源不可信的行保留注入但带标注,
                     // 人/模型自行裁量。灰度关时 suspectIds 恒空,行形状逐字不变。
                     (suspectIds.has(h.id) ? '（疑似失效:有效期来源不可信）' : '')), { maxCharsPerMemory: cfg.recall.maxCharsPerMemory, maxTotalRecallChars: cfg.recall.maxTotalRecallChars });

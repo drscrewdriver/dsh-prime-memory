@@ -191,6 +191,18 @@ export const MEMORY_ENDPOINTS: readonly string[] = [
   'dsh-memory/mem-sync',
   'dsh-memory/mem-orphans',
   'dsh-memory/skills-action',
+  'dsh-memory/ext-drivers-list',
+  'dsh-memory/ext-driver-probe',
+  'dsh-memory/ext-sync-status',
+  'dsh-memory/ext-conflicts-list',
+  'dsh-memory/ext-conflict-resolve',
+  'dsh-memory/ext-config-arm',
+  'dsh-memory/ext-config-enable',
+  'dsh-memory/ext-import-start',
+  'dsh-memory/ext-import-status',
+  'dsh-memory/ext-import-cancel',
+  'dsh-memory/ext-driver-upsert',
+  'dsh-memory/ext-driver-remove',
 ];
 
 /** HTTP 路由前缀(客户端 fetch `/dsh-memory/rpc/<短方法名>`)。 */
@@ -356,8 +368,42 @@ import type {
   SkillsDetectResponse,
   SkillProducerView,
   SkillsActionResponse,
+  ExtDriverView,
+  ExtDriversResponse,
+  ExtDriverProbeResponse,
+  ExtSyncStatusResponse,
+  ExtConfigArmResponse,
+  ExtConfigEnableResponse,
+  ExtImportStatusResponse,
+  ExtDriverUpsertResponse,
+  ExtDriverRemoveResponse,
 } from './contract.js';
+import { normSyncMode } from './ext-memory/types.js';
+import { readExtMemory } from './config.js';
+import { arm as armConfigNonce, consume as consumeConfigNonce } from './ext-memory/config-arm.js';
+import { normalizeDriverInput, removeDriverFromList, upsertDriverInList, driverErrorOf, driverListErrors, verifyDriversReadback, verifyEnabledReadback, DRIVER_ID_RE, type ExtDriverCfg } from './ext-memory/driver-config.js';
+import { commitDrivers, commitEnabled, currentDrivers, hasPendingEnabled, hasPendingReload, pendingEnabledValue, previewDrivers } from './ext-memory/driver-overlay.js';
+import type { ExtAssembly } from './ext-memory/assembly.js';
+import type { ExtImporter } from './ext-memory/importer.js';
+import type { ExtMemoryValue } from './config.js';
 export type { MemoryStats } from './contract.js';
+
+/**
+ * 组装将要写回 profile 的 `extMemory` 整段：宿主 `updateConfig` 是**整节覆盖**，
+ * 而本进程可能同时有“待生效的 drivers”与“待生效的总闸”。
+ * 两个写口都必须把对方的待生效值一并写出去，否则：先改总闸会把手刚改的驱动列表
+ * 抹回启动值（反之亦然）——那正是“面板说保存成功，盘上却是旧值”这类最难归因的坑。
+ *
+ * `enabledOverride` 给总闸写口用：本次提交的目标值**还没 commit 到 overlay**（commit 在
+ * 写成功之后），不显式传就会把启动值写回去——那等于“点开启却写了 false”。
+ */
+function mergeExtSection(section: ExtMemoryValue, drivers: readonly ExtDriverCfg[], enabledOverride?: boolean): ExtMemoryValue {
+  return {
+    ...section,
+    drivers: drivers.slice(),
+    enabled: enabledOverride ?? pendingEnabledValue() ?? section.enabled,
+  };
+}
 
 /** 分族存储聚合(浏览器保持混合视图:两族拼接展示)。 */
 type FamilyStores = {
@@ -382,6 +428,10 @@ interface MemoryRpcSources {
   skillStore?: SkillStore;
   /** 技能结晶生产者（未装配 = skills-detect 不可用、skills-list 不带 producer 态）。 */
   skillProducer?: SkillProducer;
+  /** 外部记忆装配体(计划 Phase 1；未装配/未开启 = 端点回退注册态镜像)。 */
+  extAssembly?: ExtAssembly;
+  /** 外源导入编排（计划 ext-to-l1-import）：未注入 = ext-import-* 报“未装配”。 */
+  importer?: ExtImporter;
 }
 
 /** 端点 deps 的注入面(ctx/cfg/stores/logger 由调用方绑定,其余由此处决定)。 */
@@ -410,6 +460,8 @@ export function buildEndpointDeps(
     memorySources: sources.memorySources,
     skillStore: sources.skillStore,
     skillProducer: sources.skillProducer,
+    extAssembly: sources.extAssembly,
+    importer: sources.importer,
   };
   return { ...base, ...injected };
 }
@@ -448,6 +500,10 @@ export function registerMemoryRpc(
   skillStore?: SkillStore,
   /** 技能结晶生产者（轨2；经 buildEndpointDeps 落入 deps.skillProducer）。 */
   skillProducer?: SkillProducer,
+  /** 外部记忆装配体(计划 Phase 1；经 buildEndpointDeps 落入 deps.extAssembly)。 */
+  extAssembly?: ExtAssembly,
+  /** 外源导入编排（计划 ext-to-l1-import；经 buildEndpointDeps 落入 deps.importer）。 */
+  importer?: ExtImporter,
 ): void {
   /** 当前是否持有一段有效注册(dispose 完成后清空,允许服务重上线时重注册)。 */
   let holding = false;
@@ -469,7 +525,7 @@ export function registerMemoryRpc(
             { ctx, cfg, stores, logger },
             // roomRegistry 必须随 sources 下发——漏带 = 面板侧 room-* 恒"未装配"
             // (工具面直传不受影响;2026-10-02 beta.9 实测回归)
-            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry, memorySources, skillStore, skillProducer },
+            { status, live, modes, dataDir, rebuild, embedManager, sessionInfo, roomRegistry, memorySources, skillStore, skillProducer, extAssembly, importer },
             ruminate,
           ));
           return { ok: true, value };
@@ -651,6 +707,10 @@ export interface EndpointDeps {
   skillStore?: SkillStore;
   /** 技能结晶生产者（轨2；未装配 = skills-detect 不可用，面板据此区分新旧版）。 */
   skillProducer?: SkillProducer;
+  /** 外部记忆装配体(计划 Phase 1)：在场且 enabled = 面板列实驱动态；否则回退注册态镜像。 */
+  extAssembly?: ExtAssembly;
+  /** 外源导入任务编排（计划 ext-to-l1-import）：未装配 = ext-import-* 不可用。 */
+  importer?: ExtImporter;
 }
 
 /** RPC 字符串入参上限校验:防 loopback 面畸形超长载荷
@@ -669,7 +729,7 @@ function sanitizeSettings(s: MemoryLiveSettings): MemoryLiveSettings {
 
 /** 端点分发表(导出供测试直调:可精确注入 rebuild/ruminate 等可选控制器,验证 deps 接线)。 */
 export async function handleEndpoint(endpoint: string, payload: unknown, deps: EndpointDeps): Promise<unknown> {
-  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry, memorySources, skillStore, skillProducer } = deps;
+  const { cfg, stores, status, live, modes, dataDir, rebuild, ruminate, embedManager, sessionInfo, roomRegistry, memorySources, skillStore, skillProducer, extAssembly } = deps;
   // 退场/恢复/新增的文件跟随已收口在 `L1Store` 的汇流口（`store/memory-md-sync.ts`），
   // 本分发层不再自己建点火器——那 8 处事件挂钩已被真机证伪（会漏）。
   switch (endpoint) {
@@ -918,6 +978,15 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         maxFiles: syn.maxFiles,
         timeBudgetMs: syn.timeBudgetMs,
         logger: deps.logger,
+        // 三侧账本(T4.1):影子内容作为 remote 输入(both-changed 里"文件=远端"可自动收敛回灌)。
+        // 外部同步未开 = 空数组,行为与 Phase 3 逐字一致。
+        remoteContents: (recordId: string) => {
+          if (readExtMemory(cfg.extMemory)?.enabled !== true) return [];
+          return stores.l1.ext
+            .listShadowsByRecord(recordId)
+            .map((s) => s.contentNorm)
+            .filter((c) => c !== '');
+        },
       });
     }
 
@@ -1254,6 +1323,448 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       }
       void v;
       throw new Error(`未知 action: ${String(p.action)}`);
+    }
+
+    // ── 外部记忆驱动(计划 ext-mem-drivers-sync T0.8 骨架 + Phase 1 实装) ──
+    // 总闸关时回 enabled:false + notice 而非抛错(部署状态不是调用错误,与
+    // conflicts 同模式);机密只回键名不回值(凭据永不下发浏览器)。
+    case 'dsh-memory/ext-drivers-list': {
+      const extCfg = readExtMemory(cfg.extMemory);
+      const configured = extCfg?.enabled === true;
+      // 生效态以**装配真相**为准，不能拿配置值当它。真宿主的 `extMemory` 是 volatile 节：
+      // 写入后内存值立即变，而 registry/lane 是启动期建的——拿配置值回显会反向骗人：
+      // 面板显示“已关闭、驱动未装配”，而第 5 路与 pusher 其实仍在跑（沙箱实测就是这个）。
+      // 装配体缺席（单测/老臂）时没有更可信的源，退回配置值。
+      const extOn = extAssembly === undefined ? configured : extAssembly.enabled === true;
+      const syncMode = normSyncMode(extCfg?.syncMode);
+      // md 投射态：部署值或热阀任一为真即算开。面板拿它决定要不要说“会生成等量 md 文件”。
+      // live 缺席（降级宿主/单测）时只认部署值——那正是“没有热阀”的语义。
+      const mdExportOn = cfg.mdSync?.enabled === true || live?.get().mdSyncEnabled === true;
+      const baseDrivers = (extCfg?.drivers ?? []) as readonly ExtDriverCfg[];
+      if (!extOn) {
+        // 总闸关时装配体不存在，但**已写入 profile 的驱动仍得列出来**：否则用户在本面加完
+        // 驱动看到的是空列表，“保存成功却什么都不显示”比报错更让人断定插件坏了。
+        // 行上给 enabled=false + 明写原因（总闸未开），不假装它在跑。
+        const pendingRows: ExtDriverView[] = currentDrivers(baseDrivers).map((d) => ({
+          driverId: d.id,
+          typeId: d.type,
+          enabled: false,
+          healthy: false,
+          lastProbeAt: 0,
+          lastError: '总闸未开(ext_memory.enabled=false)：配置已在 profile，开启并重载后装配',
+          configuredSecrets: d.apiKey !== '' ? ['apiKey'] : [],
+          outboxPending: stores.l1.ext.outboxPendingByDriver(d.id),
+          shadows: stores.l1.ext.countShadowsByDriver(d.id),
+          endpoint: d.endpoint,
+          space: d.space,
+        }));
+        const gateHint = hasPendingEnabled(extOn) ? ' 总闸改动已写入 profile，重载后生效。' : '';
+        const resp: ExtDriversResponse = { enabled: false, configuredEnabled: configured, syncMode, drivers: pendingRows, mdExportOn, notice: '外部记忆未开启(ext_memory.enabled=false):无驱动装配、零网络、第 5 路不存在。' + gateHint };
+        return resp;
+      }
+      // 驱动列表的三份来源:启动配置(装配真相)、overlay(已写 profile 未生效)、
+      // 运行态(registry/lane 实动态)。面板得同时说清"在跑的是哪个配置"与
+      // "你想让它变成什么"——否则用户改完看到旧 endpoint 会以为保存失败。
+      const startById = new Map(baseDrivers.map((d) => [d.id, d]));
+      const overlayById = new Map(currentDrivers(baseDrivers).map((d) => [d.id, d]));
+      const pendingMark = (id: string): string => {
+        const o = overlayById.get(id);
+        if (o === undefined) return '';
+        const s = startById.get(id);
+        if (s === undefined) return '待重载生效';
+        const same =
+          s.endpoint === o.endpoint && s.type === o.type && s.enabled === o.enabled &&
+          s.space === o.space && s.extra === o.extra && s.apiKey === o.apiKey;
+        return same ? '' : '待重载生效';
+      };
+      // Phase 1 装配体在场:列**实驱动**+ lane 熔断态;否则回退 ext_drivers 注册态镜像。
+      const laneStates = new Map((extAssembly?.lane?.statusOf() ?? []).map((s) => [s.driverId, s]));
+      const registryIds = extAssembly?.enabled === true ? extAssembly.registry.list() : [];
+      const drivers: ExtDriverView[] = registryIds.length > 0
+        ? registryIds.flatMap((entryReg) => {
+            const entry = overlayById.get(entryReg.driver.id) ?? startById.get(entryReg.driver.id);
+            if (entry === undefined) return [];
+            const st = laneStates.get(entryReg.driver.id);
+            const mark = pendingMark(entryReg.driver.id);
+            return [{
+              driverId: entryReg.driver.id,
+              typeId: entryReg.driver.typeId,
+              enabled: entryReg.enabled && entry.enabled !== false,
+              // 实动态:闭环且本轮无失败才算健康(未探过 = 未爆雷,中性呈现)
+              healthy: st === undefined ? true : st.circuit === 'closed' && st.failStreak === 0,
+              lastProbeAt: 0,
+              lastError: (st?.lastError ?? '') + (mark === '' ? '' : ` [${mark}]`),
+              configuredSecrets: entry.apiKey ? ['apiKey'] : [],
+              outboxPending: stores.l1.ext.outboxPendingByDriver(entryReg.driver.id),
+              shadows: stores.l1.ext.countShadowsByDriver(entryReg.driver.id),
+              endpoint: entry.endpoint,
+              space: entry.space,
+            }];
+          })
+        : stores.l1.ext.listDrivers().map((r) => {
+            const entry = overlayById.get(r.driverId) ?? startById.get(r.driverId);
+            const mark = pendingMark(r.driverId);
+            return {
+              driverId: r.driverId,
+              typeId: r.typeId,
+              // 配置位与镜像位取与:面板才能区分"没配/配了但停"。
+              enabled: r.enabled && entry?.enabled !== false,
+              healthy: r.healthy,
+              lastProbeAt: r.lastProbeAt,
+              lastError: r.lastError + (mark === '' ? '' : ` [${mark}]`),
+              configuredSecrets: entry?.apiKey ? ['apiKey'] : [],
+              outboxPending: stores.l1.ext.outboxPendingByDriver(r.driverId),
+              shadows: stores.l1.ext.countShadowsByDriver(r.driverId),
+              endpoint: entry?.endpoint ?? '',
+              space: entry?.space ?? '',
+            };
+          });
+      const resp: ExtDriversResponse = { enabled: true, configuredEnabled: configured, syncMode, drivers, mdExportOn };
+      // 配置与装配不一致（volatile 写入已反映到内存、但装配仍是启动值）必须说清方向往哪边偏：
+      // 面板说“已关闭”而实际仍在推/拉，与说“已开启”而实际没装配，同样坑。
+      if (configured !== extOn) {
+        resp.notice = `总闸配置与装配不一致：配置=${configured ? '开' : '关'}，当前实际按=${extOn ? '开' : '关'}运行，重载后对齐。`;
+      }
+      // 待生效行(新增但未注册的驱动):不列出来用户就看不到自己刚加的行;
+      // enabled=false + 明确 lastError,不假装它已在跑。
+      const listed = new Set(drivers.map((d) => d.driverId));
+      for (const d of overlayById.values()) {
+        if (listed.has(d.id)) continue;
+        drivers.push({
+          driverId: d.id,
+          typeId: d.type,
+          enabled: false,
+          healthy: false,
+          lastProbeAt: 0,
+          lastError: '配置已写入 profile,重载插件后生效',
+          configuredSecrets: d.apiKey !== '' ? ['apiKey'] : [],
+          outboxPending: stores.l1.ext.outboxPendingByDriver(d.id),
+          shadows: stores.l1.ext.countShadowsByDriver(d.id),
+          endpoint: d.endpoint,
+          space: d.space,
+        });
+      }
+      if (hasPendingReload(baseDrivers)) {
+        resp.notice = '有驱动配置改动已写入 profile,尚未生效(本插件无热重载通道):重载后生效。';
+      }
+      // 总闸改动同理单独点名，但仅在“配置还没反映到内存”时补（不忠实的 volatile 宿主）：
+      // 两句话说的同一件事时不要叠映，面板提示越长越没人读完。
+      if (configured === extOn && hasPendingEnabled(extOn)) {
+        resp.notice = ((resp.notice ?? '') + (resp.notice ? ' ' : '') + '总闸改动已写入 profile，重载后生效。');
+      }
+      // 存量配置自身不合法(手写 YAML 重复 id / 非法 type)时点名:这类配置装配侧会默默跳过,
+      // 面板不说的话用户只会看到"驱动没出现在列表里"而不知原因。
+      const problems = driverListErrors(currentDrivers(baseDrivers));
+      if (problems.length > 0) {
+        resp.notice = ((resp.notice ?? '') + (resp.notice ? ' ' : '') + '配置健康问题：' + problems.join('；'));
+      }
+      return resp;
+    }
+
+    case 'dsh-memory/ext-config-arm': {
+      // 配置写入门控(计划 ext-driver-config-ui)。这里两道:
+      // ① 宿主得真有 settings.forms(老臂无任意节写入能力,明确不支持比伪装成功好);
+      // ② 领票即写 —— nonce 是"真人刚在面板点了一下"的一次性凭据,写端点无票必拒。
+      // 第三道是结构性的:全仓不注册任何配置写工具,模型侧根本不存在这个入口。
+      //
+      // 这里曾判 memoryMutate(高权限模式),已摘除。它的定义对象是「模型获得记忆
+      // 写删工具 + 面板解锁记忆删除」(见概览页开关文案),拿它当配置写前置是语义借用:
+      // 用户为了接一个外援,得先给模型开写删记忆的权限 —— 成本真实。
+      // 收益却接近 0:`settings-set` 可裸写 memoryMutate(本文件该 case 无门),
+      // 同机进程 POST 一下就能自己把这道门打开,再自己 arm 领票。
+      // 拦会话修改的实质防线是 ②nonce + 第三道无工具表面积,与高权限模式无关。
+      // live 缺席 = settings 面根本没装配(降级宿主)。按用途分票：
+      // config 票要写 profile，所以仍要求 configWritable；import 票不写 profile，
+      // 拿 configWritable 拦它等于用一个无关能力的缺席去拦另一个能力（老臂上导入会白白置灰）。
+      const p = (payload ?? {}) as { issue?: unknown; scope?: unknown };
+      const scope = p.scope === 'import' ? 'import' : 'config';
+      if (scope === 'config' && (live === undefined || live.configWritable !== true)) {
+        const resp: ExtConfigArmResponse = { armed: false, reason: '当前宿主不支持配置写入（settings.forms 缺席）：请改在 profile.yaml 里维护 ext_memory。' };
+        return resp;
+      }
+      if (scope === 'import') {
+        // import 票的正向判据（不得留空）：装配体在场且总闸已开。
+        // 驱动存在/遍历可用由 ext-import-start 自己校（它才知道是哪个 driverId）。
+        if (extAssembly === undefined || extAssembly.enabled !== true) {
+          const resp: ExtConfigArmResponse = { armed: false, reason: '外部记忆未开启或未装配（总闸关 / 需重载）：没有驱动可导入。' };
+          return resp;
+        }
+        if (deps.importer === undefined) {
+          const resp: ExtConfigArmResponse = { armed: false, reason: '导入器未装配（存储降级或宿主版本过旧）。' };
+          return resp;
+        }
+      }
+      // 探而不发(issue=false):面板定时刷新的只读探测。不分开的话刷新会挤掉
+      // 用户手上那张待用令牌(未消费上限 3 张,最早的被逐)。
+      if (p.issue === false) {
+        const probe: ExtConfigArmResponse = { armed: true, notice: scope === 'import' ? '导入面就绪' : '配置写面就绪' };
+        return probe;
+      }
+      const token = armConfigNonce();
+      const resp: ExtConfigArmResponse = { armed: true, nonce: token.nonce, expiresAt: token.expiresAt };
+      return resp;
+    }
+
+    case 'dsh-memory/ext-config-enable': {
+      // 外部记忆总闸开关。接的是一个真实 bug 面：总闸此前**没有任何面板入口**——
+      // 它不在 live 键集（装配在启动期，热开不会造出驱动实例，加了也只能是个“拨了不生效”的
+      // 假开关），而面板上的同步开关卡片在总闸关时仍照常可拨、照常写 live，但 pusher/puller
+      // 第一道条件就是 masterEnabled → 行为零变更。这里把总闸接回真实生效点位：写 profile + 明示重载。
+      const p = (payload ?? {}) as { nonce?: unknown; enabled?: unknown };
+      if (!consumeConfigNonce(p.nonce)) throw new Error('缺少或已失效的面板武装令牌（nonce）：请在面板重新点「开启/关闭外部记忆」');
+      const writeConfig = live?.updateConfig;
+      if (live === undefined || live.configWritable !== true || writeConfig === undefined) {
+        throw new Error('当前宿主不支持配置写入：请改在 profile.yaml 里维护 ext_memory');
+      }
+      const section = readExtMemory(cfg.extMemory);
+      if (section === undefined) throw new Error('extMemory 配置节缺席（检查部署 schema）');
+      const want = p.enabled !== false; // 缺省开：面板主用意图是“开启”
+      // drivers 取 overlay 基线：否则“先改总闸”会把刚改过但尚未重载的驱动列表抹回启动值。
+      const drivers = currentDrivers(section.drivers as readonly ExtDriverCfg[]);
+      await writeConfig({ extMemory: mergeExtSection(section, drivers, want) });
+      const check = verifyEnabledReadback(want, live.readConfig?.('extMemory'));
+      // 与 drivers 同一纪律：mismatch 不记待生效（不骗人），unverified 仍记（可用性优先）。
+      if (check.state !== 'mismatch') commitEnabled(want);
+      deps.logger?.info(`[memory] 外部记忆总闸已写入 profile：enabled=${want}（需重载生效；读回=${check.state}）`);
+      const resp: ExtConfigEnableResponse = { ok: true, needsReload: true, enabled: want, ...(check.message === '' ? {} : { notice: check.message }) };
+      return resp;
+    }
+
+    case 'dsh-memory/ext-import-start': {
+      // 首次全量导入。走 scope:'import' 领的票（不要求 configWritable，导入不写 profile）。
+      // 它写库并逐条向量化，属高危高成本动作：票 + 面板两段式确认是它的门。
+      const p = (payload ?? {}) as { nonce?: unknown; driverId?: unknown; spaceId?: unknown; maxItems?: unknown; restart?: unknown };
+      if (!consumeConfigNonce(p.nonce)) throw new Error('缺少或已失效的面板武装令牌（nonce）：请在面板重新点「导入到本地库」');
+      const importer = deps.importer;
+      if (importer === undefined) throw new Error('导入器未装配（存储降级或本版本未启用）');
+      const driverId = typeof p.driverId === 'string' ? p.driverId.trim() : '';
+      if (driverId === '') throw new Error('driverId 为空');
+      if (driverId.length > 64) throw new Error('driverId 过长（≤64）');
+      // 受理前先验“该家能不能遍历”：否则任务起起来、进度条转一下、最后报个错，
+      // 比直接拒绝难发现得多（无遍历面的家包括 byterover：它只有 search）。
+      const entry = extAssembly?.registry.list().find((e) => e.driver.id === driverId);
+      if (entry === undefined) throw new Error(`驱动「${driverId}」未装配（总闸未开或需重载）`);
+      if (entry.driver.list === undefined || entry.driver.capabilities.browse !== true) {
+        throw new Error(`驱动「${driverId}」（${entry.driver.typeId}）不提供遍历端点，无法全量导入；只能按查询词检索。`);
+      }
+      const spaceId = typeof p.spaceId === 'string' ? p.spaceId.trim() : '';
+      const maxItems = typeof p.maxItems === 'number' && Number.isFinite(p.maxItems) ? Math.floor(p.maxItems) : undefined;
+      deps.logger?.info(`[memory] 受理外源导入：driver=${driverId} space=${spaceId || '(全部)'} maxItems=${maxItems ?? '(默认)'}`);
+      return importer.start({ driverId, ...(spaceId === '' ? {} : { spaceId }), ...(maxItems === undefined ? {} : { maxItems }), ...(p.restart === true ? { restart: true } : {}) });
+    }
+
+    case 'dsh-memory/ext-import-status': {
+      // 进度只有一套语义（本端点）：受理响应不回传进度，否则两处迟早对不上。
+      const importer = deps.importer;
+      if (importer === undefined) throw new Error('导入器未装配');
+      const pr = importer.status();
+      if (pr === null) {
+        const empty: ExtImportStatusResponse = { running: false, driverId: '', spaceId: '', offset: 0, imported: 0, skipped: 0, startedAt: 0, cancelRequested: false };
+        return empty;
+      }
+      const v: ExtImportStatusResponse = {
+        running: pr.running,
+        driverId: pr.driverId,
+        spaceId: pr.spaceId,
+        offset: pr.offset,
+        imported: pr.imported,
+        skipped: pr.skipped,
+        startedAt: pr.startedAt,
+        cancelRequested: pr.cancelRequested,
+        ...(pr.error === undefined ? {} : { error: pr.error }),
+        ...(pr.last === undefined ? {} : { last: pr.last }),
+      };
+      return v;
+    }
+
+    case 'dsh-memory/ext-import-cancel': {
+      const importer = deps.importer;
+      if (importer === undefined) throw new Error('导入器未装配');
+      return importer.cancel();
+    }
+
+    case 'dsh-memory/ext-driver-upsert': {
+      const p = (payload ?? {}) as Record<string, unknown>;
+      if (!consumeConfigNonce(p.nonce)) throw new Error('缺少或已失效的面板武装令牌（nonce）：请在面板重新点「新增/编辑」');
+      // 不判 memoryMutate:理由见 ext-config-arm 注释(定义错位 + 无增量防护)。
+      // 先把方法取成局部量再判存在:属性收窄在 await 后会丢,写成 live.updateConfig(...)
+      // 会编译失败或依赖非空断言——那等于把门禁写成注释。
+      const writeConfig = live?.updateConfig;
+      if (live === undefined || live.configWritable !== true || writeConfig === undefined) {
+        throw new Error('当前宿主不支持配置写入：请改在 profile.yaml 里维护 ext_memory');
+      }
+      const norm = normalizeDriverInput(p);
+      if (!norm.ok) throw new Error(norm.error);
+      const section = readExtMemory(cfg.extMemory);
+      if (section === undefined) throw new Error('extMemory 配置节缺席（检查部署 schema）');
+      // 基线用 overlay(本进程已写但未重载的改动)——否则第二次编辑会拿启动值覆盖第一次。
+      const res = previewDrivers(section.drivers as readonly ExtDriverCfg[], (list) => upsertDriverInList(list, norm.driver, norm.meta));
+      // 写前健康检查:重复 id 的存量配置不能越改越乱(装配侧同名覆写 = 配置与实际不一致)。
+      const guard = driverErrorOf(res.list, norm.driver.id);
+      if (guard !== undefined) throw new Error(guard);
+      await writeConfig({ extMemory: mergeExtSection(section, res.list) });
+      // 写后读回：宿主对数组的合并语义不在我们手里。三种结果差别对待：
+      // confirmed  commit;unverified(宿主不供读回) 仍 commit + 告知未校验——
+      // 为了“没读到”就不更新面板，会把可用性换成假严谨;mismatch 不 commit
+      // （内存态与盘不一致时还照旧回显就是骗人）。
+      const check = verifyDriversReadback(res.list, live.readConfig?.('extMemory'));
+      if (check.state !== 'mismatch') commitDrivers(res.list);
+      // 日志只带 id/type:payload 里有明文 apiKey,不得进任何日志面(scrubSecretsForLog 是兜底不是凭据)。
+      deps.logger?.info(`[memory] 外部驱动配置已写入 profile：id=${norm.driver.id} type=${norm.driver.type} ${res.created ? '新增' : '更新'}（需重载生效；读回=${check.state}）`);
+      const resp: ExtDriverUpsertResponse = {
+        ok: true,
+        needsReload: true,
+        created: res.created,
+        shadows: stores.l1.ext.countShadowsByDriver(norm.driver.id),
+        outboxPending: stores.l1.ext.outboxPendingByDriver(norm.driver.id),
+        ...(check.message === '' ? {} : { notice: check.message }),
+      };
+      return resp;
+    }
+
+    case 'dsh-memory/ext-driver-remove': {
+      const p = (payload ?? {}) as { nonce?: unknown; id?: unknown };
+      if (!consumeConfigNonce(p.nonce)) throw new Error('缺少或已失效的面板武装令牌（nonce）：请在面板重新点「删除」');
+      // 同上:配置移除不借高权限模式,票据 + 面板两段式确认就是它的门禁。
+      const writeConfig = live?.updateConfig;
+      if (live === undefined || live.configWritable !== true || writeConfig === undefined) {
+        throw new Error('当前宿主不支持配置写入：请改在 profile.yaml 里维护 ext_memory');
+      }
+      const id = typeof p.id === 'string' ? p.id.trim() : '';
+      if (!DRIVER_ID_RE.test(id)) throw new Error(`id 非法：需小写字母或数字起头、可含 . _ -、长度 ≤32（收到「${id}」）`);
+      const section = readExtMemory(cfg.extMemory);
+      if (section === undefined) throw new Error('extMemory 配置节缺席（检查部署 schema）');
+      const res = previewDrivers(section.drivers as readonly ExtDriverCfg[], (list) => removeDriverFromList(list, id));
+      const guard = driverErrorOf(res.list, id);
+      if (guard !== undefined) throw new Error(guard);
+      if (res.removed) {
+        await writeConfig({ extMemory: mergeExtSection(section, res.list) });
+        const check = verifyDriversReadback(res.list, live.readConfig?.('extMemory'));
+        if (check.state !== 'mismatch') commitDrivers(res.list);
+        deps.logger?.info(`[memory] 外部驱动配置移除：id=${id} removed=true（需重载生效；读回=${check.state}）`);
+        const resp: ExtDriverRemoveResponse = {
+          ok: true,
+          needsReload: true,
+          removed: res.removed,
+          shadows: stores.l1.ext.countShadowsByDriver(id),
+          outboxPending: stores.l1.ext.outboxPendingByDriver(id),
+          ...(check.message === '' ? {} : { notice: check.message }),
+        };
+        return resp;
+      }
+      deps.logger?.info(`[memory] 外部驱动配置移除：id=${id} removed=false（无写入）`);
+      const resp: ExtDriverRemoveResponse = {
+        ok: true,
+        needsReload: true,
+        removed: res.removed,
+        shadows: stores.l1.ext.countShadowsByDriver(id),
+        outboxPending: stores.l1.ext.outboxPendingByDriver(id),
+      };
+      return resp;
+    }
+
+    case 'dsh-memory/ext-conflicts-list': {
+      // 总闸关 = 没有外部同步就没有冲突面,回 enabled:false + notice(与 ext-drivers-list 同模式)
+      if (readExtMemory(cfg.extMemory)?.enabled !== true) {
+        return { enabled: false, open: 0, byKind: {}, items: [], notice: '外部记忆未开启:无冲突面。' };
+      }
+      const p = (payload ?? {}) as { status?: unknown; kind?: unknown; limit?: unknown; offset?: unknown };
+      const status = typeof p.status === 'string' && p.status.trim() !== '' ? p.status.trim() : 'open';
+      const kind = p.kind === 'both_dirty' || p.kind === 'orphan' || p.kind === 'unforgettable' ? p.kind : undefined;
+      const limit = typeof p.limit === 'number' ? Math.max(1, Math.min(200, p.limit)) : 50;
+      const offset = typeof p.offset === 'number' ? Math.max(0, p.offset) : 0;
+      const rows = stores.l1.ext.listConflicts({ status, kind, limit, offset });
+      const counts = stores.l1.ext.countConflicts();
+      const ids = [...new Set(rows.map((r) => r.recordId).filter((id) => id !== ''))];
+      const recById = new Map((ids.length === 0 ? [] : stores.l1.getByIds(ids)).map((r) => [r.id, r]));
+      return {
+        enabled: true,
+        open: counts.open,
+        byKind: counts.byKind,
+        items: rows.map((r) => {
+          const detail: Record<string, unknown> = (() => {
+            try {
+              return JSON.parse(r.detailJson) as Record<string, unknown>;
+            } catch {
+              return {};
+            }
+          })();
+          const rec = r.recordId === '' ? undefined : recById.get(r.recordId);
+          return {
+            conflictId: r.conflictId,
+            driverId: r.driverId,
+            recordId: r.recordId,
+            externalId: r.externalId,
+            kind: r.kind,
+            status: r.status,
+            resolution: r.resolution,
+            localPreview: rec === undefined ? '' : rec.content.slice(0, 200),
+            remotePreview: typeof detail.preview === 'string' ? detail.preview : '',
+            detail,
+          };
+        }),
+      };
+    }
+
+    case 'dsh-memory/ext-conflict-resolve': {
+      const p = (payload ?? {}) as { conflictId?: unknown; action?: unknown; resolution?: unknown };
+      const conflictId = typeof p.conflictId === 'string' ? p.conflictId.trim() : '';
+      if (!conflictId) throw new Error('需要 conflictId');
+      if (conflictId.length > 128) throw new Error('conflictId 过长(≤128 字符)');
+      const action = p.action === 'dismiss' ? 'dismiss' : 'resolve';
+      const resolution = typeof p.resolution === 'string' ? p.resolution.slice(0, 200) : '';
+      const ok = action === 'dismiss'
+        ? stores.l1.ext.dismissConflict(conflictId)
+        : stores.l1.ext.resolveConflict(conflictId, resolution !== '' ? resolution : 'manual');
+      return { ok, action, conflictId, notice: ok ? '' : '冲突不存在或已处理(刷新可查)' };
+    }
+
+    case 'dsh-memory/ext-driver-probe': {
+      const p = (payload ?? {}) as { driverId?: unknown };
+      const driverId = typeof p.driverId === 'string' ? p.driverId.trim() : '';
+      if (!driverId) throw new Error('需要 driverId');
+      if (driverId.length > 128) throw new Error('driverId 过长(≤128 字符)');
+      if (readExtMemory(cfg.extMemory)?.enabled !== true) {
+        const resp: ExtDriverProbeResponse = { ok: false, notice: '外部记忆未开启,无可探测的驱动。' };
+        return resp;
+      }
+      // Phase 1:装配体在册 → 真探活(60s 缓存 + in-flight 去重在 assembly 里)。
+      if (extAssembly?.enabled === true && extAssembly.registry.get(driverId) !== undefined) {
+        const res = await extAssembly.probe(driverId);
+        const resp: ExtDriverProbeResponse = {
+          ok: true,
+          healthy: res.healthy,
+          lastProbeAt: Date.now(),
+          ...(res.error === undefined ? {} : { lastError: res.error.slice(0, 300) }),
+        };
+        return resp;
+      }
+      const row = stores.l1.ext.listDrivers().find((d) => d.driverId === driverId);
+      if (!row) {
+        const resp: ExtDriverProbeResponse = { ok: false, notice: '驱动未注册:检查 ext_memory.drivers 配置项(或装配失败,看日志点名)。' };
+        return resp;
+      }
+      // 无活实例(驱动装配失败)——回显注册态镜像并在 notice 说清没探过(诚实原则)。
+      const resp: ExtDriverProbeResponse = {
+        ok: true,
+        healthy: row.healthy,
+        lastProbeAt: row.lastProbeAt,
+        lastError: row.lastError,
+        notice: '驱动未在活装配(装配失败日志可见),回显的是注册态镜像。',
+      };
+      return resp;
+    }
+
+    case 'dsh-memory/ext-sync-status': {
+      const extOn = readExtMemory(cfg.extMemory)?.enabled === true;
+      const resp: ExtSyncStatusResponse = {
+        enabled: extOn,
+        syncMode: normSyncMode(readExtMemory(cfg.extMemory)?.syncMode),
+        shadow: { ...stores.l1.ext.countShadows() },
+        outbox: stores.l1.ext.countOutbox(),
+        ...(extOn ? {} : { notice: '外部记忆未开启:计数为账本存量(通常为零),不代表同步在跑。' }),
+      };
+      return resp;
     }
 
     case 'dsh-memory/room-register': {
@@ -1640,6 +2151,12 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           explorerEnabled: live?.get()?.explorerEnabled !== false, // 默认 true
           mdExportMaxRecords: live?.get()?.mdExportMaxRecords ?? 0,
           backfillConcurrency: live?.get()?.backfillConcurrency ?? 0,
+          extSyncMode: live?.get()?.extSyncMode ?? '',
+          extPushEnabled: live?.get()?.extPushEnabled === true,
+          extPullEnabled: live?.get()?.extPullEnabled === true,
+          extAllowHardDelete: live?.get()?.extAllowHardDelete === true,
+          // 隔离闸回显方向与归一一致：关才关，缺值报开。
+          extImportIsolate: live?.get()?.extImportIsolate !== false,
         }),
         // 静态部署上限(cordis.patch.yml):运行时开关与它取 AND
         ceilings: { capture: cfg.capture.enabled, distill: cfg.extract.enabled, recall: cfg.recall.enabled },
@@ -1686,6 +2203,18 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
       for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'explorerEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
+      }
+      // 外部同步运行时开关(T4.2 后补):三布尔严格收;档位走白名单('' = 跟随部署)。
+      // 不进白名单 = “写成功但被静默丢”,面板开关会变成暗示器。
+      for (const key of ['extPushEnabled', 'extPullEnabled', 'extAllowHardDelete', 'extImportIsolate'] as const) {
+        if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
+      }
+      if (patch.extSyncMode !== undefined) {
+        const v = String(patch.extSyncMode);
+        if (!['', 'shadow-read', 'push-only', 'two-way'].includes(v)) {
+          throw new Error(`非法外部同步档位: ${v}(允许 '' / shadow-read / push-only / two-way)`);
+        }
+        clean.extSyncMode = v;
       }
       // md 投射护栏运行时覆盖：数字才收，钳 0~10000（与 live schema 同上限）；0 = 跟随部署默认。
       // 不加进白名单的话，面板上那个输入框会“写成功但被静默丢”——看得到数字、不生效。
@@ -1985,14 +2514,17 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     // 无处可得:模型被指到不存在的 memory_conflicts 工具,人也没有面板。
     // 未开启冻结时同样走返回体(enabled:false + notice)而非抛错,理由同上。
     case 'dsh-memory/conflicts': {
-      const p = (payload ?? {}) as { limit?: unknown };
+      const p = (payload ?? {}) as { limit?: unknown; workspaceId?: unknown };
+      // T0.9:面板可携当前检视工作区做可见范围过滤(缺省不带 = 不过滤,与改前一致;
+      // 工具路径的会话级过滤在 tools 侧经 scopeFilterOf 自行产出)。
+      const wsFilter = typeof p.workspaceId === 'string' && p.workspaceId.trim() !== '' ? p.workspaceId.trim() : undefined;
       // 冻结开关只有**一个**事实源:与去重管线同一套 effectiveCfg 解析
       // (live.conflictFreeze 覆盖静态 cfg.conflictFreeze.enabled)。此前这里直接读
       // cfg.conflictFreeze.enabled —— 面板开关写的是 live,而部署静态值恒 false,
       // 于是开关已开、settings.yaml 已落 true,本页仍报"矛盾冻结未开启"。
       return listConflictPairs(
         { l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true, usage: stores.usage, decayHalfLifeDays: effectiveCfg(cfg, live).recall?.decayHalfLifeDays, feedback: stores.feedback },
-        { limit: Number(p.limit) || undefined },
+        { limit: Number(p.limit) || undefined, workspaceId: wsFilter },
       );
     }
 
@@ -2002,13 +2534,14 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
     // 开关判定与上面 conflicts 同源(effectiveCfg):读端与写端必须看同一份状态,
     // 否则会出现"列表说开着、裁决说没开"的自相矛盾。
     case 'dsh-memory/conflict-resolve': {
-      const p = (payload ?? {}) as { pairId?: unknown; outcome?: unknown };
+      const p = (payload ?? {}) as { pairId?: unknown; outcome?: unknown; workspaceId?: unknown };
       const pairId = typeof p.pairId === 'string' ? p.pairId.trim() : '';
       const outcome = typeof p.outcome === 'string' ? p.outcome.trim() : '';
+      const wsFilter2 = typeof p.workspaceId === 'string' && p.workspaceId.trim() !== '' ? p.workspaceId.trim() : undefined;
       if (!pairId) throw new Error('需要 pairId(待裁决对的 pair_id)');
       if (!outcome) throw new Error('需要 outcome(winner | loser | both | defer)');
       return await resolveConflictPair(
-        { l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true },
+        { l1: stores.l1, conflictFreezeEnabled: effectiveCfg(cfg, live).conflictFreeze?.enabled === true, workspaceId: wsFilter2 },
         pairId,
         outcome,
       );

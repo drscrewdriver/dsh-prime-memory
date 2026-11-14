@@ -46,8 +46,29 @@ export interface LiveSettingsHandle {
     /** 读取面是否可用(0.1.7 起 volatile 引用恒在,恒为 true;写面缺失时 update 抛错) */
     supported: boolean;
     get(): MemoryLiveSettings;
-    /** UI 写入入口;写面缺失或宿主拒绝时抛错,由 RPC 层转成业务错误 */
+    /** UI 写入入口;写面缺失或宿主拒绍时抛错,由 RPC 层转成业务错误 */
     update(patch: Partial<MemoryLiveSettings>): Promise<void>;
+    /**
+     * 非 live 配置段写面(计划 ext-driver-config-ui T2.1)。**只在代 1(settings.forms)可用时真能写**。
+     *
+     * 与 `update` 的分工:update 只提交 live 节(热生效、可部分键);本面提交**完整配置节**
+     * 给 configEditor 落 profile——装配期静态的键改完必须重载才生效(无热重载通道),
+     * 因此调用方必须回 `needsReload`。
+     *
+     * 可选而非必填:老宿主、降级句柄与测试 fake 都没有这个能力,把缺失建成 undefined
+     * 比"必填但永远抛错"诚实——调用方一律先查 `configWritable`。
+     */
+    updateConfig?(patch: Record<string, unknown>): Promise<void>;
+    /** 配置写面是否可用(现取:settings 服务可能晚于插件上线)。 */
+    readonly configWritable?: boolean;
+    /**
+     * 写后读回配置节(能力探测型:宿主不供 `forms.get` = undefined)。
+     *
+     * 存在的理由：`forms.update` 对 **数组** 的合并语义在宿主侧未知——若它是按下标
+     * 深合并，写短了的 drivers 数组会残留尾部旧元素（面板显示已删、profile 里还在）。
+     * 调用方拿读回值与刚提交的值比对，不一致就必得报告“未完全生效”，而不是假定成功。
+     */
+    readConfig?(key: string): unknown;
 }
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
 export declare const MEMORY_ENTRY_ID = "dsh-memory";

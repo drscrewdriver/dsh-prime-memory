@@ -96,6 +96,13 @@ const ALWAYS_ON = {
     mdExportMaxRecords: 0,
     // 回填并行度运行时覆盖:0 = 跟随部署 cfg.backfill.concurrency（概览页滑块可改）
     backfillConcurrency: 0,
+    // 外部同步运行时开关(T4.2 后补):档位 '' = 跟随部署;三布尔为双闸的热阀
+    extSyncMode: '',
+    extPushEnabled: false,
+    extPullEnabled: false,
+    extAllowHardDelete: false,
+    // 污染隔离闸：默认**开**（本仓第一个默认开的 live 闸，理由见 config.ts 注释）
+    extImportIsolate: true,
     toolRoom: true,
     toolGraph: true,
     toolRuminate: true,
@@ -166,6 +173,10 @@ export function registerLiveSettings(ctx, config, logger) {
         supported: false,
         get: () => ({ ...ALWAYS_ON, distillChain: [] }),
         update: () => Promise.reject(new Error('settings 服务不可用,记忆开关无法写入')),
+        // 降级句柄:两个写面都不可用(live 写不了、配置节更写不了)
+        configWritable: false,
+        updateConfig: () => Promise.reject(new Error('settings 服务不可用,配置无法写入')),
+        readConfig: () => undefined,
     };
     const wireScope = (scope) => {
         return {
@@ -174,6 +185,10 @@ export function registerLiveSettings(ctx, config, logger) {
             update: async (patch) => {
                 await scope.update(patch);
             },
+            // 代 2/2' 的 scope 只认 live 节,不开放任意配置节写入——面板据此置灰而非伪装成功。
+            configWritable: false,
+            updateConfig: () => Promise.reject(new Error('当前宿主不支持配置写入(旧 scope 只认 live 节):请改在 profile.yaml 里维护 ext_memory')),
+            readConfig: () => undefined,
         };
     };
     const tryAttachOld = () => {
@@ -235,6 +250,9 @@ export function registerLiveSettings(ctx, config, logger) {
             supported: false,
             get: () => ({ ...ALWAYS_ON, distillChain: [] }),
             update: () => Promise.reject(new Error('settings 服务不可用,记忆开关无法写入')),
+            configWritable: false,
+            updateConfig: () => Promise.reject(new Error('settings 服务不可用,配置无法写入')),
+            readConfig: () => undefined,
         };
         tryAttachOld();
     });
@@ -245,6 +263,30 @@ export function registerLiveSettings(ctx, config, logger) {
     return {
         supported: true,
         get: () => (modernWrite() ? read() : inner.get()),
+        /** 面板据此置灰:把"写不了"伪装成"写成功"比明确不支持更坑。 */
+        get configWritable() {
+            return modernWrite();
+        },
+        updateConfig: async (patch) => {
+            const f = forms;
+            if (f === undefined || typeof f.update !== 'function') {
+                throw new Error('当前宿主不支持配置写入(settings.forms 缺席);请改在 profile.yaml 里维护 ext_memory');
+            }
+            await f.update(MEMORY_ENTRY_ID, patch);
+        },
+        readConfig: (key) => {
+            const f = forms;
+            if (f === undefined || typeof f.get !== 'function')
+                return undefined;
+            try {
+                const all = f.get(MEMORY_ENTRY_ID);
+                return all?.[key];
+            }
+            catch {
+                // 读回失败不能顶掉写入结果:调用方按"未校验"处理即可
+                return undefined;
+            }
+        },
         update: async (patch) => {
             if (modernWrite()) {
                 if (!forms)
@@ -353,5 +395,14 @@ function resolveSettings(value) {
         toolConflict: v.toolConflict !== false,
         toolMutate: v.toolMutate !== false,
         toolSkills: v.toolSkills !== false,
+        // 外部同步运行时开关:档位白名单与 schema 同源（非法值 = 跟随部署）;三布尔严格 === true
+        extSyncMode: v.extSyncMode === 'shadow-read' || v.extSyncMode === 'push-only' || v.extSyncMode === 'two-way'
+            ? v.extSyncMode
+            : '',
+        extPushEnabled: v.extPushEnabled === true,
+        extPullEnabled: v.extPullEnabled === true,
+        extAllowHardDelete: v.extAllowHardDelete === true,
+        // 隔离闸方向相反：关才关（!== false），缺字段/异常值都视为开——防污染应当默认生效。
+        extImportIsolate: v.extImportIsolate !== false,
     };
 }

@@ -16,6 +16,7 @@ import { L0WatermarkStore } from './l0-watermark.js';
 export type { BucketRow, CostAggregate, CostByLayer } from './cost-ledger.js';
 import type { CostByModel } from '../contract.js';
 import { GraphStore } from './graph-store.js';
+import { ExtSyncStore } from '../ext-memory/schema.js';
 import type { L1Receipt, ReceiptQuery, ReceiptRetentionOptions } from './receipts.js';
 import type { ConflictClaimGroup, ConflictPair, ConflictRejected, ConflictResolution, ConflictType } from './conflicts.js';
 import { type SupersedeInfo } from './supersede.js';
@@ -60,6 +61,9 @@ export declare class MemoryDb {
     readonly graphStore: GraphStore;
     /** L0 水位表(T8.4 写停;§A 恢复幂等判据的数据源,init 内建表+基线物化)。 */
     readonly l0Watermark: L0WatermarkStore;
+    /** ext_* 外部同步账本表族(计划 ext-mem-drivers-sync T0.3;init 自带 try/catch,
+     *  失败仅外部同步 no-op。这三张表**不进快照哈希投影**(T0.10 守卫钉死)。 */
+    readonly extSync: ExtSyncStore;
     private stmtUpsertL0;
     private stmtGetL0;
     private stmtL0Exists;
@@ -533,6 +537,14 @@ export declare class MemoryDb {
          * 筛查只是把混排的两种态**分开看**,不改变"浏览路径不隐藏退场记录"的设计。
          */
         retired?: boolean;
+        /**
+         * 排除外源导入条目（计划 ext-to-l1-import 的污染隔离）。
+         *
+         * 必须下推到 SQL，不能取回后再筛：反刍/重建都是 `limit:500` 窗口取数，
+         * 外源条目一旦多于窗口，外层筛筛完就什么都不剩——本地记忆反而一条进不了蒸馏。
+         * 口径用 `ext_key = ''`：该列是 `TEXT NOT NULL DEFAULT ''`，写 `IS NULL` 会恒假而返回空集。
+         */
+        excludeExternal?: boolean;
         limit: number;
         offset: number;
     }): {

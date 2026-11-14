@@ -37,6 +37,7 @@ import { MemoryModePill } from './pill/MemoryModePill.js';
 import { ExplorerPage } from './explorer/ExplorerPage.js';
 import { ExplorerFooterEntry, ExplorerIcon } from './explorer/ExplorerEntry.js';
 import { explorerEntryState } from './explorer/entry-state.js';
+import { explorerIntent } from './explorer/intent.js';
 import { makeRpc } from './rpc.js';
 
 export const inject = ['slots'];
@@ -60,8 +61,99 @@ const GEN_017_SEAT = 'sidebar.workspaces.session.menu.item';
 /** 行序：插件 0 / 搜索 5 / 会话管理 6 → 记忆库 7。 */
 const EXPLORER_ORDER = 7;
 
+/**
+ * 记忆库跳转的同步回执（v0.26.39）。
+ *
+ * 跨 bundle 的消费方（dsh-brief-sidebar）不能 import 本包，也不能裸调 layout：
+ * `selectPanel` 对未注册的 main key 会抛。所以由面板主人（本包）负责调用与回执，
+ * 事件 detail 上的 `ack` 是唯一同步答案。
+ */
+export interface ExplorerOpenAck {
+  ok: boolean;
+  reason?: 'disabled' | 'unmounted' | 'unregistered';
+  /** 诊断面：布局服务是怎么解析失败的（只进 title/tooltip，不占正文）。 */
+  detail?: string;
+}
+
+/** 布局服务的最小面：宿主 `layout.selectPanel(key)`，未注册 main key 时抛。 */
+export interface LayoutLike {
+  selectPanel?(v: string | null): unknown;
+}
+
+/** 事件名（与 dsh-brief-sidebar 的发送端同串）。 */
+export const OPEN_EXPLORER_EVENT = 'dsh-prime-memory:open-explorer';
+
+/**
+ * 当前 apply 的控制器：监听只绑一次，控制器随 apply 替换——
+ * HMR/重复 apply 不会叠加监听，也不会把旧闭包里的 mountedPage 当成真相。
+ */
+let openExplorerController: ((detail: Record<string, unknown>) => ExplorerOpenAck) | undefined;
+let openExplorerBound = false;
+
+function bindOpenExplorerEvent(): void {
+  // 测试/宿主桩可能只有 window 对象没有 addEventListener：能力探测不靠 `typeof window`。
+  if (openExplorerBound || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  openExplorerBound = true;
+  window.addEventListener(OPEN_EXPLORER_EVENT, (event: Event) => {
+    handleOpenExplorerEvent(event as unknown as OpenExplorerEventLike);
+  });
+}
+
+/** 事件的最小结构面（测试可直接传对象，不必造 DOM 事件）。 */
+interface OpenExplorerEventLike {
+  detail: unknown;
+  preventDefault(): void;
+}
+
+/**
+ * 处理一次「打开记忆库」请求：校验 mode、调当前控制器、写回执。
+ * @param event - 带 detail 与 preventDefault 的事件形状。
+ */
+export function handleOpenExplorerEvent(event: OpenExplorerEventLike): void {
+  const detail = event.detail;
+  if (typeof detail !== 'object' || detail === null) return;
+  const record = detail as Record<string, unknown>;
+  const mode = record['mode'];
+  if (mode !== 'entry' && mode !== '2d' && mode !== '3d') return;
+  const ack = openExplorerController?.(record) ?? { ok: false, reason: 'unmounted' as const };
+  record['ack'] = ack;
+  if (ack.ok) event.preventDefault();
+}
+
 export function apply(ctx: MemoryClientCtx) {
   const rpc = makeRpc(ctx);
+  // 布局服务：可选注入先抓一份（晚到不阻塞 apply），拿不到再在调用点懒解析。
+  // 0.2.x 的严格代理下 `ctx.get('layout')` 可能返 undefined / 抛，所以三路兜底。
+  let layoutSvc: LayoutLike | undefined;
+  try {
+    (ctx as unknown as { inject?: (deps: string[], cb: (scope: Record<string, unknown>) => void, label?: string) => unknown })
+      .inject?.(['layout'], (scope) => {
+        const svc = scope['layout'] as LayoutLike | undefined;
+        if (svc?.selectPanel !== undefined) layoutSvc = svc;
+      }, 'dsh-prime-memory: layout service');
+  } catch (err) {
+    console.warn('[dsh-prime-memory] layout 可选注入未建立（回退到调用点解析）:', err);
+  }
+  const resolveLayout = (): { svc?: LayoutLike; why: string } => {
+    if (layoutSvc?.selectPanel !== undefined) return { svc: layoutSvc, why: 'inject' };
+    const notes: string[] = [];
+    try {
+      const viaGet = ctx.get('layout') as LayoutLike | undefined;
+      if (viaGet?.selectPanel !== undefined) return { svc: viaGet, why: 'get' };
+      notes.push('get=empty');
+    } catch (err) {
+      notes.push(`get=${(err as Error).message}`);
+    }
+    try {
+      const reflect = (ctx as unknown as { reflect?: { get?(name: string): unknown } }).reflect;
+      const viaReflect = reflect?.get?.('layout') as LayoutLike | undefined;
+      if (viaReflect?.selectPanel !== undefined) return { svc: viaReflect, why: 'reflect' };
+      notes.push('reflect=empty');
+    } catch (err) {
+      notes.push(`reflect=${(err as Error).message}`);
+    }
+    return { why: notes.join('; ') || 'no-layout-service' };
+  };
   console.info('[dsh-prime-memory] client apply: slots 注入就绪,注册 UI 槽位');
 
   // 设置面板：**只挂顶层「记忆」分节（`settings.section`）**，其余座位一个都不注册。
@@ -120,8 +212,7 @@ export function apply(ctx: MemoryClientCtx) {
   /** 选面板/回会话：布局服务是可选的，缺席时留在原地（不抛）。 */
   const selectPanel = (id: string | null): void => {
     try {
-      const layout = ctx.get('layout') as { selectPanel?: (v: string | null) => void } | undefined;
-      layout?.selectPanel?.(id);
+      resolveLayout().svc?.selectPanel?.(id);
     } catch {
       /* 布局服务缺席：用户可点侧栏「会话」行返回 */
     }
@@ -202,6 +293,31 @@ export function apply(ctx: MemoryClientCtx) {
   // 探针登记完毕即开放响应：旧版这里用 wired 卡“settings 确认后才挂”，
   // 该门禁已移进 sync（confirmed 判定），wired 只保留“探针就位”语义。
   wired = true;
+
+  // ── 记忆库深链（v0.26.39）───────────────────────────────────
+  // 先落意图再切面板：页面已挂载时 subscribe 当场生效；未挂载时 take() 在
+  // ExplorerPage 挂载时补上。layout 可能缺席，selectPanel 也可能抛（main key
+  // 未注册），两者都只回 ack，绝不让异常穿出事件监听。
+  openExplorerController = (detail: Record<string, unknown>): ExplorerOpenAck => {
+    const mode = detail['mode'];
+    if (mode !== 'entry' && mode !== '2d' && mode !== '3d') return { ok: false, reason: 'unmounted' };
+    // 入口被开关关掉时 main 页根本不注册：这是“用户意愿”而非故障，单独一档。
+    if (!explorerEntryState.isWanted()) return { ok: false, reason: 'disabled' };
+    // ≤0.1.5 只有 footer dialog，没有 main 页可切。
+    if (!mountedPage) return { ok: false, reason: 'unmounted' };
+    const recordId = typeof detail['recordId'] === 'string' && detail['recordId'] !== '' ? detail['recordId'] : undefined;
+    explorerIntent.request({ mode, ...(recordId === undefined ? {} : { recordId }) });
+    const layout = resolveLayout();
+    if (layout.svc?.selectPanel === undefined) return { ok: false, reason: 'unregistered', detail: layout.why };
+    try {
+      layout.svc.selectPanel(EXPLORER_ID);
+      return { ok: true };
+    } catch (err) {
+      console.warn('[dsh-prime-memory] 打开记忆库失败:', layout.why, err);
+      return { ok: false, reason: 'unregistered', detail: `via ${layout.why}; ${(err as Error).message}` };
+    }
+  };
+  bindOpenExplorerEvent();
   // 专用开关（explorerEnabled，概览页可拨）：首读 live 快照落定挂载基线；
   // 之后的即时切换走上方 subscribe，不再需要重启。读失败 fail-open 照挂
   //（缺省语义就是开，settings.ts 只有显式 false 才关，不能因一次 RPC 抖动锁死入口）。

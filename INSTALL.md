@@ -11,6 +11,8 @@
 
 任选一种调用方式（`npx` 前缀可替换下面任何 `dsh` 命令）：
 
+> 以下命令仅适用于 DSH CLI 宿主与 `--profile web`；**DSH Desktop（Electron 桌面端）用户无需安装 pnpm/npm**——桌面 profile 由应用独占管理，请在应用内插件页安装本插件。
+
 ```bash
 # 方式一：npx 直接跑官方 CLI（无需预装 dsh；可 pin 版本，如 dsh-prime-memory@0.8.4）
 npx -y @deepseek-ai/dsh plugin --profile web add dsh-prime-memory
@@ -50,6 +52,19 @@ dsh plugin --profile web update dsh-prime-memory@0.8.11
 
 升级只替换插件代码与 `dist/` 产物，数据目录 `~/.dsh/memory/` 不受影响。
 
+## Windows：安装 / 更新前先关闭 DSH 运行时
+
+Windows 上只要 DSH 桌面宿主在运行，从插件页安装 / 更新**任意**插件都可能让 pnpm（hoisted 布局）重链整棵顶层 `node_modules`，把本插件的原生依赖 `@node-rs/jieba` / `sqlite-vec` 的目录改名换入新副本；而宿主进程正持有 `jieba.*.node` / `vec0.dll`，Windows 对已加载镜像加独占锁，于是重命名失败并回滚（EPERM，报 `previous build is incomplete`）。
+
+处理：**跑 pnpm / `dsh plugin add|update` 之前先完全退出 DSH**，确认无残留进程再装，装完重启：
+
+```powershell
+# 必须返回空，再执行安装 / 更新
+Get-Process | Where-Object { $_.ProcessName -match 'dsh|deepseek|electron' }
+```
+
+这与插件本身无关——触发源是宿主的插件更新流程 + Windows 文件锁；关掉运行时即可避开锁，对任何插件的更新都成立。
+
 ## 验证
 
 安装并重启 DSH Web Host 后检查：
@@ -88,5 +103,6 @@ dsh plugin --profile web remove dsh-prime-memory
 | 无「上下文注入 · memory」行 | 蒸馏未跑 / 召回关闭 | 检查档位非 off、recall.enabled=true；看 `memory.log` 的 `L1 阶段完成` |
 | 本地嵌入档下载卡住 | 镜像直连不可达 | 设 `embedding.proxy` 走代理；或换 `embedding.mirror` 为官方 `huggingface.co` |
 | 远程嵌入报错 401 | apiKey 错 / 免 key 服务不应传 key | 检查 `embedding.apiKey`；自托管免 key 服务保持 apiKey 为空 |
+| Windows 更新任一插件报 EPERM / `previous build is incomplete` | 宿主运行中持有 `jieba.*.node` / `vec0.dll`，pnpm 重链原生依赖被文件锁挡下 | 先完全退出 DSH（`Get-Process ... -match 'dsh|deepseek|electron'` 为空）再安装 / 更新，装完重启 |
 
 更多见 [README.md](./README.md) 与 [CHANGELOG.md](./CHANGELOG.md)。

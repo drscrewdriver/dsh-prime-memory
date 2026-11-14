@@ -51,6 +51,7 @@ import { CostLedger } from './cost-ledger.js';
 import { L0WatermarkStore } from './l0-watermark.js';
 // 图谱存储(graph_* 表族)同为独立职责类;init 失败仅图谱 no-op,不传染主库降级
 import { GraphStore } from './graph-store.js';
+import { ExtSyncStore } from '../ext-memory/schema.js';
 import { RECEIPTS_MAX_RUNS, RECEIPTS_QUERY_LIMIT_MAX } from './receipts.js';
 import { DEFER_MAX, groupConflictPairsByClaim, normalizeClaimKey, normalizeConflictType } from './conflicts.js';
 import { isRetired, readSupersedeMarker, stripSupersedeMarker, withSupersedeMarker, SUPERSEDE_METADATA_KEY } from './supersede.js';
@@ -94,6 +95,9 @@ export class MemoryDb {
     graphStore = new GraphStore();
     /** L0 水位表(T8.4 写停;§A 恢复幂等判据的数据源,init 内建表+基线物化)。 */
     l0Watermark = new L0WatermarkStore();
+    /** ext_* 外部同步账本表族(计划 ext-mem-drivers-sync T0.3;init 自带 try/catch,
+     *  失败仅外部同步 no-op。这三张表**不进快照哈希投影**(T0.10 守卫钉死)。 */
+    extSync = new ExtSyncStore();
     stmtUpsertL0;
     stmtGetL0;
     stmtL0Exists;
@@ -560,6 +564,8 @@ export class MemoryDb {
         // `prepareL1VecStatements` 之前的探测决定），不新增一套能力探测。探测未通过 →
         // 不传 → 图谱向量路结构性不存在（不建表、不告警、不抛）。
         this.graphStore.init(this.db, this.logger, this.vecLoaded && this.dimensions > 0 ? { dimensions: this.dimensions } : undefined);
+        // ── ext_*:外部同步账本(ExtSyncStore.init 自带 try/catch,失败仅外部同步 no-op) ──
+        this.extSync.init(this.db, this.logger);
         // ── FTS5 全文索引(建表失败仅停用 FTS,不降级整个库) ──
         try {
             // 索引重建判据(FTS5 无法 ALTER,只能 drop 后从源表全量回灌):
@@ -2001,6 +2007,11 @@ export class MemoryDb {
             else if (opts.retired === true) {
                 where.push(retiredL1Sql());
             }
+            // 污染隔离：ext_key 非空 = 外源导入条目（puller 必写）。内部记录恒为空串，
+            // 所以这里是 `= ''` 而不是 `IS NULL`（后者在 NOT NULL 列上恒假 → 空结果集）。
+            if (opts.excludeExternal === true) {
+                where.push(`ext_key = ''`);
+            }
             const whereSql = where.length > 0 ? ` WHERE ${where.join(' AND ')}` : '';
             const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM l1_records${whereSql}`).get(...params);
             const rows = this.db
@@ -2860,6 +2871,7 @@ export class MemoryDb {
     }
     close() {
         this.l0Watermark.close();
+        this.extSync.close();
         try {
             this.db.close();
         }

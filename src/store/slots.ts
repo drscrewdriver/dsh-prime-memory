@@ -68,6 +68,8 @@ export interface SlotStoreOptions {
   maxSlots: number;
   maxBodyChars: number;
   maxTitleChars: number;
+  /** 已关闭槽位(done/dropped/expired)的历史留痕留存上限;超出按 updatedAt 降序裁旧。默认 = maxSlots(issue #33)。 */
+  maxClosedTrail?: number;
 }
 
 /** 投影 view 的单条槽位(不含 body —— 判定与生成正交,正文按需再取)。 */
@@ -161,6 +163,8 @@ export class SlotStore {
   private readonly maxSlots: number;
   private readonly maxBodyChars: number;
   private readonly maxTitleChars: number;
+  /** 关闭尾迹留存上限(见 pruneClosedTrail;issue #33)。 */
+  private readonly maxClosedTrail: number;
 
   constructor(
     private readonly file: string,
@@ -168,6 +172,7 @@ export class SlotStore {
     opts: Partial<SlotStoreOptions> = {},
   ) {
     this.maxSlots = opts.maxSlots ?? 8;
+    this.maxClosedTrail = opts.maxClosedTrail ?? this.maxSlots;
     this.maxBodyChars = opts.maxBodyChars ?? 512;
     this.maxTitleChars = opts.maxTitleChars ?? 60;
   }
@@ -247,8 +252,11 @@ export class SlotStore {
   async upsert(input: SlotInput): Promise<Slot> {
     const title = String(input.title ?? '').trim();
     if (!title) throw new Error('slot.title 不能为空');
-    if (this.slots.length >= this.maxSlots) {
-      throw new Error(`槽位数量已达上限(${this.maxSlots}),无法新增;请先关闭部分槽位(memory_slot_close)`);
+    // issue #33:上限只约束「开启中」的槽位——close 是软删(留同主题历史尾迹),
+    // 若按全量数组长度卡,关闭一条并不释放额度、上限被尾迹永久占满。与 open()/
+    // openCount()/projectionSnapshot() 的 open 口径对齐;超额尾迹由 pruneClosedTrail 有界留存。
+    if (this.openCount() >= this.maxSlots) {
+      throw new Error(`开启中的槽位已达上限(${this.maxSlots}),无法新增;请先关闭部分槽位(memory_slot_close)`);
     }
     const now = nowIso();
     const slot: Slot = {
@@ -273,6 +281,7 @@ export class SlotStore {
     // 不允许直接写入过期态(过期只由 expireDue 机械产生)
     if (slot.status === 'expired') slot.status = 'open';
     this.slots.push(slot);
+    this.pruneClosedTrail();
     await this.persist();
     return clone(slot);
   }
@@ -282,7 +291,8 @@ export class SlotStore {
    * 受管刷新(服务端自动化写,非工具面):按精确标题找既有槽位,存在则**原地**
    * 更新 body/updatedAt(其余字段不动——pinned/kind/priority 由首次写入定形),
    * 不存在则按 insert-only 新建。todo 参考这类"同一主体反复刷新"的高频写必须
-   * 走这里:逐次 upsert 会在 ≤8 槽上限里堆出一条关闭槽位尾迹。
+   * 走这里:逐次 upsert 每次都新增一条 open、挤占工作集上限并产生待裁剪的关闭尾迹,
+   * 原地刷新可避免这种 churn。
    * @returns 刷新/新建的槽位;超限新建失败时抛错(调用方转日志,不打断事件流)。
    */
   async refreshByTitle(title: string, patch: { body: string; pinned?: boolean }): Promise<Slot | undefined> {
@@ -304,8 +314,28 @@ export class SlotStore {
     if (!slot) return false;
     slot.status = status;
     slot.updatedAt = nowIso();
+    this.pruneClosedTrail();
     await this.persist();
     return true;
+  }
+
+  /**
+   * 裁掉超额的历史留痕:保留全部 open + 最近 maxClosedTrail 条非 open(按 updatedAt 降序)。
+   * issue #33:close 只做软删(status),不裁会让留痕无限堆;上限判据改数 open 后,
+   * 此方法把总量界定在 maxSlots(open) + maxClosedTrail(closed) 内。
+   * 原地改 this.slots;未超额时直接返回,不打乱既有顺序(幂等)。
+   */
+  private pruneClosedTrail(): void {
+    const closed = this.slots.filter((s) => s.status !== 'open');
+    if (closed.length <= this.maxClosedTrail) return;
+    const keep = new Set(
+      closed
+        .slice()
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))
+        .slice(0, this.maxClosedTrail)
+        .map((s) => s.id),
+    );
+    this.slots = this.slots.filter((s) => s.status === 'open' || keep.has(s.id));
   }
 
   /**
@@ -395,17 +425,22 @@ export class SlotStore {
             // 直接拒写虽然"可观测",但会让并发场景下的新增静默消失——能合并就别丢。
             const merged = new Map<string, Slot>();
             for (const s of (disk?.slots ?? [])) merged.set(s.id, s);
+            const mineIds = new Set(this.slots.map((s) => s.id)); // 本进程条目(合并前)
             for (const s of this.slots) merged.set(s.id, s); // 本进程优先
-            if (merged.size > this.maxSlots) {
-              this.logger.warn(
-                `[memory] 槽位合并后超过上限(${merged.size} > ${this.maxSlots}),保留本进程优先的前 ${this.maxSlots} 条`,
-              );
-              const keep = new Set(this.slots.map((s) => s.id));
-              const trimmed = [...merged.values()].filter((s) => keep.has(s.id)).slice(0, this.maxSlots);
-              merged.clear();
-              for (const s of trimmed) merged.set(s.id, s);
-            }
             this.slots = [...merged.values()];
+            // 上限口径与 open 对齐:合并可能把两进程的 open 叠加超过 maxSlots,超则保本进程 open 优先
+            const openAll = this.slots.filter((s) => s.status === 'open');
+            if (openAll.length > this.maxSlots) {
+              this.logger.warn(
+                `[memory] 槽位合并后 open 超过上限(${openAll.length} > ${this.maxSlots}),保留本进程优先的 ${this.maxSlots} 条`,
+              );
+              const pref = openAll.filter((s) => mineIds.has(s.id));
+              const rest = openAll.filter((s) => !mineIds.has(s.id));
+              const keepOpen = new Set([...pref, ...rest].slice(0, this.maxSlots).map((s) => s.id));
+              this.slots = this.slots.filter((s) => s.status !== 'open' || keepOpen.has(s.id));
+            }
+            // 历史留痕有界(裁掉超额 closed)
+            this.pruneClosedTrail();
             this.rev = diskRev + 1;
             this.baseRev = this.rev;
             return { next: { version: SLOTS_FILE_VERSION, rev: this.rev, slots: this.slots }, result: undefined };

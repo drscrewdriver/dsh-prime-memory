@@ -122,6 +122,76 @@ export interface MemoryConfig {
          *  **0 = 不做超时降级**(显式关闭,而非"立刻全部超时")。 */
         timeoutDays: number;
     };
+    /**
+     * 外部记忆驱动(计划 ext-mem-drivers-sync,Phase 0 只建骨架)。**默认全关**——
+     * `enabled=false` 时注册表空转、第 5 路结构性不存在、零网络零同步,行为与未引入
+     * 本段逐字一致。全部扁平 boolean/number/string,**禁 union**(ADR-0008 条 4:
+     * schemastery 对非法值抛错的故障半径是整棵配置树);驱动专有字段走 `extra`
+     * (JSON 串,消费侧归一),不用嵌套对象——`cordis.patch.yml` 按行整体替换不深合并。
+     */
+    extMemory: VolatileRef<{
+        enabled: boolean;
+        /** 'shadow-read'(默认,只融合不落库) | 'push-only' | 'two-way';消费侧 `normSyncMode` 归一。 */
+        syncMode: string;
+        /** 驱动实例登记(配置是事实源;`ext_drivers` 表只是运行态镜像)。 */
+        drivers: Array<{
+            id: string;
+            /** 九类之一(mem0/hindsight/...;非法值装配期拒绝,见 registry.assertRuntime)。 */
+            type: string;
+            enabled: boolean;
+            /** HTTP baseUrl / CLI 可执行路径 / 本地 store 路径。 */
+            endpoint: string;
+            /** 明文密钥(部署 YAML 侧;不回显 UI、不进日志,与 embedding.apiKey 同款约定)。 */
+            apiKey: string;
+            /** 服务端 namespace(bankId / userId:agentId / containerTag / uri / 目录)。 */
+            space: string;
+            /** 厂商专有字段(JSON 串,消费侧自解析;空串 = 无)。 */
+            extra: string;
+        }>;
+        lane: {
+            /** 单驱动在 ext 路内最多贡献条数(防一家灌满整路)。 */
+            maxItemsPerDriver: number;
+        };
+        push: {
+            /** 推送引擎总闸(计划 Phase 2):默认关——shadow-read 融合可以开,但**任何写外流
+             *  需要这里也显式开**(双闸:enabled 装驱动 + push.enabled 才真推)。 */
+            enabled: boolean;
+            maxItems: number;
+            timeBudgetMs: number;
+            /** awaiting-settle → orphan 的时限(异步抽取家回捞 externalId 的窗口)。 */
+            settleTimeoutMs: number;
+            /** Phase 2 硬闸:false = 只派 soft-delete 驱动(hindsight/supermemory/native),
+             *  hard 家任务挂 pending 不派发(不可逆远端删的传导要等 Phase 3 面板/tombstone 闭环验收)。 */
+            allowHardDelete: boolean;
+            /** 推送族白名单(逗号列,消费侧归一;默认只推 work——个人 chat 记忆默认不出机)。 */
+            families: string;
+            /** 单任务失败重试上限,达限转 dead(面板可查)。 */
+            maxAttempts: number;
+            /** 退避阶梯 ms(逗号列,消费侧归一;超出末项取末项)。 */
+            backoffMs: string;
+            /** awaiting-settle 回捞扫描每空间条数上限。 */
+            settleScanLimit: number;
+        };
+        pull: {
+            /** 入站拉取闸(Phase 3):与 push.enabled 分开,双向的两个方向各自显式开。 */
+            enabled: boolean;
+            intervalMs: number;
+            maxItems: number;
+            timeBudgetMs: number;
+            /** 回灌族白名单(逗号列,消费侧归一;空串 = 全量)。 */
+            families: string;
+        };
+        /** 单次驱动请求超时(ms,对齐参考实现 HttpMemoryProvider 默认 15s)。 */
+        requestTimeoutMs: number;
+        health: {
+            /** 探测结果缓存 ms。 */
+            cacheMs: number;
+            /** 连续失败到阈值开熔断。 */
+            failureThreshold: number;
+            /** 熔断开路时长 ms。 */
+            openMs: number;
+        };
+    }>;
     /** 轨3 memport Connect:外部记忆来源登记与只读扫描。**默认关**——
      *  scan 仅预览(不写库)，写库仍走 memory_import；enabled 关时 memory-sources 与 memport-scan 端点均不可用。 */
     memport: {
@@ -519,6 +589,12 @@ export interface MemoryConfig {
  * ⚠️ 不得在节内再标 `.volatile()`(volatile 嵌套 volatile 会被宿主拒绝)。
  */
 export declare function liveSettingsSchema(): VolatileRef<MemoryLiveSettings>;
+/** `extMemory` 节的值形状（从 VolatileRef 里揭出来，供读侧与 RPC 写侧复用）。 */
+export type ExtMemoryValue = MemoryConfig['extMemory'] extends VolatileRef<infer V> ? V : never;
+/**
+ * 读 `extMemory`：兼容两形（已标 volatile → 宿主给引用；能力缺席/老线 → 给冻结值）。
+ * 不兼容这一形就是在老线报 `ref.get is not a function`（把加载期崩换成运行期崩）。 */
+export declare function readExtMemory(ref: VolatileRef<ExtMemoryValue> | ExtMemoryValue | undefined): ExtMemoryValue | undefined;
 /**
  * 导出面形状：宿主按 Standard Schema 接口消费它，测试把它当函数调（取默认值解算结果）。
  *

@@ -8,6 +8,27 @@ import { type L1MetaLite, type MemoryDb } from './sqlite.js';
 import type { L1FileSyncHook } from './memory-md-sync.js';
 export type RecallStrategy = 'keyword' | 'embedding' | 'hybrid';
 /**
+ * 外部记忆路提供者(计划 ext-mem-drivers-sync T0.6,第 5 路):按查询返回已排序的
+ * 外部命中(形状借用 L1Hit,id 形如 `ext:<driver>:<space>:<externalId>`)。
+ * 与 GraphLaneProvider 同一注入式纪律:**未接线 = 该路结构性不存在**,既有分数
+ * 逐位一致。路内并发/限流/归因在 provider 侧(ext-memory/lane.ts)完成,本缝只消费。
+ * 红线:外部命中只进 search() 的融合列表,**严禁进入 searchCandidates**(去重候选)
+ * ——外部正文不受本地 type 白名单/族/判据面约束,进了候选池会把去重判决拖入
+ * 不可控语义(与 recencyLane 同理而风险更大)。
+ */
+export type ExtLaneProvider = (query: string, limit: number, opts?: {
+    family?: MemoryFamily;
+    workspaceId?: string;
+}) => Promise<L1Hit[]>;
+/**
+ * 外部同步入队钩子(计划 Phase 2):汇流口只管把「变了哪些记录」交给实现侧,
+ * 双闸(enabled && push.enabled)/syncMode/族白名单/驱动集扇出的判据全部在
+ * pusher 的 hook 实现里——store 层不持有第二套同步策略。
+ */
+export interface L1ExtSyncHook {
+    enqueue(records: readonly MemoryRecord[], intent: 'add' | 'forget', why: string): void;
+}
+/**
  * 图谱路提供者(§D 第 3 路):按查询返回图谱回链的 L1 记录 id 有序列
  * (向量种子并集与 1-hop 边扩展在 provider 内完成,见 graph-store.searchLaneRecords)。
  * 抽成注入式而非直接读 `db.graphStore`,是为了给 hybrid 融合留一个可替换的测试缝,
@@ -71,8 +92,13 @@ export declare class L1Store {
     private readonly decayHalfLifeDays;
     /** §D 第 3 路(图谱回链);缺省 = 不接,恰为 2 路。 */
     private readonly graphLaneProvider?;
+    /** 第 5 路(外部记忆);缺省 = 不接,该路结构性不存在(T0.6 零漂移判据)。 */
+    private readonly extLaneProvider?;
     /** 孤儿记忆计数(没有任何 Room 的记录;rooms-get 面板「无绑定」chip 用)。 */
     untaggedL1Count(): number;
+    /** 外部同步账本(ext_* 三表;面板只读面与后续 pusher/puller 的共用入口。
+     *  未就绪时各方法自带 no-op,这里不另判空——避免第二套降级判据)。 */
+    get ext(): import("../ext-memory/schema.js").ExtSyncStore;
     /** Room 计数缓存(见 `listRooms()`:tags 仅随反刍变化,不必每次敲库)。 */
     private roomCache;
     /**
@@ -84,6 +110,14 @@ export declare class L1Store {
      * 与构造函数里的 `autoName: () => cfg.memExport.enabled` 同一先例:只拿判据,不拿配置快照。
      */
     private fileSync?;
+    /**
+     * 外部同步入队钩子(计划 Phase 2;未注入 = 零动作)。
+     *
+     * 与 fileSync 同一收口纪律:改变记录身份/有效性的写路径全部汇流在本类,
+     * 在这里点火意味着新增调用点不会漏(上游 8 处 retire 调用点的教训不重演)。
+     * 注意 rename **不**点火:文件身份键是本地投射面的概念,外部服务不感知。
+     */
+    private extSync?;
     constructor(dataDir: string, db: MemoryDb, embed?: EmbeddingService, strategy?: RecallStrategy, logger?: MemoryLogger, 
     /** 时效衰减半衰期(天;0=关)。缺省 30 与 config 默认一致。 */
     decayHalfLifeDays?: number, 
@@ -96,7 +130,10 @@ export declare class L1Store {
      * 不传 = 不主动起名（“投射关着时零动作”这条既有承诺不改），但**别人占着的名字照样修**
      * ——那是防丢数据，与开关无关。
      */
-    autoName?: (() => boolean) | undefined);
+    autoName?: (() => boolean) | undefined, 
+    /** 外部记忆路提供者(T0.6 第 5 路);不传则该路结构性不存在,既有分数逐位不变。
+     *  位序刻意在 autoName **之后**:既有装配按位置参递 autoName,插中间会静默换槽。 */
+    extLane?: ExtLaneProvider);
     /** 读路径时效半衰期(天;0=关)。老化权重展示与召回衰减同一事实源。 */
     get decayHalfLife(): number;
     /**
@@ -106,6 +143,10 @@ export declare class L1Store {
      * 未注入时四个汇流口行为与注入前逐字一致(投射面关着也是这条)。
      */
     setFileSyncHook(hook: L1FileSyncHook): void;
+    /** 晚绑定外部同步钩子(runner/推送泵晚于 stores.l1 创建,构造期拿不到)。 */
+    setExtSyncHook(hook: L1ExtSyncHook): void;
+    /** 外部同步点火(旁路:入队失败/未注入都不影响库侧结果;实现侧自己判双闸/族白名单)。 */
+    private fireExtSync;
     /** 有效性变更点火(增/退场/恢复共用一个入口:钩子内部自己跑「导出→后缀收敛」)。 */
     private fireFileSync;
     init(): Promise<void>;
@@ -266,6 +307,17 @@ export declare class L1Store {
     findSupersededTargets(newId: string): string[];
     /** 外部导入幂等 pre-check(轨3-P0):ext_key 命中已存在记录则返回其 id,否则 undefined。 */
     findIdByExtKey(extKey: string): string | undefined;
+    /**
+     * 外部回灌的同 id 改写(计划 T3.1):远端真相覆盖本地正文。
+     *
+     * 与 `upsert` 的关键区别在**事实源**:upsert 是去重合并的内部演进(官方语义不动
+     * JSONL),这里跨源覆盖必须追加版本行——只改检索库而事实源留旧文的活,下次
+     * 「重建记忆」replay 会把外部真值静默回滚,且无从察觉。
+     *
+     * 回推一环不靠这里关门:改写后 fireExtSync 会入队 add,但 pusher 的写放大闸
+     * (digest 相同已链→skip/digest 已同步)接住——调用方把影子 dbDigest 同步成新指纹即可。
+     */
+    reviseInPlace(record: MemoryRecord): Promise<void>;
     /**
      * §B 决策凭证落盘(L1Store 的薄缝)。
      * 刻意放在 store 上:`runExtraction` 已经持有 L1Store,凭证写入因此无需新增
@@ -463,6 +515,16 @@ export declare class L1Store {
      */
     private graphLane;
     /**
+     * 第 5 路(外部记忆,T0.6):provider 直接返回已排序命中列表(多驱动并发、
+     * rank 归一、注入截断都在 ext-memory/lane.ts 侧完成),本缝只做三件事:
+     * - **异常降级**:全挂 → 空列表 + warn——接线即恒占路数名额,分母不随网络抖;
+     * - **红线自证**:`assertNotDedupPath` 哨兵——外部命中进了去重候选路径即显式
+     *   崩溃(dev/test 抛、生产 no-op),与 recencyLane 同款护栏而理由更硬:
+     *   外部正文由别家 agent 产生,不受本地 type 白名单/族/判据面约束;
+     * - 未接线 = 直接返回空(provider 不存在时调用方本就不会把该路推进 lanes)。
+     */
+    private extLane;
+    /**
      * 时效衰减加权(#29):三路共用的读路径后处理——阈值过滤之后、截断之前
      * (才能轮转名额,而不只是重排已截断的集合)。updated_at 经主表批量点查
      * 回填(FTS 表无该列;候选池 ≤ limit×3 条主键查询,微秒级)。关闭时零开销。
@@ -482,6 +544,8 @@ export declare class L1Store {
         workspaceId?: string;
         /** 退场筛查:三态(`undefined` 全部 / `false` 仅活跃 / `true` 仅已退场)。 */
         retired?: boolean;
+        /** 排除外源导入条目（污染隔离）；透传到 SQL 谓词，不是取回后筛。 */
+        excludeExternal?: boolean;
         limit: number;
         offset: number;
     }): {

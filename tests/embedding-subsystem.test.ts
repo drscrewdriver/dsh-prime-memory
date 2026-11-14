@@ -240,7 +240,7 @@ describe('runtime installer', () => {
     const lockPath = join(await tmp(), `lock-${Date.now()}.json`);
     await writeFile(lockPath, lock);
     const { spawnImpl, commands } = fakeSpawn(dataDir, [1, 0]);
-    const installer = new RuntimeInstaller(dataDir, PINNED_TRANSFORMERS_VERSION, { spawnImpl, lockfileSource: lockPath, logger: noopLogger });
+    const installer = new RuntimeInstaller(dataDir, PINNED_TRANSFORMERS_VERSION, { spawnImpl, lockfileSource: lockPath, pmProbe: async () => ({ cmd: 'npm', argsPrefix: [], pnpmLike: false, label: 'npm' }), logger: noopLogger });
     expect(await installer.isReady()).toBe(false);
     expect(await installer.ensure()).toBe(true);
     // 第一次 ci(失败)→ 第二次 install 成功
@@ -287,8 +287,10 @@ describe('runtime installer', () => {
     const dll = join(cand.libvipsDir, 'libvips-42.dll');
     await writeFile(dll, 'x');
     expect(await installer.isReady()).toBe(true);
-    // 手动删 dll → isReady() === false(触发重装)
+    // 上面 isReady()===true 已落 ready marker;建议3:命中 marker 即权威短路,
+    // 半装检测只在"没有 marker"时生效——故这里连 marker 一起清掉,验无缓存下的 fix #11 重装路径。
     await rm(dll);
+    await rm(join(dataDir, 'runtime', '.ready-marker.json'));
     expect(await installer.isReady()).toBe(false);
   });
 });

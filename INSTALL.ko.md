@@ -11,6 +11,8 @@
 
 두 가지 호출 방식 중 선택（`npx` 접두사는 아래 어떤 `dsh` 명령도 대체 가능）：
 
+> 아래 명령은 DSH CLI 호스트와 `--profile web`에만 적용됩니다. **DSH Desktop(Electron 데스크톱) 사용자는 pnpm/npm을 설치할 필요가 없습니다** — 데스크톱 profile은 앱이 독점 관리하므로 앱 내 플러그인 페이지에서 이 플러그인을 설치하세요.
+
 ```bash
 # 방식 1: npx로 공식 CLI 직접 실행（dsh 사전 설치 불필요. 버전 고정 가능, 예: dsh-prime-memory@0.8.4）
 npx -y @deepseek-ai/dsh plugin --profile web add dsh-prime-memory
@@ -50,6 +52,19 @@ dsh plugin --profile web update dsh-prime-memory@0.8.11
 
 업그레이드는 플러그인 코드와 `dist/` 산출물만 교체하며, 데이터 디렉터리 `~/.dsh/memory/`에는 영향이 없습니다.
 
+## Windows: 설치 / 업데이트 전 DSH 런타임 종료
+
+Windows에서는 DSH 데스크톱 호스트가 실행 중인 상태에서 플러그인 페이지에서 **어떤** 플러그인을 설치 / 업데이트해도 pnpm(hoisted 구성)이 최상위 `node_modules` 전체를 재링크하여 이 플러그인의 네이티브 의존성 `@node-rs/jieba` / `sqlite-vec` 디렉터리를 이름 바꿔 새 사본으로 교체하려 합니다. 호스트 프로세스가 `jieba.*.node` / `vec0.dll`을 열어 두므로 Windows가 로드된 이미지에 배타 잠금을 걸어 이름 바꾸기가 실패하고 업데이트가 롤백됩니다(EPERM, `previous build is incomplete`).
+
+대처: **pnpm / `dsh plugin add|update` 실행 전에 DSH를 완전히 종료**하고 잔여 프로세스가 없음을 확인한 뒤 설치하고, 설치 후 재시작합니다:
+
+```powershell
+# 설치 / 업데이트 전에 반드시 결과가 비어야 함
+Get-Process | Where-Object { $_.ProcessName -match 'dsh|deepseek|electron' }
+```
+
+이는 플러그인 자체의 결함이 아니라, 호스트의 플러그인 업데이트 흐름과 Windows 파일 잠금이 원인입니다. 런타임을 종료하면 잠금이 풀려 어떤 플러그인 업데이트에도 적용됩니다.
+
 ## 검증
 
 DSH Web Host 재시작 후 확인：
@@ -88,5 +103,6 @@ dsh plugin --profile web remove dsh-prime-memory
 | "컨텍스트 주입 · memory" 행 없음 | 증류 미실행 / 회상 꺼짐 | 모드가 off 아니며 `recall.enabled=true` 확인. `memory.log`의 `L1 단계 완료` 확인 |
 | 로컬 임베딩 다운로드 멈춤 | 미러 직결 불가 | `embedding.proxy`로 프록시 설정, 또는 `embedding.mirror`을 공식 `huggingface.co`로 |
 | 원격 임베딩 401 오류 | apiKey 오류 / 무키 서비스에 key 불필요 | `embedding.apiKey` 확인. self-host 무키 서비스는 apiKey 비움 |
+| Windows에서 임의 플러그인 업데이트가 EPERM / `previous build is incomplete`로 실패 | 실행 중인 호스트가 `jieba.*.node` / `vec0.dll`을 열어 두어 pnpm의 네이티브 의존성 재링크가 파일 잠김에 막힘 | 설치 / 업데이트 전 DSH 완전 종료(`Get-Process ... -match 'dsh|deepseek|electron'` 결과 비어야 함) 후 설치, 완료 후 재시작 |
 
 자세한 것은 [README.ko.md](./README.ko.md)와 [CHANGELOG.ko.md](./CHANGELOG.ko.md) 참조.

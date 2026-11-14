@@ -36,6 +36,7 @@ import { DISABLE_SUFFIX, digest, isRetiredRecord, recordDigest, targetFor } from
 import { exportRecords } from '../store/memory-md-export.js';
 import { parseMdFile } from '../store/memory-md-parse.js';
 import { normalizeContentMd } from '../util/md-normalize.js';
+import { adjudicateTriSide } from './tri-side.js';
 /** 投射结构是 `<type>/<stem>.memory.md` 两层，3 层已足够宽容人的整理习惯，再深就是别人的目录。 */
 const MAX_DEPTH = 3;
 /** 样本上限：报告要进面板，全量路径会把面板撑爆；计数才是判据。 */
@@ -392,13 +393,26 @@ export async function syncFromFiles(deps) {
         // 自校验：声明 `hash` 与正文不符 = 文件侧确实被改过。把它并进 `fileChanged`（只可能“打开”、
         // 不会“关掉”判据）——这样即使账本基线因故与文件碰巧相等，正文被改仍不会被漏判成 `same`。
         const fileChanged = entry === undefined || entry.fileDigest !== digest(text) || parsed.hashValid === false;
+        // 三侧收敛(T4.1):两边都变时看远端——文件与某远端一致 = 外部真值刚落地,
+        // 以文件为真值回灌库(与下方 file-only 分支同路),不挂人工账。
+        let reimportFromBoth = false;
         if (dbChanged && fileChanged) {
-            report.pending += 1;
-            sample(abs, 'both: 挂待裁决（两侧都不动）');
-            logger?.warn(`[memory] md 同步挂账（两边都变，等人裁决）: ${abs} record=${rec.id}`);
-            continue;
+            const remotes = deps.remoteContents?.(rec.id) ?? [];
+            const adjudication = adjudicateTriSide({
+                dbContent: rec.content,
+                fileContent: parsed.content,
+                remoteContents: remotes,
+            });
+            if (adjudication.action !== 'reimport-db') {
+                report.pending += 1;
+                sample(abs, `both: 挂待裁决（${adjudication.why}）`);
+                logger?.warn(`[memory] md 同步挂账（两边都变，等人裁决）: ${abs} record=${rec.id} verdict=${adjudication.verdict}`);
+                continue;
+            }
+            reimportFromBoth = true;
+            logger?.info(`[memory] md 三侧收敛：文件=远端 → 回灌库 (${abs})`);
         }
-        if (!dbChanged && !fileChanged) {
+        else if (!dbChanged && !fileChanged) {
             report.same += 1;
             continue;
         }
@@ -412,7 +426,7 @@ export async function syncFromFiles(deps) {
             logger,
             now: deps.now,
         });
-        if (dbChanged) {
+        if (dbChanged && !reimportFromBoth) {
             // 只有库变 → 重写文件（走导出侧同一条写盘路）。
             const sub = await one([rec]);
             if (sub.skipped > 0) {

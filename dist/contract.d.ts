@@ -139,6 +139,22 @@ export interface MemoryLiveSettings {
     /** 存量回填（keyword/redistill）LLM 批调用的运行时并行度覆盖：0 = 跟随部署
      *  `cfg.backfill.concurrency`（默认 2）；1–8 = 直接覆盖。概览页 1–3 滑块写的就是它。 */
     backfillConcurrency: number;
+    /**
+     * 外部同步**运行时档位**：'' = 跟随部署 `ext_memory.syncMode`；非空 = 覆盖。
+     * 热生效（pusher/puller 每轮读 live），且仍过共存门控：two-way × memExport 同开会被降 shadow-read。
+     */
+    extSyncMode: '' | 'shadow-read' | 'push-only' | 'two-way';
+    /** 推送闸热开关（与部署 `ext_memory.push.enabled` 双闸，任一关不出站）。 */
+    extPushEnabled: boolean;
+    /** 拉取闸热开关（与部署 `ext_memory.pull.enabled` 双闸，任一关不入站）。 */
+    extPullEnabled: boolean;
+    /** hard-delete 派发热阀：true 才允许不可逆远端删传导（面板上必须带警示文案）。 */
+    extAllowHardDelete: boolean;
+    /**
+     * 污染隔离闸（计划 ext-to-l1-import）：true = 反刍 L2 / 轻量刷新 / 重建取数时排除外源导入条目。
+     * **默认 true**（与其余默认关的追加型开关相反）：它防的是污染，判据是“排除”而非“追加”。
+     */
+    extImportIsolate: boolean;
 }
 /** 召回停用原因(session-stats recall.enabled=false 时带出;短路序第一个为假的因子)。 */
 export type RecallDisabledReason = 'deploy' | 'global' | 'session' | 'mode';
@@ -861,6 +877,13 @@ export interface SettingsSetRequest {
     capture?: boolean;
     distill?: boolean;
     recall?: boolean;
+    /** 外部同步运行时开关(T4.2 后补):档位 '' = 跟随部署;三布尔热阀(与部署取或)。 */
+    extSyncMode?: '' | 'shadow-read' | 'push-only' | 'two-way';
+    extPushEnabled?: boolean;
+    extPullEnabled?: boolean;
+    extAllowHardDelete?: boolean;
+    /** 污染隔离闸（默认开；显式 false 才关）。 */
+    extImportIsolate?: boolean;
     distillChain?: DistillChainEntry[];
     /** 运行时按层路由链:逐层 patch(只带要改的层;空数组 = 该层回到跟随)。 */
     distillLayerChains?: Partial<Record<LayerRouteKey, DistillChainEntry[]>>;
@@ -1654,6 +1677,9 @@ export interface ConflictPairView {
 export interface ConflictsRequest {
     /** 最多返回多少对(默认 50,上限 200)。 */
     limit?: number;
+    /** T0.9 可见范围过滤:携当前检视工作区时,任一方记录对其不可见的对整对隐去;
+     *  缺省/空串 = 不过滤(与改前逐字一致)。 */
+    workspaceId?: string;
 }
 /** `dsh-memory/conflicts` 响应。 */
 export interface ConflictsResponse {
@@ -1672,6 +1698,8 @@ export interface ConflictResolveRequest {
     pairId: string;
     /** `winner` | `loser` | `both`。 */
     outcome: string;
+    /** T0.9:与展示侧同一可见性闸——不可见即拒(携了才生效,缺省不过滤)。 */
+    workspaceId?: string;
 }
 /** `dsh-memory/conflict-resolve` 响应(与 `memory_resolve_conflict` 工具同形状)。 */
 export interface ConflictResolveResponse {
@@ -1991,6 +2019,255 @@ export interface WorkspaceRelinkResponse {
     /** 命中记录按归属分布——拿它判断路由表合不合口味。 */
     byWorkspace: Record<string, number>;
 }
+/** 一个驱动实例的面板视图。机密只回键名不回值(参考实现同款纪律:凭据永不下发浏览器)。 */
+export interface ExtDriverView {
+    driverId: string;
+    typeId: string;
+    /** 配置登记位的 enabled(与运行态镜像取与后面板才能区分"没配/配了但停")。 */
+    enabled: boolean;
+    healthy: boolean;
+    lastProbeAt: number;
+    lastError: string;
+    /** 已配置的机密字段名(只名不值)。 */
+    configuredSecrets: string[];
+    /** 该驱动的待同步队列条数(pending/running/awaiting_settle 合计)。 */
+    outboxPending: number;
+    /**
+     * 该驱动已有影子账条数。
+     * 存在的理由：面板的**删除前确认**要拿它说话（“该驱动已有 N 条映射，
+     * 移除后远端数据不会因此消失”）——没有这个数，删除就是个无成本按钮。
+     */
+    shadows: number;
+    /**
+     * 接入地址与 namespace(非机密,已在 profile YAML 里)。
+     * 带上是为了**编辑预填**：面板表单若空着 endpoint 让用户“保存”，
+     * 就会把已配置地址清空——这是比不显示更坑的默认值。
+     */
+    endpoint: string;
+    space: string;
+}
+/** `dsh-memory/ext-drivers-list` 请求(无入参)。 */
+export type ExtDriversRequest = Record<string, never>;
+/**
+ * `dsh-memory/ext-drivers-list` 响应。
+ * `enabled` = **装配真相**（驱动实例到底在不在跑），面板的置灰与“已关闭”卡片据此判定；
+ * `configuredEnabled` = profile 里的意图。两者不等 = 刚改过总闸尚未重载，notice 会说清方
+ * 向（否则“显示已关闭而实际仍在推/拉”与“显示已开启而实际没装配”同样坑）。
+ */
+export interface ExtDriversResponse {
+    enabled: boolean;
+    configuredEnabled?: boolean;
+    syncMode: string;
+    drivers: ExtDriverView[];
+    /**
+     * md 投射是否开着（`mdSync.enabled` 或热阀 `mdSyncEnabled`）。
+     *
+     * 面板得知道这件事才能把“导入 N 条 = 生成 N 个 .memory.md”说在点下去之前；
+     * 不外露就只能写一句泛泛的“可能有副作用”，与没说一样。
+     */
+    mdExportOn?: boolean;
+    notice?: string;
+}
+/** `dsh-memory/ext-driver-probe` 请求。 */
+export interface ExtDriverProbeRequest {
+    driverId: string;
+}
+/** `dsh-memory/ext-driver-probe` 响应。Phase 0 只回显注册态镜像(真探活在 Phase 1+)。 */
+export interface ExtDriverProbeResponse {
+    ok: boolean;
+    healthy?: boolean;
+    lastProbeAt?: number;
+    lastError?: string;
+    notice?: string;
+}
+/** `dsh-memory/ext-sync-status` 请求(无入参)。 */
+export type ExtSyncStatusRequest = Record<string, never>;
+/** `dsh-memory/ext-sync-status` 响应:影子账四象限计数 + 出站队列水位。 */
+export interface ExtSyncStatusResponse {
+    enabled: boolean;
+    syncMode: string;
+    /** sync_state → 条数(键集见 ext-memory/schema.ts 的 EXT_SHADOW_STATES)。 */
+    shadow: Record<string, number>;
+    outbox: {
+        pending: number;
+        dead: number;
+    };
+    notice?: string;
+}
+/** `dsh-memory/ext-conflicts-list` 请求:按状态/族过滤 + 分页。 */
+export interface ExtConflictsListRequest {
+    status?: string;
+    kind?: 'both_dirty' | 'orphan' | 'unforgettable';
+    limit?: number;
+    offset?: number;
+}
+/** `dsh-memory/ext-conflicts-list` 响应:冲突三族账 + 双侧预览(本地/R 端各 200 字)。 */
+export interface ExtConflictsListResponse {
+    enabled: boolean;
+    open: number;
+    byKind: Record<string, number>;
+    items: Array<{
+        conflictId: string;
+        driverId: string;
+        recordId: string;
+        externalId: string;
+        kind: string;
+        status: string;
+        resolution: string;
+        localPreview: string;
+        remotePreview: string;
+        detail: Record<string, unknown>;
+    }>;
+    notice?: string;
+}
+/** `dsh-memory/ext-conflict-resolve` 请求:resolve=裁决结案 / dismiss=忽略。 */
+export interface ExtConflictResolveRequest {
+    conflictId: string;
+    action?: 'resolve' | 'dismiss';
+    resolution?: string;
+}
+export interface ExtConflictResolveResponse {
+    ok: boolean;
+    action: string;
+    conflictId: string;
+    notice: string;
+}
+/**
+ * `dsh-memory/ext-config-arm` 响应(计划 ext-driver-config-ui)：面板写配置前的武装面。
+ * `armed=false` 时 `reason` 必给原因（宿主不供 settings.forms 写配置能力），UI 置灰而非静默失败。
+ * 这里不涉及 memoryMutate：那条门的定义对象是模型写删记忆工具，配置面只需 nonce + 宿主能力。
+ */
+export interface ExtConfigArmResponse {
+    armed: boolean;
+    nonce?: string;
+    expiresAt?: number;
+    reason?: string;
+    notice?: string;
+}
+/**
+ * `ext-config-arm` 请求。`issue: false` = 只探可用性、**不签发令牌**。
+ * 分开是因为令牌名额只有 3 张且会挤掉最早一张:面板定时刷新若也签发,就能把
+ * 用户刚拿到、正准备保存的那张挤掉——表现为“莫名其妙保存失败”。
+ */
+export interface ExtConfigArmRequest {
+    issue?: boolean;
+    /**
+     * 票的用途。`config`（缺省）= 写 profile，仍要求 `configWritable`；
+     * `import` = 启动导入（不写 profile），**不受配置写能力缺席拖累**。
+     * 分票的理由：用一个无关能力的缺席去拦另一个能力。
+     */
+    scope?: 'config' | 'import';
+}
+/** `ext-driver-upsert` 请求：意图式只带驱动字段（服务端做读-改-写，空 apiKey = 保留旧值）。 */
+export interface ExtDriverUpsertRequest {
+    nonce: string;
+    id: string;
+    type: string;
+    enabled?: boolean;
+    endpoint?: string;
+    apiKey?: string;
+    space?: string;
+    extra?: string;
+}
+/**
+ * 写类响应共同字段：`needsReload` 恒 true（无热重载通道）；
+ * shadows/outboxPending 给面板做“该驱动已有账本”的提醒（不回显任何密钥信息）。
+ */
+export interface ExtDriverUpsertResponse {
+    ok: boolean;
+    needsReload: boolean;
+    created: boolean;
+    shadows: number;
+    outboxPending: number;
+    notice?: string;
+}
+export interface ExtDriverRemoveRequest {
+    nonce: string;
+    id: string;
+}
+export interface ExtDriverRemoveResponse {
+    ok: boolean;
+    needsReload: boolean;
+    removed: boolean;
+    shadows: number;
+    outboxPending: number;
+    notice?: string;
+}
+/**
+ * `dsh-memory/ext-config-enable` 总闸开关（同一意图式通道：面板可改、会话无入口）。
+ *
+ * 为何需要它：`extMemory.enabled` 不在 live 键集（装配在启动期，热开不会造出驱动实例），
+ * 也没任何面板入口——面板上的同步开关因此成了“可拨但行为零变更”的暗示器。
+ * 走 profile 写入 + 明示重载才是诚实的生效点位。
+ */
+export interface ExtConfigEnableRequest {
+    nonce: string;
+    /** 缺省 true（面板主用意图是“开启”）；显式 false = 关闭总闸。 */
+    enabled?: boolean;
+}
+export interface ExtConfigEnableResponse {
+    ok: boolean;
+    /** 恒 true：总闸靠装配采纳，重载前行为不变。 */
+    needsReload: boolean;
+    /** 本次提交的目标值（不是生效值，生效值仍由 `ext-drivers-list.enabled` 说）。 */
+    enabled: boolean;
+    notice?: string;
+}
+/**
+ * `dsh-memory/ext-import-start` 首次全量导入。
+ * 走 `scope:'import'` 领来的票；**不要求 configWritable**（导入不写 profile）。
+ */
+export interface ExtImportStartRequest {
+    nonce: string;
+    driverId: string;
+    spaceId?: string;
+    /** 省略 = 用部署护栏默认；面板可改。达上限后 truncation='capped'。 */
+    maxItems?: number;
+    /**
+     * true = 先清断点再从 0 开始。
+     *
+     * 默认行为是“有断点就续”，这是为了不重复嵌入（最贵的一项）；但用户可能就是想重导一遍
+     * （比如远端删过条目、或上一轮的跳过错得离谱）。没这个开关时那条断点只能手动改库才能清。
+     */
+    restart?: boolean;
+}
+/** 受理即返回，不在这里回传进度（进度只有一套语义：`ext-import-status`）。 */
+export interface ExtImportStartResponse {
+    accepted: true;
+    startedAt: number;
+}
+export interface ExtImportStatusResponse {
+    /** 从未跑过 = null（面板不显示进度区）。 */
+    running: boolean;
+    driverId: string;
+    spaceId: string;
+    offset: number;
+    imported: number;
+    skipped: number;
+    startedAt: number;
+    cancelRequested: boolean;
+    error?: string;
+    /** 上一轮结果（事后凭证）：`l1TotalAfter - l1TotalBefore` 就是真正新增几条。 */
+    last?: {
+        finishedAt: number;
+        durationMs: number;
+        pulled: number;
+        imported: number;
+        skipped: number;
+        conflicts: number;
+        failed: number;
+        offset: number;
+        truncation: 'complete' | 'capped' | 'budget' | 'cancelled' | 'unsupported';
+        l1TotalBefore: number;
+        l1TotalAfter: number;
+    };
+}
+export interface ExtImportCancelRequest {
+    driverId?: string;
+}
+export interface ExtImportCancelResponse {
+    cancelled: boolean;
+}
 export interface DshMemoryRequestMap {
     'dsh-memory/stats': Record<string, never>;
     'dsh-memory/token-cost': TokenCostRequest;
@@ -2061,6 +2338,18 @@ export interface DshMemoryRequestMap {
     'dsh-memory/mem-sync': MemSyncRequest;
     'dsh-memory/mem-orphans': MemOrphansRequest;
     'dsh-memory/skills-action': SkillsActionRequest;
+    'dsh-memory/ext-drivers-list': ExtDriversRequest;
+    'dsh-memory/ext-driver-probe': ExtDriverProbeRequest;
+    'dsh-memory/ext-sync-status': ExtSyncStatusRequest;
+    'dsh-memory/ext-conflicts-list': ExtConflictsListRequest;
+    'dsh-memory/ext-conflict-resolve': ExtConflictResolveRequest;
+    'dsh-memory/ext-config-arm': ExtConfigArmRequest;
+    'dsh-memory/ext-config-enable': ExtConfigEnableRequest;
+    'dsh-memory/ext-import-start': ExtImportStartRequest;
+    'dsh-memory/ext-import-status': Record<string, never>;
+    'dsh-memory/ext-import-cancel': ExtImportCancelRequest;
+    'dsh-memory/ext-driver-upsert': ExtDriverUpsertRequest;
+    'dsh-memory/ext-driver-remove': ExtDriverRemoveRequest;
 }
 /** DRSC 健康五态（与 `drsc-inproc.probeDrscHealth` 返回同步；此处只保留形状，不引 node 侧代码）。 */
 export type DrscHealthStateName = 'ok' | 'not-running' | 'stale' | 'missing' | 'unknown';
@@ -2144,6 +2433,18 @@ export interface DshMemoryResponseMap {
     'dsh-memory/mem-sync': MemSyncResponse;
     'dsh-memory/mem-orphans': MemOrphansResponse;
     'dsh-memory/skills-action': SkillsActionResponse;
+    'dsh-memory/ext-drivers-list': ExtDriversResponse;
+    'dsh-memory/ext-driver-probe': ExtDriverProbeResponse;
+    'dsh-memory/ext-sync-status': ExtSyncStatusResponse;
+    'dsh-memory/ext-conflicts-list': ExtConflictsListResponse;
+    'dsh-memory/ext-conflict-resolve': ExtConflictResolveResponse;
+    'dsh-memory/ext-config-arm': ExtConfigArmResponse;
+    'dsh-memory/ext-config-enable': ExtConfigEnableResponse;
+    'dsh-memory/ext-import-start': ExtImportStartResponse;
+    'dsh-memory/ext-import-status': ExtImportStatusResponse;
+    'dsh-memory/ext-import-cancel': ExtImportCancelResponse;
+    'dsh-memory/ext-driver-upsert': ExtDriverUpsertResponse;
+    'dsh-memory/ext-driver-remove': ExtDriverRemoveResponse;
 }
 /** 全部端点名(client 调用与 host case 表的共用字面量来源)。 */
 export type DshMemoryEndpoint = keyof DshMemoryResponseMap;
