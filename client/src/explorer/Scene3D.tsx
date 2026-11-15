@@ -36,6 +36,7 @@ import {
   brightnessFor,
   buildClusterShapeLayout,
   buildEgoLayout,
+  flowShape,
   labelBudget,
   lerpLayout,
   pickLabels,
@@ -44,8 +45,8 @@ import {
   projectAll,
   zoomBy,
 } from './projection.js';
-import type { ClusterAxis, ClusterShape, Projected, Vec3 } from './projection.js';
-import { HALL_FALLBACK, HALL_ORDER, hallLabel, defaultHallToken, variantOf } from './hall-palette.js';
+import type { ClusterAxis, DiskStyle, ClusterShape, Projected, Vec3 } from './projection.js';
+import { HALL_FALLBACK, HALL_ORDER, hallLabel, defaultHallToken, HALL_GALAXY_COLORS, variantOf } from './hall-palette.js';
 import { NButton } from '../ui/primitives.js';
 
 /** type → 既有图表系列令牌（与 GraphCanvas / GraphTab 同源五色，不引入新色值）。 */
@@ -119,6 +120,21 @@ export function Scene3D(props: {
   const [pointSize, setPointSize] = useState(2.2);
   /** 漂移默认关：开启后密集簇的 lighter 辉光每帧亚像素抖动→“闪烁感”；默认静态更稳。 */
   const [driftOn, setDriftOn] = useState(false);
+  /** 形态流转(炫技档):盘=差速自转,环=8字轨道流动;默认关。 */
+  const [flowOn, setFlowOn] = useState(false);
+  const flowRef = useRef(false);
+  flowRef.current = flowOn;
+  /** 流转参数:转速(0.2~3×基准)与幅度(0~2×基准,点级摆动幅度)。 */
+  const [flowSpeed, setFlowSpeed] = useState(1);
+  const [flowAmp, setFlowAmp] = useState(1);
+  const flowSpeedRef = useRef(1);
+  flowSpeedRef.current = flowSpeed;
+  const flowAmpRef = useRef(1);
+  flowAmpRef.current = flowAmp;
+  /** 流转样式:spin = 差速自转,eight = 8 字轨道流。undefined 时按形态自动(盘→自转,环→8字)。 */
+  const [flowStyle, setFlowStyle] = useState<'spin' | 'eight' | 'auto'>('auto');
+  const flowStyleRef = useRef<'spin' | 'eight' | 'auto'>('auto');
+  flowStyleRef.current = flowStyle;
   /** 主题：星空（暗底+星点，默认）/ 白底（浅色）。 */
   const [starry, setStarry] = useState(true);
   /** 呼吸：只有激活元素（hover 命中/焦点）错相脉冲，背景星恒静。
@@ -131,7 +147,11 @@ export function Scene3D(props: {
   const [variant, setVariant] = useState(0.35);
   /** 聚类形态:球面堆(现状)/星系盘(横向双臂螺旋,z 薄层错开)/8 字回环。 */
   const [shape, setShape] = useState<ClusterShape>('sphere');
+  /** 盘子风格:legacy 既有双臂 / flat 平铺 / spiral 星系悬臂(巨簇独臂)。 */
+  const [diskStyle, setDiskStyle] = useState<DiskStyle>('spiral');
   const shapeRef = useRef<ClusterShape>('sphere');
+  const diskStyleRef = useRef<DiskStyle>('spiral');
+  diskStyleRef.current = diskStyle;
   shapeRef.current = shape;
   /** 轴 ref:主循环闭包读取,不进 deps(轴切换由轴切换 effect 设 transRef 踢醒)。 */
   const axisRef = useRef<ClusterAxis>('type');
@@ -164,7 +184,7 @@ export function Scene3D(props: {
     return [...known, ...rest, ...tail];
   }, [hallCounts]);
   /** 图例色块:自定义实色优先;未自定义直接吃 CSS 变量(DOM 面可以,canvas 才要解实色)。 */
-  const swatchOf = (h: string): string => hallColors[h] ?? `var(${defaultHallToken(h)})`;
+  const swatchOf = (h: string): string => hallColors[h] ?? HALL_GALAXY_COLORS[h] ?? `var(${defaultHallToken(h)})`;
   const colorInputRef = useRef<HTMLInputElement | null>(null);
   const colorTargetRef = useRef<string | null>(null);
   const lastColorAtRef = useRef(0);
@@ -208,8 +228,8 @@ export function Scene3D(props: {
   const axisNodes = useMemo(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: (n as { hall?: string }).hall })), [full]);
   /** clusterLayout 由 full+axis 派生:轴切换会换布局引用,但硬落位 effect 只认 [full](F4)。 */
   const clusterLayout = useMemo(
-    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape),
-    [axisNodes, axis, shape],
+    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle),
+    [axisNodes, axis, shape, diskStyle],
   );
   const layoutRef = useRef<Map<string, Vec3>>(clusterLayout);
   const egoLayoutRef = useRef<Map<string, Vec3> | null>(null);
@@ -229,13 +249,15 @@ export function Scene3D(props: {
   /** 轴/形态切换:520ms 过渡重排(种子前缀不改 → 同一批点换队形,不是乱飞);主循环被 transRef 驱动。 */
   const prevAxisRef = useRef<ClusterAxis>('type');
   const prevShapeRef = useRef<ClusterShape>('sphere');
+  const prevDiskStyleRef = useRef<DiskStyle>('spiral');
   useEffect(() => {
-    if (prevAxisRef.current === axis && prevShapeRef.current === shape) return;
+    if (prevAxisRef.current === axis && prevShapeRef.current === shape && prevDiskStyleRef.current === diskStyle) return;
     prevAxisRef.current = axis;
     prevShapeRef.current = shape;
+    prevDiskStyleRef.current = diskStyle;
     transRef.current = { from: layoutRef.current, to: clusterLayout, start: performance.now() };
     wakeRef.current?.();
-  }, [axis, shape, clusterLayout]);
+  }, [axis, shape, diskStyle, clusterLayout]);
 
   /** 外部强调变化（如详情面板点「看图」）：自动进入 ego 聚焦该节点。 */
   useEffect(() => {
@@ -275,6 +297,9 @@ export function Scene3D(props: {
     const hallColorOf = (hall: string): string => {
       const custom = hallColors[hall];
       if (custom) return custom;
+      // 星系色板优先(深空底优化);旧 chart 令牌链路保留作兜底
+      const galaxy = HALL_GALAXY_COLORS[hall];
+      if (galaxy) return galaxy;
       let c = hallColorCache.get(hall);
       if (c === undefined) {
         c = resolveColor(host, defaultHallToken(hall));
@@ -519,7 +544,13 @@ export function Scene3D(props: {
       if (disposed) return;
       refreshColors();
       const cam = camRef.current;
-      const layout = activeLayout(now);
+      let layout = activeLayout(now);
+      // 形态流转(炫技档):盘=差速自转,环=8字轨道流动;ego 聚焦时不转(壳层语义优先)。
+      if (flowRef.current && shapeRef.current !== 'sphere' && modeRef.current === 'cluster') {
+        layout = flowShape(layout, now, shapeRef.current, flowSpeedRef.current, flowAmpRef.current, flowStyleRef.current === 'auto' ? undefined : flowStyleRef.current);
+        edgeDirty = true;
+        nodeDirty = true;
+      }
       const ego = modeRef.current === 'ego';
       const metas = metasRef.current;
       const hover = hoverRef.current;
@@ -723,7 +754,7 @@ export function Scene3D(props: {
 
       // 空闲停摆（取证方向③）：无脏/无呼吸/无过渡/无待上屏 → 停 rAF，事件唤醒；
       // 单帧超支时不再“逐帧追不上”，而是压根不排帧——掉帧闪烁的根源拆除。
-      running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || (driftOn && !ego);
+      running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || (driftOn && !ego) || (flowRef.current && shapeRef.current !== 'sphere' && modeRef.current === 'cluster');
       if (running) raf = requestAnimationFrame(frame);
     };
     /**
@@ -1062,6 +1093,60 @@ export function Scene3D(props: {
             </button>
           ))}
         </span>
+        {shape === 'disk' && (
+          <span style={{ display: 'inline-flex', gap: 0, border: ui.border, borderRadius: 8, overflow: 'hidden', marginLeft: 6 }}>
+            {(['legacy', 'flat', 'spiral'] as const).map((d) => (
+              <button
+                key={d}
+                onClick={() => setDiskStyle(d)}
+                style={{
+                  fontSize: 11,
+                  padding: '2px 8px',
+                  cursor: 'pointer',
+                  border: 'none',
+                  color: diskStyle === d ? ui.accent : ui.text,
+                  background: diskStyle === d ? 'rgba(127,177,255,0.14)' : 'transparent',
+                }}
+              >
+                {d === 'legacy' ? '双臂' : d === 'flat' ? '平铺' : '悬臂'}
+              </button>
+            ))}
+          </span>
+        )}
+        {toggle('流转', flowOn, setFlowOn)}
+        {flowOn && shape !== 'sphere' ? (
+          <>
+            <span style={{ display: 'inline-flex', gap: 0, border: ui.border, borderRadius: 8, overflow: 'hidden', marginLeft: 6 }}>
+              {(['auto', 'spin', 'eight'] as const).map((f) => {
+                const active = flowStyle === f;
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setFlowStyle(f)}
+                    style={{
+                      fontSize: 11,
+                      padding: '2px 8px',
+                      cursor: 'pointer',
+                      border: 'none',
+                      color: active ? ui.accent : ui.text,
+                      background: active ? 'rgba(127,177,255,0.14)' : 'transparent',
+                    }}
+                  >
+                    {f === 'auto' ? '自动' : f === 'spin' ? '自转' : '8字流'}
+                  </button>
+                );
+              })}
+            </span>
+            <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              转速
+              <input type="range" min={0} max={1} step={0.01} value={Math.sqrt((flowSpeed - 0.2) / 2.8)} onChange={(e) => setFlowSpeed(0.2 + 2.8 * Math.pow(Number(e.target.value), 2))} />
+            </label>
+            <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              幅度
+              <input type="range" min={0} max={2} step={0.1} value={flowAmp} onChange={(e) => setFlowAmp(Number(e.target.value))} />
+            </label>
+          </>
+        ) : null}
         {toggle('辉光', glowOn, setGlowOn)}
         {toggle('边', edgesOn, setEdgesOn)}
         {toggle('标签', labelsOn, setLabelsOn)}

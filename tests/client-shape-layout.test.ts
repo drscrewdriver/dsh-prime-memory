@@ -63,4 +63,137 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     const cross = dist(L, 'w1', 'f1');
     expect(inner).toBeLessThan(cross);
   });
+
+    it('disk 悬臂六臂:大簇占臂头内圈,臂沿角向均分整圈', () => {
+    const big: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 50; i++) big.push(mk('bb' + i, 'tool', 'bilibili'));
+    const smalls: ReturnType<typeof mk>[] = [];
+    for (const h of ['work', 'learning', 'health', 'finance', 'journey', 'creative']) {
+      for (let i = 0; i < 3; i++) smalls.push(mk(h + i, 'person', h));
+    }
+    const L = buildClusterShapeLayout([...big, ...smalls], 'hall', 'disk');
+    // bilibili 是最大簇 → LPT 分给当前最空臂 → 臂头 s≈0 → 簇心半径最小段(~150-190)
+    // 用质心而非单点:臂向散布 du ±110 会把单个点甩离簇心
+    let bx = 0, bz = 0;
+    for (let i = 0; i < 50; i++) { const q = L.get('bb' + i)!; bx += q.x; bz += q.z; }
+    const bbR = Math.hypot(bx / 50, bz / 50);
+    expect(bbR).toBeGreaterThan(100); // 臂头段在内圈(~150-430 臂半径带)
+    // 六臂角向均分:bilibili 臂与每个小簇簇心的角距 ≥ 0.3 rad(臂间 60°=1.05 rad,同臂簇才贴近)
+    const ang = (x: number, z: number) => Math.atan2(z, x);
+    const bbA = ang(bx / 50, bz / 50);
+    for (const h of ['work', 'learning', 'health', 'finance', 'journey', 'creative']) {
+      let cx = 0, cz = 0;
+      for (let i = 0; i < 3; i++) { const q = L.get(h + i)!; cx += q.x; cz += q.z; }
+      cx /= 3; cz /= 3;
+      const d = Math.abs(ang(cx, cz) - bbA);
+      expect(Math.min(d, Math.PI * 2 - d)).toBeGreaterThan(0.3);
+      expect(Math.hypot(cx, cz)).toBeGreaterThan(60); // 簇心在臂半径带内(散布偏移后仍>60)
+    }
+  });
+
+  it('disk flat 平铺:所有簇心环形均布,角度互不重叠', () => {
+    const L = buildClusterShapeLayout(nodes, 'hall', 'disk', 'flat');
+    // 逐簇取代表点(每组第一点),角度间隔应均匀(允许 jitter 偏差 < 平均间隔 × 1.6)
+    const reps = nodes.filter((n, i) => nodes.findIndex((m) => m.hall === n.hall) === i);
+    const angs = reps.map((n) => Math.atan2(L.get(n.id)!.z, L.get(n.id)!.x));
+    const sorted = [...angs].sort((a, b) => a - b);
+    const gaps = sorted.slice(1).map((v, i) => v - sorted[i]).concat([Math.PI * 2 - sorted[sorted.length - 1]! + sorted[0]!]);
+    const avg = (Math.PI * 2) / angs.length;
+    for (const g of gaps) expect(g).toBeGreaterThan(avg * 0.3);
+  });
+
+  it('disk legacy 双臂:回到 i%2 既有行为(sphere 回归钉同款纪律)', () => {
+    const L = buildClusterShapeLayout(nodes, 'hall', 'disk', 'legacy');
+    // work 簇仍彼此更近(分组语义不变)
+    const inner = Math.min(dist(L, 'w1', 'w2'), dist(L, 'w1', 'w3'), dist(L, 'w2', 'w3'));
+    const cross = dist(L, 'w1', 'f1');
+    expect(inner).toBeLessThan(cross);
+  });
+
+  it('flowShape 转速/幅度参数:speed 缩放角速度,amp 缩放摆动', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const L = buildClusterShapeLayout(nodes, 'hall', 'lemniscate');
+    // amp=0:speed>0 时环仍旋转(位置变化)但点级摆动归零;speed=0:位置恒定
+    const s0 = flowShape(L, 5000, 'lemniscate', 0, 1);
+    const s0b = flowShape(L, 15000, 'lemniscate', 0, 1);
+    // speed=0 → om=0,ph=相位常量,摆动随 t 变化吗?ph 含 om=0 → sin(ph) 恒定 → 两帧逐位一致
+    const a0 = [...s0.values()].map((p) => p.x.toFixed(6)).join(',');
+    const b0 = [...s0b.values()].map((p) => p.x.toFixed(6)).join(',');
+    expect(a0).toBe(b0);
+    // speed=2 在 t=20000 处 om=2×1 → 与 speed=1 在 t=40000 同相位(转速线性)
+    const sA = flowShape(L, 20000, 'lemniscate', 2, 0);
+    const sB = flowShape(L, 40000, 'lemniscate', 1, 0);
+    const aA = [...sA.values()].map((p) => p.x.toFixed(5)).join(',');
+    const bB = [...sB.values()].map((p) => p.x.toFixed(5)).join(',');
+    expect(aA).toBe(bB);
+    // disk:speed=0 时位置不变
+    const Ld = buildClusterShapeLayout(nodes, 'hall', 'disk');
+    const d0 = flowShape(Ld, 99999, 'disk', 0, 1);
+    for (const [id, q] of d0) {
+      const base = Ld.get(id)!;
+      expect(Math.hypot(q.x - base.x, q.z - base.z)).toBeLessThan(0.001);
+    }
+  });
+
+  it('flowStyle 显式覆盖:任意形态都能选自转/8字流,且 8 字流半径不爆', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const Ld = buildClusterShapeLayout(nodes, 'hall', 'disk');
+    // disk 显式 eight:点必须都落在有限范围(A 夹到 2.2×r0 上限)
+    for (const t of [0, 5000, 20000]) {
+      const e = flowShape(Ld, t, 'disk', 1, 1, 'eight');
+      for (const q of e.values()) {
+        expect(Number.isFinite(q.x)).toBe(true);
+        expect(Number.isFinite(q.z)).toBe(true);
+        expect(Math.hypot(q.x, q.z)).toBeLessThan(2200);
+      }
+      expect(e.size).toBe(Ld.size);
+    }
+    // 环显式 spin:半径守恒(spin 只绕 y 转)
+    const Ll = buildClusterShapeLayout(nodes, 'hall', 'lemniscate');
+    const s1 = flowShape(Ll, 8000, 'lemniscate', 1, 1, 'spin');
+    for (const [id, q] of s1) {
+      const b = Ll.get(id)!;
+      expect(Math.hypot(q.x, q.z)).toBeCloseTo(Math.hypot(b.x, b.z), 6);
+    }
+    // 缺省(不传样式)按形态自动:环 → eight(半径不再守恒),盘 → spin(半径守恒)
+    const autoL = flowShape(Ll, 8000, 'lemniscate');
+    let diff = 0;
+    for (const [id, q] of autoL) {
+      const b = Ll.get(id)!;
+      diff += Math.abs(Math.hypot(q.x, q.z) - Math.hypot(b.x, b.z));
+    }
+    expect(diff).toBeGreaterThan(1);
+  });
+
+  it('悬臂=对数螺线:同臂簇的半径与卷角同步增长,六臂在任意半径处角向互不交缠', () => {
+    const big: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 200; i++) big.push(mk('bb' + i, 'tool', 'bilibili'));
+    const rest: ReturnType<typeof mk>[] = [];
+    const halls = ['work', 'learning', 'health', 'finance', 'journey', 'creative', 'home', 'relationships'];
+    halls.forEach((h, hi) => { for (let i = 0; i < 40 - hi * 4; i++) rest.push(mk(h + i, 'person', h)); });
+    const all = [...big, ...rest];
+    const L = buildClusterShapeLayout(all, 'hall', 'disk');
+    // 每个簇取质心
+    const cent = new Map<string, { x: number; z: number }>();
+    for (const n of all) {
+      const q = L.get(n.id)!;
+      const c = cent.get(n.hall) ?? { x: 0, z: 0 };
+      cent.set(n.hall, { x: c.x + q.x, z: c.z + q.z });
+    }
+    const cnt = new Map<string, number>();
+    for (const n of all) cnt.set(n.hall, (cnt.get(n.hall) ?? 0) + 1);
+    const pts = [...cent.entries()].map(([h, c]) => {
+      const k = cnt.get(h)!;
+      return { h, r: Math.hypot(c.x / k, c.z / k), a: Math.atan2(c.z / k, c.x / k), w: k };
+    });
+    // 半径带:全部落在 [100, 700] 内(核球空洞 + 外沿不溢出)
+    for (const p2 of pts) {
+      expect(p2.r).toBeGreaterThan(100);
+      expect(p2.r).toBeLessThan(700);
+    }
+    // 大簇在臂头(半径小),小簇铺向外圈 → bilibili 半径应明显小于最小簇
+    const bb = pts.find((p2) => p2.h === 'bilibili')!;
+    const minW = pts.reduce((a, b) => (a.w < b.w ? a : b));
+    expect(bb.r).toBeLessThan(minW.r);
+  });
 });

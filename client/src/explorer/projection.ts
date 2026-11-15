@@ -178,6 +178,8 @@ export function buildClusterLayoutByAxis(nodes: readonly LayoutNode[], axis: Clu
 }
 // ── 聚类形态（星系盘 / 8 字环）：簇心排布可换,种子前缀一个不改 ──────────
 /** 聚类形态：sphere = 既有球面堆；disk = 横向星系盘（双臂螺旋,z 薄层错开）；lemniscate = 8 字回环。 */
+/** disk 子风格:legacy = 既有双臂轮转;flat = 平铺(全簇环形均布一圈);spiral = 星系悬臂(巨簇独臂+其余双弧段)。 */
+export type DiskStyle = 'legacy' | 'flat' | 'spiral';
 export type ClusterShape = 'sphere' | 'disk' | 'lemniscate';
 
 /**
@@ -190,7 +192,7 @@ export type ClusterShape = 'sphere' | 'disk' | 'lemniscate';
  *   簇内点沿臂向长散布 + 垂直臂向窄 + y 薄层 ±28(横向盘状展开,z→y 稍微错开);
  * - lemniscate: 簇心沿 ∞ 曲线 x=A·cos t / z=A·sin t·cos t 均布,簇内沿环向散布 + y 薄层。
  */
-export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: ClusterAxis, shape: ClusterShape): Map<string, Vec3> {
+export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: ClusterAxis, shape: ClusterShape, diskStyle: DiskStyle = 'spiral'): Map<string, Vec3> {
   if (shape === 'sphere') return buildClusterLayoutByAxis(nodes, axis);
   const out = new Map<string, Vec3>();
   const groups = groupOrder(
@@ -199,22 +201,92 @@ export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: Clus
   );
   const centers = new Map<string, Vec3>();
   const total = Math.max(1, groups.length);
-  groups.forEach((key, i) => {
-    const jitter = rand01(`c:${key}`) * 0.5;
-    if (shape === 'disk') {
-      // 双臂螺旋:臂内序 k = 簇在该臂里的序号;θ 随 k 递推成 S 弧,半径随 k 向外递推。
-      const arm = i % 2;
-      const k = Math.floor(i / 2);
-      const theta = arm * Math.PI + k * 0.85 + jitter;
-      const radius = 240 + Math.sqrt(k) * 210 + rand01(`r:${key}`) * 60;
+  const countOf = new Map<string, number>();
+  for (const n of nodes) {
+    const g = groupKeyOf(n, axis);
+    countOf.set(g, (countOf.get(g) ?? 0) + 1);
+  }
+  /**
+   * 臂段表:簇 → 它在臂上占据的 [s0,s1] 弧段(连同臂基点与卷角)。
+   * 关键设计——**簇不是臂上的一个点,而是臂的一段**。簇内每个点在此弧段内独立取 s,
+   * 半径/角向都随 s 连续推进,于是无论只有 9 个 hall 簇还是 40 个簇,
+   * 拼起来都是一条从核球连续卷到外沿的星流带,而不是一串孤立的短棒。
+   */
+  /** 旋臂半径带:核球边缘 150 → 盘外沿 640(对数螺线两端)。 */
+  const R0 = 115;
+  const REND = 640;
+  const armSpan = new Map<string, { base: number; chord: number; s0: number; s1: number }>();
+  const placeOnArms = (bins: string[][], chord: number): void => {
+    const N = bins.length;
+    bins.forEach((bin, arm) => {
+      const base = (arm / N) * Math.PI * 2 + rand01(`c:arm${arm}`) * 0.16;
+      // 臂内按大小降序:大簇占长弧段且靠内(臂头),小簇靠外
+      const ordered = [...bin].sort((a, b) => (countOf.get(b) ?? 0) - (countOf.get(a) ?? 0));
+      // s 段按「簇数均分 + 权重轻度调制」:纯按权重会让大簇独占内半臂、
+      // 外半臂只剩极小簇 → 视觉上臂"长不出去"。取权重的 0.5 次幂做抑制调制。
+      const mods = ordered.map((k) => Math.pow(countOf.get(k) ?? 1, 0.5));
+      const wSum = mods.reduce((a, b) => a + b, 0) || 1;
+      let acc = 0;
+      for (let oi = 0; oi < ordered.length; oi++) {
+        const key = ordered[oi]!;
+        const w = mods[oi] ?? 1;
+        // 弧段覆盖整个臂(0.02~0.98),相邻簇首尾相接
+        const s0 = 0.02 + (acc / wSum) * 0.96;
+        const s1 = 0.02 + ((acc + w) / wSum) * 0.96;
+        acc += w;
+        armSpan.set(key, { base, chord, s0, s1 });
+        // 簇心取弧段中点(标签/拾取用)
+        const sm = (s0 + s1) / 2;
+        const theta = base + sm * chord;
+        const radius = R0 * Math.pow(REND / R0, sm); // 对数螺线:径向指数外推
+        centers.set(key, {
+          x: Math.cos(theta) * radius,
+          y: (rand01(`r:${key}:y`) - 0.5) * 26,
+          z: Math.sin(theta) * radius * 0.82,
+        });
+      }
+    });
+  };
+  // 均衡装箱:大簇先入当前最空的臂(按节点数)
+  const binPack = (nArms: number): string[][] => {
+    const bins: string[][] = Array.from({ length: nArms }, () => []);
+    const load = new Array(nArms).fill(0);
+    const sorted = [...groups].sort((a, b) => (countOf.get(b) ?? 0) - (countOf.get(a) ?? 0));
+    for (const key of sorted) {
+      let mi = 0;
+      for (let i2 = 1; i2 < nArms; i2++) if ((load[i2] ?? 0) < (load[mi] ?? 0)) mi = i2;
+      const bin = bins[mi];
+      if (bin) {
+        bin.push(key);
+        load[mi] = (load[mi] ?? 0) + (countOf.get(key) ?? 1);
+      }
+    }
+    return bins;
+  };
+  if (shape === 'disk' && diskStyle === 'spiral') {
+    // 六臂星系:6 臂共用同一扫掠 θ=base+s·1.55 → 任意半径处臂距恒为 2π/6=1.047 rad,
+    // 永不交缠;1.55 rad 卷曲 ≈ 23° 螺旋角,是典型星系的放射-旋纹折中。
+    placeOnArms(binPack(6), 1.55);
+  }
+  if (shape === 'disk' && diskStyle === 'legacy') {
+    // 双臂螺旋:相位差 π、共用扫掠 1.55 rad → 两条分明旋臂,绝不并成一条
+    placeOnArms(binPack(2), 1.55);
+  }
+  if (shape === 'disk' && diskStyle === 'flat') {
+    // 平铺:所有簇环形均布一圈,半径随序外推成同心环带,无臂结构
+    groups.forEach((key, i) => {
+      const theta = (i / total) * Math.PI * 2 + rand01(`c:${key}`) * 0.4;
+      const radius = 260 + Math.sqrt(i) * 150 + rand01(`r:${key}`) * 50;
       centers.set(key, {
         x: Math.cos(theta) * radius,
-        // 盘面法向(y)薄层:簇心本身几乎共面,只留 ±20 错层
         y: (rand01(`r:${key}:y`) - 0.5) * 40,
         z: Math.sin(theta) * radius * 0.82,
       });
-    } else {
-      // lemniscate of Gerono:x = A·cos t, z = A·sin t·cos t;t 均布给簇(同臂序不适用)。
+    });
+  }
+  if (shape === 'lemniscate') {
+    groups.forEach((key, i) => {
+      const jitter = rand01(`c:${key}`) * 0.5;
       const t8 = (i / total) * Math.PI * 2 + jitter;
       const A = 560 + rand01(`r:${key}`) * 80;
       centers.set(key, {
@@ -222,29 +294,47 @@ export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: Clus
         y: (rand01(`r:${key}:y`) - 0.5) * 36,
         z: Math.sin(t8) * Math.cos(t8) * A * 0.72,
       });
-    }
-  });
+    });
+  }
   for (const n of nodes) {
-    const c = centers.get(groupKeyOf(n, axis)) ?? { x: 0, y: 0, z: 0 };
-    const a = rand01(`a:${n.id}`) * Math.PI * 2;
-    const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
-    const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
+    const gk = groupKeyOf(n, axis);
     if (shape === 'disk') {
-      // 盘内散布:臂向(u,沿簇心径向)长、切向(v)中、法向(y)薄层 ±28——横向盘状观感。
-      const ux = c.x;
-      const uz = c.z;
-      const len = Math.hypot(ux, uz) || 1;
-      const rx = ux / len;
-      const rz = uz / len;
-      const radial = Math.sin(b) * Math.cos(a) * rr;
-      const tang = Math.sin(b) * Math.sin(a) * rr * 0.55;
-      out.set(n.id, {
-        x: c.x + rx * radial - rz * tang,
-        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 56,
-        z: c.z + rz * radial + rx * tang,
-      });
+      const span = armSpan.get(gk);
+      if (span) {
+        // 臂段分布:点在自己的弧段内独立取 s → 簇铺成弧,相邻簇首尾相接成连续星流带
+        const { base, chord, s0, s1 } = span;
+        // 半径均匀重采样:对数螺线下 dr/ds ∝ r 会把点堆在内圈;先均匀取 r 再反解 s,
+        // 臂的每一段密度一致,整条臂才一路连续长到外沿。
+        const K = REND / R0;
+        const rr0 = R0 * Math.pow(K, s0);
+        const rr1 = R0 * Math.pow(K, s1);
+        const rt = rr0 + rand01(`s:${n.id}`) * (rr1 - rr0);
+        const s = Math.log(rt / R0) / Math.log(K);
+        const radius = rt + (rand01(`a:${n.id}`) - 0.5) * 2 * (12 + 22 * (s1 - s0));
+        const theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (0.02 + 0.06 * (s1 - s0));
+        out.set(n.id, {
+          x: Math.cos(theta) * radius,
+          y: (rand01(`s:${n.id}:y`) - 0.5) * 34,
+          z: Math.sin(theta) * radius * 0.82,
+        });
+      } else {
+        // 平铺:簇心团块散布
+        const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
+        const a = rand01(`a:${n.id}`) * Math.PI * 2;
+        const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
+        const rr2 = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 90;
+        out.set(n.id, {
+          x: c.x + Math.sin(b) * Math.cos(a) * rr2,
+          y: c.y + Math.cos(b) * rr2 * 0.5,
+          z: c.z + Math.sin(b) * Math.sin(a) * rr2,
+        });
+      }
     } else {
-      // lemniscate:环向(切向)散布为主 + 法向薄层。
+      // lemniscate:簇心沿 ∞ 曲线,簇内环向散布 + 法向薄层
+      const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
+      const a = rand01(`a:${n.id}`) * Math.PI * 2;
+      const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
+      const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
       const len = Math.hypot(c.x, c.z) || 1;
       const tx = -c.z / len;
       const tz = c.x / len;
@@ -255,6 +345,59 @@ export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: Clus
         y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 52,
         z: c.z + tz * ring + (c.z / len) * cross,
       });
+    }
+  }
+  return out;
+}
+/**
+ * 形态动画帧变换（炫技档）：disk = 差速自转（内圈快外圈慢，星系感的关键）；
+ * lemniscate = 8 字轨道流转（整条星尘带沿 ∞ 环连续流动）。
+ * 纯几何驱动——只吃点位，不需要簇归属信息；确定性：同一帧同一批点位置恒定。
+ * 纯函数:base 布局不动,返回新 Map;主循环每帧调用(开销 = 一次 Map 遍历,千点级无感)。
+ */
+export type FlowStyle = 'spin' | 'eight';
+
+/**
+ * 形态动画帧变换（炫技档）。样式与形态解耦——任意盘/环都可选自转或 8 字流：
+ * - spin: 差速自转（内圈快外圈慢，星系感的关键），对 disk/lemniscate 通用；
+ * - eight: 真 8 字轨道流（点沿 ∞ 曲线 x=A·cosφ / z=A·sinφ·cosφ 连续推进），对任意形态通用。
+ * 纯几何驱动，只吃 (t, 布局, 参数)，不含状态 → 同一 t 必得同一帧（可回放）。
+ */
+export function flowShape(
+  base: ReadonlyMap<string, Vec3>,
+  t: number,
+  shape: ClusterShape,
+  speed = 1,
+  amp = 1,
+  flowStyle?: FlowStyle,
+): Map<string, Vec3> {
+  const out = new Map<string, Vec3>();
+  if (shape === 'sphere') return out; // 球面堆不流转(调用方直接跳过)
+  const style: FlowStyle = flowStyle ?? (shape === 'lemniscate' ? 'eight' : 'spin');
+  for (const id of base.keys()) {
+    const p = base.get(id)!;
+    if (style === 'spin') {
+      // 差速自转:角速度 ∝ 1/半径(内快外慢),基准 ~0.10 rad/s @ r=400
+      const r = Math.hypot(p.x, p.z);
+      const w = 0.10 * speed * (400 / Math.max(120, r)) * 0.0167; // 每毫秒
+      const a = w * t;
+      const cy = Math.cos(a); const sy = Math.sin(a);
+      out.set(id, { x: p.x * cy - p.z * sy, y: p.y, z: p.x * sy + p.z * cy });
+    } else {
+      // 8 字真轨道流:反解每点固有轨道相位 φ0,φ = φ0 + om·t 沿 ∞ 曲线推进。
+      const om = (t / 20000) * speed;
+      const off = (rand01('f:' + id) - 0.5) * 0.6; // 点级小偏移,带子错落
+      const r0 = Math.hypot(p.x, p.z) || 1;
+      const ct = Math.max(-1, Math.min(1, p.x / r0));
+      let t8 = Math.acos(ct);
+      if (Math.sin(t8) * Math.cos(t8) * (p.z / r0) < 0) t8 = Math.PI * 2 - t8;
+      const ph = t8 + om + off;
+      const jit = rand01('j:' + id) * 0.06 - 0.03; // A 的微小个体差,流起来有层次
+      // 反解 A 时夹到 2.2×r0 上限——否则贴 z 轴的点(|cos|≈0)会算出巨大 A 飞出画面
+      const A = Math.min(r0 * 2.2, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
+      const x = Math.cos(ph) * A;
+      const z = Math.sin(ph) * Math.cos(ph) * A;
+      out.set(id, { x: x + Math.sin(ph * 3.1) * 5 * amp, y: p.y + Math.cos(ph * 2.3) * 4 * amp, z: z + Math.sin(ph * 2.7) * 5 * amp });
     }
   }
   return out;

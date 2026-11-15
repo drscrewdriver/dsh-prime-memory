@@ -45508,6 +45508,17 @@ var __create = Object.create;
 		  if (i >= 0) return `--dsh-mem-chart-${i + 1}`;
 		  return "--dsh-mem-chart-8";
 		}
+		var HALL_GALAXY_COLORS = {
+		  work: "#638ee3",
+		  relationships: "#9863e3",
+		  learning: "#e363ce",
+		  creative: "#e3636e",
+		  home: "#e3b963",
+		  health: "#aee363",
+		  finance: "#63e378",
+		  journey: "#63e3d9",
+		  general: "#6b7480"
+		};
 		function hallLabel(hall) {
 		  return HALL_LABELS[hall] ?? hall;
 		}
@@ -45654,7 +45665,7 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
-		function buildClusterShapeLayout(nodes, axis, shape) {
+		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral") {
 		  if (shape === "sphere") return buildClusterLayoutByAxis(nodes, axis);
 		  const out = /* @__PURE__ */ new Map();
 		  const groups = groupOrder(
@@ -45663,20 +45674,75 @@ var __create = Object.create;
 		  );
 		  const centers = /* @__PURE__ */ new Map();
 		  const total = Math.max(1, groups.length);
-		  groups.forEach((key, i) => {
-		    const jitter = rand01(`c:${key}`) * 0.5;
-		    if (shape === "disk") {
-		      const arm = i % 2;
-		      const k = Math.floor(i / 2);
-		      const theta = arm * Math.PI + k * 0.85 + jitter;
-		      const radius = 240 + Math.sqrt(k) * 210 + rand01(`r:${key}`) * 60;
+		  const countOf = /* @__PURE__ */ new Map();
+		  for (const n of nodes) {
+		    const g = groupKeyOf(n, axis);
+		    countOf.set(g, (countOf.get(g) ?? 0) + 1);
+		  }
+		  const R0 = 115;
+		  const REND = 640;
+		  const armSpan = /* @__PURE__ */ new Map();
+		  const placeOnArms = (bins, chord) => {
+		    const N = bins.length;
+		    bins.forEach((bin, arm) => {
+		      const base = arm / N * Math.PI * 2 + rand01(`c:arm${arm}`) * 0.16;
+		      const ordered = [...bin].sort((a, b) => (countOf.get(b) ?? 0) - (countOf.get(a) ?? 0));
+		      const mods = ordered.map((k) => Math.pow(countOf.get(k) ?? 1, 0.5));
+		      const wSum = mods.reduce((a, b) => a + b, 0) || 1;
+		      let acc = 0;
+		      for (let oi = 0; oi < ordered.length; oi++) {
+		        const key = ordered[oi];
+		        const w = mods[oi] ?? 1;
+		        const s0 = 0.02 + acc / wSum * 0.96;
+		        const s1 = 0.02 + (acc + w) / wSum * 0.96;
+		        acc += w;
+		        armSpan.set(key, { base, chord, s0, s1 });
+		        const sm = (s0 + s1) / 2;
+		        const theta = base + sm * chord;
+		        const radius = R0 * Math.pow(REND / R0, sm);
+		        centers.set(key, {
+		          x: Math.cos(theta) * radius,
+		          y: (rand01(`r:${key}:y`) - 0.5) * 26,
+		          z: Math.sin(theta) * radius * 0.82
+		        });
+		      }
+		    });
+		  };
+		  const binPack = (nArms) => {
+		    const bins = Array.from({ length: nArms }, () => []);
+		    const load = new Array(nArms).fill(0);
+		    const sorted = [...groups].sort((a, b) => (countOf.get(b) ?? 0) - (countOf.get(a) ?? 0));
+		    for (const key of sorted) {
+		      let mi = 0;
+		      for (let i2 = 1; i2 < nArms; i2++) if ((load[i2] ?? 0) < (load[mi] ?? 0)) mi = i2;
+		      const bin = bins[mi];
+		      if (bin) {
+		        bin.push(key);
+		        load[mi] = (load[mi] ?? 0) + (countOf.get(key) ?? 1);
+		      }
+		    }
+		    return bins;
+		  };
+		  if (shape === "disk" && diskStyle === "spiral") {
+		    placeOnArms(binPack(6), 1.55);
+		  }
+		  if (shape === "disk" && diskStyle === "legacy") {
+		    placeOnArms(binPack(2), 1.55);
+		  }
+		  if (shape === "disk" && diskStyle === "flat") {
+		    groups.forEach((key, i) => {
+		      const theta = i / total * Math.PI * 2 + rand01(`c:${key}`) * 0.4;
+		      const radius = 260 + Math.sqrt(i) * 150 + rand01(`r:${key}`) * 50;
 		      centers.set(key, {
 		        x: Math.cos(theta) * radius,
-		        // 盘面法向(y)薄层:簇心本身几乎共面,只留 ±20 错层
 		        y: (rand01(`r:${key}:y`) - 0.5) * 40,
 		        z: Math.sin(theta) * radius * 0.82
 		      });
-		    } else {
+		    });
+		  }
+		  if (shape === "lemniscate") {
+		    groups.forEach((key, i) => {
+		      const jitter = rand01(`c:${key}`) * 0.5;
 		      const t8 = i / total * Math.PI * 2 + jitter;
 		      const A = 560 + rand01(`r:${key}`) * 80;
 		      centers.set(key, {
@@ -45684,27 +45750,42 @@ var __create = Object.create;
 		        y: (rand01(`r:${key}:y`) - 0.5) * 36,
 		        z: Math.sin(t8) * Math.cos(t8) * A * 0.72
 		      });
-		    }
-		  });
+		    });
+		  }
 		  for (const n of nodes) {
-		    const c = centers.get(groupKeyOf(n, axis)) ?? { x: 0, y: 0, z: 0 };
-		    const a = rand01(`a:${n.id}`) * Math.PI * 2;
-		    const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
-		    const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
+		    const gk = groupKeyOf(n, axis);
 		    if (shape === "disk") {
-		      const ux = c.x;
-		      const uz = c.z;
-		      const len = Math.hypot(ux, uz) || 1;
-		      const rx = ux / len;
-		      const rz = uz / len;
-		      const radial = Math.sin(b) * Math.cos(a) * rr;
-		      const tang = Math.sin(b) * Math.sin(a) * rr * 0.55;
-		      out.set(n.id, {
-		        x: c.x + rx * radial - rz * tang,
-		        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 56,
-		        z: c.z + rz * radial + rx * tang
-		      });
+		      const span = armSpan.get(gk);
+		      if (span) {
+		        const { base, chord, s0, s1 } = span;
+		        const K = REND / R0;
+		        const rr0 = R0 * Math.pow(K, s0);
+		        const rr1 = R0 * Math.pow(K, s1);
+		        const rt = rr0 + rand01(`s:${n.id}`) * (rr1 - rr0);
+		        const s = Math.log(rt / R0) / Math.log(K);
+		        const radius = rt + (rand01(`a:${n.id}`) - 0.5) * 2 * (12 + 22 * (s1 - s0));
+		        const theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (0.02 + 0.06 * (s1 - s0));
+		        out.set(n.id, {
+		          x: Math.cos(theta) * radius,
+		          y: (rand01(`s:${n.id}:y`) - 0.5) * 34,
+		          z: Math.sin(theta) * radius * 0.82
+		        });
+		      } else {
+		        const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
+		        const a = rand01(`a:${n.id}`) * Math.PI * 2;
+		        const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
+		        const rr2 = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 90;
+		        out.set(n.id, {
+		          x: c.x + Math.sin(b) * Math.cos(a) * rr2,
+		          y: c.y + Math.cos(b) * rr2 * 0.5,
+		          z: c.z + Math.sin(b) * Math.sin(a) * rr2
+		        });
+		      }
 		    } else {
+		      const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
+		      const a = rand01(`a:${n.id}`) * Math.PI * 2;
+		      const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
+		      const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
 		      const len = Math.hypot(c.x, c.z) || 1;
 		      const tx = -c.z / len;
 		      const tz = c.x / len;
@@ -45715,6 +45796,36 @@ var __create = Object.create;
 		        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 52,
 		        z: c.z + tz * ring + c.z / len * cross
 		      });
+		    }
+		  }
+		  return out;
+		}
+		function flowShape(base, t, shape, speed = 1, amp = 1, flowStyle) {
+		  const out = /* @__PURE__ */ new Map();
+		  if (shape === "sphere") return out;
+		  const style = flowStyle ?? (shape === "lemniscate" ? "eight" : "spin");
+		  for (const id of base.keys()) {
+		    const p = base.get(id);
+		    if (style === "spin") {
+		      const r = Math.hypot(p.x, p.z);
+		      const w = 0.1 * speed * (400 / Math.max(120, r)) * 0.0167;
+		      const a = w * t;
+		      const cy = Math.cos(a);
+		      const sy = Math.sin(a);
+		      out.set(id, { x: p.x * cy - p.z * sy, y: p.y, z: p.x * sy + p.z * cy });
+		    } else {
+		      const om = t / 2e4 * speed;
+		      const off = (rand01("f:" + id) - 0.5) * 0.6;
+		      const r0 = Math.hypot(p.x, p.z) || 1;
+		      const ct = Math.max(-1, Math.min(1, p.x / r0));
+		      let t8 = Math.acos(ct);
+		      if (Math.sin(t8) * Math.cos(t8) * (p.z / r0) < 0) t8 = Math.PI * 2 - t8;
+		      const ph = t8 + om + off;
+		      const jit = rand01("j:" + id) * 0.06 - 0.03;
+		      const A = Math.min(r0 * 2.2, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
+		      const x = Math.cos(ph) * A;
+		      const z = Math.sin(ph) * Math.cos(ph) * A;
+		      out.set(id, { x: x + Math.sin(ph * 3.1) * 5 * amp, y: p.y + Math.cos(ph * 2.3) * 4 * amp, z: z + Math.sin(ph * 2.7) * 5 * amp });
 		    }
 		  }
 		  return out;
@@ -45875,6 +45986,18 @@ var __create = Object.create;
 		  const [agingOn, setAgingOn] = (0, import_react33.useState)(true);
 		  const [pointSize, setPointSize] = (0, import_react33.useState)(2.2);
 		  const [driftOn, setDriftOn] = (0, import_react33.useState)(false);
+		  const [flowOn, setFlowOn] = (0, import_react33.useState)(false);
+		  const flowRef = (0, import_react33.useRef)(false);
+		  flowRef.current = flowOn;
+		  const [flowSpeed, setFlowSpeed] = (0, import_react33.useState)(1);
+		  const [flowAmp, setFlowAmp] = (0, import_react33.useState)(1);
+		  const flowSpeedRef = (0, import_react33.useRef)(1);
+		  flowSpeedRef.current = flowSpeed;
+		  const flowAmpRef = (0, import_react33.useRef)(1);
+		  flowAmpRef.current = flowAmp;
+		  const [flowStyle, setFlowStyle] = (0, import_react33.useState)("auto");
+		  const flowStyleRef = (0, import_react33.useRef)("auto");
+		  flowStyleRef.current = flowStyle;
 		  const [starry, setStarry] = (0, import_react33.useState)(true);
 		  const [twinkleOn, setTwinkleOn] = (0, import_react33.useState)(true);
 		  const [axis, setAxis] = (0, import_react33.useState)("type");
@@ -45882,7 +46005,10 @@ var __create = Object.create;
 		  const [hallColors, setHallColors] = (0, import_react33.useState)({});
 		  const [variant, setVariant] = (0, import_react33.useState)(0.35);
 		  const [shape, setShape] = (0, import_react33.useState)("sphere");
+		  const [diskStyle, setDiskStyle] = (0, import_react33.useState)("spiral");
 		  const shapeRef = (0, import_react33.useRef)("sphere");
+		  const diskStyleRef = (0, import_react33.useRef)("spiral");
+		  diskStyleRef.current = diskStyle;
 		  shapeRef.current = shape;
 		  const axisRef = (0, import_react33.useRef)("type");
 		  axisRef.current = axis;
@@ -45909,7 +46035,7 @@ var __create = Object.create;
 		    const tail = hallCounts.has(HALL_FALLBACK) ? [HALL_FALLBACK] : [];
 		    return [...known, ...rest, ...tail];
 		  }, [hallCounts]);
-		  const swatchOf = (h) => hallColors[h] ?? `var(${defaultHallToken(h)})`;
+		  const swatchOf = (h) => hallColors[h] ?? HALL_GALAXY_COLORS[h] ?? `var(${defaultHallToken(h)})`;
 		  const colorInputRef = (0, import_react33.useRef)(null);
 		  const colorTargetRef = (0, import_react33.useRef)(null);
 		  const lastColorAtRef = (0, import_react33.useRef)(0);
@@ -45943,8 +46069,8 @@ var __create = Object.create;
 		  const nodeKeySeed = (0, import_react33.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
 		  const axisNodes = (0, import_react33.useMemo)(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: n.hall })), [full]);
 		  const clusterLayout = (0, import_react33.useMemo)(
-		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape),
-		    [axisNodes, axis, shape]
+		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle),
+		    [axisNodes, axis, shape, diskStyle]
 		  );
 		  const layoutRef = (0, import_react33.useRef)(clusterLayout);
 		  const egoLayoutRef = (0, import_react33.useRef)(null);
@@ -45959,13 +46085,15 @@ var __create = Object.create;
 		  }, [full]);
 		  const prevAxisRef = (0, import_react33.useRef)("type");
 		  const prevShapeRef = (0, import_react33.useRef)("sphere");
+		  const prevDiskStyleRef = (0, import_react33.useRef)("spiral");
 		  (0, import_react33.useEffect)(() => {
-		    if (prevAxisRef.current === axis && prevShapeRef.current === shape) return;
+		    if (prevAxisRef.current === axis && prevShapeRef.current === shape && prevDiskStyleRef.current === diskStyle) return;
 		    prevAxisRef.current = axis;
 		    prevShapeRef.current = shape;
+		    prevDiskStyleRef.current = diskStyle;
 		    transRef.current = { from: layoutRef.current, to: clusterLayout, start: performance.now() };
 		    wakeRef.current?.();
-		  }, [axis, shape, clusterLayout]);
+		  }, [axis, shape, diskStyle, clusterLayout]);
 		  (0, import_react33.useEffect)(() => {
 		    if (!emphasisId || emphasisId === focusRef.current) return;
 		    if (!clusterLayout.has(emphasisId)) return;
@@ -45999,6 +46127,8 @@ var __create = Object.create;
 		    const hallColorOf = (hall) => {
 		      const custom = hallColors[hall];
 		      if (custom) return custom;
+		      const galaxy = HALL_GALAXY_COLORS[hall];
+		      if (galaxy) return galaxy;
 		      let c = hallColorCache.get(hall);
 		      if (c === void 0) {
 		        c = resolveColor2(host, defaultHallToken(hall));
@@ -46193,7 +46323,12 @@ var __create = Object.create;
 		      if (disposed) return;
 		      refreshColors();
 		      const cam = camRef.current;
-		      const layout = activeLayout(now);
+		      let layout = activeLayout(now);
+		      if (flowRef.current && shapeRef.current !== "sphere" && modeRef.current === "cluster") {
+		        layout = flowShape(layout, now, shapeRef.current, flowSpeedRef.current, flowAmpRef.current, flowStyleRef.current === "auto" ? void 0 : flowStyleRef.current);
+		        edgeDirty = true;
+		        nodeDirty = true;
+		      }
 		      const ego = modeRef.current === "ego";
 		      const metas = metasRef.current;
 		      const hover = hoverRef.current;
@@ -46361,7 +46496,7 @@ var __create = Object.create;
 		        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
 		        needsPresent = false;
 		      }
-		      running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || driftOn && !ego;
+		      running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || driftOn && !ego || flowRef.current && shapeRef.current !== "sphere" && modeRef.current === "cluster";
 		      if (running) raf = requestAnimationFrame(frame);
 		    };
 		    const presentNow = () => {
@@ -46686,6 +46821,52 @@ var __create = Object.create;
 		            },
 		            s
 		          )) }),
+		          shape === "disk" && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden", marginLeft: 6 }, children: ["legacy", "flat", "spiral"].map((d) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "button",
+		            {
+		              onClick: () => setDiskStyle(d),
+		              style: {
+		                fontSize: 11,
+		                padding: "2px 8px",
+		                cursor: "pointer",
+		                border: "none",
+		                color: diskStyle === d ? ui.accent : ui.text,
+		                background: diskStyle === d ? "rgba(127,177,255,0.14)" : "transparent"
+		              },
+		              children: d === "legacy" ? "双臂" : d === "flat" ? "平铺" : "悬臂"
+		            },
+		            d
+		          )) }),
+		          toggle("流转", flowOn, setFlowOn),
+		          flowOn && shape !== "sphere" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden", marginLeft: 6 }, children: ["auto", "spin", "eight"].map((f) => {
+		              const active = flowStyle === f;
+		              return /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		                "button",
+		                {
+		                  onClick: () => setFlowStyle(f),
+		                  style: {
+		                    fontSize: 11,
+		                    padding: "2px 8px",
+		                    cursor: "pointer",
+		                    border: "none",
+		                    color: active ? ui.accent : ui.text,
+		                    background: active ? "rgba(127,177,255,0.14)" : "transparent"
+		                  },
+		                  children: f === "auto" ? "自动" : f === "spin" ? "自转" : "8字流"
+		                },
+		                f
+		              );
+		            }) }),
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4 }, children: [
+		              "转速",
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("input", { type: "range", min: 0, max: 1, step: 0.01, value: Math.sqrt((flowSpeed - 0.2) / 2.8), onChange: (e) => setFlowSpeed(0.2 + 2.8 * Math.pow(Number(e.target.value), 2)) })
+		            ] }),
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4 }, children: [
+		              "幅度",
+		              /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("input", { type: "range", min: 0, max: 2, step: 0.1, value: flowAmp, onChange: (e) => setFlowAmp(Number(e.target.value)) })
+		            ] })
+		          ] }) : null,
 		          toggle("辉光", glowOn, setGlowOn),
 		          toggle("边", edgesOn, setEdgesOn),
 		          toggle("标签", labelsOn, setLabelsOn),

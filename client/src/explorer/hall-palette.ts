@@ -49,6 +49,24 @@ export function defaultHallToken(hall: string): string {
   return '--dsh-mem-chart-8';
 }
 
+/**
+ * hall 星系色板(深空底优化)——3D hall 视角专用,不吃 chart 令牌。
+ * 设计:等距色相环(210° 起步每 45°),统一 s≈68/l≈62(深底上鲜而不刺、八色亮度拉平,
+ * 图表令牌组里 #8892a6 那种中性灰在新色板里只留给 general);跨域兜底沿用中性灰。
+ * 变异层(variantOf)照常在这组基准色上做 HSL 抖动。
+ */
+export const HALL_GALAXY_COLORS: Record<string, string> = {
+  work: '#638ee3',
+  relationships: '#9863e3',
+  learning: '#e363ce',
+  creative: '#e3636e',
+  home: '#e3b963',
+  health: '#aee363',
+  finance: '#63e378',
+  journey: '#63e3d9',
+  general: '#6b7480',
+};
+
 /** hall → 中文名(兜底表缺项回落 id 本身,不猜)。 */
 export function hallLabel(hall: string): string {
   return HALL_LABELS[hall] ?? hall;
