@@ -45480,6 +45480,104 @@ var __create = Object.create;
 		// client/src/explorer/Scene3D.tsx
 		var import_react33 = require("react");
 		
+		// client/src/explorer/hall-palette.ts
+		var HALL_ORDER = [
+		  "work",
+		  "relationships",
+		  "learning",
+		  "creative",
+		  "home",
+		  "health",
+		  "finance",
+		  "journey"
+		];
+		var HALL_FALLBACK = "general";
+		var HALL_LABELS = {
+		  work: "工作",
+		  relationships: "人际",
+		  learning: "学习",
+		  creative: "创作娱乐",
+		  home: "居家",
+		  health: "健康",
+		  finance: "财务",
+		  journey: "出行",
+		  general: "跨域"
+		};
+		function defaultHallToken(hall) {
+		  const i = HALL_ORDER.indexOf(hall);
+		  if (i >= 0) return `--dsh-mem-chart-${i + 1}`;
+		  return "--dsh-mem-chart-8";
+		}
+		function hallLabel(hall) {
+		  return HALL_LABELS[hall] ?? hall;
+		}
+		function hexToHsl(hex) {
+		  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+		  if (!m) return null;
+		  let body = m[1];
+		  if (body.length === 3) body = body.split("").map((c) => c + c).join("");
+		  const r = parseInt(body.slice(0, 2), 16) / 255;
+		  const g = parseInt(body.slice(2, 4), 16) / 255;
+		  const b = parseInt(body.slice(4, 6), 16) / 255;
+		  const max = Math.max(r, g, b);
+		  const min = Math.min(r, g, b);
+		  const l = (max + min) / 2;
+		  let h = 0;
+		  let s = 0;
+		  if (max !== min) {
+		    const d = max - min;
+		    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+		    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+		    else if (max === g) h = ((b - r) / d + 2) * 60;
+		    else h = ((r - g) / d + 4) * 60;
+		  }
+		  return { h, s: s * 100, l: l * 100 };
+		}
+		function hueToRgb(p, q, t) {
+		  let tt = t;
+		  if (tt < 0) tt += 1;
+		  if (tt > 1) tt -= 1;
+		  if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+		  if (tt < 1 / 2) return q;
+		  if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+		  return p;
+		}
+		var byte = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0");
+		function hslToHex(h, s, l) {
+		  const ss = Math.min(100, Math.max(0, s)) / 100;
+		  const ll = Math.min(100, Math.max(0, l)) / 100;
+		  const hh = (h % 360 + 360) % 360;
+		  if (ss === 0) {
+		    const v = byte(ll);
+		    return `#${v}${v}${v}`;
+		  }
+		  const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss;
+		  const p = 2 * ll - q;
+		  const r = hueToRgb(p, q, hh / 360 + 1 / 3);
+		  const g = hueToRgb(p, q, hh / 360);
+		  const b = hueToRgb(p, q, hh / 360 - 1 / 3);
+		  return `#${byte(r)}${byte(g)}${byte(b)}`;
+		}
+		function hash323(s) {
+		  let h = 2166136261;
+		  for (let i = 0; i < s.length; i++) {
+		    h ^= s.charCodeAt(i);
+		    h = Math.imul(h, 16777619);
+		  }
+		  return h >>> 0;
+		}
+		var HUE_SPAN = 18;
+		var LIGHT_SPAN = 12;
+		function variantOf(baseHex, id, strength) {
+		  const k = Math.min(1, Math.max(0, strength));
+		  if (k === 0) return baseHex;
+		  const hsl = hexToHsl(baseHex);
+		  if (!hsl) return baseHex;
+		  const hueJitter = (hash323(id) % 2e3 / 1e3 - 1) * HUE_SPAN * k;
+		  const lightJitter = (hash323(id + ":l") % 2e3 / 1e3 - 1) * LIGHT_SPAN * k;
+		  return hslToHex(hsl.h + hueJitter, hsl.s, hsl.l + lightJitter);
+		}
+		
 		// client/src/explorer/projection.ts
 		var FOCAL = 1100;
 		var LABEL_SKIP_DIST = 2600;
@@ -45510,25 +45608,41 @@ var __create = Object.create;
 		  const rest = [...seen].filter((t) => !known.includes(t)).sort((a, b) => hash322(a) - hash322(b));
 		  return [...known, ...rest];
 		}
-		function buildClusterLayout(nodes) {
+		function groupKeyOf(n, axis) {
+		  if (axis === "hall") return n.hall ?? HALL_FALLBACK;
+		  return n.type;
+		}
+		function hallGroupOrder(keys) {
+		  const seen = new Set(keys);
+		  const known = HALL_ORDER.filter((h) => seen.has(h));
+		  const rest = [...seen].filter((h) => !HALL_ORDER.includes(h) && h !== HALL_FALLBACK).sort((a, b) => hash322(a) - hash322(b));
+		  const tail = seen.has(HALL_FALLBACK) ? [HALL_FALLBACK] : [];
+		  return [...known, ...rest, ...tail];
+		}
+		function groupOrder(keys, axis) {
+		  return axis === "hall" ? hallGroupOrder(keys) : clusterOrder(keys);
+		}
+		function buildClusterLayoutByAxis(nodes, axis) {
 		  const out = /* @__PURE__ */ new Map();
-		  const types = clusterOrder(nodes.map((n) => n.type));
+		  const groups = groupOrder(
+		    nodes.map((n) => groupKeyOf(n, axis)),
+		    axis
+		  );
 		  const centers = /* @__PURE__ */ new Map();
-		  const total = Math.max(1, types.length);
-		  types.forEach((type, i) => {
+		  const total = Math.max(1, groups.length);
+		  groups.forEach((key, i) => {
 		    const y = total === 1 ? 0 : 1 - i / (total - 1) * 2;
 		    const ring = Math.sqrt(Math.max(0, 1 - y * y));
-		    const phi = i * Math.PI * (3 - Math.sqrt(5)) + rand01(`c:${type}`) * 0.6;
-		    const radius = 230 + rand01(`r:${type}`) * 190;
-		    centers.set(type, {
+		    const phi = i * Math.PI * (3 - Math.sqrt(5)) + rand01(`c:${key}`) * 0.6;
+		    const radius = 230 + rand01(`r:${key}`) * 190;
+		    centers.set(key, {
 		      x: Math.cos(phi) * ring * radius,
 		      y: y * radius * 0.82,
-		      // 纵向压扁：正球在俯视时上下层会互相挡住
 		      z: Math.sin(phi) * ring * radius
 		    });
 		  });
 		  for (const n of nodes) {
-		    const c = centers.get(n.type) ?? { x: 0, y: 0, z: 0 };
+		    const c = centers.get(groupKeyOf(n, axis)) ?? { x: 0, y: 0, z: 0 };
 		    const a = rand01(`a:${n.id}`) * Math.PI * 2;
 		    const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
 		    const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
@@ -45698,6 +45812,39 @@ var __create = Object.create;
 		  const [driftOn, setDriftOn] = (0, import_react33.useState)(false);
 		  const [starry, setStarry] = (0, import_react33.useState)(true);
 		  const [twinkleOn, setTwinkleOn] = (0, import_react33.useState)(true);
+		  const [axis, setAxis] = (0, import_react33.useState)("type");
+		  const [focusHalls, setFocusHalls] = (0, import_react33.useState)([]);
+		  const [hallColors, setHallColors] = (0, import_react33.useState)({});
+		  const [variant, setVariant] = (0, import_react33.useState)(0.35);
+		  const axisRef = (0, import_react33.useRef)("type");
+		  axisRef.current = axis;
+		  const viewKind = axis === "type" ? "type" : focusHalls.length === 0 ? "hall" : "hallFocus";
+		  const viewRef = (0, import_react33.useRef)(viewKind);
+		  viewRef.current = viewKind;
+		  const focusHallsRef = (0, import_react33.useRef)(focusHalls);
+		  focusHallsRef.current = focusHalls;
+		  const hallColorsRef = (0, import_react33.useRef)(hallColors);
+		  hallColorsRef.current = hallColors;
+		  const variantRef = (0, import_react33.useRef)(variant);
+		  variantRef.current = variant;
+		  const hallCounts = (0, import_react33.useMemo)(() => {
+		    const m = /* @__PURE__ */ new Map();
+		    for (const n of full.nodes) {
+		      const h = n.hall ?? HALL_FALLBACK;
+		      m.set(h, (m.get(h) ?? 0) + 1);
+		    }
+		    return m;
+		  }, [full]);
+		  const legendHalls = (0, import_react33.useMemo)(() => {
+		    const known = HALL_ORDER.filter((h) => hallCounts.has(h));
+		    const rest = [...hallCounts.keys()].filter((h) => !HALL_ORDER.includes(h) && h !== HALL_FALLBACK).sort((a, b) => hash322(a) - hash322(b));
+		    const tail = hallCounts.has(HALL_FALLBACK) ? [HALL_FALLBACK] : [];
+		    return [...known, ...rest, ...tail];
+		  }, [hallCounts]);
+		  const swatchOf = (h) => hallColors[h] ?? `var(${defaultHallToken(h)})`;
+		  const colorInputRef = (0, import_react33.useRef)(null);
+		  const colorTargetRef = (0, import_react33.useRef)(null);
+		  const lastColorAtRef = (0, import_react33.useRef)(0);
 		  const camRef = (0, import_react33.useRef)({ ...CAM_DEFAULT });
 		  const modeRef = (0, import_react33.useRef)("cluster");
 		  const focusRef = (0, import_react33.useRef)(null);
@@ -45726,7 +45873,8 @@ var __create = Object.create;
 		  }, [edgeList]);
 		  const nodeById = (0, import_react33.useMemo)(() => new Map(full.nodes.map((n) => [n.id, n])), [full]);
 		  const nodeKeySeed = (0, import_react33.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
-		  const clusterLayout = (0, import_react33.useMemo)(() => buildClusterLayout(full.nodes.map((n) => ({ id: n.id, type: n.type }))), [full]);
+		  const axisNodes = (0, import_react33.useMemo)(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: n.hall })), [full]);
+		  const clusterLayout = (0, import_react33.useMemo)(() => buildClusterLayoutByAxis(axisNodes, axisRef.current), [axisNodes, axis]);
 		  const layoutRef = (0, import_react33.useRef)(clusterLayout);
 		  const egoLayoutRef = (0, import_react33.useRef)(null);
 		  const transRef = (0, import_react33.useRef)(null);
@@ -45737,7 +45885,14 @@ var __create = Object.create;
 		    modeRef.current = "cluster";
 		    focusRef.current = null;
 		    setMode("cluster");
-		  }, [clusterLayout]);
+		  }, [full]);
+		  const prevAxisRef = (0, import_react33.useRef)("type");
+		  (0, import_react33.useEffect)(() => {
+		    if (prevAxisRef.current === axis) return;
+		    prevAxisRef.current = axis;
+		    transRef.current = { from: layoutRef.current, to: clusterLayout, start: performance.now() };
+		    wakeRef.current?.();
+		  }, [axis, clusterLayout]);
 		  (0, import_react33.useEffect)(() => {
 		    if (!emphasisId || emphasisId === focusRef.current) return;
 		    if (!clusterLayout.has(emphasisId)) return;
@@ -45767,26 +45922,47 @@ var __create = Object.create;
 		      }
 		      return c;
 		    };
+		    const hallColorCache = /* @__PURE__ */ new Map();
+		    const hallColorOf = (hall) => {
+		      const custom = hallColors[hall];
+		      if (custom) return custom;
+		      let c = hallColorCache.get(hall);
+		      if (c === void 0) {
+		        c = resolveColor2(host, defaultHallToken(hall));
+		        hallColorCache.set(hall, c);
+		      }
+		      return c;
+		    };
+		    const ax = axisRef.current;
 		    metasRef.current = new Map(
 		      full.nodes.map((n) => {
 		        const deg = degree.get(n.id) ?? 0;
+		        const hall = n.hall ?? HALL_FALLBACK;
+		        let color;
+		        if (ax === "type") {
+		          color = colorOf(n.type);
+		        } else {
+		          const base = hallColorOf(hall);
+		          color = variantOf(base, n.id, variant);
+		        }
 		        return [
 		          n.id,
 		          {
 		            id: n.id,
 		            name: n.name,
 		            type: n.type,
-		            color: colorOf(n.type),
+		            color,
 		            degree: deg,
 		            // 度数 → 基础半径：sqrt 压缩（与 2D radiusForDegree 同一族形状，单位换成 3D 世界）
 		            base: pointSize * (1 + Math.sqrt(deg) * 0.28),
 		            aging: n.aging ?? null,
-		            source: n.source ?? null
+		            source: n.source ?? null,
+		            hall
 		          }
 		        ];
 		      })
 		    );
-		  }, [full, degree, pointSize]);
+		  }, [full, degree, pointSize, axis, hallColors, variant]);
 		  (0, import_react33.useLayoutEffect)(() => {
 		    const host = hostRef.current;
 		    const canvas = canvasRef.current;
@@ -46001,12 +46177,14 @@ var __create = Object.create;
 		      if (nodeDirty) {
 		        const c = nctx;
 		        c.clearRect(0, 0, vw, vh);
+		        const dimmed = (m) => viewRef.current === "hallFocus" && !focusHallsRef.current.includes(m.hall);
 		        for (const p of projected) {
 		          if (activeIds.has(p.id)) continue;
 		          const m = metas.get(p.id);
 		          if (!m) continue;
-		          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
-		          const r = Math.max(0.8, m.base * p.f * 1.75);
+		          const dim = dimmed(m);
+		          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true) * (dim ? 0.22 : 1);
+		          const r = Math.max(0.8, m.base * p.f * 1.75 * (dim ? 0.7 : 1));
 		          if (glowOn) {
 		            c.globalCompositeOperation = "lighter";
 		            c.globalAlpha = alpha * 0.5;
@@ -46015,7 +46193,7 @@ var __create = Object.create;
 		            c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
 		          }
 		          c.globalCompositeOperation = "source-over";
-		          c.globalAlpha = Math.min(1, alpha + 0.15);
+		          c.globalAlpha = Math.min(1, Math.max(alpha + (dim ? 0 : 0.15), 0.06));
 		          c.fillStyle = m.color;
 		          c.beginPath();
 		          c.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -46058,8 +46236,9 @@ var __create = Object.create;
 		          const m = metas.get(id);
 		          if (!p || !m) continue;
 		          const tw = 0.5 + 0.5 * Math.sin(now / BREATH_PERIOD_MS + phaseOf(id));
-		          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
-		          const r = Math.max(0.8, m.base * p.f * 1.75 * 1.9);
+		          const dimActive = viewRef.current === "hallFocus" && !focusHallsRef.current.includes(m.hall);
+		          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true) * (dimActive ? 0.22 : 1);
+		          const r = Math.max(0.8, m.base * p.f * 1.75 * 1.9 * (dimActive ? 0.7 : 1));
 		          if (glowOn) {
 		            c.globalCompositeOperation = "lighter";
 		            c.globalAlpha = Math.min(1, alpha * 0.5 + tw * 0.4);
@@ -46068,7 +46247,7 @@ var __create = Object.create;
 		            c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
 		          }
 		          c.globalCompositeOperation = "source-over";
-		          c.globalAlpha = Math.min(1, alpha + 0.15 + tw * 0.25);
+		          c.globalAlpha = Math.min(1, Math.max(alpha + 0.15 + (dimActive ? 0 : tw * 0.25), 0.06));
 		          c.fillStyle = m.color;
 		          c.beginPath();
 		          c.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -46286,6 +46465,76 @@ var __create = Object.create;
 		        ] }) : /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { children: "左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录" })
 		      }
 		    ),
+		    axis === "hall" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
+		      "div",
+		      {
+		        style: { position: "absolute", top: 8, right: 8, background: ui.barBg, border: ui.border, borderRadius: 10, padding: "6px 8px", fontSize: 11, color: ui.dim, maxHeight: "70%", overflowY: "auto" },
+		        children: [
+		          legendHalls.map((h) => {
+		            const selected = focusHalls.includes(h);
+		            const custom = hallColors[h];
+		            return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
+		              "div",
+		              {
+		                style: { display: "flex", alignItems: "center", gap: 6, padding: "2px 0", cursor: "pointer", opacity: focusHalls.length === 0 || selected ? 1 : 0.55 },
+		                onClick: () => setFocusHalls((prev) => prev.includes(h) ? prev.filter((x) => x !== h) : [...prev, h]),
+		                onDoubleClick: () => {
+		                  colorTargetRef.current = h;
+		                  colorInputRef.current?.click();
+		                },
+		                title: "单击选中/取消 · 双击改色",
+		                children: [
+		                  /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		                    "span",
+		                    {
+		                      onClick: (e) => {
+		                        e.stopPropagation();
+		                        colorTargetRef.current = h;
+		                        colorInputRef.current?.click();
+		                      },
+		                      style: {
+		                        width: 10,
+		                        height: 10,
+		                        borderRadius: 3,
+		                        display: "inline-block",
+		                        background: swatchOf(h),
+		                        boxShadow: custom ? "0 0 0 1.5px rgba(255,255,255,0.65)" : "none",
+		                        flex: "none"
+		                      }
+		                    }
+		                  ),
+		                  /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { color: ui.text }, children: hallLabel(h) }),
+		                  /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { children: hallCounts.get(h) ?? 0 })
+		                ]
+		              },
+		              h
+		            );
+		          }),
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "input",
+		            {
+		              ref: colorInputRef,
+		              type: "color",
+		              value: colorTargetRef.current ? hallColors[colorTargetRef.current] ?? swatchOf(colorTargetRef.current) : "#888888",
+		              style: { position: "absolute", width: 0, height: 0, opacity: 0, pointerEvents: "none" },
+		              onInput: (e) => {
+		                const h = colorTargetRef.current;
+		                if (!h) return;
+		                const now = performance.now();
+		                if (now - lastColorAtRef.current < 60) return;
+		                lastColorAtRef.current = now;
+		                setHallColors((prev) => ({ ...prev, [h]: e.target.value }));
+		              },
+		              onChange: (e) => {
+		                const h = colorTargetRef.current;
+		                if (!h) return;
+		                setHallColors((prev) => ({ ...prev, [h]: e.target.value }));
+		              }
+		            }
+		          )
+		        ]
+		      }
+		    ) : null,
 		    hoverInfo && hoverMeta ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(
 		      "div",
 		      {
@@ -46312,6 +46561,10 @@ var __create = Object.create;
 		            " 条",
 		            hoverMeta.aging != null ? ` · 老化 ${hoverMeta.aging.toFixed(2)}` : ""
 		          ] }),
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { color: "var(--dsh-mem-text-3)" }, children: [
+		            "Wing · ",
+		            hallLabel(hoverMeta.hall)
+		          ] }),
 		          hoverMeta.source ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { style: { color: "var(--dsh-mem-text-3)" }, children: [
 		            "出处：",
 		            hoverMeta.source
@@ -46324,6 +46577,26 @@ var __create = Object.create;
 		      {
 		        style: { position: "absolute", bottom: 8, left: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", background: ui.barBg, border: ui.border, borderRadius: 10, padding: "4px 8px" },
 		        children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden" }, children: ["type", "hall", "hallFocus"].map((k) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "button",
+		            {
+		              onClick: () => setAxis(k === "type" ? "type" : "hall"),
+		              style: {
+		                fontSize: 11,
+		                padding: "2px 8px",
+		                cursor: "pointer",
+		                border: "none",
+		                color: (k === "hallFocus" ? axis === "hall" && focusHalls.length > 0 : axis === k) ? ui.accent : ui.text,
+		                background: (k === "hallFocus" ? axis === "hall" && focusHalls.length > 0 : axis === k) ? "rgba(127,177,255,0.14)" : "transparent"
+		              },
+		              children: k === "type" ? "类型" : k === "hall" ? "八维" : "自选"
+		            },
+		            k
+		          )) }),
+		          axis === "hall" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4 }, children: [
+		            "变异",
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("input", { type: "range", min: 0, max: 1, step: 0.05, value: variant, onChange: (e) => setVariant(Number(e.target.value)) })
+		          ] }) : null,
 		          toggle("辉光", glowOn, setGlowOn),
 		          toggle("边", edgesOn, setEdgesOn),
 		          toggle("标签", labelsOn, setLabelsOn),
@@ -46582,7 +46855,7 @@ var __create = Object.create;
 		        "/",
 		        stats?.jobsTotal ?? 0
 		      ] }) : null,
-		      view === "3d" && full && full.nodes.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { style: { display: "inline-flex", gap: 8, alignItems: "center", fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
+		      view === "2d" && full && full.nodes.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { style: { display: "inline-flex", gap: 8, alignItems: "center", fontSize: 11, color: "var(--dsh-mem-text-3)" }, children: [
 		        LEGEND_TYPES.filter(([t]) => full.nodes.some((n) => n.type === t)).map(([t, zh, token2]) => /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("span", { children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
 		            "span",

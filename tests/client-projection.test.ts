@@ -37,6 +37,8 @@ import {
   type LabelCandidate,
   type LayoutNode,
 } from '../client/src/explorer/projection.js';
+import { buildClusterLayoutByAxis, groupKeyOf, groupOrder, hallGroupOrder } from '../client/src/explorer/projection.js';
+import { HALL_FALLBACK, HALL_ORDER } from '../client/src/explorer/hall-palette.js';
 
 const NODES: LayoutNode[] = [
   { id: 'p1', type: 'person' },
@@ -301,5 +303,76 @@ describe('phaseOf / BREATH_PERIOD_MS —— 激活元素呼吸的错相门禁', 
     // 批量不同 id 不应全同相位（齐闪即此处失守）。
     const set = new Set(Array.from({ length: 50 }, (_, i) => Math.round(phaseOf(`node-${i}`) * 100)));
     expect(set.size).toBeGreaterThan(40);
+  });
+});
+
+/** hall 轴参数化验收面(计划 prime-memory-3d-hall-views task_7):
+ * ① 确定性:同输入两次调用逐位一致、与入参顺序无关;
+ * ② 同 hall 点彼此更近(簇内距离 < 跨簇抽样距离);
+ * ③ 缺 hall 落 general 兜底;hallGroupOrder 固定序 + general 殿后;
+ * ④ 种子前缀不改:type 轴下 buildClusterLayoutByAxis 与 buildClusterLayout 逐位一致。 */
+describe('buildClusterLayoutByAxis —— hall 轴', () => {
+  const mk = (id: string, type: string, hall?: string) => ({ id, type, ...(hall != null ? { hall } : {}) });
+
+  it('type 轴与既有 buildClusterLayout 逐位一致(种子前缀不改的回归钉)', () => {
+    const nodes = Array.from({ length: 50 }, (_, i) => mk(`n${i}`, ['person', 'project', 'tool'][i % 3]!));
+    const a = buildClusterLayout(nodes);
+    const b = buildClusterLayoutByAxis(nodes, 'type');
+    expect([...a.entries()]).toEqual([...b.entries()]);
+  });
+
+  it('确定性:同输入两次逐位一致;打乱入参顺序布局不变', () => {
+    const nodes = [
+      mk('w1', 'person', 'work'), mk('w2', 'person', 'work'), mk('f1', 'tool', 'finance'),
+      mk('g1', 'tool'), mk('j1', 'person', 'journey'),
+    ];
+    const r1 = buildClusterLayoutByAxis(nodes, 'hall');
+    const r2 = buildClusterLayoutByAxis(nodes, 'hall');
+    expect([...r1.entries()]).toEqual([...r2.entries()]);
+    const shuffled = [nodes[3], nodes[0], nodes[4], nodes[2], nodes[1]];
+    const r3 = buildClusterLayoutByAxis(shuffled, 'hall');
+    // Map 迭代序跟插入序(入参序)走——逐 id 对齐比较坐标,钉的是"布局与入参顺序无关"
+    for (const [id, v] of r1) expect(r3.get(id)).toEqual(v);
+  });
+
+  it('同 hall 点彼此更近:work 两点距离 < work 到 finance 点距离', () => {
+    const nodes = [
+      mk('w1', 'person', 'work'), mk('w2', 'person', 'work'),
+      mk('w3', 'tool', 'work'), mk('f1', 'tool', 'finance'),
+    ];
+    const L = buildClusterLayoutByAxis(nodes, 'hall');
+    const dist = (a: string, b: string) => {
+      const p = L.get(a)!; const q = L.get(b)!;
+      return Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+    };
+    const inner = Math.min(dist('w1', 'w2'), dist('w1', 'w3'), dist('w2', 'w3'));
+    const cross = dist('w1', 'f1');
+    expect(inner).toBeLessThan(cross);
+  });
+
+  it('缺 hall 落 general 兜底;groupKeyOf 两轴语义正确', () => {
+    expect(groupKeyOf(mk('a', 'person'), 'hall')).toBe(HALL_FALLBACK);
+    expect(groupKeyOf(mk('a', 'person', 'work'), 'hall')).toBe('work');
+    expect(groupKeyOf(mk('a', 'person', 'work'), 'type')).toBe('person');
+    const L = buildClusterLayoutByAxis([mk('a', 'person'), mk('b', 'tool', 'work')], 'hall');
+    expect(L.has('a')).toBe(true);
+  });
+
+  it('hallGroupOrder:固定序 + 未知按 hash 追加 + general 殿后;与入参顺序无关', () => {
+    const keys = ['journey', 'work', 'general', 'ghost-x', 'finance'];
+    const o1 = hallGroupOrder(keys);
+    const o2 = hallGroupOrder([...keys].reverse());
+    expect(o1).toEqual(o2);
+    expect(o1.indexOf('work')).toBeLessThan(o1.indexOf('finance'));
+    expect(o1.indexOf('finance')).toBeLessThan(o1.indexOf('journey'));
+    expect(o1[o1.length - 1]).toBe('general');
+    // 未知值在八维与 general 之间
+    expect(o1.indexOf('ghost-x')).toBeGreaterThan(o1.indexOf('journey'));
+    expect(o1.indexOf('ghost-x')).toBeLessThan(o1.indexOf('general'));
+    // groupOrder 委托
+    expect(groupOrder(['person', 'tool'], 'type')).toEqual(['person', 'tool']);
+    expect(groupOrder(keys, 'hall')).toEqual(o1);
+    // HALL_ORDER 全序参与
+    expect(o1.filter((k) => (HALL_ORDER as readonly string[]).includes(k)).length).toBe(3);
   });
 });

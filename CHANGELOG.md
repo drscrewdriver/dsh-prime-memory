@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.26.41
+## 0.26.42
+
+- **3D 记忆海新增 hall 双视角（计划 prime-memory-3d-hall-views）**：
+  - **视角一「八维聚类」**：`graph-preview(mode:'full')` 节点新增可选键 `hall`（来源记录 metadata.hall 众数，同票按 WING_CATALOG 词表序、非法值不计票；无值键缺席，零漂移先例与 aging/source 同款）。`sourceMeta()` 扩为三通道（ms/scene/hall），入表判据放宽为任一通道有值，一次扫描供三通道；`agingOf` 对 ms:null 短路返 null。
+  - **视角二「自选 hall 高亮」**：布局沿用八维聚类不重排；选中 hall 按自定义色/令牌色 + 确定性变异高亮，未选中点 alpha×0.22（兜 ALPHA_FLOOR）、半径×0.7。
+  - **客户端**：新建零依赖 `hall-palette.ts`（HALL_ORDER 防漂移钉钉住与 WING_CATALOG 逐项相等；hexToHsl/hslToHex 往返逐字节稳定；variantOf 双路散列 HSL 变异，strength=0 逐字节等于基准色）；`projection.ts` 轴参数化（buildClusterLayoutByAxis，种子前缀 c:/r:/a:/b:/s: 一个不改——同 id 两轴球内角度一致，轴切换是"重新分堆"不是乱飞）；Scene3D 三档视角控件 + 变异滑块 + 右上角 hall 图例（单击选中、双击取色器 60ms 节流）；ExplorerPage 3D 模式隐藏顶部 type 图例（两套图例并存会互相矛盾）。
+  - 硬落位 effect 依赖收窄为 [full]（findings F4：留 clusterLayout 会让轴切换过渡被硬落位静默吃掉）。
 
 - 终端面（dsh-tui / Desktop 命令面板同源）：转正号（原 package.json 0.26.40-local.4 / dsh.plugin.json 0.26.39-local.3 双清单不一致，本次统一）；/memory 终端面。
 # 更新日志（Changelog）

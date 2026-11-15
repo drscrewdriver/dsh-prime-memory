@@ -21,10 +21,11 @@ import { randomBytes } from 'node:crypto';
 import { applyGraphProjection } from '../graph/apply.js';
 import { expandHitRecordIds, searchGraphNodes } from '../graph/search.js';
 import { buildFullView, buildGraphPreview } from '../graph/preview.js';
+import { isWingId } from '../metadata-validators.js';
 import { buildRecordLinks } from '../graph/record-links.js';
 import { selectExplorerNodes } from '../graph/select.js';
 import { GRAPH_JOB_BACKOFF_BASE_MS, GRAPH_JOB_BATCH, GRAPH_JOB_MAX_ATTEMPTS, GRAPH_JOB_TRANSIENT_MAX_ATTEMPTS, GRAPH_PRIORITY_BACKFILL, GRAPH_PRIORITY_NEW, GRAPH_PROJECTOR_VERSION, GRAPH_VEC_SEED_CAP, } from '../graph/types.js';
-import { normPersistence } from '../types.js';
+import { normPersistence, WING_CATALOG, WING_FALLBACK } from '../types.js';
 import { classifyValidity, isExitedState, validToSourceOf } from './validity.js';
 import { readSupersedeMarker } from './supersede.js';
 import { isZeroVector, vecToBuffer } from './vec-utils.js';
@@ -515,7 +516,7 @@ export class GraphStore {
      * `agingOf`/`sourceOf` 仅在 mode==='full' 时生效(星图亮度与出处通道):本层不认识 L1,
      * 由端点层查来源记录后注入判据(nodeId → aging | null / 场景名 | null)。
      */
-    buildPreview(seedId, mode, agingOf, sourceOf) {
+    buildPreview(seedId, mode, agingOf, sourceOf, hallOf) {
         const zero = { seeds: [], stats: { nodes: 0, edges: 0, causalEdges: 0, pendingJobs: 0, jobsTotal: 0 } };
         if (!this.db)
             return mode === 'full' ? { ...zero, full: { nodes: [], edges: [], truncated: false } } : zero;
@@ -523,16 +524,20 @@ export class GraphStore {
         const { pendingJobs, jobsTotal, deadJobs } = this.jobCounts();
         const r = buildGraphPreview(nodes, edges, { seedId, pendingJobs, jobsTotal, deadJobs, missing: this.countMissing() });
         if (mode === 'full')
-            return { ...r, full: buildFullView(nodes, edges, { agingOf, sourceOf }) };
+            return { ...r, full: buildFullView(nodes, edges, { agingOf, sourceOf, hallOf }) };
         return r;
     }
     /**
-     * 节点 → 存活来源记录的最新时间 + 主场景标签。
-     * `graph-preview(mode:'full')` 老化与出处两条展示通道的数据源：
+     * 节点 → 存活来源记录的最新时间 + 主场景标签 + Wing（生活域）归属。
+     * `graph-preview(mode:'full')` 老化/出处/hall 三条展示通道的数据源（一次扫描供三通道）：
      *   - `ms`：最新存活来源的 `updated_time`（老化属于记录不属于投影节点，端点层据此算 agingWeight）；
      *   - `scene`：来源记录中出现最多的非空 `scene_name`（provenance fallback：人物实体靠场景回溯“在哪提到的”，
      *     如“字节Code M岗位”；无场景则 null，不猜）。B 方案（投影期落库 context）上线后本项退为兜底。
-     * 只认有值的行：全来源无有效时间戳的节点**不进表**。降级返空表不抛。
+     *   - `hall`：来源记录 `metadata.hall` 的**众数**（单值口径，实测 1591 节点仅 6.4% 跨 hall）；
+     *     同票按 `WING_CATALOG` 词表序取先（确定性 tie-break），非法值（不在八维 + general 内）不计票
+     *     （`isWingId` 校验，`metadata-validators.ts`）；无合法票则 null。
+     * 入表判据：ms / scene / hall **任一有值**即入表（hall 通道引入无时间戳但有归属的行）；
+     * 全空不入表。降级返空表不抛。
      */
     sourceMeta() {
         const out = new Map();
@@ -548,10 +553,11 @@ export class GraphStore {
                 return out;
             const updatedById = new Map();
             const sceneById = new Map();
+            const hallById = new Map();
             for (const chunk of chunkOf([...sources])) {
                 const ph = chunk.map(() => '?').join(',');
                 for (const row of this.db
-                    .prepare(`SELECT record_id, updated_time, scene_name FROM l1_records WHERE record_id IN (${ph})`)
+                    .prepare(`SELECT record_id, updated_time, scene_name, json_extract(metadata_json,'$.hall') AS hall FROM l1_records WHERE record_id IN (${ph})`)
                     .all(...chunk)) {
                     const ms = Date.parse(String(row.updated_time ?? ''));
                     if (Number.isFinite(ms))
@@ -559,11 +565,17 @@ export class GraphStore {
                     const sc = String(row.scene_name ?? '').trim();
                     if (sc)
                         sceneById.set(row.record_id, sc);
+                    const h = row.hall;
+                    if (typeof h === 'string' && isWingId(h))
+                        hallById.set(row.record_id, h);
                 }
             }
+            // hall 同票 tie-break 用词表序：八维按 WING_CATALOG 序，general 殿后（WING_FALLBACK）。
+            const wingRank = new Map([...WING_CATALOG.map((w) => w.id), WING_FALLBACK].map((id, i) => [id, i]));
             for (const n of nodes) {
                 let latest = -1;
                 const tally = new Map();
+                const hallTally = new Map();
                 for (const id of n.sourceRecordIds) {
                     const ms = updatedById.get(id);
                     if (ms != null)
@@ -571,9 +583,10 @@ export class GraphStore {
                     const sc = sceneById.get(id);
                     if (sc)
                         tally.set(sc, (tally.get(sc) ?? 0) + 1);
+                    const h = hallById.get(id);
+                    if (h)
+                        hallTally.set(h, (hallTally.get(h) ?? 0) + 1);
                 }
-                if (latest < 0)
-                    continue; // 无有效时间戳：不挂（aging 与 scene 同进退）
                 let scene = null;
                 let best = 0;
                 for (const [s, c] of tally)
@@ -581,12 +594,24 @@ export class GraphStore {
                         best = c;
                         scene = s;
                     }
-                out.set(n.id, { ms: latest, scene });
+                // hall 众数：票数最高者当选；同票按词表序取先（确定性）。
+                let hall = null;
+                let hallBest = 0;
+                for (const [h, c] of hallTally) {
+                    if (c > hallBest || (c === hallBest && hall != null && (wingRank.get(h) ?? 999) < (wingRank.get(hall) ?? 999))) {
+                        hallBest = c;
+                        hall = h;
+                    }
+                }
+                // 任一通道有值即入表；全空不入表。
+                if (latest < 0 && scene == null && hall == null)
+                    continue;
+                out.set(n.id, { ms: latest < 0 ? null : latest, scene, hall });
             }
             return out;
         }
         catch (err) {
-            this.logger?.warn(`${TAG} 来源元信息读取失败(老化/出处通道整轮缺省): ${err instanceof Error ? err.message : String(err)}`);
+            this.logger?.warn(`${TAG} 来源元信息读取失败(老化/出处/hall 通道整轮缺省): ${err instanceof Error ? err.message : String(err)}`);
             return new Map();
         }
     }

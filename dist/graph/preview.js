@@ -198,6 +198,10 @@ export function buildFullView(nodes, edges, caps = {}) {
             const source = caps.sourceOf?.(n.id) ?? null;
             if (source != null)
                 base.source = source;
+            // 有值才挂键（可选键零漂移：null/无 resolver → 键缺席，老消费方看到的形状不变）。
+            const hall = caps.hallOf?.(n.id) ?? null;
+            if (hall != null)
+                base.hall = hall;
             return base;
         }),
         edges: outEdges,

@@ -18,6 +18,7 @@
  *      把两个语义挤进同一个数（基准页上一版就是这么把老化差异吞掉的，见 brightnessFor）。
  */
 import { hash32 } from '../tabs/graph-canvas-data.js';
+import { HALL_FALLBACK, HALL_ORDER } from './hall-palette.js';
 
 // ── 相机与交互常量（渲染层与单测共用同一组数字） ──────────────────
 /** 透视焦距：越大越接近平视，越小纵深越夸张。 */
@@ -75,6 +76,8 @@ export interface Vec3 {
 export interface LayoutNode {
   id: string;
   type: string;
+  /** Wing 生活域归属（hall 轴分组键）；缺值落 general 兜底（键可缺席）。 */
+  hall?: string;
 }
 
 /** 投影后的屏幕项。`f` 是透视系数（近大远小的那个"倍率"），`depth` 用于排序。 */
@@ -102,28 +105,68 @@ export function clusterOrder(types: Iterable<string>): string[] {
  * 簇内点在自己那层薄壳里散开。**没有全局中心**——这正是 prime-memory 要的形态。
  */
 export function buildClusterLayout(nodes: readonly LayoutNode[]): Map<string, Vec3> {
+  return buildClusterLayoutByAxis(nodes, 'type');
+}
+
+// ── 聚类轴参数化（hall 视角）：组键可换，散列种子前缀一个不改 ──────────
+/** 聚类分组轴：type = 既有五类；hall = 生活域八维 + general 兜底。 */
+export type ClusterAxis = 'type' | 'hall';
+
+/** 节点在给定轴下的组键。hall 轴缺值落 HALL_FALLBACK（不出现 undefined 组键）。 */
+export function groupKeyOf(n: LayoutNode, axis: ClusterAxis): string {
+  if (axis === 'hall') return n.hall ?? HALL_FALLBACK;
+  return n.type;
+}
+
+/**
+ * hall 轴的组序：按 HALL_ORDER 固定序（与 WING_CATALOG 一致），未知 hall 值按
+ * hash 升序追加（同 type 轴的确定性纪律），general（兜底组）殿后——它语义上
+ * 是"跨域/无归属"，不挤进八维序列中间。**与入参顺序无关**（同契约 R6）。
+ */
+export function hallGroupOrder(keys: Iterable<string>): string[] {
+  const seen = new Set<string>(keys);
+  const known = HALL_ORDER.filter((h) => seen.has(h));
+  const rest = [...seen]
+    .filter((h) => !(HALL_ORDER as readonly string[]).includes(h) && h !== HALL_FALLBACK)
+    .sort((a, b) => hash32(a) - hash32(b));
+  const tail = seen.has(HALL_FALLBACK) ? [HALL_FALLBACK] : [];
+  return [...known, ...rest, ...tail];
+}
+
+/** 按轴取组序：type 轴委托既有 clusterOrder（行为不动）；hall 轴走 hallGroupOrder。 */
+export function groupOrder(keys: Iterable<string>, axis: ClusterAxis): string[] {
+  return axis === 'hall' ? hallGroupOrder(keys) : clusterOrder(keys);
+}
+
+/**
+ * buildClusterLayout 的轴参数化版本：把「组键 → 簇心」的斐波那契球面逻辑原样
+ * 参数化，簇半径/抖动种子前缀 `c:`/`r:`/`a:`/`b:`/`s:` **一个不改**——
+ * 同一节点 id 在两条轴下的球内角度/壳层半径保持一致，轴切换过渡读起来像
+ * 「同一批点重新分堆」而不是「满屏乱飞」（findings F3）。
+ */
+export function buildClusterLayoutByAxis(nodes: readonly LayoutNode[], axis: ClusterAxis): Map<string, Vec3> {
   const out = new Map<string, Vec3>();
-  const types = clusterOrder(nodes.map((n) => n.type));
+  const groups = groupOrder(
+    nodes.map((n) => groupKeyOf(n, axis)),
+    axis,
+  );
   const centers = new Map<string, Vec3>();
-  const total = Math.max(1, types.length);
-  types.forEach((type, i) => {
-    // 斐波那契球面：y 线性铺开，phi 用黄金角递推；再叠一层按簇名派生的抖动，
-    // 避免两个簇恰好落在同一方向上糊成一坨。
+  const total = Math.max(1, groups.length);
+  groups.forEach((key, i) => {
     const y = total === 1 ? 0 : 1 - (i / (total - 1)) * 2;
     const ring = Math.sqrt(Math.max(0, 1 - y * y));
-    const phi = i * Math.PI * (3 - Math.sqrt(5)) + rand01(`c:${type}`) * 0.6;
-    const radius = 230 + rand01(`r:${type}`) * 190;
-    centers.set(type, {
+    const phi = i * Math.PI * (3 - Math.sqrt(5)) + rand01(`c:${key}`) * 0.6;
+    const radius = 230 + rand01(`r:${key}`) * 190;
+    centers.set(key, {
       x: Math.cos(phi) * ring * radius,
-      y: y * radius * 0.82, // 纵向压扁：正球在俯视时上下层会互相挡住
+      y: y * radius * 0.82,
       z: Math.sin(phi) * ring * radius,
     });
   });
   for (const n of nodes) {
-    const c = centers.get(n.type) ?? { x: 0, y: 0, z: 0 };
+    const c = centers.get(groupKeyOf(n, axis)) ?? { x: 0, y: 0, z: 0 };
     const a = rand01(`a:${n.id}`) * Math.PI * 2;
     const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
-    // pow(…,0.65) 把分布往壳外推：纯均匀会让中心一坨密到看不出结构。
     const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
     out.set(n.id, {
       x: c.x + Math.sin(b) * Math.cos(a) * rr,
@@ -133,7 +176,6 @@ export function buildClusterLayout(nodes: readonly LayoutNode[]): Map<string, Ve
   }
   return out;
 }
-
 /**
  * ego 布局：焦点在球心，**BFS 跳数决定壳层半径**（第 k 跳在 r = k×SHELL_GAP 的壳上），
  * 同壳内按 id 派生方向均匀散布。

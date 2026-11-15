@@ -2888,19 +2888,22 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // source 取主场景名（provenance fallback，B 方案落库后退为兜底）。无值→不挂键（可选键零漂移）。
       let agingOf: ((id: string) => number | null) | undefined;
       let sourceOf: ((id: string) => string | null) | undefined;
+      let hallOf: ((id: string) => string | null) | undefined;
       if (mode === 'full') {
         const halfLife = stores.l1.decayHalfLife;
+        // 一次 sourceMeta() 同时供三算：aging/scene/hall 共用同一次来源扫描，零额外查询。
         const meta = graph.sourceMeta();
         sourceOf = (id) => meta.get(id)?.scene ?? null;
+        hallOf = (id) => meta.get(id)?.hall ?? null;
         if (halfLife > 0) {
           agingOf = (id) => {
             const m = meta.get(id);
-            // 星图专用下限 0.2：让 0.2~1 的亮度差异可见（召回/列表仍用缺省 0.5，不受影响）。
-            return m == null ? null : agingWeightOf(m.ms, halfLife, undefined, 0.2);
+            // ms 变可空后：null = 无有效时间戳 → aging=null（不剔点、亮度走缺省），不抛。
+            return m == null || m.ms == null ? null : agingWeightOf(m.ms, halfLife, undefined, 0.2);
           };
         }
       }
-      return graph.buildPreview(seedId, mode, agingOf, sourceOf);
+      return graph.buildPreview(seedId, mode, agingOf, sourceOf, hallOf);
     }
 
     case 'dsh-memory/record-links': {

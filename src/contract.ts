@@ -1334,9 +1334,10 @@ export interface GraphPreviewResponse {
   };
   /** mode==='full' 才出现;全图星图轻量块(可见节点×active 边,截断标记 truncated)。
    *  不带此键时响应与旧形状逐字节一致——消费方按需读 `res.full?`。
-   *  节点 `aging`(0.5~1,3D 亮度通道)与 `source`(出处场景名,provenance fallback)同为可选键:无值时**缺席**。 */
+   *  节点 `aging`(0.5~1,3D 亮度通道)、`source`(出处场景名,provenance fallback)与
+   *  `hall`(Wing 生活域,八维+general 兜底,hall 视角数据源)同为可选键:无值时**缺席**。 */
   full?: {
-    nodes: Array<{ id: string; name: string; type: string; aging?: number; source?: string }>;
+    nodes: Array<{ id: string; name: string; type: string; aging?: number; source?: string; hall?: string }>;
     edges: Array<{ from: string; to: string; relation: string; causal: boolean }>;
     truncated: boolean;
   };

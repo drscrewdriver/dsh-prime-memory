@@ -243,6 +243,12 @@ export interface FullViewNode {
    * 人物实体靠它回溯“在哪提到的”。同为可选键零漂移：无场景/未注入 resolver 时键缺席。
    */
   source?: string;
+  /**
+   * Wing（生活域粗分类，八维 + general 兜底）：来源记录 metadata.hall 的众数——
+   * 3D 星图 hall 视角（聚类轴 + 自选高亮）的数据源。同 aging/source 口径：
+   * **可选键零漂移**——无归属/未注入 resolver 时该键**缺席**，不是 undefined 占位。
+   */
+  hall?: string;
 }
 
 /** 全图边轻量项（causal 由单源词表判出，渲染侧不再抄词表）。 */
@@ -274,6 +280,11 @@ export interface FullViewCaps {
    * 本纯函数不查库。B 方案（投影期落库 context）上线后本项退为兜底。
    */
   sourceOf?: (id: string) => string | null;
+  /**
+   * Wing 解析器（nodeId → hall id | null）：由端点层查来源记录 metadata.hall 众数后注入，
+   * 与 agingOf/sourceOf 同构——本纯函数**不查库**。null = 无归属（八维视角落 general 兜底）。
+   */
+  hallOf?: (id: string) => string | null;
 }
 
 /**
@@ -319,6 +330,9 @@ export function buildFullView(
       if (aging != null) base.aging = aging;
       const source = caps.sourceOf?.(n.id) ?? null;
       if (source != null) base.source = source;
+      // 有值才挂键（可选键零漂移：null/无 resolver → 键缺席，老消费方看到的形状不变）。
+      const hall = caps.hallOf?.(n.id) ?? null;
+      if (hall != null) base.hall = hall;
       return base;
     }),
     edges: outEdges,

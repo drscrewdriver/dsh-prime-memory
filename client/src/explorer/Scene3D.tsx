@@ -34,7 +34,7 @@ import {
   SHELL_GAP,
   TRANSITION_MS,
   brightnessFor,
-  buildClusterLayout,
+  buildClusterLayoutByAxis,
   buildEgoLayout,
   labelBudget,
   lerpLayout,
@@ -44,7 +44,8 @@ import {
   projectAll,
   zoomBy,
 } from './projection.js';
-import type { Projected, Vec3 } from './projection.js';
+import type { ClusterAxis, Projected, Vec3 } from './projection.js';
+import { HALL_FALLBACK, HALL_ORDER, hallLabel, defaultHallToken, variantOf } from './hall-palette.js';
 import { NButton } from '../ui/primitives.js';
 
 /** type → 既有图表系列令牌（与 GraphCanvas / GraphTab 同源五色，不引入新色值）。 */
@@ -78,6 +79,8 @@ interface NodeMeta {
   aging: number | null;
   /** 出处场景名（provenance fallback）：悬停卡片显示“出处：xxx”。 */
   source: string | null;
+  /** Wing 归属(hall 视角/hover 卡/hallFocus 压暗判据)。 */
+  hall: string;
 }
 
 interface EdgeMeta {
@@ -121,6 +124,46 @@ export function Scene3D(props: {
   /** 呼吸：只有激活元素（hover 命中/焦点）错相脉冲，背景星恒静。
    *  默认开；早先的 90px  proximity 场被真机否决（鼠标一动全场闪跳）。 */
   const [twinkleOn, setTwinkleOn] = useState(true);
+  /** hall 视角三件套：轴 / 自选高亮子集(空=普通 hall 视角) / 每 hall 自定义色 / 变异强度。 */
+  const [axis, setAxis] = useState<ClusterAxis>('type');
+  const [focusHalls, setFocusHalls] = useState<string[]>([]);
+  const [hallColors, setHallColors] = useState<Record<string, string>>({});
+  const [variant, setVariant] = useState(0.35);
+  /** 轴 ref:主循环闭包读取,不进 deps(轴切换由轴切换 effect 设 transRef 踢醒)。 */
+  const axisRef = useRef<ClusterAxis>('type');
+  axisRef.current = axis;
+  /** 视角三档派生:type / hall(无自选) / hallFocus(自选高亮)。 */
+  const viewKind = axis === 'type' ? 'type' : focusHalls.length === 0 ? 'hall' : 'hallFocus';
+  const viewRef = useRef(viewKind);
+  viewRef.current = viewKind;
+  const focusHallsRef = useRef(focusHalls);
+  focusHallsRef.current = focusHalls;
+  const hallColorsRef = useRef(hallColors);
+  hallColorsRef.current = hallColors;
+  const variantRef = useRef(variant);
+  variantRef.current = variant;
+  /** hall 节点计数(图例用):hall 轴数据面,full 变化才重算。 */
+  const hallCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const n of full.nodes) {
+      const h = (n as { hall?: string }).hall ?? HALL_FALLBACK;
+      m.set(h, (m.get(h) ?? 0) + 1);
+    }
+    return m;
+  }, [full]);
+
+  /** 图例行序:八维序 + 其余出现值 hash 序 + general 殿后(与布局组序同纪律)。 */
+  const legendHalls = useMemo(() => {
+    const known = (HALL_ORDER as readonly string[]).filter((h) => hallCounts.has(h));
+    const rest = [...hallCounts.keys()].filter((h) => !(HALL_ORDER as readonly string[]).includes(h) && h !== HALL_FALLBACK).sort((a, b) => hash32(a) - hash32(b));
+    const tail = hallCounts.has(HALL_FALLBACK) ? [HALL_FALLBACK] : [];
+    return [...known, ...rest, ...tail];
+  }, [hallCounts]);
+  /** 图例色块:自定义实色优先;未自定义直接吃 CSS 变量(DOM 面可以,canvas 才要解实色)。 */
+  const swatchOf = (h: string): string => hallColors[h] ?? `var(${defaultHallToken(h)})`;
+  const colorInputRef = useRef<HTMLInputElement | null>(null);
+  const colorTargetRef = useRef<string | null>(null);
+  const lastColorAtRef = useRef(0);
 
   // ── 交互态（ref 为主，避免每帧 setState；hover 走 DOM 浮层才需要 state） ──
   const camRef = useRef({ ...CAM_DEFAULT });
@@ -158,19 +201,33 @@ export function Scene3D(props: {
   const nodeKeySeed = useMemo(() => full.nodes.map((n) => n.id).join('|') || 'empty', [full]);
 
   // ── 布局：cluster 随数据重建；ego 进入时算一次并缓存 ──
-  const clusterLayout = useMemo(() => buildClusterLayout(full.nodes.map((n) => ({ id: n.id, type: n.type }))), [full]);
+  const axisNodes = useMemo(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: (n as { hall?: string }).hall })), [full]);
+  /** clusterLayout 由 full+axis 派生:轴切换会换布局引用,但硬落位 effect 只认 [full](F4)。 */
+  const clusterLayout = useMemo(() => buildClusterLayoutByAxis(axisNodes, axisRef.current), [axisNodes, axis]);
   const layoutRef = useRef<Map<string, Vec3>>(clusterLayout);
   const egoLayoutRef = useRef<Map<string, Vec3> | null>(null);
   const transRef = useRef<{ from: Map<string, Vec3>; to: Map<string, Vec3>; start: number } | null>(null);
   useEffect(() => {
     // 数据换了：过渡作废，直接落到新 cluster 布局（ego 焦点可能已不在新图里）。
+    // 依赖收窄为 [full](findings F4):clusterLayout 由 full+axis 派生,若把 clusterLayout
+    // 留在依赖里,轴切换会触发本 effect 把 transRef 清空 → 过渡被硬落位吃掉(静默失效)。
     layoutRef.current = clusterLayout;
     egoLayoutRef.current = null;
     transRef.current = null;
     modeRef.current = 'cluster';
     focusRef.current = null;
     setMode('cluster');
-  }, [clusterLayout]);
+  }, [full]);
+
+  /** 轴切换:520ms 过渡重排(种子前缀不改 → 同一批点重新分堆,不是乱飞);主循环会被 transRef 驱动。 */
+  const prevAxisRef = useRef<ClusterAxis>('type');
+  useEffect(() => {
+    if (prevAxisRef.current === axis) return;
+    prevAxisRef.current = axis;
+    // 硬落位 effect 在数据未变时不触发;这里独占轴切换的过渡语义
+    transRef.current = { from: layoutRef.current, to: clusterLayout, start: performance.now() };
+    wakeRef.current?.();
+  }, [axis, clusterLayout]);
 
   /** 外部强调变化（如详情面板点「看图」）：自动进入 ego 聚焦该节点。 */
   useEffect(() => {
@@ -205,26 +262,50 @@ export function Scene3D(props: {
       }
       return c;
     };
+    /** hall 令牌实色缓存(轴为 hall/hallFocus 时才用,但缓存预热便宜)。 */
+    const hallColorCache = new Map<string, string>();
+    const hallColorOf = (hall: string): string => {
+      const custom = hallColors[hall];
+      if (custom) return custom;
+      let c = hallColorCache.get(hall);
+      if (c === undefined) {
+        c = resolveColor(host, defaultHallToken(hall));
+        hallColorCache.set(hall, c);
+      }
+      return c;
+    };
+    const ax = axisRef.current;
     metasRef.current = new Map(
       full.nodes.map((n): [string, NodeMeta] => {
         const deg = degree.get(n.id) ?? 0;
+        const hall = (n as { hall?: string }).hall ?? HALL_FALLBACK;
+        // 颜色通道 = 当前分组键(F2 定案):type 轴吃类型色;hall 轴吃 hall 色 + 确定性变异
+        let color: string;
+        if (ax === 'type') {
+          color = colorOf(n.type);
+        } else {
+          const base = hallColorOf(hall);
+          // variantOf 不走逐帧路径:仅在 metas 重建(轴/改色/变异强度变化)时每节点算一次(C3)
+          color = variantOf(base, n.id, variant);
+        }
         return [
           n.id,
           {
             id: n.id,
             name: n.name,
             type: n.type,
-            color: colorOf(n.type),
+            color,
             degree: deg,
             // 度数 → 基础半径：sqrt 压缩（与 2D radiusForDegree 同一族形状，单位换成 3D 世界）
             base: pointSize * (1 + Math.sqrt(deg) * 0.28),
             aging: n.aging ?? null,
             source: n.source ?? null,
+            hall,
           },
         ];
       }),
     );
-  }, [full, degree, pointSize]);
+  }, [full, degree, pointSize, axis, hallColors, variant]);
 
   // ── 主循环：一帧 = 过渡推进 → 投影 → 深度排序绘制 → 标签 LOD ──
   // 用 useLayoutEffect 而非 useEffect：保证首帧在浏览器 paint 前画完，消除“空画布闪烁”。
@@ -500,12 +581,16 @@ export function Scene3D(props: {
         c.clearRect(0, 0, vw, vh);
 
         // ── 点（远→近；辉光走 lighter 叠加）：跳过激活点，它们由动态层画，防残影 ──
+        // hallFocus:未选中 hall 的点整体压暗退后(alpha×0.22 不低于地板、半径×0.7)——
+        // 不重排,只改配色与亮度(T3)。dimmed 在 metas 重建后按轴派生,逐帧只查表。
+        const dimmed = (m: NodeMeta): boolean => viewRef.current === 'hallFocus' && !focusHallsRef.current.includes(m.hall);
         for (const p of projected) {
           if (activeIds.has(p.id)) continue;
           const m = metas.get(p.id);
           if (!m) continue;
-          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
-          const r = Math.max(0.8, m.base * p.f * 1.75);
+          const dim = dimmed(m);
+          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true) * (dim ? 0.22 : 1);
+          const r = Math.max(0.8, m.base * p.f * 1.75 * (dim ? 0.7 : 1));
           if (glowOn) {
             c.globalCompositeOperation = 'lighter';
             c.globalAlpha = alpha * 0.5;
@@ -514,7 +599,7 @@ export function Scene3D(props: {
             c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
           }
           c.globalCompositeOperation = 'source-over';
-          c.globalAlpha = Math.min(1, alpha + 0.15);
+          c.globalAlpha = Math.min(1, Math.max(alpha + (dim ? 0 : 0.15), 0.06));
           c.fillStyle = m.color;
           c.beginPath();
           c.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -567,8 +652,9 @@ export function Scene3D(props: {
           if (!p || !m) continue;
           // 呼吸：错相脉冲（id 相位），背景星恒静。
           const tw = 0.5 + 0.5 * Math.sin(now / BREATH_PERIOD_MS + phaseOf(id));
-          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true);
-          const r = Math.max(0.8, m.base * p.f * 1.75 * 1.9);
+          const dimActive = viewRef.current === 'hallFocus' && !focusHallsRef.current.includes(m.hall);
+          const alpha = brightnessFor(p.f, agingOn ? m.aging : null, true) * (dimActive ? 0.22 : 1);
+          const r = Math.max(0.8, m.base * p.f * 1.75 * 1.9 * (dimActive ? 0.7 : 1));
           if (glowOn) {
             c.globalCompositeOperation = 'lighter';
             c.globalAlpha = Math.min(1, alpha * 0.5 + tw * 0.4);
@@ -577,7 +663,7 @@ export function Scene3D(props: {
             c.drawImage(sp, p.x - gr, p.y - gr, gr * 2, gr * 2);
           }
           c.globalCompositeOperation = 'source-over';
-          c.globalAlpha = Math.min(1, alpha + 0.15 + tw * 0.25);
+          c.globalAlpha = Math.min(1, Math.max(alpha + 0.15 + (dimActive ? 0 : tw * 0.25), 0.06));
           c.fillStyle = m.color;
           c.beginPath();
           c.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -839,6 +925,59 @@ export function Scene3D(props: {
         )}
       </div>
 
+      {/* 右上角 hall 图例(仅 hall 轴显示):色块+名称+计数;单击切换选中、双击改色。
+          位置避开左上模式提示与底部工具条(findings T4);自定义色加描边标记(R5)。 */}
+      {axis === 'hall' ? (
+        <div
+          style={{ position: 'absolute', top: 8, right: 8, background: ui.barBg, border: ui.border, borderRadius: 10, padding: '6px 8px', fontSize: 11, color: ui.dim, maxHeight: '70%', overflowY: 'auto' }}
+        >
+          {legendHalls.map((h) => {
+            const selected = focusHalls.includes(h);
+            const custom = hallColors[h];
+            return (
+              <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', cursor: 'pointer', opacity: focusHalls.length === 0 || selected ? 1 : 0.55 }}
+                onClick={() => setFocusHalls((prev) => (prev.includes(h) ? prev.filter((x) => x !== h) : [...prev, h]))}
+                onDoubleClick={() => { colorTargetRef.current = h; colorInputRef.current?.click(); }}
+                title="单击选中/取消 · 双击改色"
+              >
+                <span
+                  onClick={(e) => { e.stopPropagation(); colorTargetRef.current = h; colorInputRef.current?.click(); }}
+                  style={{
+                    width: 10, height: 10, borderRadius: 3, display: 'inline-block',
+                    background: swatchOf(h),
+                    boxShadow: custom ? '0 0 0 1.5px rgba(255,255,255,0.65)' : 'none',
+                    flex: 'none',
+                  }}
+                />
+                <span style={{ color: ui.text }}>{hallLabel(h)}</span>
+                <span>{hallCounts.get(h) ?? 0}</span>
+              </div>
+            );
+          })}
+          {/* 隐藏取色器:图例色块/行双击唤起;onChange 节流 ≤60ms(R3) */}
+          <input
+            ref={colorInputRef}
+            type="color"
+            value={colorTargetRef.current ? (hallColors[colorTargetRef.current] ?? swatchOf(colorTargetRef.current)) : '#888888'}
+            style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
+            onInput={(e) => {
+              const h = colorTargetRef.current;
+              if (!h) return;
+              const now = performance.now();
+              if (now - lastColorAtRef.current < 60) return;
+              lastColorAtRef.current = now;
+              setHallColors((prev) => ({ ...prev, [h]: (e.target as HTMLInputElement).value }));
+            }}
+            onChange={(e) => {
+              // change(松手确定值)必落,防止节流窗口吞掉最终色
+              const h = colorTargetRef.current;
+              if (!h) return;
+              setHallColors((prev) => ({ ...prev, [h]: (e.target as HTMLInputElement).value }));
+            }}
+          />
+        </div>
+      ) : null}
+
       {/* 悬停明细：DOM 浮层（canvas 里没有 DOM，别在 canvas 上排版整段元数据） */}
       {hoverInfo && hoverMeta ? (
         <div
@@ -861,6 +1000,7 @@ export function Scene3D(props: {
           <div>
             {hoverMeta.type} · 关系 {hoverMeta.degree} 条{hoverMeta.aging != null ? ` · 老化 ${hoverMeta.aging.toFixed(2)}` : ''}
           </div>
+          <div style={{ color: 'var(--dsh-mem-text-3)' }}>Wing · {hallLabel(hoverMeta.hall)}</div>
           {hoverMeta.source ? <div style={{ color: 'var(--dsh-mem-text-3)' }}>出处：{hoverMeta.source}</div> : null}
         </div>
       ) : null}
@@ -870,6 +1010,31 @@ export function Scene3D(props: {
       <div
         style={{ position: 'absolute', bottom: 8, left: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', background: ui.barBg, border: ui.border, borderRadius: 10, padding: '4px 8px' }}
       >
+        {/* 视角段控件(轴切换):类型 | 八维 | 自选 */}
+        <span style={{ display: 'inline-flex', gap: 0, border: ui.border, borderRadius: 8, overflow: 'hidden' }}>
+          {(['type', 'hall', 'hallFocus'] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setAxis(k === 'type' ? 'type' : 'hall')}
+              style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                cursor: 'pointer',
+                border: 'none',
+                color: (k === 'hallFocus' ? axis === 'hall' && focusHalls.length > 0 : axis === k) ? ui.accent : ui.text,
+                background: (k === 'hallFocus' ? axis === 'hall' && focusHalls.length > 0 : axis === k) ? 'rgba(127,177,255,0.14)' : 'transparent',
+              }}
+            >
+              {k === 'type' ? '类型' : k === 'hall' ? '八维' : '自选'}
+            </button>
+          ))}
+        </span>
+        {axis === 'hall' ? (
+          <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            变异
+            <input type="range" min={0} max={1} step={0.05} value={variant} onChange={(e) => setVariant(Number(e.target.value))} />
+          </label>
+        ) : null}
         {toggle('辉光', glowOn, setGlowOn)}
         {toggle('边', edgesOn, setEdgesOn)}
         {toggle('标签', labelsOn, setLabelsOn)}

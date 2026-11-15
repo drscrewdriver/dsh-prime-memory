@@ -203,6 +203,23 @@ describe('buildFullView —— 全图星图轻量块', () => {
     const bare = buildFullView(nodes, []);
     for (const n of bare.nodes) expect('aging' in n).toBe(false);
   });
+
+  it('hall 通道:resolver 有值才挂 hall 键;null/未注入 → 键缺席(同 aging 零漂移口径)', () => {
+    const nodes = [node('a'), node('b')];
+    const withHall = buildFullView(nodes, [], { hallOf: (id) => (id === 'a' ? 'work' : null) });
+    expect(withHall.nodes[0]).toEqual({ id: 'a', name: 'n-a', type: 'tool', hall: 'work' });
+    expect(Object.keys(withHall.nodes[1]).sort()).toEqual(['id', 'name', 'type']);
+    // 未注入 resolver：整块退回既有三键形状，不出现 hall: undefined 占位
+    const bare = buildFullView(nodes, []);
+    for (const n of bare.nodes) expect('hall' in n).toBe(false);
+    // 三通道并存：aging/source/hall 各自独立挂键
+    const all = buildFullView(nodes, [], {
+      agingOf: () => 0.9,
+      sourceOf: () => '场景',
+      hallOf: () => 'finance',
+    });
+    expect(Object.keys(all.nodes[0]).sort()).toEqual(['aging', 'hall', 'id', 'name', 'source', 'type']);
+  });
 });
 
 describe('GraphStore.buildPreview mode:full 与零漂移', () => {

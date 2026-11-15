@@ -22,6 +22,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { applyGraphProjection } from '../graph/apply.js';
 import { expandHitRecordIds, searchGraphNodes } from '../graph/search.js';
 import { buildFullView, buildGraphPreview } from '../graph/preview.js';
+import { isWingId } from '../metadata-validators.js';
 import type { GraphPreviewResult, GraphPreviewStats } from '../graph/preview.js';
 import { buildRecordLinks } from '../graph/record-links.js';
 import type { RecordLinksResult } from '../graph/record-links.js';
@@ -45,7 +46,7 @@ import type {
   GraphProjectionResult,
 } from '../graph/types.js';
 import type { MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
-import { normPersistence } from '../types.js';
+import { normPersistence, WING_CATALOG, WING_FALLBACK } from '../types.js';
 import { classifyValidity, isExitedState, validToSourceOf } from './validity.js';
 import { readSupersedeMarker } from './supersede.js';
 import { isZeroVector, vecToBuffer } from './vec-utils.js';
@@ -600,26 +601,30 @@ export class GraphStore {
    * `agingOf`/`sourceOf` 仅在 mode==='full' 时生效(星图亮度与出处通道):本层不认识 L1,
    * 由端点层查来源记录后注入判据(nodeId → aging | null / 场景名 | null)。
    */
-  buildPreview(seedId?: string, mode?: 'full', agingOf?: (id: string) => number | null, sourceOf?: (id: string) => string | null): GraphPreviewResult & { full?: ReturnType<typeof buildFullView> } {
+  buildPreview(seedId?: string, mode?: 'full', agingOf?: (id: string) => number | null, sourceOf?: (id: string) => string | null, hallOf?: (id: string) => string | null): GraphPreviewResult & { full?: ReturnType<typeof buildFullView> } {
     const zero = { seeds: [], stats: { nodes: 0, edges: 0, causalEdges: 0, pendingJobs: 0, jobsTotal: 0 } };
     if (!this.db) return mode === 'full' ? { ...zero, full: { nodes: [], edges: [], truncated: false } } : zero;
     const { nodes, edges } = this.loadGraph();
     const { pendingJobs, jobsTotal, deadJobs } = this.jobCounts();
     const r = buildGraphPreview(nodes, edges, { seedId, pendingJobs, jobsTotal, deadJobs, missing: this.countMissing() });
-    if (mode === 'full') return { ...r, full: buildFullView(nodes, edges, { agingOf, sourceOf }) };
+    if (mode === 'full') return { ...r, full: buildFullView(nodes, edges, { agingOf, sourceOf, hallOf }) };
     return r;
   }
 
   /**
-   * 节点 → 存活来源记录的最新时间 + 主场景标签。
-   * `graph-preview(mode:'full')` 老化与出处两条展示通道的数据源：
+   * 节点 → 存活来源记录的最新时间 + 主场景标签 + Wing（生活域）归属。
+   * `graph-preview(mode:'full')` 老化/出处/hall 三条展示通道的数据源（一次扫描供三通道）：
    *   - `ms`：最新存活来源的 `updated_time`（老化属于记录不属于投影节点，端点层据此算 agingWeight）；
    *   - `scene`：来源记录中出现最多的非空 `scene_name`（provenance fallback：人物实体靠场景回溯“在哪提到的”，
    *     如“字节Code M岗位”；无场景则 null，不猜）。B 方案（投影期落库 context）上线后本项退为兜底。
-   * 只认有值的行：全来源无有效时间戳的节点**不进表**。降级返空表不抛。
+   *   - `hall`：来源记录 `metadata.hall` 的**众数**（单值口径，实测 1591 节点仅 6.4% 跨 hall）；
+   *     同票按 `WING_CATALOG` 词表序取先（确定性 tie-break），非法值（不在八维 + general 内）不计票
+   *     （`isWingId` 校验，`metadata-validators.ts`）；无合法票则 null。
+   * 入表判据：ms / scene / hall **任一有值**即入表（hall 通道引入无时间戳但有归属的行）；
+   * 全空不入表。降级返空表不抛。
    */
-  sourceMeta(): Map<string, { ms: number; scene: string | null }> {
-    const out = new Map<string, { ms: number; scene: string | null }>();
+  sourceMeta(): Map<string, { ms: number | null; scene: string | null; hall: string | null }> {
+    const out = new Map<string, { ms: number | null; scene: string | null; hall: string | null }>();
     if (!this.db) return out;
     try {
       const { nodes } = this.loadGraph();
@@ -628,35 +633,52 @@ export class GraphStore {
       if (sources.size === 0) return out;
       const updatedById = new Map<string, number>();
       const sceneById = new Map<string, string>();
+      const hallById = new Map<string, string>();
       for (const chunk of chunkOf([...sources])) {
         const ph = chunk.map(() => '?').join(',');
         for (const row of this.db
-          .prepare(`SELECT record_id, updated_time, scene_name FROM l1_records WHERE record_id IN (${ph})`)
-          .all(...chunk) as Array<{ record_id: string; updated_time: string; scene_name: string | null }>) {
+          .prepare(`SELECT record_id, updated_time, scene_name, json_extract(metadata_json,'$.hall') AS hall FROM l1_records WHERE record_id IN (${ph})`)
+          .all(...chunk) as Array<{ record_id: string; updated_time: string; scene_name: string | null; hall: unknown }>) {
           const ms = Date.parse(String(row.updated_time ?? ''));
           if (Number.isFinite(ms)) updatedById.set(row.record_id, ms);
           const sc = String(row.scene_name ?? '').trim();
           if (sc) sceneById.set(row.record_id, sc);
+          const h = row.hall;
+          if (typeof h === 'string' && isWingId(h)) hallById.set(row.record_id, h);
         }
       }
+      // hall 同票 tie-break 用词表序：八维按 WING_CATALOG 序，general 殿后（WING_FALLBACK）。
+      const wingRank = new Map<string, number>([...WING_CATALOG.map((w) => w.id), WING_FALLBACK].map((id, i) => [id, i]));
       for (const n of nodes) {
         let latest = -1;
         const tally = new Map<string, number>();
+        const hallTally = new Map<string, number>();
         for (const id of n.sourceRecordIds) {
           const ms = updatedById.get(id);
           if (ms != null) latest = Math.max(latest, ms);
           const sc = sceneById.get(id);
           if (sc) tally.set(sc, (tally.get(sc) ?? 0) + 1);
+          const h = hallById.get(id);
+          if (h) hallTally.set(h, (hallTally.get(h) ?? 0) + 1);
         }
-        if (latest < 0) continue; // 无有效时间戳：不挂（aging 与 scene 同进退）
         let scene: string | null = null;
         let best = 0;
         for (const [s, c] of tally) if (c > best) { best = c; scene = s; }
-        out.set(n.id, { ms: latest, scene });
+        // hall 众数：票数最高者当选；同票按词表序取先（确定性）。
+        let hall: string | null = null;
+        let hallBest = 0;
+        for (const [h, c] of hallTally) {
+          if (c > hallBest || (c === hallBest && hall != null && (wingRank.get(h) ?? 999) < (wingRank.get(hall) ?? 999))) {
+            hallBest = c; hall = h;
+          }
+        }
+        // 任一通道有值即入表；全空不入表。
+        if (latest < 0 && scene == null && hall == null) continue;
+        out.set(n.id, { ms: latest < 0 ? null : latest, scene, hall });
       }
       return out;
     } catch (err) {
-      this.logger?.warn(`${TAG} 来源元信息读取失败(老化/出处通道整轮缺省): ${err instanceof Error ? err.message : String(err)}`);
+      this.logger?.warn(`${TAG} 来源元信息读取失败(老化/出处/hall 通道整轮缺省): ${err instanceof Error ? err.message : String(err)}`);
       return new Map();
     }
   }

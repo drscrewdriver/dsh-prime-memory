@@ -128,20 +128,25 @@ export declare class GraphStore {
      * `agingOf`/`sourceOf` 仅在 mode==='full' 时生效(星图亮度与出处通道):本层不认识 L1,
      * 由端点层查来源记录后注入判据(nodeId → aging | null / 场景名 | null)。
      */
-    buildPreview(seedId?: string, mode?: 'full', agingOf?: (id: string) => number | null, sourceOf?: (id: string) => string | null): GraphPreviewResult & {
+    buildPreview(seedId?: string, mode?: 'full', agingOf?: (id: string) => number | null, sourceOf?: (id: string) => string | null, hallOf?: (id: string) => string | null): GraphPreviewResult & {
         full?: ReturnType<typeof buildFullView>;
     };
     /**
-     * 节点 → 存活来源记录的最新时间 + 主场景标签。
-     * `graph-preview(mode:'full')` 老化与出处两条展示通道的数据源：
+     * 节点 → 存活来源记录的最新时间 + 主场景标签 + Wing（生活域）归属。
+     * `graph-preview(mode:'full')` 老化/出处/hall 三条展示通道的数据源（一次扫描供三通道）：
      *   - `ms`：最新存活来源的 `updated_time`（老化属于记录不属于投影节点，端点层据此算 agingWeight）；
      *   - `scene`：来源记录中出现最多的非空 `scene_name`（provenance fallback：人物实体靠场景回溯“在哪提到的”，
      *     如“字节Code M岗位”；无场景则 null，不猜）。B 方案（投影期落库 context）上线后本项退为兜底。
-     * 只认有值的行：全来源无有效时间戳的节点**不进表**。降级返空表不抛。
+     *   - `hall`：来源记录 `metadata.hall` 的**众数**（单值口径，实测 1591 节点仅 6.4% 跨 hall）；
+     *     同票按 `WING_CATALOG` 词表序取先（确定性 tie-break），非法值（不在八维 + general 内）不计票
+     *     （`isWingId` 校验，`metadata-validators.ts`）；无合法票则 null。
+     * 入表判据：ms / scene / hall **任一有值**即入表（hall 通道引入无时间戳但有归属的行）；
+     * 全空不入表。降级返空表不抛。
      */
     sourceMeta(): Map<string, {
-        ms: number;
+        ms: number | null;
         scene: string | null;
+        hall: string | null;
     }>;
     /**
      * 投影作业三档计数(预览与记忆库视图共用同一分母)。

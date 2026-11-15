@@ -309,7 +309,9 @@ export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHe
             构建中 {stats ? stats.jobsTotal - stats.pendingJobs : 0}/{stats?.jobsTotal ?? 0}
           </span>
         ) : null}
-        {view === '3d' && full && full.nodes.length > 0 ? (
+        {/* 3D 模式下顶部 type 图例不再渲染:轴由 Scene3D 内部持有、其自带 hall/type 图例;
+            两套图例并存会互相矛盾(findings T4)。2D 保持原样。 */}
+        {view === '2d' && full && full.nodes.length > 0 ? (
           <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>
             {LEGEND_TYPES.filter(([t]) => full.nodes.some((n) => n.type === t)).map(([t, zh, token]) => (
               <span key={t}>
