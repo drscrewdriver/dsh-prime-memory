@@ -45807,12 +45807,11 @@ var __create = Object.create;
 		  for (const id of base.keys()) {
 		    const p = base.get(id);
 		    if (style === "spin") {
-		      const r = Math.hypot(p.x, p.z);
-		      const w = 0.1 * speed * (400 / Math.max(120, r)) * 0.0167;
-		      const a = w * t;
+		      const a = 0.1 * speed * 0.0167 * t;
 		      const cy = Math.cos(a);
 		      const sy = Math.sin(a);
-		      out.set(id, { x: p.x * cy - p.z * sy, y: p.y, z: p.x * sy + p.z * cy });
+		      const breathe = amp > 0 ? Math.sin(t * 4e-4 + (p.x + p.z) * 12e-4) * 2.2 * amp : 0;
+		      out.set(id, { x: p.x * cy - p.z * sy, y: p.y + breathe, z: p.x * sy + p.z * cy });
 		    } else {
 		      const om = t / 2e4 * speed;
 		      const off = (rand01("f:" + id) - 0.5) * 0.6;

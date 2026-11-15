@@ -377,12 +377,14 @@ export function flowShape(
   for (const id of base.keys()) {
     const p = base.get(id)!;
     if (style === 'spin') {
-      // 差速自转:角速度 ∝ 1/半径(内快外慢),基准 ~0.10 rad/s @ r=400
-      const r = Math.hypot(p.x, p.z);
-      const w = 0.10 * speed * (400 / Math.max(120, r)) * 0.0167; // 每毫秒
-      const a = w * t;
+      // **刚体自转**:全盘同一角速度(与半径无关)。这是星臂不变形的唯一前提——
+      // 差速旋转(内快外慢)会让任意螺旋臂随 t 无限剪切,转一会儿就缠绕成一团
+      // (低速只是慢,剪切量照样随时长累积)。所以这里刻意不用 1/r 权重。
+      const a = 0.10 * speed * 0.0167 * t; // rad,约 0.1 rad/s @ speed=1
       const cy = Math.cos(a); const sy = Math.sin(a);
-      out.set(id, { x: p.x * cy - p.z * sy, y: p.y, z: p.x * sy + p.z * cy });
+      // 生命感用**有界**摆动补:只动 y(呼吸),或极小的径向抖动——不参与角向累积。
+      const breathe = amp > 0 ? Math.sin(t * 0.0004 + (p.x + p.z) * 0.0012) * 2.2 * amp : 0;
+      out.set(id, { x: p.x * cy - p.z * sy, y: p.y + breathe, z: p.x * sy + p.z * cy });
     } else {
       // 8 字真轨道流:反解每点固有轨道相位 φ0,φ = φ0 + om·t 沿 ∞ 曲线推进。
       const om = (t / 20000) * speed;

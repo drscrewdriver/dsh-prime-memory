@@ -196,4 +196,28 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     const minW = pts.reduce((a, b) => (a.w < b.w ? a : b));
     expect(bb.r).toBeLessThan(minW.r);
   });
+
+  it('自转=刚体:任意时刻两点 xz 距离恒定(臂永不剪切的数学钉)', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const L = buildClusterShapeLayout(nodes, 'hall', 'disk');
+    const ids = [...L.keys()].slice(0, 24);
+    const d0 = new Map<string, number>();
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = L.get(ids[i]!)!, b = L.get(ids[j]!)!;
+        d0.set(ids[i] + '|' + ids[j], Math.hypot(a.x - b.x, a.z - b.z));
+      }
+    }
+    // 覆盖低速到高速、短时到长时(低速缠绕正是因为剪切随时长累积)
+    for (const speed of [0.1, 1, 3]) {
+      for (const time of [1000, 60000, 600000, 3600000]) {
+        const S = flowShape(L, time, 'disk', speed, 1, 'spin');
+        for (const [key, d] of d0) {
+          const [ia, ib] = key.split('|');
+          const a = S.get(ia!)!, b = S.get(ib!)!;
+          expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeCloseTo(d, 6);
+        }
+      }
+    }
+  });
 });
