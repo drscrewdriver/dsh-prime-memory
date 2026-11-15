@@ -45654,6 +45654,71 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
+		function buildClusterShapeLayout(nodes, axis, shape) {
+		  if (shape === "sphere") return buildClusterLayoutByAxis(nodes, axis);
+		  const out = /* @__PURE__ */ new Map();
+		  const groups = groupOrder(
+		    nodes.map((n) => groupKeyOf(n, axis)),
+		    axis
+		  );
+		  const centers = /* @__PURE__ */ new Map();
+		  const total = Math.max(1, groups.length);
+		  groups.forEach((key, i) => {
+		    const jitter = rand01(`c:${key}`) * 0.5;
+		    if (shape === "disk") {
+		      const arm = i % 2;
+		      const k = Math.floor(i / 2);
+		      const theta = arm * Math.PI + k * 0.85 + jitter;
+		      const radius = 240 + Math.sqrt(k) * 210 + rand01(`r:${key}`) * 60;
+		      centers.set(key, {
+		        x: Math.cos(theta) * radius,
+		        // 盘面法向(y)薄层:簇心本身几乎共面,只留 ±20 错层
+		        y: (rand01(`r:${key}:y`) - 0.5) * 40,
+		        z: Math.sin(theta) * radius * 0.82
+		      });
+		    } else {
+		      const t8 = i / total * Math.PI * 2 + jitter;
+		      const A = 560 + rand01(`r:${key}`) * 80;
+		      centers.set(key, {
+		        x: Math.cos(t8) * A,
+		        y: (rand01(`r:${key}:y`) - 0.5) * 36,
+		        z: Math.sin(t8) * Math.cos(t8) * A * 0.72
+		      });
+		    }
+		  });
+		  for (const n of nodes) {
+		    const c = centers.get(groupKeyOf(n, axis)) ?? { x: 0, y: 0, z: 0 };
+		    const a = rand01(`a:${n.id}`) * Math.PI * 2;
+		    const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
+		    const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
+		    if (shape === "disk") {
+		      const ux = c.x;
+		      const uz = c.z;
+		      const len = Math.hypot(ux, uz) || 1;
+		      const rx = ux / len;
+		      const rz = uz / len;
+		      const radial = Math.sin(b) * Math.cos(a) * rr;
+		      const tang = Math.sin(b) * Math.sin(a) * rr * 0.55;
+		      out.set(n.id, {
+		        x: c.x + rx * radial - rz * tang,
+		        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 56,
+		        z: c.z + rz * radial + rx * tang
+		      });
+		    } else {
+		      const len = Math.hypot(c.x, c.z) || 1;
+		      const tx = -c.z / len;
+		      const tz = c.x / len;
+		      const ring = Math.sin(b) * Math.cos(a) * rr;
+		      const cross = Math.sin(b) * Math.sin(a) * rr * 0.6;
+		      out.set(n.id, {
+		        x: c.x + tx * ring + c.x / len * cross,
+		        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 52,
+		        z: c.z + tz * ring + c.z / len * cross
+		      });
+		    }
+		  }
+		  return out;
+		}
 		function buildEgoLayout(adj, focusId, hops) {
 		  const out = /* @__PURE__ */ new Map();
 		  const depth = Math.min(Math.max(Math.floor(hops), 1), EGO_HOPS_MAX2);
@@ -45816,6 +45881,9 @@ var __create = Object.create;
 		  const [focusHalls, setFocusHalls] = (0, import_react33.useState)([]);
 		  const [hallColors, setHallColors] = (0, import_react33.useState)({});
 		  const [variant, setVariant] = (0, import_react33.useState)(0.35);
+		  const [shape, setShape] = (0, import_react33.useState)("sphere");
+		  const shapeRef = (0, import_react33.useRef)("sphere");
+		  shapeRef.current = shape;
 		  const axisRef = (0, import_react33.useRef)("type");
 		  axisRef.current = axis;
 		  const viewKind = axis === "type" ? "type" : focusHalls.length === 0 ? "hall" : "hallFocus";
@@ -45874,7 +45942,10 @@ var __create = Object.create;
 		  const nodeById = (0, import_react33.useMemo)(() => new Map(full.nodes.map((n) => [n.id, n])), [full]);
 		  const nodeKeySeed = (0, import_react33.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
 		  const axisNodes = (0, import_react33.useMemo)(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: n.hall })), [full]);
-		  const clusterLayout = (0, import_react33.useMemo)(() => buildClusterLayoutByAxis(axisNodes, axisRef.current), [axisNodes, axis]);
+		  const clusterLayout = (0, import_react33.useMemo)(
+		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape),
+		    [axisNodes, axis, shape]
+		  );
 		  const layoutRef = (0, import_react33.useRef)(clusterLayout);
 		  const egoLayoutRef = (0, import_react33.useRef)(null);
 		  const transRef = (0, import_react33.useRef)(null);
@@ -45887,12 +45958,14 @@ var __create = Object.create;
 		    setMode("cluster");
 		  }, [full]);
 		  const prevAxisRef = (0, import_react33.useRef)("type");
+		  const prevShapeRef = (0, import_react33.useRef)("sphere");
 		  (0, import_react33.useEffect)(() => {
-		    if (prevAxisRef.current === axis) return;
+		    if (prevAxisRef.current === axis && prevShapeRef.current === shape) return;
 		    prevAxisRef.current = axis;
+		    prevShapeRef.current = shape;
 		    transRef.current = { from: layoutRef.current, to: clusterLayout, start: performance.now() };
 		    wakeRef.current?.();
-		  }, [axis, clusterLayout]);
+		  }, [axis, shape, clusterLayout]);
 		  (0, import_react33.useEffect)(() => {
 		    if (!emphasisId || emphasisId === focusRef.current) return;
 		    if (!clusterLayout.has(emphasisId)) return;
@@ -46597,6 +46670,22 @@ var __create = Object.create;
 		            "变异",
 		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("input", { type: "range", min: 0, max: 1, step: 0.05, value: variant, onChange: (e) => setVariant(Number(e.target.value)) })
 		          ] }) : null,
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden" }, children: ["sphere", "disk", "lemniscate"].map((s) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            "button",
+		            {
+		              onClick: () => setShape(s),
+		              style: {
+		                fontSize: 11,
+		                padding: "2px 8px",
+		                cursor: "pointer",
+		                border: "none",
+		                color: shape === s ? ui.accent : ui.text,
+		                background: shape === s ? "rgba(127,177,255,0.14)" : "transparent"
+		              },
+		              children: s === "sphere" ? "球" : s === "disk" ? "盘" : "环"
+		            },
+		            s
+		          )) }),
 		          toggle("辉光", glowOn, setGlowOn),
 		          toggle("边", edgesOn, setEdgesOn),
 		          toggle("标签", labelsOn, setLabelsOn),

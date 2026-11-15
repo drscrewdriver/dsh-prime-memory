@@ -176,6 +176,89 @@ export function buildClusterLayoutByAxis(nodes: readonly LayoutNode[], axis: Clu
   }
   return out;
 }
+// ── 聚类形态（星系盘 / 8 字环）：簇心排布可换,种子前缀一个不改 ──────────
+/** 聚类形态：sphere = 既有球面堆；disk = 横向星系盘（双臂螺旋,z 薄层错开）；lemniscate = 8 字回环。 */
+export type ClusterShape = 'sphere' | 'disk' | 'lemniscate';
+
+/**
+ * 形态参数化的簇布局。组键序复用 groupOrder(axis),簇内散布种子前缀 `c:`/`r:`/`a:`/`b:`/`s:`
+ * **一个不改**——同一节点 id 在任意形态/轴组合下球内角度分量保持一致,形态切换过渡读作
+ * 「同一批点换队形」而不是「满屏乱飞」。
+ *
+ * - sphere: 与 buildClusterLayoutByAxis 逐位一致(既有球面堆,竖向偏多是 y 铺开的固有特征);
+ * - disk: 双臂螺旋(偶数序簇走臂 A、奇数序簇走臂 B,臂内半径递推成 S 弧),盘面 = x-z 平面,
+ *   簇内点沿臂向长散布 + 垂直臂向窄 + y 薄层 ±28(横向盘状展开,z→y 稍微错开);
+ * - lemniscate: 簇心沿 ∞ 曲线 x=A·cos t / z=A·sin t·cos t 均布,簇内沿环向散布 + y 薄层。
+ */
+export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: ClusterAxis, shape: ClusterShape): Map<string, Vec3> {
+  if (shape === 'sphere') return buildClusterLayoutByAxis(nodes, axis);
+  const out = new Map<string, Vec3>();
+  const groups = groupOrder(
+    nodes.map((n) => groupKeyOf(n, axis)),
+    axis,
+  );
+  const centers = new Map<string, Vec3>();
+  const total = Math.max(1, groups.length);
+  groups.forEach((key, i) => {
+    const jitter = rand01(`c:${key}`) * 0.5;
+    if (shape === 'disk') {
+      // 双臂螺旋:臂内序 k = 簇在该臂里的序号;θ 随 k 递推成 S 弧,半径随 k 向外递推。
+      const arm = i % 2;
+      const k = Math.floor(i / 2);
+      const theta = arm * Math.PI + k * 0.85 + jitter;
+      const radius = 240 + Math.sqrt(k) * 210 + rand01(`r:${key}`) * 60;
+      centers.set(key, {
+        x: Math.cos(theta) * radius,
+        // 盘面法向(y)薄层:簇心本身几乎共面,只留 ±20 错层
+        y: (rand01(`r:${key}:y`) - 0.5) * 40,
+        z: Math.sin(theta) * radius * 0.82,
+      });
+    } else {
+      // lemniscate of Gerono:x = A·cos t, z = A·sin t·cos t;t 均布给簇(同臂序不适用)。
+      const t8 = (i / total) * Math.PI * 2 + jitter;
+      const A = 560 + rand01(`r:${key}`) * 80;
+      centers.set(key, {
+        x: Math.cos(t8) * A,
+        y: (rand01(`r:${key}:y`) - 0.5) * 36,
+        z: Math.sin(t8) * Math.cos(t8) * A * 0.72,
+      });
+    }
+  });
+  for (const n of nodes) {
+    const c = centers.get(groupKeyOf(n, axis)) ?? { x: 0, y: 0, z: 0 };
+    const a = rand01(`a:${n.id}`) * Math.PI * 2;
+    const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
+    const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
+    if (shape === 'disk') {
+      // 盘内散布:臂向(u,沿簇心径向)长、切向(v)中、法向(y)薄层 ±28——横向盘状观感。
+      const ux = c.x;
+      const uz = c.z;
+      const len = Math.hypot(ux, uz) || 1;
+      const rx = ux / len;
+      const rz = uz / len;
+      const radial = Math.sin(b) * Math.cos(a) * rr;
+      const tang = Math.sin(b) * Math.sin(a) * rr * 0.55;
+      out.set(n.id, {
+        x: c.x + rx * radial - rz * tang,
+        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 56,
+        z: c.z + rz * radial + rx * tang,
+      });
+    } else {
+      // lemniscate:环向(切向)散布为主 + 法向薄层。
+      const len = Math.hypot(c.x, c.z) || 1;
+      const tx = -c.z / len;
+      const tz = c.x / len;
+      const ring = Math.sin(b) * Math.cos(a) * rr;
+      const cross = Math.sin(b) * Math.sin(a) * rr * 0.6;
+      out.set(n.id, {
+        x: c.x + tx * ring + (c.x / len) * cross,
+        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 52,
+        z: c.z + tz * ring + (c.z / len) * cross,
+      });
+    }
+  }
+  return out;
+}
 /**
  * ego 布局：焦点在球心，**BFS 跳数决定壳层半径**（第 k 跳在 r = k×SHELL_GAP 的壳上），
  * 同壳内按 id 派生方向均匀散布。

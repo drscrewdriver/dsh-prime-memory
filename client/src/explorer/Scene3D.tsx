@@ -34,7 +34,7 @@ import {
   SHELL_GAP,
   TRANSITION_MS,
   brightnessFor,
-  buildClusterLayoutByAxis,
+  buildClusterShapeLayout,
   buildEgoLayout,
   labelBudget,
   lerpLayout,
@@ -44,7 +44,7 @@ import {
   projectAll,
   zoomBy,
 } from './projection.js';
-import type { ClusterAxis, Projected, Vec3 } from './projection.js';
+import type { ClusterAxis, ClusterShape, Projected, Vec3 } from './projection.js';
 import { HALL_FALLBACK, HALL_ORDER, hallLabel, defaultHallToken, variantOf } from './hall-palette.js';
 import { NButton } from '../ui/primitives.js';
 
@@ -129,6 +129,10 @@ export function Scene3D(props: {
   const [focusHalls, setFocusHalls] = useState<string[]>([]);
   const [hallColors, setHallColors] = useState<Record<string, string>>({});
   const [variant, setVariant] = useState(0.35);
+  /** 聚类形态:球面堆(现状)/星系盘(横向双臂螺旋,z 薄层错开)/8 字回环。 */
+  const [shape, setShape] = useState<ClusterShape>('sphere');
+  const shapeRef = useRef<ClusterShape>('sphere');
+  shapeRef.current = shape;
   /** 轴 ref:主循环闭包读取,不进 deps(轴切换由轴切换 effect 设 transRef 踢醒)。 */
   const axisRef = useRef<ClusterAxis>('type');
   axisRef.current = axis;
@@ -203,7 +207,10 @@ export function Scene3D(props: {
   // ── 布局：cluster 随数据重建；ego 进入时算一次并缓存 ──
   const axisNodes = useMemo(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: (n as { hall?: string }).hall })), [full]);
   /** clusterLayout 由 full+axis 派生:轴切换会换布局引用,但硬落位 effect 只认 [full](F4)。 */
-  const clusterLayout = useMemo(() => buildClusterLayoutByAxis(axisNodes, axisRef.current), [axisNodes, axis]);
+  const clusterLayout = useMemo(
+    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape),
+    [axisNodes, axis, shape],
+  );
   const layoutRef = useRef<Map<string, Vec3>>(clusterLayout);
   const egoLayoutRef = useRef<Map<string, Vec3> | null>(null);
   const transRef = useRef<{ from: Map<string, Vec3>; to: Map<string, Vec3>; start: number } | null>(null);
@@ -219,15 +226,16 @@ export function Scene3D(props: {
     setMode('cluster');
   }, [full]);
 
-  /** 轴切换:520ms 过渡重排(种子前缀不改 → 同一批点重新分堆,不是乱飞);主循环会被 transRef 驱动。 */
+  /** 轴/形态切换:520ms 过渡重排(种子前缀不改 → 同一批点换队形,不是乱飞);主循环被 transRef 驱动。 */
   const prevAxisRef = useRef<ClusterAxis>('type');
+  const prevShapeRef = useRef<ClusterShape>('sphere');
   useEffect(() => {
-    if (prevAxisRef.current === axis) return;
+    if (prevAxisRef.current === axis && prevShapeRef.current === shape) return;
     prevAxisRef.current = axis;
-    // 硬落位 effect 在数据未变时不触发;这里独占轴切换的过渡语义
+    prevShapeRef.current = shape;
     transRef.current = { from: layoutRef.current, to: clusterLayout, start: performance.now() };
     wakeRef.current?.();
-  }, [axis, clusterLayout]);
+  }, [axis, shape, clusterLayout]);
 
   /** 外部强调变化（如详情面板点「看图」）：自动进入 ego 聚焦该节点。 */
   useEffect(() => {
@@ -1035,6 +1043,25 @@ export function Scene3D(props: {
             <input type="range" min={0} max={1} step={0.05} value={variant} onChange={(e) => setVariant(Number(e.target.value))} />
           </label>
         ) : null}
+        {/* 形态段控件:球(现状)|盘(横向星系盘)|环(8 字回环) */}
+        <span style={{ display: 'inline-flex', gap: 0, border: ui.border, borderRadius: 8, overflow: 'hidden' }}>
+          {(['sphere', 'disk', 'lemniscate'] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setShape(s)}
+              style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                cursor: 'pointer',
+                border: 'none',
+                color: shape === s ? ui.accent : ui.text,
+                background: shape === s ? 'rgba(127,177,255,0.14)' : 'transparent',
+              }}
+            >
+              {s === 'sphere' ? '球' : s === 'disk' ? '盘' : '环'}
+            </button>
+          ))}
+        </span>
         {toggle('辉光', glowOn, setGlowOn)}
         {toggle('边', edgesOn, setEdgesOn)}
         {toggle('标签', labelsOn, setLabelsOn)}
