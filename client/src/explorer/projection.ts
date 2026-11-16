@@ -195,15 +195,36 @@ export type ClusterShape = 'sphere' | 'disk' | 'lemniscate';
 export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: ClusterAxis, shape: ClusterShape, diskStyle: DiskStyle = 'spiral'): Map<string, Vec3> {
   if (shape === 'sphere') return buildClusterLayoutByAxis(nodes, axis);
   const out = new Map<string, Vec3>();
-  const groups = groupOrder(
-    nodes.map((n) => groupKeyOf(n, axis)),
-    axis,
-  );
+  /**
+   * type 轴的**超大组拆半**:真实数据里 tool 常常占掉一半以上节点,单簇在盘/环上
+   * 会独占一整臂或糊成一坨。超过阈值(≥max(50, 总数 22%))的组按 id 确定性哈希
+   * 拆成 `key#0` / `key#1` 两个子簇——平分后两条臂的负载自然均衡,且同一 id
+   * 永远落在同一半边(可回放)。hall 轴不拆:八维本身就均衡。
+   */
+  const baseCount = new Map<string, number>();
+  for (const n of nodes) {
+    const b = groupKeyOf(n, axis);
+    baseCount.set(b, (baseCount.get(b) ?? 0) + 1);
+  }
+  const sumAll = nodes.length || 1;
+  const splitSet = new Set<string>();
+  if (axis === 'type') {
+    for (const [b, c] of baseCount) {
+      if (c >= Math.max(50, sumAll * 0.22) && baseCount.size > 1) splitSet.add(b);
+    }
+  }
+  /** 形态布局内的组键:type 轴超大组拆半,其余同 groupKeyOf。 */
+  const keyOf = (n: LayoutNode): string => {
+    const b = groupKeyOf(n, axis);
+    if (!splitSet.has(b)) return b;
+    return `${b}#${rand01(`x:${n.id}`) < 0.5 ? 0 : 1}`;
+  };
+  const groups = groupOrder(nodes.map(keyOf), axis);
   const centers = new Map<string, Vec3>();
   const total = Math.max(1, groups.length);
   const countOf = new Map<string, number>();
   for (const n of nodes) {
-    const g = groupKeyOf(n, axis);
+    const g = keyOf(n);
     countOf.set(g, (countOf.get(g) ?? 0) + 1);
   }
   /**
@@ -297,7 +318,7 @@ export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: Clus
     });
   }
   for (const n of nodes) {
-    const gk = groupKeyOf(n, axis);
+    const gk = keyOf(n);
     if (shape === 'disk') {
       const span = armSpan.get(gk);
       if (span) {

@@ -45668,15 +45668,29 @@ var __create = Object.create;
 		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral") {
 		  if (shape === "sphere") return buildClusterLayoutByAxis(nodes, axis);
 		  const out = /* @__PURE__ */ new Map();
-		  const groups = groupOrder(
-		    nodes.map((n) => groupKeyOf(n, axis)),
-		    axis
-		  );
+		  const baseCount = /* @__PURE__ */ new Map();
+		  for (const n of nodes) {
+		    const b = groupKeyOf(n, axis);
+		    baseCount.set(b, (baseCount.get(b) ?? 0) + 1);
+		  }
+		  const sumAll = nodes.length || 1;
+		  const splitSet = /* @__PURE__ */ new Set();
+		  if (axis === "type") {
+		    for (const [b, c] of baseCount) {
+		      if (c >= Math.max(50, sumAll * 0.22) && baseCount.size > 1) splitSet.add(b);
+		    }
+		  }
+		  const keyOf = (n) => {
+		    const b = groupKeyOf(n, axis);
+		    if (!splitSet.has(b)) return b;
+		    return `${b}#${rand01(`x:${n.id}`) < 0.5 ? 0 : 1}`;
+		  };
+		  const groups = groupOrder(nodes.map(keyOf), axis);
 		  const centers = /* @__PURE__ */ new Map();
 		  const total = Math.max(1, groups.length);
 		  const countOf = /* @__PURE__ */ new Map();
 		  for (const n of nodes) {
-		    const g = groupKeyOf(n, axis);
+		    const g = keyOf(n);
 		    countOf.set(g, (countOf.get(g) ?? 0) + 1);
 		  }
 		  const R0 = 115;
@@ -45753,7 +45767,7 @@ var __create = Object.create;
 		    });
 		  }
 		  for (const n of nodes) {
-		    const gk = groupKeyOf(n, axis);
+		    const gk = keyOf(n);
 		    if (shape === "disk") {
 		      const span = armSpan.get(gk);
 		      if (span) {
@@ -46804,38 +46818,40 @@ var __create = Object.create;
 		            "变异",
 		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("input", { type: "range", min: 0, max: 1, step: 0.05, value: variant, onChange: (e) => setVariant(Number(e.target.value)) })
 		          ] }) : null,
-		          /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden" }, children: ["sphere", "disk", "lemniscate"].map((s) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
-		            "button",
-		            {
-		              onClick: () => setShape(s),
-		              style: {
-		                fontSize: 11,
-		                padding: "2px 8px",
-		                cursor: "pointer",
-		                border: "none",
-		                color: shape === s ? ui.accent : ui.text,
-		                background: shape === s ? "rgba(127,177,255,0.14)" : "transparent"
+		          /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden" }, children: [
+		            ["sphere", "disk", "lemniscate"].map((s) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		              "button",
+		              {
+		                onClick: () => setShape(s),
+		                style: {
+		                  fontSize: 11,
+		                  padding: "2px 8px",
+		                  cursor: "pointer",
+		                  border: "none",
+		                  color: shape === s ? ui.accent : ui.text,
+		                  background: shape === s ? "rgba(127,177,255,0.14)" : "transparent"
+		                },
+		                children: s === "sphere" ? "球" : s === "disk" ? "圆盘" : "8字"
 		              },
-		              children: s === "sphere" ? "球" : s === "disk" ? "盘" : "环"
-		            },
-		            s
-		          )) }),
-		          shape === "disk" && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden", marginLeft: 6 }, children: ["legacy", "flat", "spiral"].map((d) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
-		            "button",
-		            {
-		              onClick: () => setDiskStyle(d),
-		              style: {
-		                fontSize: 11,
-		                padding: "2px 8px",
-		                cursor: "pointer",
-		                border: "none",
-		                color: diskStyle === d ? ui.accent : ui.text,
-		                background: diskStyle === d ? "rgba(127,177,255,0.14)" : "transparent"
+		              s
+		            )),
+		            shape === "disk" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, borderLeft: "1px solid rgba(127,177,255,0.3)" }, children: ["legacy", "flat", "spiral"].map((d) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		              "button",
+		              {
+		                onClick: () => setDiskStyle(d),
+		                style: {
+		                  fontSize: 11,
+		                  padding: "2px 8px",
+		                  cursor: "pointer",
+		                  border: "none",
+		                  color: diskStyle === d ? ui.accent : ui.text,
+		                  background: diskStyle === d ? "rgba(127,177,255,0.14)" : "transparent"
+		                },
+		                children: d === "legacy" ? "双臂" : d === "flat" ? "平铺" : "悬臂"
 		              },
-		              children: d === "legacy" ? "双臂" : d === "flat" ? "平铺" : "悬臂"
-		            },
-		            d
-		          )) }),
+		              d
+		            )) }) : null
+		          ] }),
 		          toggle("流转", flowOn, setFlowOn),
 		          flowOn && shape !== "sphere" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden", marginLeft: 6 }, children: ["auto", "spin", "eight"].map((f) => {

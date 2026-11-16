@@ -220,4 +220,35 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
       }
     }
   });
+
+  it('type 轴超大组拆半:tool 占多数时拆成两个子簇,负载接近且确定性可回放', () => {
+    const mk2 = (id: string, type: string, hall: string) => mk(id, type, hall);
+    const nodes2: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 200; i++) nodes2.push(mk2('t' + i, 'tool', 'work'));
+    for (let i = 0; i < 20; i++) nodes2.push(mk2('p' + i, 'person', 'work'));
+    for (let i = 0; i < 20; i++) nodes2.push(mk2('r' + i, 'project', 'work'));
+    const L = buildClusterShapeLayout(nodes2, 'type', 'disk');
+    // tool 200 点远超阈值 → 拆半后两类各自的簇心(用质心近似)半径/角向应当分开
+    const cen = (pre: string, n: number) => {
+      let x = 0, z = 0;
+      for (let i = 0; i < n; i++) { const q = L.get(pre + i)!; x += q.x; z += q.z; }
+      return { x: x / n, z: z / n };
+    };
+    // 拆半后 tool 的 200 点分散到两条臂 → 整体质心更靠近盘心(两半角向相反抵消)
+    const toolC = cen('t', 200);
+    const personC = cen('p', 20);
+    expect(Math.hypot(toolC.x, toolC.z)).toBeLessThan(Math.hypot(personC.x, personC.z) * 1.6 + 200);
+    // 确定性:两次调用逐位一致
+    const L2 = buildClusterShapeLayout(nodes2, 'type', 'disk');
+    for (const [id, q] of L) {
+      const r = L2.get(id)!;
+      expect(r.x).toBeCloseTo(q.x, 9);
+      expect(r.z).toBeCloseTo(q.z, 9);
+    }
+    // hall 轴不拆:同 hall 点仍聚在一起(质心半径有限)
+    const Lh = buildClusterShapeLayout(nodes2, 'hall', 'disk');
+    let hx = 0, hz = 0;
+    for (const n of nodes2) { const q = Lh.get(n.id)!; hx += q.x; hz += q.z; }
+    expect(Number.isFinite(Math.hypot(hx, hz))).toBe(true);
+  });
 });

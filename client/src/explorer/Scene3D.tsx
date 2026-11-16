@@ -1074,7 +1074,7 @@ export function Scene3D(props: {
             <input type="range" min={0} max={1} step={0.05} value={variant} onChange={(e) => setVariant(Number(e.target.value))} />
           </label>
         ) : null}
-        {/* 形态段控件:球(现状)|盘(横向星系盘)|环(8 字回环) */}
+        {/* 形态段控（单一容器）：球 | 圆盘 | 8字；选圆盘时右侧紧接其子风格 双臂|平铺|悬臂 */}
         <span style={{ display: 'inline-flex', gap: 0, border: ui.border, borderRadius: 8, overflow: 'hidden' }}>
           {(['sphere', 'disk', 'lemniscate'] as const).map((s) => (
             <button
@@ -1089,30 +1089,30 @@ export function Scene3D(props: {
                 background: shape === s ? 'rgba(127,177,255,0.14)' : 'transparent',
               }}
             >
-              {s === 'sphere' ? '球' : s === 'disk' ? '盘' : '环'}
+              {s === 'sphere' ? '球' : s === 'disk' ? '圆盘' : '8字'}
             </button>
           ))}
+          {shape === 'disk' ? (
+            <span style={{ display: 'inline-flex', gap: 0, borderLeft: '1px solid rgba(127,177,255,0.3)' }}>
+              {(['legacy', 'flat', 'spiral'] as const).map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDiskStyle(d)}
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 8px',
+                    cursor: 'pointer',
+                    border: 'none',
+                    color: diskStyle === d ? ui.accent : ui.text,
+                    background: diskStyle === d ? 'rgba(127,177,255,0.14)' : 'transparent',
+                  }}
+                >
+                  {d === 'legacy' ? '双臂' : d === 'flat' ? '平铺' : '悬臂'}
+                </button>
+              ))}
+            </span>
+          ) : null}
         </span>
-        {shape === 'disk' && (
-          <span style={{ display: 'inline-flex', gap: 0, border: ui.border, borderRadius: 8, overflow: 'hidden', marginLeft: 6 }}>
-            {(['legacy', 'flat', 'spiral'] as const).map((d) => (
-              <button
-                key={d}
-                onClick={() => setDiskStyle(d)}
-                style={{
-                  fontSize: 11,
-                  padding: '2px 8px',
-                  cursor: 'pointer',
-                  border: 'none',
-                  color: diskStyle === d ? ui.accent : ui.text,
-                  background: diskStyle === d ? 'rgba(127,177,255,0.14)' : 'transparent',
-                }}
-              >
-                {d === 'legacy' ? '双臂' : d === 'flat' ? '平铺' : '悬臂'}
-              </button>
-            ))}
-          </span>
-        )}
         {toggle('流转', flowOn, setFlowOn)}
         {flowOn && shape !== 'sphere' ? (
           <>
