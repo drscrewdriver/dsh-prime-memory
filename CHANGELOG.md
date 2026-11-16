@@ -1,3 +1,37 @@
+## 0.26.57
+
+**实体本体论：图谱从「五类节点一个筐」走到「七类实体 + 概念独立表 + 属性规范词表」，工具入口三处小改。**
+
+### 实体身份（新模块 `src/graph/entity-identity.ts`）
+- `classifyNameKind`：path → descriptive → role → proper 四判序；`isPathLike` 认盘符/`~`/`${VAR}`/多级目录/扩展名，
+  不认 `@scope/pkg` 与 URL；`isAliasShaped` 拒动作句/读数/从句（别名只收写法变体）。
+- 限定名：`splitQualified` 取**最后一个** `@`——`用户@DSH` 与 `用户@GitHub` 是两个实体，`@drscrewdriver` 是整体；
+  `isSameEntity` 改 (base, qualifier) 二元组比较，NFKC+小写+剥 `[\s_-]` 归一。
+- 泛称准入：`用户/助手/AI/开发团队` 这类裸角色词**不再建节点**（实测「用户」一个黑洞挂 158 fact/12 别名）；
+  带限定符或带指称残段（团队A）放行——角色词的组合写法（用户/AI协作）仍拦。
+
+### 七类 + 概念独立表
+- `GRAPH_NODE_TYPES` 扩到 7：新增 `activity`、`concept`；`GRAPH_PROJECTOR_VERSION` → 2，
+  旧投影凭证全部作废、装上新版后自动重投整库。
+- 概念走 **`graph_concepts` 独立表**（六分类 algorithm/mechanism/spec/principle/pattern/other + 向量表
+  `graph_concept_vec`）：apply 分流，`type:'concept'` 不落节点表；检索侧独立打分
+  （name×6 / aliases×5 / definition×5 / facts×4 / category×3）。
+- place 去污：路径样名字投 place 直接丢（实测 89% 的「地点」是路径/环境/站点），真地理保留；
+  路径样 tool 放行但打 `路径` tag（npm scoped 包是真工具）。
+
+### 属性 key 规范化（4819 → 收敛）
+- `GRAPH_FACT_KEYS` 约 60 个规范 key + `GRAPH_FACT_KEY_SYNONYMS` 同义映射（当前状态/本批状态/运行状态 → 状态）；
+  未命中的 key 原样保留但节点打 `未规范` tag——收敛率可测，不硬删信息。
+
+### 工具入口三处小改（spec R5）
+- `memory_write` 四合一：add / update / delete / import 经 action 派发，实现逐字沿用旧 handler；
+  旧四名移入 **`legacy` 组（默认封印）**，`toolLegacy=true` 随时开回。
+- `memory_ruminate` 三合一：run（缺省）/ cancel / status；两个附属旧名同入 `legacy` 组。
+- `memory_reproject` + `memory_migrate_relation` 拆出 **`graphAdmin` 组（默认封印）**——
+  低频写不再和 graph 读工具绑在同一个开关下。线上按 cordis.patch.yml 五组封印口径，
+  常驻 `memory_*` = 核心读 3 + graph 读 2 + 槽位 3 = **8**（tools.test 钉测）。
+- 客户端同步：扇区布局/2D/3D/图例五类→七类（activity=chart-6、concept=chart-7、兜底移 chart-8）。
+
 ## 0.26.56
 
 **修「不转的时候画面还在伸缩」——幅度彻底改成静态几何，与流转解耦。**

@@ -181,6 +181,11 @@ const ALWAYS_ON: MemoryLiveSettings = {
   toolConflict: true,
   toolMutate: true,
   toolSkills: true,
+  // v0.26.57 工具面精简:管理组(graphAdmin)与旧名兼容组(legacy)默认**封印**——
+  // memory_reproject/migrate_relation 是人工纠偏通道、memory_add 等四件已被
+  // memory_write 吸收,常态不该占模型工具位;要开回在设置页显式打开。
+  toolGraphAdmin: false,
+  toolLegacy: false,
 };
 
 /** 自带自定义设置页(settings.section 顶层「记忆」分节,client 半挂载):
@@ -487,6 +492,9 @@ function resolveSettings(value: unknown): MemoryLiveSettings {
     toolConflict: v.toolConflict !== false,
     toolMutate: v.toolMutate !== false,
     toolSkills: v.toolSkills !== false,
+    // 默认封印组:方向相反——缺字段/异常值都视为封印(false 才开)。
+    toolGraphAdmin: v.toolGraphAdmin === true,
+    toolLegacy: v.toolLegacy === true,
     // 外部同步运行时开关:档位白名单与 schema 同源（非法值 = 跟随部署）;三布尔严格 === true
     extSyncMode:
       v.extSyncMode === 'shadow-read' || v.extSyncMode === 'push-only' || v.extSyncMode === 'two-way'

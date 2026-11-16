@@ -86,7 +86,7 @@ describe('§C 手动路径接线(memory_add)', () => {
     const ctx = { on: () => {}, tools: { register: (t: unknown) => handlers.set((t as { name: string }).name, t) } } as unknown as Context;
     const written: MemoryRecord[] = [];
     const logger: MemoryLogger = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} } as unknown as MemoryLogger;
-    const live = { get: () => ({ memoryMutate: true }) };
+    const live = { get: () => ({ memoryMutate: true, toolLegacy: true }) };
     const cfg = { tools: true, capture: { enabled: true, maxMessageChars: 4000, stripCodeBlocks: false, ...cfgOverride } } as unknown as MemoryConfig;
     const stores = {
       l0: {} as never,

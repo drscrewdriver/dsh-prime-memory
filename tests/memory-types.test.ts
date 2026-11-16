@@ -98,7 +98,7 @@ describe('memory_add 白名单派生 + 降级可观测', () => {
     const written: MemoryRecord[] = [];
     const warns: string[] = [];
     const logger = { info: () => {}, warn: (m: string) => warns.push(m), error: () => {}, debug: () => {} } as unknown as MemoryLogger;
-    const live = { get: () => ({ memoryMutate: true }) };
+    const live = { get: () => ({ memoryMutate: true, toolLegacy: true }) };
     const cfg = { tools: true, capture: { enabled: true, maxMessageChars: 4000, stripCodeBlocks: false } } as unknown as MemoryConfig;
     const stores = {
       l0: {} as never,

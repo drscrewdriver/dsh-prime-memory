@@ -61,7 +61,7 @@ interface RegisteredTool {
   execute: (args: Record<string, unknown>, exec?: { agent?: { id?: string } }) => Promise<unknown>;
 }
 
-function harness(opts: { liveMutate?: boolean; sessionMode?: (sid: string) => string; captureEvents?: boolean; cfgSkillsEnabled?: boolean; liveSkillsEnabled?: boolean } = {}) {
+function harness(opts: { liveMutate?: boolean; sessionMode?: (sid: string) => string; captureEvents?: boolean; cfgSkillsEnabled?: boolean; liveSkillsEnabled?: boolean; liveLegacy?: boolean; liveGraphAdmin?: boolean; sealAllOptional?: boolean } = {}) {
   const events: Array<(paths: string[]) => void> = [];
   // 基线不含 conflictFreeze 键(留空 = 不覆盖,见 runner.ts 的 !== undefined 判定),故用断言;
   // 空数组按契约类型加宽(never[] 会让断言两侧失去重叠)
@@ -75,6 +75,12 @@ function harness(opts: { liveMutate?: boolean; sessionMode?: (sid: string) => st
     memoryMutate: opts.liveMutate ?? false,
     skillsEnabled: opts.liveSkillsEnabled === true,
     toolSkills: true,
+    // v0.26.57 默认封印两组:基线按线上默认(false),测试按需开回验证兼容面
+    toolGraphAdmin: opts.liveGraphAdmin === true,
+    toolLegacy: opts.liveLegacy === true,
+    ...(opts.sealAllOptional
+      ? { toolRoom: false, toolGraph: true, toolRuminate: false, toolConflict: false, toolMutate: false, toolSkills: false }
+      : {}),
   } as MemoryLiveSettings;
   const liveHandle: LiveSettingsHandle = { supported: true, get: () => live, update: async () => {} };
   const modes = new SessionModeStore('/nonexistent', 'auto');
@@ -149,7 +155,7 @@ describe('memory tools', () => {
     return { db, l1, l0, scenes, persona };
   }
 
-  it('registers the retrieval/mutation tools, the three ruminate tools, and memory_room_review', async () => {
+  it('registers the default tool surface (v0.26.57 consolidated writes; legacy/graphAdmin sealed)', async () => {
     const stores = await setupStores();
     const h = harness();
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
@@ -160,8 +166,33 @@ describe('memory tools', () => {
     // 早就写着"待裁决对可用 memory_conflicts 查看",而那个工具**一直不存在** ——
     // 模型照着描述调用只会拿到"工具不存在"。本次补上读出口,故在此登记。
     expect(h.registered.map((t) => t.name).sort()).toEqual([
-      'conversation_search', 'memory_add', 'memory_conflicts', 'memory_conflicts_rejected', 'memory_delete', 'memory_expand_graph_node', 'memory_import', 'memory_migrate_relation', 'memory_read_scene', 'memory_receipts', 'memory_reproject', 'memory_resolve_conflict', 'memory_room_admin', 'memory_room_review', 'memory_ruminate', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_search', 'memory_search_graph', 'memory_update',
+      'conversation_search', 'memory_conflicts', 'memory_conflicts_rejected', 'memory_expand_graph_node', 'memory_read_scene', 'memory_receipts', 'memory_resolve_conflict', 'memory_room_admin', 'memory_room_review', 'memory_ruminate', 'memory_search', 'memory_search_graph', 'memory_write',
     ]);
+    // 默认面**不含**:旧写四件 + 反刍 cancel/status(legacy 组)、
+    // memory_reproject + memory_migrate_relation(graphAdmin 组)。
+    expect(h.registered.map((t) => t.name)).not.toContain('memory_add');
+    expect(h.registered.map((t) => t.name)).not.toContain('memory_reproject');
+    expect(h.registered.filter((t) => t.name.startsWith('memory_'))).toHaveLength(12);
+    // 部署口径(checklist「常驻 ≤ 8」):五组按线上 cordis.patch.yml 封印时,
+    // 常驻 memory_* = 核心读 3(search/read_scene/receipts)+ graph 读 2 + 槽位 3 = 8。
+    const hd = harness({ sealAllOptional: true });
+    registerMemoryTools(hd.ctx, hd.cfg, stores, noopLogger, hd.modes, hd.liveHandle);
+    const slotStore = new SlotStore(join(await tmp(), `slots-surface-${Date.now()}.json`), noopLogger);
+    await slotStore.load();
+    registerSlotTools(hd.ctx, hd.cfg, slotStore, noopLogger, hd.modes, hd.liveHandle, stores.l1);
+    const resident = hd.registered.map((t) => t.name).filter((n) => n.startsWith('memory_'));
+    expect(resident.sort()).toEqual([
+      'memory_expand_graph_node', 'memory_read_scene', 'memory_receipts', 'memory_search', 'memory_search_graph', 'memory_slot_close', 'memory_slot_list', 'memory_slot_write',
+    ]);
+    expect(resident.length).toBeLessThanOrEqual(8);
+
+    // 兼容面:toolLegacy / toolGraphAdmin 显式开回后旧名全部在位
+    const hl = harness({ liveLegacy: true, liveGraphAdmin: true });
+    registerMemoryTools(hl.ctx, hl.cfg, stores, noopLogger, hl.modes, hl.liveHandle);
+    const names = hl.registered.map((t) => t.name);
+    for (const legacyName of ['memory_add', 'memory_import', 'memory_delete', 'memory_update', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_reproject', 'memory_migrate_relation']) {
+      expect(names, legacyName).toContain(legacyName);
+    }
     stores.db.close();
   });
 
@@ -171,10 +202,14 @@ describe('memory tools', () => {
     const stores = await setupStores();
     const h = harness();
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
-    const status = h.registered.find((t) => t.name === 'memory_ruminate_status')!;
-    const res = (await status.execute({})) as { notice: string; running: boolean };
+    const rum = h.registered.find((t) => t.name === 'memory_ruminate')!;
+    const res = (await rum.execute({ action: 'status' })) as { notice: string; running: boolean };
     expect(res.notice).toContain('反刍未初始化');
     expect(res.running).toBe(false);
+    const cancel = (await rum.execute({ action: 'cancel' })) as { notice: string; running: boolean };
+    expect(cancel.notice).toContain('反刍未初始化');
+    const bad = (await rum.execute({ action: 'nope' })) as { notice: string };
+    expect(bad.notice).toContain('未知 action');
     stores.db.close();
   });
 
@@ -224,15 +259,15 @@ describe('memory tools', () => {
     const stores = await setupStores();
     const h = harness({ liveMutate: false });
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
-    const add = h.registered.find((t) => t.name === 'memory_add')!;
-    const denied = (await add.execute({ content: '测试' }, {})) as { notice: string };
+    const add = h.registered.find((t) => t.name === 'memory_write')!;
+    const denied = (await add.execute({ action: 'add', content: '测试' }, {})) as { notice: string };
     expect(denied.notice).toContain('高权限');
 
     // 开门后写入
     const h2 = harness({ liveMutate: true });
     registerMemoryTools(h2.ctx, h2.cfg, stores, noopLogger, h2.modes, h2.liveHandle);
-    const add2 = h2.registered.find((t) => t.name === 'memory_add')!;
-    const ok = (await add2.execute({ content: '记得我明天要体检', type: 'work_task', hall: 'work' }, {})) as { id: string };
+    const add2 = h2.registered.find((t) => t.name === 'memory_write')!;
+    const ok = (await add2.execute({ action: 'add', content: '记得我明天要体检', type: 'work_task', hall: 'work' }, {})) as { id: string };
     expect(ok.id).toMatch(/^mem-/);
     const rec = stores.l1.getByIds([ok.id])[0];
     expect(rec.type).toBe('work_task');
@@ -243,7 +278,7 @@ describe('memory tools', () => {
     // 写侧标注(task_3.2):工具路径落库时盖 dsh_validity 快照(validToSource 由汇流口补 'unknown')
     expect((rec.metadata as Record<string, unknown>).dsh_validity).toBeDefined();
     // 非法 type 缺省 episodic
-    const fallback = (await add2.execute({ content: '随便记一条' }, {})) as { id: string };
+    const fallback = (await add2.execute({ action: 'add', content: '随便记一条' }, {})) as { id: string };
     expect(stores.l1.getByIds([fallback.id])[0].type).toBe('episodic');
     stores.db.close();
   });
@@ -252,9 +287,10 @@ describe('memory tools', () => {
     const stores = await setupStores();
     const h = harness({ liveMutate: true });
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
-    const add = h.registered.find((t) => t.name === 'memory_add')!;
+    const add = h.registered.find((t) => t.name === 'memory_write')!;
     const res = (await add.execute(
       {
+        action: 'add',
         content: '用户目前在做 dsh-prime-memory 的记忆时间轴改造',
         type: 'work_task',
         persistence: 'o',
@@ -277,27 +313,28 @@ describe('memory tools', () => {
       temporal: { st: 'o', vf: '2026-08-31T16:00:00.000Z', vt: null },
     });
     // 持续性缺省 = 未判定,不参与取代判定
-    const plain = (await add.execute({ content: '没有时间信息的普通事实' }, {})) as { id: string };
+    const plain = (await add.execute({ action: 'add', content: '没有时间信息的普通事实' }, {})) as { id: string };
     const plainRec = stores.l1.getByIds([plain.id])[0];
     expect(plainRec.persistence).toBeUndefined();
     expect(plainRec.validFrom).toBeUndefined();
     stores.db.close();
   });
 
-  it('memory_import: 批量写入 + 批内重复拦截 + 上限拒绝 + 高权限门控', async () => {
+  it('memory_write action=import: 批量写入 + 批内重复拦截 + 上限拒绝 + 高权限门控', async () => {
     const stores = await setupStores();
     const deniedHarness = harness({ liveMutate: false });
     registerMemoryTools(deniedHarness.ctx, deniedHarness.cfg, stores, noopLogger, deniedHarness.modes, deniedHarness.liveHandle);
-    const deniedTool = deniedHarness.registered.find((t) => t.name === 'memory_import')!;
-    const denied = (await deniedTool.execute({ records: [{ content: '外部记忆' }] }, {})) as { written: number; notice: string };
+    const deniedTool = deniedHarness.registered.find((t) => t.name === 'memory_write')!;
+    const denied = (await deniedTool.execute({ action: 'import', records: [{ content: '外部记忆' }] }, {})) as { written: number; notice: string };
     expect(denied.written).toBe(0);
     expect(denied.notice).toContain('高权限');
 
     const h = harness({ liveMutate: true });
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
-    const imp = h.registered.find((t) => t.name === 'memory_import')!;
+    const imp = h.registered.find((t) => t.name === 'memory_write')!;
     const res = (await imp.execute(
       {
+        action: 'import',
         scene: '外部导入/trae',
         records: [
           {
@@ -329,7 +366,7 @@ describe('memory tools', () => {
 
     // 上限拒绝:超过 MAX_IMPORT 不写入
     const over = (await imp.execute(
-      { records: Array.from({ length: 201 }, (_, i) => ({ content: `批量记忆 ${i}` })) },
+      { action: 'import', records: Array.from({ length: 201 }, (_, i) => ({ content: `批量记忆 ${i}` })) },
       {},
     )) as { written: number; notice: string };
     expect(over.written).toBe(0);
@@ -337,14 +374,14 @@ describe('memory tools', () => {
     stores.db.close();
   });
 
-  it('memory_delete: gated, semantic search then **soft-delete**(可恢复)', async () => {
+  it('memory_write action=delete: gated, semantic search then **soft-delete**(可恢复)', async () => {
     const stores = await setupStores();
     const h2 = harness({ liveMutate: true });
     registerMemoryTools(h2.ctx, h2.cfg, stores, noopLogger, h2.modes, h2.liveHandle);
-    const del = h2.registered.find((t) => t.name === 'memory_delete')!;
-    const noMatch = (await del.execute({ query: '完全不存在的量子记忆' }, { agent: { id: 'auto-sess' } })) as { deleted: number; notice?: string };
+    const del = h2.registered.find((t) => t.name === 'memory_write')!;
+    const noMatch = (await del.execute({ action: 'delete', query: '完全不存在的量子记忆' }, { agent: { id: 'auto-sess' } })) as { deleted: number; notice?: string };
     expect(noMatch.deleted).toBe(0);
-    const ok = (await del.execute({ query: '手冲咖啡', limit: 1 }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
+    const ok = (await del.execute({ action: 'delete', query: '手冲咖啡', limit: 1 }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
     expect(ok.deleted).toBe(1);
     // **软删**:主表仍在(可恢复的载体),但已退出检索面。
     // 门1 解耦:退场判据是 marker 单源，valid_to 不再被 retire 闭合。
@@ -359,20 +396,20 @@ describe('memory tools', () => {
     // 关门拒绝
     const h1 = harness({ liveMutate: false });
     registerMemoryTools(h1.ctx, h1.cfg, stores, noopLogger, h1.modes, h1.liveHandle);
-    const del1 = h1.registered.find((t) => t.name === 'memory_delete')!;
-    const denied = (await del1.execute({ query: '咖啡' }, {})) as { notice: string };
+    const del1 = h1.registered.find((t) => t.name === 'memory_write')!;
+    const denied = (await del1.execute({ action: 'delete', query: '咖啡' }, {})) as { notice: string };
     expect(denied.notice).toContain('高权限');
     stores.db.close();
   });
 
-  it('memory_delete: 默认只退场 1 条(复刻真实误删事故)', async () => {
+  it('memory_write action=delete: 默认只退场 1 条(复刻真实误删事故)', async () => {
     // 事故原样:调用方只想忘掉 1 条,默认 limit=3 却按语义邻近连带退场了 3 条
     // (memory.log 实测「高权限删除记忆 3 条(...)」其中 2 条与本意无关)。
     const stores = await setupStores();
     const h = harness({ liveMutate: true });
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
-    const del = h.registered.find((t) => t.name === 'memory_delete')!;
-    const r = (await del.execute({ query: '手冲咖啡' }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
+    const del = h.registered.find((t) => t.name === 'memory_write')!;
+    const r = (await del.execute({ action: 'delete', query: '手冲咖啡' }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
     expect(r.deleted).toBe(1); // 默认 limit=1,不再是 3
     expect(r.ids).toHaveLength(1);
     expect(stores.l1.listRetired({ limit: 10, offset: 0 }).total).toBe(1);
@@ -381,13 +418,13 @@ describe('memory tools', () => {
     stores.db.close();
   });
 
-  it('memory_delete: ids 精确路径**跳过**语义匹配', async () => {
+  it('memory_write action=delete: ids 精确路径**跳过**语义匹配', async () => {
     const stores = await setupStores();
     const h = harness({ liveMutate: true });
     registerMemoryTools(h.ctx, h.cfg, stores, noopLogger, h.modes, h.liveHandle);
-    const del = h.registered.find((t) => t.name === 'memory_delete')!;
+    const del = h.registered.find((t) => t.name === 'memory_write')!;
     // query 故意与目标无关:精确路径不得受它影响
-    const r = (await del.execute({ ids: ['r2'], query: '手冲咖啡' }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
+    const r = (await del.execute({ action: 'delete', ids: ['r2'], query: '手冲咖啡' }, { agent: { id: 'auto-sess' } })) as { deleted: number; ids: string[] };
     expect(r.ids).toEqual(['r2']);
     expect(r.deleted).toBe(1);
     // 门1 解耦:退场凭 marker 表达，不再拿 valid_to 当退场凭据。

@@ -43117,7 +43117,7 @@ var __create = Object.create;
 		var import_g6 = __toESM(require_g6_min(), 1);
 		
 		// client/src/tabs/graph-seed-layout.ts
-		var SECTOR_ORDER = ["person", "project", "organization", "tool", "place"];
+		var SECTOR_ORDER = ["person", "project", "organization", "tool", "place", "activity", "concept"];
 		function hash32(s) {
 		  let h = 2166136261;
 		  for (let i = 0; i < s.length; i++) {
@@ -43287,9 +43287,11 @@ var __create = Object.create;
 		  project: "--dsh-mem-chart-2",
 		  organization: "--dsh-mem-chart-3",
 		  tool: "--dsh-mem-chart-4",
-		  place: "--dsh-mem-chart-5"
+		  place: "--dsh-mem-chart-5",
+		  activity: "--dsh-mem-chart-6",
+		  concept: "--dsh-mem-chart-7"
 		};
-		var FALLBACK_TOKEN = "--dsh-mem-chart-6";
+		var FALLBACK_TOKEN = "--dsh-mem-chart-8";
 		var FALLBACK_COLOR = "#8a8f98";
 		var CANVAS_H = 460;
 		var LABEL_ALL_EDGES_MAX = 220;
@@ -43521,9 +43523,11 @@ var __create = Object.create;
 		  project: "var(--dsh-mem-chart-2)",
 		  organization: "var(--dsh-mem-chart-3)",
 		  tool: "var(--dsh-mem-chart-4)",
-		  place: "var(--dsh-mem-chart-5)"
+		  place: "var(--dsh-mem-chart-5)",
+		  activity: "var(--dsh-mem-chart-6)",
+		  concept: "var(--dsh-mem-chart-7)"
 		};
-		var FALLBACK_COLOR2 = "var(--dsh-mem-chart-6)";
+		var FALLBACK_COLOR2 = "var(--dsh-mem-chart-8)";
 		var FULL_H = 470;
 		var EGO_H = 400;
 		var LIST_MAX = 40;
@@ -45615,7 +45619,7 @@ var __create = Object.create;
 		}
 		function clusterOrder(types) {
 		  const seen = new Set(types);
-		  const known = ["person", "project", "organization", "tool", "place"].filter((t) => seen.has(t));
+		  const known = ["person", "project", "organization", "tool", "place", "activity", "concept"].filter((t) => seen.has(t));
 		  const rest = [...seen].filter((t) => !known.includes(t)).sort((a, b) => hash322(a) - hash322(b));
 		  return [...known, ...rest];
 		}
@@ -46139,9 +46143,11 @@ var __create = Object.create;
 		  project: "--dsh-mem-chart-2",
 		  organization: "--dsh-mem-chart-3",
 		  tool: "--dsh-mem-chart-4",
-		  place: "--dsh-mem-chart-5"
+		  place: "--dsh-mem-chart-5",
+		  activity: "--dsh-mem-chart-6",
+		  concept: "--dsh-mem-chart-7"
 		};
-		var FALLBACK_TOKEN2 = "--dsh-mem-chart-6";
+		var FALLBACK_TOKEN2 = "--dsh-mem-chart-8";
 		var FALLBACK_COLOR3 = "#8a8f98";
 		function resolveColor2(host, token2) {
 		  const v = getComputedStyle(host).getPropertyValue(token2).trim();
@@ -47153,7 +47159,9 @@ var __create = Object.create;
 		  ["project", "项目", "--dsh-mem-chart-2"],
 		  ["organization", "组织", "--dsh-mem-chart-3"],
 		  ["tool", "工具", "--dsh-mem-chart-4"],
-		  ["place", "地点", "--dsh-mem-chart-5"]
+		  ["place", "地点", "--dsh-mem-chart-5"],
+		  ["activity", "活动", "--dsh-mem-chart-6"],
+		  ["concept", "概念", "--dsh-mem-chart-7"]
 		];
 		function ExplorerPage(props) {
 		  const { rpc, onClose, canvasHeight = 620 } = props;

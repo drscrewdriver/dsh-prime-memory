@@ -26,16 +26,18 @@ import {
   type GraphFull,
 } from './graph-canvas-data.js';
 
-/** type → 既有图表系列令牌(与 GraphTab 径向卡同源五色)。 */
+/** type → 既有图表系列令牌(与 GraphTab 径向卡同源七色)。 */
 const TYPE_TOKENS: Record<string, string> = {
   person: '--dsh-mem-chart-1',
   project: '--dsh-mem-chart-2',
   organization: '--dsh-mem-chart-3',
   tool: '--dsh-mem-chart-4',
   place: '--dsh-mem-chart-5',
+  activity: '--dsh-mem-chart-6',
+  concept: '--dsh-mem-chart-7',
 };
 /** 未知 type 兜底(生产不该出现:apply 校验超集即丢弃)。 */
-const FALLBACK_TOKEN = '--dsh-mem-chart-6';
+const FALLBACK_TOKEN = '--dsh-mem-chart-8';
 /** 解析不到 CSS 变量时的最后兜底(面板样式还没挂上,别把整图画崩)。 */
 const FALLBACK_COLOR = '#8a8f98';
 /** 画布高度:面板宽度不固定,高度钉死避免 Tab 切换时布局跳动。 */

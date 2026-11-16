@@ -37,6 +37,7 @@ import { normalizeEntityName } from '../src/graph/apply.js';
 import type { GraphEdge, GraphNode } from '../src/graph/types.js';
 import { runGraphProjection } from '../src/pipeline/graph.js';
 import { GRAPH_PROJECTION_EXAMPLE } from '../src/prompts/graph-projection.js';
+import type { GraphConcept } from '../src/graph/types.js';
 import { GraphStore } from '../src/store/graph-store.js';
 import type { MemoryLogger } from '../src/types.js';
 import type { MemoryConfig } from '../src/config.js';
@@ -55,6 +56,7 @@ const noopLogger: MemoryLogger = { info: () => {}, warn: () => {}, error: () => 
 const GRAPH_TABLES = [
   'graph_nodes',
   'graph_edges',
+  'graph_concepts',
   'graph_projection_jobs',
   'graph_job_records',
   'graph_projected_records',
@@ -146,7 +148,7 @@ async function projectAllFromL1(gs: GraphStore, ctx: Context): Promise<number> {
 }
 
 interface Violation {
-  kind: 'node' | 'fact' | 'edge';
+  kind: 'node' | 'fact' | 'edge' | 'concept' | 'conceptFact';
   id: string;
   detail: string;
 }
@@ -213,6 +215,25 @@ function checkProvenanceInvariant(raw: DatabaseSync): Violation[] {
     }
   }
 
+  const conceptRows = raw.prepare('SELECT * FROM graph_concepts').all() as Array<Record<string, unknown>>;
+  for (const c of conceptRows) {
+    const conceptId = String(c.concept_id);
+    const conceptArchived = String(c.status) === 'archived';
+    check('concept', conceptId, parseSafe<string[]>(c.source_record_ids_json as string, []), conceptArchived);
+    const cfacts = parseSafe<Array<{ id?: string; key?: string; status?: string; sourceRecordIds?: string[] }>>(
+      c.facts_json as string,
+      [],
+    );
+    for (const f of cfacts) {
+      check(
+        'conceptFact',
+        `${conceptId}#${f.id ?? f.key ?? '?'}`,
+        Array.isArray(f.sourceRecordIds) ? f.sourceRecordIds : [],
+        conceptArchived || f.status === 'archived',
+      );
+    }
+  }
+
   const edgeRows = raw.prepare('SELECT * FROM graph_edges').all() as Array<Record<string, unknown>>;
   for (const e of edgeRows) {
     check(
@@ -231,9 +252,14 @@ function checkProvenanceInvariant(raw: DatabaseSync): Violation[] {
  * idFactory 与 wall-clock now 决定),保留全部**内容性**字段。
  * 边用「节点 key」而非 node id 引用,使比较与 id 无关。
  */
-function canonicalize(graph: { nodes: GraphNode[]; edges: GraphEdge[] }): unknown {
+function canonicalize(graph: { nodes: GraphNode[]; edges: GraphEdge[]; concepts?: GraphConcept[] }): unknown {
   const keyOf = (n: GraphNode): string => `${n.type}|${normalizeEntityName(n.name)}`;
-  const keyById = new Map(graph.nodes.map((n) => [n.id, keyOf(n)]));
+  const conceptKeyOf = (c: GraphConcept): string => `concept|${normalizeEntityName(c.name)}`;
+  // 跨表边端点也解析成 key:概念与实体同池注册,重建比较不因表分裂而失配
+  const keyById = new Map<string, string>([
+    ...graph.nodes.map((n) => [n.id, keyOf(n)] as const),
+    ...(graph.concepts ?? []).map((c) => [c.id, conceptKeyOf(c)] as const),
+  ]);
   const sorted = (xs: readonly string[]): string[] => [...xs].sort();
 
   const nodes = graph.nodes
@@ -279,7 +305,32 @@ function canonicalize(graph: { nodes: GraphNode[]; edges: GraphEdge[] }): unknow
       return ka < kb ? -1 : ka > kb ? 1 : 0;
     });
 
-  return { nodes, edges };
+  const concepts = (graph.concepts ?? [])
+    .map((c) => ({
+      key: conceptKeyOf(c),
+      name: c.name,
+      category: c.category,
+      definition: c.definition,
+      aliases: sorted(c.aliases),
+      status: c.status,
+      confidence: c.confidence,
+      sourceRecordIds: sorted(c.sourceRecordIds),
+      families: sorted(c.families),
+      facts: c.facts
+        .map((f) => ({
+          key: f.key,
+          value: f.value,
+          status: f.status,
+          validFrom: f.validFrom,
+          validTo: f.validTo ?? null,
+          confidence: f.confidence,
+          sourceRecordIds: sorted(f.sourceRecordIds),
+        }))
+        .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
+    }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
+  return { nodes, edges, concepts };
 }
 
 /** 建一个已投影完成的图谱夹具(原始句柄 + GraphStore)。 */

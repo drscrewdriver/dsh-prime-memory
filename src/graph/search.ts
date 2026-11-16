@@ -34,7 +34,7 @@
  * - score 只用于排序,不是事实置信度;无词法命中返回空,不兜底。
  */
 import { tokenize } from '../util/text.js';
-import type { GraphEdge, GraphNode, GraphNodeSearchResult } from './types.js';
+import type { GraphConcept, GraphEdge, GraphNode, GraphNodeSearchResult } from './types.js';
 import { GRAPH_HOP_RECORD_CAP, GRAPH_SEARCH_LIMIT_MAX } from './types.js';
 
 /** 字段权重(检索命中计分;名称最高、关系词最低)。 */
@@ -274,5 +274,87 @@ export function searchGraphNodes(
   }
 
   results.sort((a, b) => b.score - a.score || (a.node.updatedAt < b.node.updatedAt ? 1 : a.node.updatedAt > b.node.updatedAt ? -1 : a.node.id < b.node.id ? -1 : 1));
+  return results.slice(0, cappedLimit);
+}
+
+/**
+ * 概念检索(与节点检索同规的纯函数;graph_concepts 专用)。
+ *
+ * 字段加权:name×6 / aliases×5 / definition×5 / category×3 / facts×4——
+ * 定义承担节点 currentState 的角色(概念没有"当前状态",definition 就是它);
+ * category 比节点 type 权重略高(3 vs 2):"机制/规范/模式"是概念检索最常见
+ * 的意图限定词。relations 不参与(概念的关系价值在"被谁实现"反查,由边表
+ * expandHitRecordIds 的回链承接,不在词法打分里混入邻接噪声)。
+ *
+ * 候选状态闸与节点一致:active | disputed;结果排序 score 降序 → updatedAt
+ * 新→旧 → id 升序(与 searchGraphNodes 同式,RRF 混排时两路行为可预期)。
+ */
+export const GRAPH_CONCEPT_FIELD_WEIGHTS = {
+  name: 6,
+  aliases: 5,
+  definition: 5,
+  category: 3,
+  facts: 4,
+} as const;
+
+export interface GraphConceptSearchResult {
+  concept: GraphConcept;
+  score: number;
+  matchedFields: Array<'name' | 'aliases' | 'definition' | 'category' | 'facts'>;
+  matchReason: string;
+}
+
+const CONCEPT_FIELD_LABELS: Record<'name' | 'aliases' | 'definition' | 'category' | 'facts', string> = {
+  name: '名称',
+  aliases: '别名',
+  definition: '定义',
+  category: '分类',
+  facts: '事实',
+};
+const CONCEPT_FIELD_ORDER = ['name', 'aliases', 'definition', 'category', 'facts'] as const;
+
+export function searchGraphConcepts(
+  concepts: readonly GraphConcept[],
+  query: string,
+  limit: number,
+): GraphConceptSearchResult[] {
+  const tokens = [...new Set(tokenize(query))];
+  const cappedLimit = Math.min(Math.max(Math.floor(limit) || 5, 1), GRAPH_SEARCH_LIMIT_MAX);
+  if (tokens.length === 0) return [];
+  const results: GraphConceptSearchResult[] = [];
+  for (const concept of concepts) {
+    if (concept.status !== 'active' && concept.status !== 'disputed') continue;
+    const fieldTokens: Record<(typeof CONCEPT_FIELD_ORDER)[number], Set<string>> = {
+      name: new Set(tokenize(concept.name)),
+      aliases: new Set(concept.aliases.flatMap((a) => tokenize(a))),
+      definition: new Set(tokenize(concept.definition)),
+      category: new Set(tokenize(concept.category)),
+      facts: new Set(
+        concept.facts
+          .filter((f) => f.status === 'active')
+          .flatMap((f) => tokenize(`${f.key} ${factValueText(f.value)}`)),
+      ),
+    };
+    let score = 0;
+    const matchedFields: (typeof CONCEPT_FIELD_ORDER)[number][] = [];
+    const matchedTokens = new Set<string>();
+    for (const field of CONCEPT_FIELD_ORDER) {
+      let hits = 0;
+      for (const t of tokens) {
+        if (fieldTokens[field].has(t)) {
+          hits++;
+          matchedTokens.add(t);
+        }
+      }
+      if (hits > 0) {
+        score += GRAPH_CONCEPT_FIELD_WEIGHTS[field] * hits;
+        matchedFields.push(field);
+      }
+    }
+    if (matchedFields.length === 0) continue;
+    const matchReason = `命中${matchedFields.map((f) => CONCEPT_FIELD_LABELS[f]).join('/')}「${[...matchedTokens].slice(0, 4).join('、')}」`;
+    results.push({ concept, score, matchedFields, matchReason });
+  }
+  results.sort((a, b) => b.score - a.score || (a.concept.updatedAt < b.concept.updatedAt ? 1 : a.concept.updatedAt > b.concept.updatedAt ? -1 : a.concept.id < b.concept.id ? -1 : 1));
   return results.slice(0, cappedLimit);
 }

@@ -94,7 +94,7 @@ async function setupAll(scope: 'global' | 'workspace' | undefined, mutate = fals
     makeModes(),
     // `recall: true` 必须显式给：`resolvedRecall(owner, live.get().recall)` 在
     // 缺字段时按 falsy 处理 → 工具返回 GLOBAL_OFF_NOTICE，测试会以"0 条"假绿/假红
-    { supported: true, get: () => ({ memoryMutate: mutate, recall: true }), update: async () => {} } as unknown as LiveSettingsHandle,
+    { supported: true, get: () => ({ memoryMutate: mutate, recall: true, toolLegacy: true }), update: async () => {} } as unknown as LiveSettingsHandle,
   );
   return h.registered;
 }

@@ -1,20 +1,24 @@
 import type { MemoryRecord } from '../types.js';
-import type { GraphEdge, GraphNode, GraphProjectionResult } from './types.js';
+import type { GraphConcept, GraphEdge, GraphNode, GraphProjectionResult } from './types.js';
 export interface ApplyGraphProjectionOptions {
     /** 可变异的合并 scope(现有节点/边;调用方决定 scope 大小)。 */
     nodes: GraphNode[];
     edges: GraphEdge[];
+    /** 可变异的概念 scope(独立表 graph_concepts 的内存形)。 */
+    concepts?: GraphConcept[];
     /** 本批认领的记录(族判定与时间锚的证据来源)。 */
     records: readonly MemoryRecord[];
     result: GraphProjectionResult;
     allowedRecordIds: ReadonlySet<string>;
     /** 本次投影时刻(ISO;时间锚兜底与 updatedAt 的时间基准)。 */
     now: string;
-    idFactory: (prefix: 'node' | 'edge' | 'gfact') => string;
+    idFactory: (prefix: 'node' | 'edge' | 'gfact' | 'gconcept') => string;
 }
 export interface ApplyGraphProjectionOutcome {
     nodeIds: string[];
     edgeIds: string[];
+    /** touched 概念 id(独立表写回输入)。 */
+    conceptIds: string[];
     /** 因无来源/形状非法被丢弃的提案条数(节点+fact+边;诊断日志用)。 */
     dropped: number;
 }

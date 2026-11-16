@@ -255,7 +255,7 @@ describe('工具输出视图 ↔ 声明 schema 不得漂移（#23 同类面）',
     { name: 'memory_conflicts', args: {} },
     { name: 'memory_conflicts_rejected', args: {} },
     { name: 'memory_receipts', args: { record_id: 'r1' } },
-    { name: 'memory_ruminate_status', args: {} },
+    { name: 'memory_ruminate', args: { action: 'status' } }, // v0.26.57 三合一:status 经合并入口派发
     { name: 'memory_search', args: { query: '咖啡' } },
     { name: 'memory_read_scene', args: { path: 'persona-chat.md' } },
     { name: 'memory_room_review', args: { action: 'next' } },

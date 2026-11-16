@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
 import type { GraphStore } from '../store/graph-store.js';
 import type { MemoryLogger, MemoryRecord } from '../types.js';
-import type { GraphEdge, GraphNode, GraphProjectionResult } from '../graph/types.js';
+import type { GraphConcept, GraphEdge, GraphNode, GraphProjectionResult } from '../graph/types.js';
 /** claim 上下文装配的节点上限(词法相关 + 最近更新,总量封顶)。 */
 export declare const GRAPH_CONTEXT_NODE_LIMIT = 80;
 /** 保底携带的最近更新节点数(图谱冷启动后有"当前关注点"锚)。 */
@@ -41,6 +41,12 @@ export declare function isTransientGraphFailure(msg: string): boolean;
  */
 export declare function nodeEmbedText(node: GraphNode): string;
 /**
+ * 概念向量化的嵌入文本(task_13,与 nodeEmbedText 同构):
+ * 概念名 + 别名 + 定义串。定义是概念的"语义面"对应实体的"当前状态"——
+ * 缺 definition 的概念在 apply 层就被拒了,到这里必然非空。
+ */
+export declare function conceptEmbedText(concept: GraphConcept): string;
+/**
  * 投影收尾的节点向量补写(G-vec 缺陷修:此前 upsertNodeVectors 生产零调用点,
  * 嵌入开着时 graph_node_vec 永远是 0 行,"向量种子"读路结构性空转)。
  *
@@ -48,6 +54,11 @@ export declare function nodeEmbedText(node: GraphNode): string;
  * 绝不能把一个旁路补算弄挂投影主流程(与 L1 侧 restore 的向量纪律同向)。
  */
 export declare function writeNodeVectorsAfterComplete(graphs: GraphStore, touched: readonly GraphNode[], embed: ((text: string) => Promise<Float32Array | undefined>) | undefined, logger: MemoryLogger): Promise<number>;
+/**
+ * 投影收尾的概念向量补写(task_13):与节点路同一失败隔离纪律——
+ * 嵌入失败/表未就绪只 warn,向量是召回增益,缺了它概念词法路照常。
+ */
+export declare function writeConceptVectorsAfterComplete(graphs: GraphStore, touched: readonly GraphConcept[], embed: ((text: string) => Promise<Float32Array | undefined>) | undefined, logger: MemoryLogger): Promise<number>;
 /**
  * 执行一次图谱投影(claim 一个 job → LLM → 校验落库;无 job 时静默返回)。
  * 返回是否实际认领了任务(泵据此决定是否续排)。失败转 fail(退避/封顶由

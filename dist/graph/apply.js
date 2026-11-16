@@ -19,7 +19,8 @@
  * 不发生在该事务内。
  */
 import { familyForType } from '../types.js';
-import { GRAPH_CAP, GRAPH_NODE_TYPE_SET, GRAPH_SOURCE_RECORDS_CAP, GRAPH_STATUS_SET, } from './constraints.js';
+import { clampConceptCategory, isAliasShaped, isPathLike, isRoleName, splitQualified, } from './entity-identity.js';
+import { GRAPH_CAP, GRAPH_FACT_KEYS, GRAPH_FACT_KEY_SYNONYMS, GRAPH_NODE_TYPE_SET, GRAPH_SOURCE_RECORDS_CAP, GRAPH_STATUS_SET, } from './constraints.js';
 /** 字符串字段归一:trim、折叠空白、截断;非字符串一律空串。 */
 function textOf(value, limit) {
     return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, limit) : '';
@@ -106,13 +107,53 @@ function unionSourcesCapped(old, add) {
 function isSameEntity(node, name, aliases, type) {
     if (node.type !== type)
         return false;
-    const keys = new Set([normalizeEntityName(name), ...aliases.map(normalizeEntityName)]);
-    return [node.name, ...node.aliases].some((candidate) => keys.has(normalizeEntityName(candidate)));
+    // v0.26.57 消歧升级:限定符参与身份比较——用户@DSH 与 用户@GitHub 是两个实体,
+    // 用户@DSH 与 用户@dsh(NFKC/大小写/空白变体)是同一实体;无限定名不并入带限定名
+    // (语境不明宁可分裂,不误合并)。同判据也用于概念合并(sameQualified)。
+    return sameQualified(node, name, aliases);
+}
+/**
+ * 同一概念判定:归一集合相交 + **限定符一致**(v0.26.57)。
+ *
+ * 限定名 `用户@DSH` 与 `用户@GitHub` 归一后 base 相同但不是同一实体——
+ * 比较 (normalize(base), normalize(qualifier)) 二元组。概念合并只按名称/别名。
+ */
+function sameQualified(node, name, aliases) {
+    const want = splitQualified(name);
+    const qWant = want.qualifier ? normalizeEntityName(want.qualifier) : '';
+    const candidates = [node.name, ...node.aliases];
+    for (const cand of candidates) {
+        const got = splitQualified(cand);
+        const qGot = got.qualifier ? normalizeEntityName(got.qualifier) : '';
+        if (qGot !== qWant)
+            continue;
+        if (normalizeEntityName(got.base) === normalizeEntityName(want.base))
+            return true;
+        if (aliases.some((alias) => {
+            const ga = splitQualified(alias);
+            return (ga.qualifier ? normalizeEntityName(ga.qualifier) : '') === qWant
+                && normalizeEntityName(ga.base) === normalizeEntityName(got.base);
+        }))
+            return true;
+    }
+    return false;
+}
+/** fact key 规范化:trim/小写无关的中文 key 原样,命中同义映射替换;规范表外不动。 */
+function normalizeFactKey(key) {
+    const k = key.trim();
+    return GRAPH_FACT_KEY_SYNONYMS[k] ?? k;
+}
+/** key 是否在规范词表内(表外保留但供统计收敛率)。 */
+function isCanonicalFactKey(key) {
+    return GRAPH_FACT_KEYS.includes(key) || key === '未规范';
 }
 /** 应用一次投影提案(硬校验 + 消歧 + supersede + 状态重建)。 */
 export function applyGraphProjection(options) {
     const { nodes, edges, records, allowedRecordIds, now, idFactory } = options;
+    const concepts = options.concepts ?? [];
     const refs = new Map();
+    const conceptRefs = new Map();
+    const touchedConcepts = new Set();
     const touchedNodes = new Set();
     const touchedEdges = new Set();
     let dropped = 0;
@@ -140,8 +181,26 @@ export function applyGraphProjection(options) {
             dropped++;
             continue;
         }
-        const aliases = stringsOf(raw?.aliases, GRAPH_CAP.alias, GRAPH_CAP.aliases).filter((alias) => normalizeEntityName(alias) !== normalizeEntityName(name));
+        // ── 本体准入(v0.26.57):类型×名字形态硬规则,与提示词同源 ──
+        if (raw.type === 'concept') {
+            dropped++;
+            continue;
+        } // 概念走独立表分流
+        const pathLike = isPathLike(name);
+        if (raw.type === 'place' && pathLike) {
+            dropped++;
+            continue;
+        } // 路径不是地点
+        if ((raw.type === 'person' || raw.type === 'organization') && !splitQualified(name).qualifier && isRoleName(name)) {
+            dropped++; // 泛称裸节点不落库(带限定名除外)
+            continue;
+        }
+        const aliases = stringsOf(raw?.aliases, GRAPH_CAP.alias, GRAPH_CAP.aliases)
+            .filter((alias) => normalizeEntityName(alias) !== normalizeEntityName(name))
+            .filter(isAliasShaped); // 别名只收写法变体
         const tags = stringsOf(raw?.tags, GRAPH_CAP.tag, GRAPH_CAP.tags);
+        if (raw.type === 'tool' && pathLike)
+            tags.push('路径'); // 路径样工具保留打 tag(@scope/pkg 是真工具)
         const validFrom = textOf(raw?.validFrom, GRAPH_CAP.date) || anchorTimeFromRecords(sources.map((id) => recordById.get(id)).filter(Boolean), now);
         const validTo = textOf(raw?.validTo, GRAPH_CAP.date) || undefined;
         const status = clampStatus(raw?.status);
@@ -180,7 +239,11 @@ export function applyGraphProjection(options) {
             ...explicitFacts,
         ];
         for (const fp of factProposals) {
-            const key = textOf(fp?.key, GRAPH_CAP.factKey);
+            const rawKey = textOf(fp?.key, GRAPH_CAP.factKey);
+            const key = normalizeFactKey(rawKey);
+            if (key && !isCanonicalFactKey(key) && !(node.tags ?? []).includes('未规范')) {
+                node.tags = [...(node.tags ?? []), '未规范'];
+            }
             const value = Array.isArray(fp?.value)
                 ? stringsOf(fp.value, GRAPH_CAP.factValue, GRAPH_CAP.factValueItems)
                 : textOf(fp?.value, GRAPH_CAP.factValue);
@@ -226,10 +289,92 @@ export function applyGraphProjection(options) {
         refs.set(ref, node);
         touchedNodes.add(node.id);
     }
+    // ── 概念提案(独立表分流;硬校验与节点同规)──
+    for (const raw of Array.isArray(options.result.concepts) ? options.result.concepts : []) {
+        const ref = textOf(raw?.ref, GRAPH_CAP.ref);
+        const name = textOf(raw?.name, GRAPH_CAP.name);
+        const sources = validSources(raw?.sourceRecordIds);
+        if (!ref || !name || sources.length === 0) {
+            dropped++;
+            continue;
+        }
+        const definition = textOf(raw?.definition, GRAPH_CAP.state);
+        if (!definition) {
+            dropped++;
+            continue;
+        } // 概念必须有定义(空定义 = 没有沉淀价值)
+        const category = clampConceptCategory(raw?.category, name);
+        const aliases = stringsOf(raw?.aliases, GRAPH_CAP.alias, GRAPH_CAP.aliases)
+            .filter((alias) => normalizeEntityName(alias) !== normalizeEntityName(name))
+            .filter(isAliasShaped);
+        const validFrom = textOf(raw?.validFrom, GRAPH_CAP.date) || anchorTimeFromRecords(sources.map((id) => recordById.get(id)).filter(Boolean), now);
+        const status = clampStatus(raw?.status);
+        const confidence = clampConfidence(raw?.confidence);
+        let concept = concepts.find((c) => sameQualified(c, name, aliases));
+        if (!concept) {
+            concept = {
+                id: idFactory('gconcept'),
+                name,
+                category,
+                aliases: [],
+                definition,
+                facts: [],
+                status,
+                confidence,
+                sourceRecordIds: [],
+                families: [],
+                createdAt: now,
+                updatedAt: now,
+            };
+            concepts.push(concept);
+        }
+        concept.aliases = [...new Set([...concept.aliases, ...aliases])];
+        concept.definition = definition;
+        concept.status = status;
+        concept.confidence = confidence;
+        concept.sourceRecordIds = unionSourcesCapped(concept.sourceRecordIds, sources);
+        concept.families = [...new Set([...concept.families, ...familiesOf(sources)])];
+        for (const fp of (Array.isArray(raw.facts) ? raw.facts : [])) {
+            const key = normalizeFactKey(textOf(fp?.key, GRAPH_CAP.factKey));
+            const value = Array.isArray(fp?.value)
+                ? stringsOf(fp.value, GRAPH_CAP.factValue, GRAPH_CAP.factValueItems)
+                : textOf(fp?.value, GRAPH_CAP.factValue);
+            if (!key || (Array.isArray(value) ? value.length === 0 : !value))
+                continue;
+            const factSources = fp && 'sourceRecordIds' in fp && fp.sourceRecordIds !== undefined
+                ? validSources(fp.sourceRecordIds)
+                : sources;
+            if (factSources.length === 0) {
+                dropped++;
+                continue;
+            }
+            for (const old of concept.facts) {
+                if (old.status === 'active' && old.key === key) {
+                    old.status = 'superseded';
+                    if (!old.validTo)
+                        old.validTo = validFrom;
+                    old.updatedAt = now;
+                }
+            }
+            concept.facts.push({
+                id: idFactory('gfact'),
+                key,
+                value,
+                status,
+                validFrom,
+                confidence,
+                sourceRecordIds: unionSourcesCapped([], factSources),
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+        conceptRefs.set(ref, concept);
+        touchedConcepts.add(concept.id);
+    }
     // ── 边提案 ──
     for (const raw of Array.isArray(options.result.edges) ? options.result.edges : []) {
-        const from = refs.get(textOf(raw?.fromRef, GRAPH_CAP.ref));
-        const to = refs.get(textOf(raw?.toRef, GRAPH_CAP.ref));
+        const from = refs.get(textOf(raw?.fromRef, GRAPH_CAP.ref)) ?? conceptRefs.get(textOf(raw?.fromRef, GRAPH_CAP.ref));
+        const to = refs.get(textOf(raw?.toRef, GRAPH_CAP.ref)) ?? conceptRefs.get(textOf(raw?.toRef, GRAPH_CAP.ref));
         const relation = textOf(raw?.relation, GRAPH_CAP.relation);
         const sources = validSources(raw?.sourceRecordIds);
         if (!from || !to || from.id === to.id || !relation || sources.length === 0) {
@@ -276,5 +421,5 @@ export function applyGraphProjection(options) {
             touchedEdges.add(edge.id);
         }
     }
-    return { nodeIds: [...touchedNodes], edgeIds: [...touchedEdges], dropped };
+    return { nodeIds: [...touchedNodes], edgeIds: [...touchedEdges], conceptIds: [...touchedConcepts], dropped };
 }

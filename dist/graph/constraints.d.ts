@@ -6,7 +6,7 @@
  * 的序列化约束推导(L1 content 上限、fact 行渲染宽度、上下文装配预算),不对照
  * 外部实现抄数。
  */
-import type { GraphNodeType, GraphRecordStatus } from './types.js';
+import type { ConceptCategory, GraphNodeType, GraphRecordStatus } from './types.js';
 /** 节点类型词汇表(提示词枚举与 apply 校验共用;超集即丢弃提案)。 */
 export declare const GRAPH_NODE_TYPES: readonly GraphNodeType[];
 export declare const GRAPH_NODE_TYPE_SET: ReadonlySet<string>;
@@ -24,10 +24,16 @@ export declare function isGraphNodeVisible(n: {
 }): boolean;
 /** 因果边四词单源(投影提示词枚举、校验与面板预览加权共用——防两处词表漂移)。 */
 export declare const GRAPH_CAUSAL_RELATIONS: readonly ["导致", "因为", "修复了", "取代"];
+/**
+ * 实体↔概念的专属关系词:实现(实体→概念)/ 引用(通用指向概念)。
+ * 概念的独有价值在"被谁实现"的反向查询,这对词是 graph_concepts 与边表
+ * 之间的连接契约——提示词与校验同源内插。
+ */
+export declare const GRAPH_CONCEPT_RELATIONS: readonly ["实现", "引用"];
 /** 规范中文关系词(提示词给枚举;校验不做白名单——关系是开放词表,只做长度钳制)。
  *  尾部即因果集 GRAPH_CAUSAL_RELATIONS——让"前因后果"跨记录成链;仅当 graph.enabled 时
  *  才参与投影(整块图谱默认关,不碰非图谱用户的蒸馏产物)。 */
-export declare const GRAPH_RELATION_WORDS: readonly ["使用", "属于", "创建", "参与", "贡献", "依赖", "位于", "相关", "导致", "因为", "修复了", "取代"];
+export declare const GRAPH_RELATION_WORDS: readonly ["使用", "属于", "创建", "参与", "贡献", "依赖", "位于", "相关", "实现", "引用", "导致", "因为", "修复了", "取代"];
 /** 提案字段上限(校验侧截断/丢弃与提示词内插共用同一组数字)。 */
 export declare const GRAPH_CAP: {
     /** 提案内临时引用(ref)长度。 */
@@ -63,3 +69,25 @@ export declare const GRAPH_SOURCE_RECORDS_CAP = 128;
  * 与 explorer 的 `agingWeightOf(..., floor=0.2)` 同值——下限即剔除线，低于它已经暗到看不出。
  */
 export declare const GRAPH_AGING_CULL_FLOOR = 0.2;
+/** 概念分类六档(提示词枚举与 apply 归一共用;非法值回落 other,不整条丢弃)。 */
+export declare const GRAPH_CONCEPT_CATEGORIES: readonly ConceptCategory[];
+export declare const GRAPH_CONCEPT_CATEGORY_SET: ReadonlySet<string>;
+/**
+ * 泛称/角色词表(person/organization 建节点的准入黑名单,prompt 与 apply 共用)。
+ *
+ * "用户/助手/AI/开发团队"这类词在任意语境下都指"某类角色"而非"某个实体"——
+ * 裸建节点会让每个会话的"用户"都往同一个黑洞节点上堆 facts(实测"用户"已挂
+ * 158 fact / 12 别名)。带限定符的写法(用户@DSH)不在此列,准入。
+ */
+export declare const GRAPH_ROLE_WORDS: readonly string[];
+export declare const GRAPH_ROLE_SET: ReadonlySet<string>;
+/**
+ * fact key 规范词表(v0.26.57 属性规范化):实测 4819 种 key、72% 只出现 1 次
+ * ——没有体系就无法聚合("查所有负责人"散落在 负责人/角色/职责/状态 四种写法)。
+ * 映射表把同义写法收敛到规范 key;未命中的 key 原样保留(不硬删——概念表
+ * 冷启动阶段宁欠收敛不误删信息)。**规范 key 之外的 key 落库打「未规范」tag**
+ * 供重投影统计收敛率。
+ */
+export declare const GRAPH_FACT_KEYS: readonly string[];
+/** 同义映射(左=模型可能给出的写法,右=规范 key;仅收高频实测变体)。 */
+export declare const GRAPH_FACT_KEY_SYNONYMS: Readonly<Record<string, string>>;

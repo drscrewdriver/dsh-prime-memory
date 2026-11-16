@@ -95,7 +95,7 @@ export interface Projected {
  */
 export function clusterOrder(types: Iterable<string>): string[] {
   const seen = new Set<string>(types);
-  const known = ['person', 'project', 'organization', 'tool', 'place'].filter((t) => seen.has(t));
+  const known = ['person', 'project', 'organization', 'tool', 'place', 'activity', 'concept'].filter((t) => seen.has(t));
   const rest = [...seen].filter((t) => !known.includes(t)).sort((a, b) => hash32(a) - hash32(b));
   return [...known, ...rest];
 }
@@ -109,7 +109,7 @@ export function buildClusterLayout(nodes: readonly LayoutNode[]): Map<string, Ve
 }
 
 // ── 聚类轴参数化（hall 视角）：组键可换，散列种子前缀一个不改 ──────────
-/** 聚类分组轴：type = 既有五类；hall = 生活域八维 + general 兜底。 */
+/** 聚类分组轴：type = 既有七类；hall = 生活域八维 + general 兜底。 */
 export type ClusterAxis = 'type' | 'hall';
 
 /** 节点在给定轴下的组键。hall 轴缺值落 HALL_FALLBACK（不出现 undefined 组键）。 */

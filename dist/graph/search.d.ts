@@ -1,4 +1,4 @@
-import type { GraphEdge, GraphNode, GraphNodeSearchResult } from './types.js';
+import type { GraphConcept, GraphEdge, GraphNode, GraphNodeSearchResult } from './types.js';
 /** 字段权重(检索命中计分;名称最高、关系词最低)。 */
 export declare const GRAPH_FIELD_WEIGHTS: {
     readonly name: 6;
@@ -55,3 +55,29 @@ export declare function graphHitRecordIds(hits: readonly GraphNodeSearchResult[]
  * 候选节点 = active | disputed(superseded/archived 不进检索)。
  */
 export declare function searchGraphNodes(nodes: readonly GraphNode[], edges: readonly GraphEdge[], query: string, limit: number, opts?: GraphAsOfOptions): GraphNodeSearchResult[];
+/**
+ * 概念检索(与节点检索同规的纯函数;graph_concepts 专用)。
+ *
+ * 字段加权:name×6 / aliases×5 / definition×5 / category×3 / facts×4——
+ * 定义承担节点 currentState 的角色(概念没有"当前状态",definition 就是它);
+ * category 比节点 type 权重略高(3 vs 2):"机制/规范/模式"是概念检索最常见
+ * 的意图限定词。relations 不参与(概念的关系价值在"被谁实现"反查,由边表
+ * expandHitRecordIds 的回链承接,不在词法打分里混入邻接噪声)。
+ *
+ * 候选状态闸与节点一致:active | disputed;结果排序 score 降序 → updatedAt
+ * 新→旧 → id 升序(与 searchGraphNodes 同式,RRF 混排时两路行为可预期)。
+ */
+export declare const GRAPH_CONCEPT_FIELD_WEIGHTS: {
+    readonly name: 6;
+    readonly aliases: 5;
+    readonly definition: 5;
+    readonly category: 3;
+    readonly facts: 4;
+};
+export interface GraphConceptSearchResult {
+    concept: GraphConcept;
+    score: number;
+    matchedFields: Array<'name' | 'aliases' | 'definition' | 'category' | 'facts'>;
+    matchReason: string;
+}
+export declare function searchGraphConcepts(concepts: readonly GraphConcept[], query: string, limit: number): GraphConceptSearchResult[];

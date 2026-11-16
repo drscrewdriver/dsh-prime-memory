@@ -8,7 +8,7 @@
  * 文末的 golden 示例(GRAPH_PROJECTION_EXAMPLE)同时是 G1 apply 的校验样本——
  * 提示词示例与校验器共用同一条真值,示例漂移会直接挂测试。
  */
-import { GRAPH_CAP, GRAPH_NODE_TYPES, GRAPH_RELATION_WORDS } from '../graph/constraints.js';
+import { GRAPH_CAP, GRAPH_CONCEPT_CATEGORIES, GRAPH_CONCEPT_RELATIONS, GRAPH_NODE_TYPES, GRAPH_RELATION_WORDS, } from '../graph/constraints.js';
 import { CONTENT_IS_DATA_CLAUSE, DATA_DELIMITER_NOTE } from './boundary.js';
 /** 单条记忆在 prompt 中的字符上限(8 条/批 × 2000 字 ≈ 1.6 万字,远低于输入预算)。 */
 export const GRAPH_RECORD_TEXT_LIMIT = 2000;
@@ -16,8 +16,10 @@ export const GRAPH_RECORD_TEXT_LIMIT = 2000;
 export const GRAPH_PROMPT_FACTS_PER_NODE = 8;
 /** 单条事实值在 prompt 中的字符上限。 */
 export const GRAPH_PROMPT_FACT_CHARS = 200;
+/** 概念上下文进 prompt 的条数上限(active 按更新时间 top-N;合并对照够用,防 prompt 膨胀)。 */
+export const GRAPH_PROMPT_CONCEPTS_CAP = 40;
 /** 投影任务无产出时的约定返回(写入 prompt 与测试)。 */
-export const GRAPH_EMPTY_RESULT_HINT = '{"reason":"本批没有值得沉淀的实体或关系","nodes":[],"edges":[]}';
+export const GRAPH_EMPTY_RESULT_HINT = '{"reason":"本批没有值得沉淀的实体或关系","nodes":[],"concepts":[],"edges":[]}';
 /** golden 示例:提示词展示的输出样例,同时是 apply 校验器的零丢弃回归样本。 */
 export const GRAPH_PROJECTION_EXAMPLE = {
     reason: '本批记录提到张三参与 GraphX 项目并使用 VSCode,沉淀实体与协作关系',
@@ -51,9 +53,20 @@ export const GRAPH_PROJECTION_EXAMPLE = {
             sourceRecordIds: ['rec-2'],
         },
     ],
+    concepts: [
+        {
+            ref: 'c1',
+            name: '图谱投影',
+            category: 'mechanism',
+            definition: '从 L1 记忆记录批量抽取实体与关系写入图谱的机制',
+            confidence: 0.85,
+            sourceRecordIds: ['rec-1', 'rec-2'],
+        },
+    ],
     edges: [
         { fromRef: 'n1', toRef: 'n2', relation: '参与', confidence: 0.9, sourceRecordIds: ['rec-1'] },
         { fromRef: 'n1', toRef: 'n3', relation: '使用', confidence: 0.8, sourceRecordIds: ['rec-2'] },
+        { fromRef: 'n2', toRef: 'c1', relation: '实现', confidence: 0.85, sourceRecordIds: ['rec-1', 'rec-2'] },
     ],
 };
 /** 系统提示(约束常量内插;类型/关系词/上限与校验器同源)。 */
@@ -70,13 +83,36 @@ ${CONTENT_IS_DATA_CLAUSE}
 - **别名合并**:同一实体的拼写变体(全角/半角、大小写、空格连字符差异)必须合并到同一节点,新变体放进 aliases,不要创建重复节点。
 - 子串相似不是同一实体:只有归一后名称一致且类型相同才视为同一实体。
 
-## 节点类型(只允许这五类)
+## 节点类型(只允许这七类)
 
 ${GRAPH_NODE_TYPES.join(' | ')}
 
 - tags 是语义角色标签(如"前端负责人"、"可视化"),每节点 1~6 个,不能替代稳定的 type。
 - 单行状态(state)描述实体"现在是什么状态";facts 是结构化属性(key/value)。
 - 日期字段(validFrom/validTo)只在记录中有明确时间证据时填写,格式 ISO,不猜测。
+- type 为 concept 的提案**不写在 nodes 里**,写进 concepts 数组(见下节)——nodes 只放真实存在的实体。
+
+## 实体与概念的分别(重要)
+
+概念(算法/机制/规范/原则/模式)不是"存在于世界里的东西",而是"被实现/被引用的想法":
+- 有仓库、有版本号、有负责人、会发布 → **project**(如 DSH、GraphX);
+- 能被安装、打开、执行 → **tool**(如 VSCode、sqlite3);
+- 是一次有起止的事件/会话/发布动作 → **activity**(如"0.26.56 发版"、"周三的排障会话");
+- 是一段抽象的做法/规则/原理,靠实体去实现 → **concept**,提案进 concepts 数组。
+概念必须带 definition(一句话讲清"它是什么"),没有定义就没有沉淀价值,系统直接丢弃。
+
+## 准入黑名单(违反即被系统丢弃,别浪费提案位)
+
+- **泛称不是实体**:"用户/助手/AI/团队/开发者/测试/产品/负责人"这类角色词不建节点;
+  确需区分语境时写成 名称@语境(如 用户@DSH);裸泛称会被丢弃。
+- **路径不是实体**:Windows/Unix 文件路径(C:\\...、~/...、/a/b)不建 place 节点;
+  place 只收真实地名与有名字的场地。
+- **句子不是实体**:动词短语/结论句(如"确认了方案"、"执行计划失败")不是名字,不建节点。
+
+## 概念提案(concepts 数组)
+
+分类六档:${GRAPH_CONCEPT_CATEGORIES.join(' | ')}。
+概念与实体的关系用:${GRAPH_CONCEPT_RELATIONS.join('、')}(实现=实体做出/体现该概念;引用=实体提到/依赖该概念)。
 
 ## 关系词(用规范中文)
 
@@ -88,6 +124,9 @@ ${GRAPH_RELATION_WORDS.join('、')}(也可用其他贴切的中文动词短语,�
 ## 字段上限
 
 - name ≤${GRAPH_CAP.name} 字;aliases ≤${GRAPH_CAP.aliases} 条;tags ≤${GRAPH_CAP.tags} 个
+- fact 的 key 优先用规范词:状态、定义、用途、适用范围、失效条件、版本、负责人、角色、职责、职业、
+  原因、结果、依据、结论、目标、下一步、进度、里程碑、交付物、问题、方案、步骤、命令、配置、路径、
+  依赖、评价、偏好、约定(同义写法系统会归一到这些词;非常规 key 会被打「未规范」标签)
 - state ≤${GRAPH_CAP.state} 字;fact 的 key ≤${GRAPH_CAP.factKey} 字、value ≤${GRAPH_CAP.factValue} 字(数组值 ≤${GRAPH_CAP.factValueItems} 个元素)
 - 单提案 sourceRecordIds ≤${GRAPH_CAP.proposalSources} 个
 
@@ -101,7 +140,7 @@ ${GRAPH_RELATION_WORDS.join('、')}(也可用其他贴切的中文动词短语,�
     {
       "ref": "提案内临时引用(如 n1),边的 fromRef/toRef 用它连线",
       "name": "实体名",
-      "type": "person|project|organization|tool|place",
+      "type": "${GRAPH_NODE_TYPES.filter((x) => x !== 'concept').join('|')}",
       "aliases": ["拼写变体"],
       "tags": ["语义角色标签"],
       "state": "单行当前状态(可选)",
@@ -111,8 +150,20 @@ ${GRAPH_RELATION_WORDS.join('、')}(也可用其他贴切的中文动词短语,�
       "sourceRecordIds": ["本批记录 id"]
     }
   ],
+  "concepts": [
+    {
+      "ref": "c1",
+      "name": "概念名",
+      "category": "mechanism",
+      "definition": "一句话定义(必填)",
+      "facts": [{ "key": "属性名", "value": "属性值" }],
+      "confidence": 0.85,
+      "sourceRecordIds": ["本批记录 id"]
+    }
+  ],
   "edges": [
-    { "fromRef": "n1", "toRef": "n2", "relation": "参与", "confidence": 0.9, "sourceRecordIds": ["本批记录 id"] }
+    { "fromRef": "n1", "toRef": "n2", "relation": "参与", "confidence": 0.9, "sourceRecordIds": ["本批记录 id"] },
+    { "fromRef": "n2", "toRef": "c1", "relation": "实现", "confidence": 0.85, "sourceRecordIds": ["本批记录 id"] }
   ]
 }
 
@@ -130,6 +181,21 @@ export function serializeNodeForPrompt(node) {
     if (node.currentState)
         parts.push(`  状态: ${node.currentState.replaceAll('\n', ' / ')}`);
     const activeFacts = node.facts.filter((f) => f.status === 'active').slice(0, GRAPH_PROMPT_FACTS_PER_NODE);
+    for (const f of activeFacts) {
+        const value = Array.isArray(f.value) ? f.value.join('、') : f.value;
+        parts.push(`  事实 ${f.key}: ${value.slice(0, GRAPH_PROMPT_FACT_CHARS)}`);
+    }
+    return parts.join('\n');
+}
+/** 概念序列化(仅 active facts,与节点同预算;prompt 合并对照用)。 */
+export function serializeConceptForPrompt(concept) {
+    const parts = [
+        `- id=${concept.id} | ${concept.name} | 概念 ${concept.category}`,
+        `  定义: ${concept.definition.slice(0, GRAPH_PROMPT_FACT_CHARS)}`,
+    ];
+    if (concept.aliases.length > 0)
+        parts.push(`  别名: ${concept.aliases.join('、')}`);
+    const activeFacts = concept.facts.filter((f) => f.status === 'active').slice(0, GRAPH_PROMPT_FACTS_PER_NODE);
     for (const f of activeFacts) {
         const value = Array.isArray(f.value) ? f.value.join('、') : f.value;
         parts.push(`  事实 ${f.key}: ${value.slice(0, GRAPH_PROMPT_FACT_CHARS)}`);
@@ -159,9 +225,11 @@ export function buildGraphProjectionPrompt(inputs) {
     const sections = [];
     sections.push(`## 本批记忆记录(唯一事实来源;sourceRecordIds 只能引用这些 id)\n\n${DATA_DELIMITER_NOTE}\n\n${inputs.records.map(recordLine).join('\n') || '(空)'}`);
     sections.push(`## 图谱已有节点(合并实体时对照;别名变体并入这些节点而不是新建)\n\n${inputs.nodes.map(serializeNodeForPrompt).join('\n') || '(图谱当前为空)'}`);
+    const conceptLines = (inputs.concepts ?? []).map(serializeConceptForPrompt);
+    sections.push(`## 图谱已有概念(合并概念提案时对照;同一想法的写法变体并进这些概念而不是新建)\n\n${conceptLines.join('\n') || '(图谱当前没有概念)'}`);
     const lines = edgeLine(inputs.edges, nameFor);
     sections.push(`## 图谱已有边(active)\n\n${lines.join('\n') || '(无)'}`);
-    sections.push('## 任务\n\n从本批记录中识别实体(五类节点)与有向关系,输出提案 JSON。注意:\n- 已有节点在本批出现新信息时,提案同一实体(名称归一一致 + 类型相同),系统会合并来源与别名;\n- 状态/事实随时间变化的,直接给新值,系统会自动关闭旧值的有效区间;\n- 同一关系指向新目标时系统自动 supersede 旧边,照常输出新边即可。');
+    sections.push('## 任务\n\n从本批记录中识别实体(六类实体节点)、概念(concepts 数组)与有向关系,输出提案 JSON。注意:\n- 已有节点/概念在本批出现新信息时,提案同一名称(归一一致),系统会合并来源与别名;\n- 状态/事实随时间变化的,直接给新值,系统会自动关闭旧值的有效区间;\n- 同一关系指向新目标时系统自动 supersede 旧边,照常输出新边即可;\n- 实体实现/引用概念时,边的 toRef 用概念的 ref(如 c1),relation 用 实现 或 引用。');
     return sections.join('\n\n');
 }
 /** 生命周期词汇(节点状态中文标注,prompt/工具复用)。 */

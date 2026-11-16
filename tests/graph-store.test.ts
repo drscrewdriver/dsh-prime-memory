@@ -82,7 +82,7 @@ describe('GraphStore:独立降级 no-op', () => {
     const gs = new GraphStore();
     gs.init(raw);
     expect(gs.ready).toBe(false);
-    expect(gs.loadGraph()).toEqual({ nodes: [], edges: [] });
+    expect(gs.loadGraph()).toEqual({ nodes: [], edges: [], concepts: [] });
     expect(gs.getNode('n1')).toBeNull();
     expect(gs.edgesOf('n1')).toEqual([]);
     expect(gs.searchNodes('张三', 5)).toEqual([]);

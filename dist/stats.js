@@ -1908,6 +1908,8 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 settings: sanitizeSettings(s ?? {
                     enabled: true, capture: true, distill: true, recall: true,
                     toolRoom: true, toolGraph: true, toolRuminate: true, toolConflict: true, toolMutate: true, toolSkills: true,
+                    // 默认值与 settings.ts 的 DEFAULT_LIVE 同向:管理组/旧名组默认封印(false)。
+                    toolGraphAdmin: false, toolLegacy: false,
                     reasoningEffort: '', distillProvider: '', distillModel: '', distillChain: [],
                     distillBudgets: { extract: 0, dedup: 0, l2: 0, l3: 0, graph: 0 }, distillMaxInputChars: 0,
                     distillTimeoutMs: 0,
@@ -1976,7 +1978,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const patch = (payload ?? {});
             const clean = {};
             // 布尔开关组:memoryMutate(高权限写删门)与主开关同列;conflictFreeze(§C 人工冲突裁决)
-            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'explorerEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills']) {
+            for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'explorerEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills', 'toolGraphAdmin', 'toolLegacy']) {
                 if (typeof patch[key] === 'boolean')
                     clean[key] = patch[key];
             }

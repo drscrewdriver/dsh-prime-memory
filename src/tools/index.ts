@@ -152,6 +152,10 @@ export function registerMemoryTools(
       case 'ruminate': return snap.toolRuminate === false;
       case 'conflict': return snap.toolConflict === false;
       case 'mutate': return snap.toolMutate === false;
+      // v0.26.57 工具面精简:管理组与旧名兼容组**默认封印**——与其他组的 opt-out 极性相反,
+      // 显式 true 才注册(见 settings.normalizeLive 与 config 的 .default(false))。
+      case 'graphAdmin': return snap.toolGraphAdmin !== true;
+      case 'legacy': return snap.toolLegacy !== true;
       case 'skills': return !skillsFeatureOn() || snap.toolSkills === false;
       default: return false;
     }
@@ -816,33 +820,16 @@ export function registerMemoryTools(
     rewritten: { type: 'boolean', description: '是否已被后续条目改写/取代' },
   } as const;
 
-  // memory_add:显式"记得X"直接落库一条 L1 记忆(绕过抽取管线,需高权限)。
-  reg('mutate', () => ctx.tools.register(
-    defineTool({
-      name: 'memory_add',
-      description:
-        '直接写入一条结构化记忆(L1)。仅当用户显式要求"记住/记下 X"时用;需高权限模式开启。内容须是待记忆的事实/偏好/任务/规则,不应包含对话过程。',
-      parameters: {
-        content: { type: 'string', required: true, description: '要记忆的完整内容(一句话事实,语义完整)' },
-        ...writeFields,
-        scene: {
-          type: 'string',
-          description: '归属场景名(缺省 __manual__;导入外部记忆建议填"外部导入/<来源>")',
-        },
-        priority: { type: 'number', description: '优先级 0-100(缺省 80)' },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            notice: { type: 'string' },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value) => [{ type: 'text', text: value.notice ?? ('已记录记忆 ' + (value.id ?? '')) }],
-      },
-      execute: async (args, exec) => {
+  // ── 写侧/反刍的 execute 主体抽成 handler(v0.26.57 工具面精简)──
+  // 新旧入口**逐字共用同一实现**(memoryMutate 高权限门仍在各 handler 内部生效),
+  // 合并只收敛注册面,不改行为。返回 any:handler 各有具名响应类型,
+  // 而 defineTool 的 execute 只要求可 JSON 序列化,窄化反而丢精度。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type Handler = (args: Record<string, any>, exec?: any) => Promise<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type VoidHandler = () => Promise<any>;
+  const writeHandlers: Record<'add' | 'import' | 'delete' | 'update', Handler> = {
+    add: async (args, exec) => {
         if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
         const content = String(args.content ?? '').trim();
         if (!content) return { notice: 'content 为空,未写入' };
@@ -858,77 +845,8 @@ export function registerMemoryTools(
         logger.info(
           `[memory] 高权限写入记忆(${record.type}${record.metadata?.hall ? '/' + String(record.metadata.hall) : ''},时间轴 ${record.persistence ?? '?'}):${record.content.slice(0, 120)}`,
         );
-        return { id: record.id };
-      },
-    }),
-  ));
-
-  // memory_import:批量写入(工具刷写通道——外部记忆包导入/迁移,免逐条调用)。
-  reg('mutate', () => ctx.tools.register(
-    defineTool({
-      name: 'memory_import',
-      description:
-        '批量写入多条记忆(L1)。用于把已整理好的外部记忆(其他 AI 工具导出的记忆包)一次性导入;需高权限模式开启。去重与冲突判定由调用方先行完成(见 memport Skill):本工具只做结构校验与批内重复拦截,不替调用方裁决语义冲突。单次上限 200 条。',
-      parameters: {
-        records: {
-          type: 'array',
-          required: true,
-          description: '待写入的记录数组(content 必填,其余字段语义同 memory_add)',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              content: {
-                type: 'string',
-                required: true,
-                description: '要记忆的完整内容(一句话事实,语义完整)',
-              },
-              ...writeFields,
-              priority: { type: 'number', description: '优先级 0-100(缺省 80)' },
-              dedupe_key: {
-                type: 'string',
-                description: '可选稳定身份(外部包内该条的稳定 id);与顶层 source_id 组合算幂等键,缺省用内容规范化哈希',
-              },
-            },
-          },
-        },
-        scene: {
-          type: 'string',
-          description: `归属场景名(缺省 ${DEFAULT_IMPORT_SCENE};建议用"${DEFAULT_IMPORT_SCENE}/<来源>")`,
-        },
-        source_id: {
-          type: 'string',
-          description:
-            '来源标识(如 "workbuddy"/"claude-code"/外部包名);非空时启用幂等——同一来源重复导入相同 dedupe_key/内容会被跳过并计入 deduped',
-        },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          properties: {
-            written: { type: 'number' },
-            deduped: { type: 'number' },
-            ids: { type: 'array', items: { type: 'string' } },
-            skipped: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  index: { type: 'number' },
-                  reason: { type: 'string' },
-                },
-                additionalProperties: false,
-              },
-            },
-            notice: { type: 'string' },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value) => [
-          { type: 'text', text: value.notice ?? `已导入 ${value.written ?? 0} 条记忆` },
-        ],
-      },
-      execute: async (args, exec) => {
+        return { id: record.id };    },
+    import: async (args, exec) => {
         if (!live.get().memoryMutate) {
           return { written: 0, deduped: 0, ids: [], skipped: [], notice: MUTATE_OFF_NOTICE };
         }
@@ -994,51 +912,8 @@ export function registerMemoryTools(
         logger.info(
           `[memory] 批量导入 ${records.length} 条(幂等跳过 ${deduped} 条,场景 ${scene}${sourceId ? `,来源 ${sourceId}` : ''})`,
         );
-        return { written: records.length, deduped, ids: records.map((r) => r.id), skipped };
-      },
-    }),
-  ));
-
-  // memory_delete:显式"忘了 X"——按语义检索命中后删除(高权限门控)。
-  reg('mutate', () => ctx.tools.register(
-    defineTool({
-      name: 'memory_delete',
-      description:
-        '退场(软删)与查询相关的记忆(L1)。仅当用户显式要求"忘记/删除某条记忆"时用;需高权限模式开启。' +
-        '默认只退场**最贴近的 1 条**;可用 limit 放大(上限 10)。' +
-        '退场是**软删**:记录移出检索面但保留在主表,可在记忆列表恢复,不是物理删除。' +
-        '已知确切 record_id 时应走 ids 参数(精确退场,不做语义匹配)。',
-      parameters: {
-        query: { type: 'string', description: '要退场的记忆描述(自然语言,匹配最贴近的现存记忆);给出 ids 时可省略' },
-        ids: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '确切的 record_id 列表(给了它就不做语义匹配,只退场这些 id;上限同 limit)',
-        },
-        limit: { type: 'number', description: '最多退场条数(默认 1,上限 10)' },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          properties: {
-            deleted: { type: 'number' },
-            ids: { type: 'array', items: { type: 'string' } },
-            notice: { type: 'string' },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value) => [
-          {
-            type: 'text',
-            text:
-              value.notice ??
-              `已退场(软删)${value.deleted ?? 0} 条记忆` +
-                (value.ids && value.ids.length ? `:${value.ids.join('，')}` : '') +
-                '——它们仍在主表,可在记忆列表恢复',
-          },
-        ],
-      },
-      execute: async (args, exec) => {
+        return { written: records.length, deduped, ids: records.map((r) => r.id), skipped };    },
+    delete: async (args, exec) => {
         if (!live.get().memoryMutate) return { deleted: 0, ids: [], notice: MUTATE_OFF_NOTICE };
         const family = familyOfCaller(exec);
         // 默认 1(原为 3):"忘记某条记忆"是一对一的意图,而 limit=3 会顺带退场
@@ -1070,44 +945,8 @@ export function registerMemoryTools(
         const n = stores.l1.retire(ids, { at: new Date().toISOString(), reason: 'manual' });
         logger.info(`[memory] 高权限退场(软删)记忆 ${n} 条(${ids.join('，')})`);
         // 投射文件跟随不在这里点火：`l1.retire()` 是汇流口，钩子在那里（`store/memory-md-sync.ts`）。
-        return { deleted: n, ids };
-      },
-    }),
-  ));
-
-  // memory_update:一等"改一条 L1"工具(graph-write-plane R1/G-update)。
-  //
-  // 形态是"新版本 + 旧版本 supersede 退场",不是物理覆写:JSONL 事实源 append-only,
-  // 旧行经退场汇流口软删(可 restore),退场传播顺带把"只靠旧源支撑"的图谱边标墓碑,
-  // 再对 [旧,新] 强制重投让边跟随——全程复用既有原语,不新造退场通道。
-  reg('mutate', () => ctx.tools.register(
-    defineTool({
-      name: 'memory_update',
-      description:
-        '修订一条既有记忆(L1):就地产新版本,旧版本自动退场(软删,可在记忆列表恢复),图谱跟随重投。需高权限模式开启。' +
-        '与 memory_add 的区分:改"已知 record_id 的那条"用它;新事实才用 add。不是物理删除——旧行保留。',
-      parameters: {
-        record_id: { type: 'string', required: true, description: '要修订的记忆 record_id(memory_search 返回的 id)' },
-        content: { type: 'string', required: true, description: '修订后的完整内容(一句话事实,语义完整)' },
-        ...writeFields,
-        scene: { type: 'string', description: '归属场景名(缺省沿用旧记录)' },
-        priority: { type: 'number', description: '优先级 0-100(缺省沿用旧记录)' },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', description: '新版本记录 id' },
-            retired_id: { type: 'string', description: '被取代退场的旧 id' },
-            notice: { type: 'string' },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value) => [
-          { type: 'text', text: value.notice ?? `已修订记忆,新版本 ${value.id ?? ''}(旧版 ${value.retired_id ?? ''} 已退场可恢复)` },
-        ],
-      },
-      execute: async (args) => {
+        return { deleted: n, ids };    },
+    update: async (args) => {
         if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
         const oldId = String(args.record_id ?? '').trim();
         const content = String(args.content ?? '').trim();
@@ -1154,8 +993,261 @@ export function registerMemoryTools(
         graphWrite?.enqueueGraph([oldId, newRecord.id]);
         graphWrite?.reprojectGraph([oldId, newRecord.id]);
         logger.info(`[memory] 高权限修订记忆:v${newRecord.version} ${newRecord.id} ← ${oldId}(${newRecord.content.slice(0, 120)})`);
-        return { id: newRecord.id, retired_id: oldId };
+        return { id: newRecord.id, retired_id: oldId };    },
+  };
+
+  // memory_write:写侧四合一(v0.26.57)。四动作经 action 派发进 writeHandlers——
+  // 与 legacy 组旧四件**逐字同一实现**,只收敛注册面:模型默认只见本工具,
+  // 旧名需 live.toolLegacy=true 开回;各动作的参数校验与高权限门全在 handler 内,行为零变化。
+  reg('mutate', () => ctx.tools.register(
+    defineTool({
+      name: 'memory_write',
+      description:
+        '记忆写操作统一入口(L1),按 action 派发:' +
+        'action="add" 直接落库一条(用户显式"记住/记下 X"时用;content 必填);' +
+        'action="update" 修订既有记忆(record_id + content 必填;就地产新版本、旧版自动退场可恢复,图谱跟随重投);' +
+        'action="delete" 退场记忆(query 语义匹配或 ids 精确指定,默认 1 条、上限 10;软删可在记忆列表恢复);' +
+        'action="import" 批量导入外部记忆包(records 数组必填,单次上限 200;去重与冲突判定由调用方先行完成,见 memport Skill)。' +
+        '四个动作均需高权限模式开启。新事实用 add,改已知 record_id 的那条用 update。',
+      parameters: {
+        action: { type: 'string', required: true, description: 'add | update | delete | import' },
+        content: { type: 'string', description: 'add/update:要记忆的完整内容(一句话事实,语义完整)' },
+        record_id: { type: 'string', description: 'update:要修订的 record_id(memory_search 返回的 id)' },
+        scene: { type: 'string', description: 'add/update/import:归属场景名(add 缺省 __manual__;import 缺省"外部导入";update 缺省沿用旧记录)' },
+        priority: { type: 'number', description: 'add/update:优先级 0-100(add 缺省 80;update 缺省沿用旧记录)' },
+        query: { type: 'string', description: 'delete:要退场的记忆描述(自然语言匹配);给出 ids 时可省略' },
+        ids: { type: 'array', items: { type: 'string' }, description: 'delete:确切 record_id 列表(给了就不做语义匹配)' },
+        limit: { type: 'number', description: 'delete:最多退场条数(默认 1,上限 10)' },
+        records: {
+          type: 'array',
+          description: 'import:待写入记录数组(content 必填,其余字段语义同 add)',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              content: { type: 'string', required: true, description: '要记忆的完整内容(一句话事实,语义完整)' },
+              ...writeFields,
+              priority: { type: 'number', description: '优先级 0-100(缺省 80)' },
+              dedupe_key: { type: 'string', description: '可选稳定身份(与 source_id 组合算幂等键;缺省用内容哈希)' },
+            },
+          },
+        },
+        source_id: { type: 'string', description: 'import:来源标识;非空启用幂等(同来源重复导入被跳过)' },
       },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'add/update:新记录 id' },
+            retired_id: { type: 'string', description: 'update:被取代退场的旧 id' },
+            deleted: { type: 'number', description: 'delete:本次退场条数' },
+            written: { type: 'number', description: 'import:写入条数' },
+            deduped: { type: 'number', description: 'import:幂等跳过条数' },
+            ids: { type: 'array', items: { type: 'string' }, description: 'delete/import:涉及的 record_id' },
+            skipped: {
+              type: 'array',
+              description: 'import:被跳过的批内条目(含 index 与 reason)',
+              items: {
+                type: 'object',
+                properties: {
+                  index: { type: 'number' },
+                  reason: { type: 'string' },
+                },
+                additionalProperties: false,
+              },
+            },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: value.notice ?? JSON.stringify(value) }],
+      },
+      execute: async (args, exec) => {
+        const action = String(args.action ?? '').trim().toLowerCase();
+        if (action === 'add') return writeHandlers.add(args, exec);
+        if (action === 'update') return writeHandlers.update(args, exec);
+        if (action === 'delete') return writeHandlers.delete(args, exec);
+        if (action === 'import') return writeHandlers.import(args, exec);
+        return { notice: `未知 action ${JSON.stringify(args.action ?? '')}(应为 add / update / delete / import)` };
+      },
+    }),
+  ));
+
+  // memory_add:显式"记得X"直接落库一条 L1 记忆(绕过抽取管线,需高权限)。
+  reg('legacy', () => ctx.tools.register(
+    defineTool({
+      name: 'memory_add',
+      description:
+        '直接写入一条结构化记忆(L1)。仅当用户显式要求"记住/记下 X"时用;需高权限模式开启。内容须是待记忆的事实/偏好/任务/规则,不应包含对话过程。',
+      parameters: {
+        content: { type: 'string', required: true, description: '要记忆的完整内容(一句话事实,语义完整)' },
+        ...writeFields,
+        scene: {
+          type: 'string',
+          description: '归属场景名(缺省 __manual__;导入外部记忆建议填"外部导入/<来源>")',
+        },
+        priority: { type: 'number', description: '优先级 0-100(缺省 80)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: value.notice ?? ('已记录记忆 ' + (value.id ?? '')) }],
+      },
+      execute: (args, exec) => writeHandlers.add(args, exec),
+    }),
+  ));
+
+  // memory_import:批量写入(工具刷写通道——外部记忆包导入/迁移,免逐条调用)。
+  reg('legacy', () => ctx.tools.register(
+    defineTool({
+      name: 'memory_import',
+      description:
+        '批量写入多条记忆(L1)。用于把已整理好的外部记忆(其他 AI 工具导出的记忆包)一次性导入;需高权限模式开启。去重与冲突判定由调用方先行完成(见 memport Skill):本工具只做结构校验与批内重复拦截,不替调用方裁决语义冲突。单次上限 200 条。',
+      parameters: {
+        records: {
+          type: 'array',
+          required: true,
+          description: '待写入的记录数组(content 必填,其余字段语义同 memory_add)',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              content: {
+                type: 'string',
+                required: true,
+                description: '要记忆的完整内容(一句话事实,语义完整)',
+              },
+              ...writeFields,
+              priority: { type: 'number', description: '优先级 0-100(缺省 80)' },
+              dedupe_key: {
+                type: 'string',
+                description: '可选稳定身份(外部包内该条的稳定 id);与顶层 source_id 组合算幂等键,缺省用内容规范化哈希',
+              },
+            },
+          },
+        },
+        scene: {
+          type: 'string',
+          description: `归属场景名(缺省 ${DEFAULT_IMPORT_SCENE};建议用"${DEFAULT_IMPORT_SCENE}/<来源>")`,
+        },
+        source_id: {
+          type: 'string',
+          description:
+            '来源标识(如 "workbuddy"/"claude-code"/外部包名);非空时启用幂等——同一来源重复导入相同 dedupe_key/内容会被跳过并计入 deduped',
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            written: { type: 'number' },
+            deduped: { type: 'number' },
+            ids: { type: 'array', items: { type: 'string' } },
+            skipped: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  index: { type: 'number' },
+                  reason: { type: 'string' },
+                },
+                additionalProperties: false,
+              },
+            },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          { type: 'text', text: value.notice ?? `已导入 ${value.written ?? 0} 条记忆` },
+        ],
+      },
+      execute: (args, exec) => writeHandlers.import(args, exec),
+    }),
+  ));
+
+  // memory_delete:显式"忘了 X"——按语义检索命中后删除(高权限门控)。
+  reg('legacy', () => ctx.tools.register(
+    defineTool({
+      name: 'memory_delete',
+      description:
+        '退场(软删)与查询相关的记忆(L1)。仅当用户显式要求"忘记/删除某条记忆"时用;需高权限模式开启。' +
+        '默认只退场**最贴近的 1 条**;可用 limit 放大(上限 10)。' +
+        '退场是**软删**:记录移出检索面但保留在主表,可在记忆列表恢复,不是物理删除。' +
+        '已知确切 record_id 时应走 ids 参数(精确退场,不做语义匹配)。',
+      parameters: {
+        query: { type: 'string', description: '要退场的记忆描述(自然语言,匹配最贴近的现存记忆);给出 ids 时可省略' },
+        ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '确切的 record_id 列表(给了它就不做语义匹配,只退场这些 id;上限同 limit)',
+        },
+        limit: { type: 'number', description: '最多退场条数(默认 1,上限 10)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            deleted: { type: 'number' },
+            ids: { type: 'array', items: { type: 'string' } },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          {
+            type: 'text',
+            text:
+              value.notice ??
+              `已退场(软删)${value.deleted ?? 0} 条记忆` +
+                (value.ids && value.ids.length ? `:${value.ids.join('，')}` : '') +
+                '——它们仍在主表,可在记忆列表恢复',
+          },
+        ],
+      },
+      execute: (args, exec) => writeHandlers.delete(args, exec),
+    }),
+  ));
+
+  // memory_update:一等"改一条 L1"工具(graph-write-plane R1/G-update)。
+  //
+  // 形态是"新版本 + 旧版本 supersede 退场",不是物理覆写:JSONL 事实源 append-only,
+  // 旧行经退场汇流口软删(可 restore),退场传播顺带把"只靠旧源支撑"的图谱边标墓碑,
+  // 再对 [旧,新] 强制重投让边跟随——全程复用既有原语,不新造退场通道。
+  reg('legacy', () => ctx.tools.register(
+    defineTool({
+      name: 'memory_update',
+      description:
+        '修订一条既有记忆(L1):就地产新版本,旧版本自动退场(软删,可在记忆列表恢复),图谱跟随重投。需高权限模式开启。' +
+        '与 memory_add 的区分:改"已知 record_id 的那条"用它;新事实才用 add。不是物理删除——旧行保留。',
+      parameters: {
+        record_id: { type: 'string', required: true, description: '要修订的记忆 record_id(memory_search 返回的 id)' },
+        content: { type: 'string', required: true, description: '修订后的完整内容(一句话事实,语义完整)' },
+        ...writeFields,
+        scene: { type: 'string', description: '归属场景名(缺省沿用旧记录)' },
+        priority: { type: 'number', description: '优先级 0-100(缺省沿用旧记录)' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: '新版本记录 id' },
+            retired_id: { type: 'string', description: '被取代退场的旧 id' },
+            notice: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          { type: 'text', text: value.notice ?? `已修订记忆,新版本 ${value.id ?? ''}(旧版 ${value.retired_id ?? ''} 已退场可恢复)` },
+        ],
+      },
+      execute: (args) => writeHandlers.update(args),
     }),
   ));
 
@@ -1285,7 +1377,7 @@ export function registerMemoryTools(
 
   // memory_reproject:强制重投入口(graph-write-plane R3/G-reproject 工具化)。
   // 纠正通道:改完 L1 想让图谱跟随,走"删凭证 + 高优入队",不再需要人肉 SQL。
-  reg('graph', () => ctx.tools.register(
+  reg('graphAdmin', () => ctx.tools.register(
     defineTool({
       name: 'memory_reproject',
       description:
@@ -1348,7 +1440,7 @@ export function registerMemoryTools(
   // 只对它重投。刻意**不**把旧源记录拉进重投批:旧源文本仍描述旧关系,重投会把刚迁移
   // 的边翻回去("内容即真相");要连旧文本一起改,配合 memory_update 逐条修订。
   // 全程无裸 SQL:不新增、也不可能经由本工具绕过投影直写 graph 表(R5)。
-  reg('mutate', () => ctx.tools.register(
+  reg('graphAdmin', () => ctx.tools.register(
     defineTool({
       name: 'memory_migrate_relation',
       description:
@@ -1485,31 +1577,12 @@ export function registerMemoryTools(
   const RUMINATE_UNAVAIL_NOTICE = '反刍未初始化:存储处于降级态,无法反刍。';
   const RUMINATE_RUNNING_NOTICE = '反刍已在进行中,请稍后再试。';
 
-  reg('ruminate', () => ctx.tools.register(
-    defineTool({
-      name: 'memory_ruminate',
-      description:
-        '触发记忆反刍:把未蒸馏的对话缓冲冲刷出来,跑一轮 L1 抽取 → L2 场景整合 → L3 画像更新。与重建不同,不清库不改 L0,仅消化攒而未蒸馏的切片;无缓冲时做轻量 L2/L3 刷新。',
-      parameters: {},
-      output: {
-        schema: {
-          type: 'object',
-          properties: {
-            running: { type: 'boolean' },
-            phase: { type: 'string' },
-            done: { type: 'number' },
-            total: { type: 'number' },
-            recordsBuilt: { type: 'number' },
-            startedAt: { type: 'string' },
-            notice: { type: 'string' },
-          },
-          additionalProperties: false,
-        },
-        render: (_args, value) => [
-          { type: 'text', text: value.notice ?? renderRuminateStatus(value) },
-        ],
-      },
-      execute: async () => {
+  const ruminateHandlers: {
+    run: VoidHandler; cancel: VoidHandler; status: VoidHandler;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dispatch: (action: string) => Promise<any>;
+  } = {
+    run: async () => {
         if (!ruminate) return { notice: RUMINATE_UNAVAIL_NOTICE, running: false, phase: 'idle', done: 0, total: 0, recordsBuilt: 0, startedAt: undefined };
         const s = live.get();
         if (!s.enabled || !s.distill) return { notice: RUMINATE_OFF_NOTICE, running: false, phase: 'idle', done: 0, total: 0, recordsBuilt: 0, startedAt: undefined };
@@ -1527,13 +1600,79 @@ export function registerMemoryTools(
           const msg = err instanceof Error ? err.message : String(err);
           if (msg.includes('已在进行中')) return { notice: RUMINATE_RUNNING_NOTICE, running: true, phase: (err as any).phase ?? 'distilling', done: 0, total: 0, recordsBuilt: 0, startedAt: undefined };
           return { notice: `反刍启动失败: ${msg}`, running: false, phase: 'failed', done: 0, total: 0, recordsBuilt: 0, startedAt: undefined };
-        }
+        }    },
+    cancel: async () => {
+        if (!ruminate) return { notice: RUMINATE_UNAVAIL_NOTICE, phase: 'idle', running: false };
+        try {
+          const result = ruminate.requestCancel();
+          return {
+            notice: result.phase === 'cancelled' ? '反刍已取消' : '取消请求已发送',
+            phase: result.phase,
+            running: result.running,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { notice: msg, phase: 'idle', running: false };
+        }    },
+    status: async () => {
+        if (!ruminate) return { notice: RUMINATE_UNAVAIL_NOTICE, running: false, phase: 'idle', done: 0, total: 0, recordsBuilt: 0, cancelRequested: false, startedAt: undefined, finishedAt: undefined, error: undefined };
+        const result = ruminate.getStatus();
+        return {
+          running: result.running,
+          phase: result.phase,
+          done: result.done,
+          total: result.total,
+          recordsBuilt: result.recordsBuilt,
+          cancelRequested: result.cancelRequested,
+          startedAt: result.startedAt ? new Date(result.startedAt).toISOString() : undefined,
+          finishedAt: result.finishedAt ? new Date(result.finishedAt).toISOString() : undefined,
+          error: result.error ?? undefined,
+        };    },
+    dispatch: async (action: string) => {
+      if (action === 'cancel') return ruminateHandlers.cancel();
+      if (action === 'status') return ruminateHandlers.status();
+      if (action === 'run') return ruminateHandlers.run();
+      return { notice: `未知 action ${JSON.stringify(action)}(应为 run / cancel / status)`, running: false, phase: 'idle', done: 0, total: 0, recordsBuilt: 0 };
+    },
+  };
+
+  reg('ruminate', () => ctx.tools.register(
+    defineTool({
+      name: 'memory_ruminate',
+      description:
+        '记忆反刍统一入口,按 action 派发:action="run"(缺省)触发反刍——把未蒸馏的对话缓冲冲刷出来,跑一轮 L1 抽取 → L2 场景整合 → L3 画像更新;与重建不同,不清库不改 L0,仅消化攒而未蒸馏的切片,无缓冲时做轻量 L2/L3 刷新。' +
+        'action="cancel" 取消进行中的反刍(已蒸馏部分保留);action="status" 查询反刍状态与进度。',
+      parameters: {
+        action: { type: 'string', description: 'run(缺省) | cancel | status' },
       },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            running: { type: 'boolean' },
+            phase: { type: 'string' },
+            done: { type: 'number' },
+            total: { type: 'number' },
+            recordsBuilt: { type: 'number' },
+            startedAt: { type: 'string' },
+            notice: { type: 'string' },
+            // cancel / status 两个 action 的附加键(status 全量,cancel 用 notice/phase/running)
+            cancelRequested: { type: 'boolean' },
+            finishedAt: { type: 'string' },
+            error: { type: 'string' },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          { type: 'text', text: value.notice ?? renderRuminateStatus(value) },
+        ],
+      },
+      execute: (args) => ruminateHandlers.dispatch(String(args.action ?? 'run')),
     }),
   ));
 
   // ── 取消反刍(按需取消正在进行的反刍) ──
-  reg('ruminate', () => ctx.tools.register(
+  reg('legacy', () => ctx.tools.register(
     defineTool({
       name: 'memory_ruminate_cancel',
       description:
@@ -1551,20 +1690,7 @@ export function registerMemoryTools(
         },
         render: (_args, value) => [{ type: 'text', text: value.notice ?? `反刍已取消(当前阶段:${value.phase})` }],
       },
-      execute: async () => {
-        if (!ruminate) return { notice: RUMINATE_UNAVAIL_NOTICE, phase: 'idle', running: false };
-        try {
-          const result = ruminate.requestCancel();
-          return {
-            notice: result.phase === 'cancelled' ? '反刍已取消' : '取消请求已发送',
-            phase: result.phase,
-            running: result.running,
-          };
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { notice: msg, phase: 'idle', running: false };
-        }
-      },
+      execute: () => ruminateHandlers.cancel(),
     }),
   ));
 
@@ -1648,7 +1774,7 @@ export function registerMemoryTools(
     }),
   ));
 
-  reg('ruminate', () => ctx.tools.register(
+  reg('legacy', () => ctx.tools.register(
     defineTool({
       name: 'memory_ruminate_status',
       description:
@@ -1675,21 +1801,7 @@ export function registerMemoryTools(
           { type: 'text', text: value.notice ?? renderRuminateStatus(value) },
         ],
       },
-      execute: async () => {
-        if (!ruminate) return { notice: RUMINATE_UNAVAIL_NOTICE, running: false, phase: 'idle', done: 0, total: 0, recordsBuilt: 0, cancelRequested: false, startedAt: undefined, finishedAt: undefined, error: undefined };
-        const result = ruminate.getStatus();
-        return {
-          running: result.running,
-          phase: result.phase,
-          done: result.done,
-          total: result.total,
-          recordsBuilt: result.recordsBuilt,
-          cancelRequested: result.cancelRequested,
-          startedAt: result.startedAt ? new Date(result.startedAt).toISOString() : undefined,
-          finishedAt: result.finishedAt ? new Date(result.finishedAt).toISOString() : undefined,
-          error: result.error ?? undefined,
-        };
-      },
+      execute: () => ruminateHandlers.status(),
     }),
   ));
 

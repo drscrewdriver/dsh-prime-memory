@@ -53,6 +53,10 @@ export interface MemoryLiveSettings {
     toolRuminate: boolean;
     toolConflict: boolean;
     toolMutate: boolean;
+    /** v0.26.57 图谱管理组:false(默认)= memory_reproject / memory_migrate_relation 不注册 */
+    toolGraphAdmin: boolean;
+    /** v0.26.57 旧名兼容组:false(默认)= memory_add/update/delete/import 等旧入口不注册(已被 memory_write 等吸收) */
+    toolLegacy: boolean;
     /** 技能工具组封印:false = memory_skill_* 从模型工具列表移除（技能功能开启时才相关；功能关时本就零表面积）。 */
     toolSkills: boolean;
     /** L0 捕获(原始对话落盘) */

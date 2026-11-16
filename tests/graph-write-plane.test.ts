@@ -19,7 +19,7 @@ import { PersonaStore } from '../src/store/persona.js';
 import { SessionModeStore } from '../src/store/session-modes.js';
 import { isRetired, readSupersedeMarker } from '../src/store/supersede.js';
 import { GRAPH_PRIORITY_NEW } from '../src/graph/types.js';
-import { writeNodeVectorsAfterComplete, nodeEmbedText } from '../src/pipeline/graph.js';
+import { writeNodeVectorsAfterComplete, writeConceptVectorsAfterComplete, nodeEmbedText, conceptEmbedText } from '../src/pipeline/graph.js';
 import type { GraphProjectionResult } from '../src/graph/types.js';
 import type { LiveSettingsHandle } from '../src/settings.js';
 import type { MemoryLiveSettings } from '../src/contract.js';
@@ -96,6 +96,9 @@ function harness(liveMutate: boolean) {
   const live = {
     enabled: true, capture: true, distill: true, recall: true,
     memoryMutate: liveMutate, toolSkills: true,
+    // v0.26.57 入口合并:旧名注册在兼容组里——本文件测的是**写面接线**(钩子/入队),
+    // 与入口名无关;开回两组沿用原断言(memory_write 走的是逐字同一 handler)。
+    toolLegacy: true, toolGraphAdmin: true,
   } as unknown as MemoryLiveSettings;
   const liveHandle: LiveSettingsHandle = { supported: true, get: () => live, update: async () => {} };
   const modes = new SessionModeStore('/nonexistent', 'auto');
@@ -383,8 +386,9 @@ describe('写面 R6:G-vec 缺陷修(task_6.x)', () => {
     const touched1 = g.complete(claim1!.job.id, {
       reason: '', nodes: [{ ref: 'n0', name: '甲', type: 'person', sourceRecordIds: ['w1'], state: '在测试', status: 'active' }], edges: [],
     }, { now: new Date().toISOString() });
-    expect(touched1.map((n) => n.name)).toEqual(['甲']);
-    expect(await writeNodeVectorsAfterComplete(g, touched1, async (t) => vecFor(t), noopLogger)).toBe(1);
+    expect(touched1.nodes.map((n) => n.name)).toEqual(['甲']);
+    expect(touched1.concepts).toEqual([]);
+    expect(await writeNodeVectorsAfterComplete(g, touched1.nodes, async (t) => vecFor(t), noopLogger)).toBe(1);
 
     // 第二轮新节点 → 行数增长(缺陷修的验收面:不再永远 0 行)
     g.queueGraphProjection(['w2'], GRAPH_PRIORITY_NEW);
@@ -392,7 +396,28 @@ describe('写面 R6:G-vec 缺陷修(task_6.x)', () => {
     const touched2 = g.complete(claim2!.job.id, {
       reason: '', nodes: [{ ref: 'n0', name: '乙', type: 'person', sourceRecordIds: ['w2'], state: '在观察', status: 'active' }], edges: [],
     }, { now: new Date().toISOString() });
-    expect(await writeNodeVectorsAfterComplete(g, touched2, async (t) => vecFor(t), noopLogger)).toBe(1);
+    expect(await writeNodeVectorsAfterComplete(g, touched2.nodes, async (t) => vecFor(t), noopLogger)).toBe(1);
+
+    // task_13:概念随投影写向量(嵌入缝共用,向量表独立)
+    // 注意必须用**未投影过的新记录**:w1/w2 已在 graph_projected_records 里,
+    // 同版本重复入队被去重闸吞掉,claimNext 拿到的是 null。
+    await l1.appendNew([rec('w3', '实体丙的事')]);
+    g.queueGraphProjection(['w3'], GRAPH_PRIORITY_NEW);
+    const claimC = g.claimNext();
+    expect(claimC).not.toBeNull();
+    const touchedC = g.complete(claimC!.job.id, {
+      reason: '',
+      nodes: [],
+      edges: [],
+      concepts: [{ ref: 'c0', name: 'RRF 融合算法', category: 'algorithm', definition: '倒数排名融合的检索重排算法', sourceRecordIds: ['w3'], status: 'active' }],
+    }, { now: new Date().toISOString() });
+    expect(touchedC.concepts.map((c) => c.name)).toEqual(['RRF 融合算法']);
+    expect(await writeConceptVectorsAfterComplete(g, touchedC.concepts, async (t) => vecFor(t), noopLogger)).toBe(1);
+    expect(g.conceptVecReady).toBe(true);
+    const cHits = g.searchConceptsByVector(vecFor('RRF 融合算法 倒数排名融合的检索重排算法'), 10);
+    expect(cHits.length).toBeGreaterThanOrEqual(1);
+    // 概念嵌入形态单源:名+别名+定义
+    expect(conceptEmbedText({ ...touchedC.concepts[0]!, name: 'RRF', aliases: ['倒数排名融合'], definition: '融合算法' })).toBe('RRF 倒数排名融合 融合算法');
 
     // 读路不再空转:向量种子能命中刚写入的两节点
     const hits = g.searchNodesByVector(vecFor('甲 在测试'), 10);
@@ -402,7 +427,7 @@ describe('写面 R6:G-vec 缺陷修(task_6.x)', () => {
     const claim3 = (() => { g.queueGraphProjection(['w1'], GRAPH_PRIORITY_NEW); return g.claimNext(); })();
     if (claim3) {
       const touched3 = g.complete(claim3.job.id, { reason: '', nodes: [], edges: [] }, { now: new Date().toISOString() });
-      expect(touched3.every((n) => n.status === 'active' || n.status === 'disputed')).toBe(true);
+      expect(touched3.nodes.every((n) => n.status === 'active' || n.status === 'disputed')).toBe(true);
     }
     void l1;
   });
@@ -416,6 +441,11 @@ describe('写面 R6:G-vec 缺陷修(task_6.x)', () => {
     expect(touched.length).toBeGreaterThan(0);
     expect(await writeNodeVectorsAfterComplete(g, touched, async (t) => vecFor(t), noopLogger)).toBe(0);
     expect(await writeNodeVectorsAfterComplete(g, touched, undefined, noopLogger)).toBe(0);
+    // 概念路同构降级(conceptVecReady=false → no-op 返 0 不抛)
+    expect(g.conceptVecReady).toBe(false);
+    const concepts = g.loadGraph().concepts;
+    expect(await writeConceptVectorsAfterComplete(g, concepts, async (t) => vecFor(t), noopLogger)).toBe(0);
+    expect(await writeConceptVectorsAfterComplete(g, concepts, undefined, noopLogger)).toBe(0);
     // 嵌入文本形态单源:名+别名+状态串(空字段不进串)
     expect(nodeEmbedText({ ...touched[0], name: '甲', aliases: ['A哥'], currentState: '在职' })).toBe('甲 A哥 在职');
   });

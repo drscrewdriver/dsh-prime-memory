@@ -2,16 +2,16 @@
  * 全图星图的初始布局:type 扇区 seed 坐标(轨③纯函数,无 G6/无 DOM/无契约依赖)。
  *
  * 目的(spec 模块 B/T3-4):
- * - 分组观感——五类实体各占一个扇区,进 Tab 未等物理收敛就先"按组"成团;
+ * - 分组观感——七类实体各占一个扇区,进 Tab 未等物理收敛就先"按组"成团;
  * - 同图同形——坐标只由 id hash 决定(与输入顺序、组内序号无关),
  *   同一张图每次加载开局逐位一致,消除"布局彩票";收敛后的微调交给 G6 物理。
  *
- * 未知 type(理论上生产不出现:apply 校验超集即丢弃)不混入五类扇区,
+ * 未知 type(理论上生产不出现:apply 校验超集即丢弃)不混入七类扇区,
  * 单独占末位扇区,视觉分组不被污染。
  */
 
 /** 扇区顺序 = 存储侧 GraphNodeType 枚举序(types.ts GRAPH_NODE_TYPES,改动需同步)。 */
-const SECTOR_ORDER = ['person', 'project', 'organization', 'tool', 'place'] as const;
+const SECTOR_ORDER = ['person', 'project', 'organization', 'tool', 'place', 'activity', 'concept'] as const;
 
 export interface SeedInput {
   id: string;

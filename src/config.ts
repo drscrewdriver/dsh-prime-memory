@@ -706,6 +706,9 @@ export function liveSettingsSchema(): VolatileRef<MemoryLiveSettings> {
     // 技能工具组封印:false = memory_skill_* 不注册。与功能总开关 skillsEnabled 取 AND——
     // 功能关或本键 false 都不注册；两者都随 volatile 热更。
     toolSkills: Schema.boolean().default(true),
+    // v0.26.57:管理组与旧名兼容组默认 false(= 封印),显式 true 才注册。
+    toolGraphAdmin: Schema.boolean().default(false),
+    toolLegacy: Schema.boolean().default(false),
   });
   // 探测后再标：`Schema.object(...).volatile()` 只在新版 schemastery 上有（格内实测：
   // cordis/schemastery 4.0.4 有、0.1.5-rc.3 解析到的 4.0.2 没有）。直接调用会让**整插件**

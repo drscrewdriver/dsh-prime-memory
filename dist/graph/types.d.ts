@@ -11,7 +11,54 @@
  * 只要求投影作业重跑,不像 l1_records 的 DDL 那样逐字节冻结。
  */
 import type { MemoryFamily, MemoryRecord } from '../types.js';
-export type GraphNodeType = 'person' | 'project' | 'organization' | 'tool' | 'place';
+/**
+ * 实体节点七类(v0.26.57 本体扩充)。
+ *
+ * - person/organization/project/tool/place:有生命周期、可持有【当前状态】的实体;
+ * - activity:有起止时间与产出物的活动(实验/调研/计划/阶段);
+ * - concept:无版本、可被多处实现的概念/知识点(算法/机制/规范/原理/模式)——
+ *   概念不落 graph_nodes,而是投影进独立表 graph_concepts(反向多对多查询模式
+ *   与实体的正向单条查询不同,混表两边索引都差;type 枚举单源仍在此)。
+ */
+export type GraphNodeType = 'person' | 'organization' | 'project' | 'tool' | 'place' | 'activity' | 'concept';
+/** 概念子类(category 六档;词表单源在 constraints.GRAPH_CONCEPT_CATEGORIES)。 */
+export type ConceptCategory = 'algorithm' | 'mechanism' | 'spec' | 'principle' | 'pattern' | 'other';
+/**
+ * 概念(graph_concepts 表行;与 GraphNode 的差异:多 category/definition、
+ * 无 currentState——概念没有现在是什么状态,只有定义说什么)。
+ */
+export interface GraphConcept {
+    id: string;
+    name: string;
+    category: ConceptCategory;
+    aliases: string[];
+    /** 一句话定义(提案缺定义时以 state 兜底,仍空则丢弃)。 */
+    definition: string;
+    facts: GraphFact[];
+    status: GraphRecordStatus;
+    confidence: number;
+    sourceRecordIds: string[];
+    families: MemoryFamily[];
+    createdAt: string;
+    updatedAt: string;
+}
+/** 模型返回的概念提案(ref 语义与节点提案一致;边可以连概念)。 */
+export interface GraphConceptProjection {
+    ref: string;
+    name: string;
+    category?: string;
+    definition?: string;
+    aliases?: string[];
+    facts?: Array<{
+        key: string;
+        value: string | string[];
+        sourceRecordIds?: string[];
+    }>;
+    validFrom?: string;
+    status?: GraphRecordStatus;
+    confidence?: number;
+    sourceRecordIds: string[];
+}
 export type GraphRecordStatus = 'active' | 'superseded' | 'disputed' | 'archived';
 export interface GraphFact {
     id: string;
@@ -91,6 +138,8 @@ export interface GraphProjectionResult {
     reason: string;
     nodes: GraphNodeProjection[];
     edges: GraphEdgeProjection[];
+    /** 概念提案(落独立表 graph_concepts;旧输出形状缺省 = 空)。 */
+    concepts?: GraphConceptProjection[];
 }
 /** 投影作业(持久化状态机 pending → running → completed/failed/dead)。 */
 export interface GraphProjectionJob {
@@ -125,9 +174,11 @@ export interface GraphProjectionContext {
     records: MemoryRecord[];
     existingNodes: GraphNode[];
     existingEdges: GraphEdge[];
+    /** 已有概念(合并对照;装配侧可只给 top-N 控制 prompt 规模)。 */
+    existingConcepts: GraphConcept[];
 }
 /** 投影版本号:提示词/校验语义升级时 +1,旧版本 job 全部作废重投影。 */
-export declare const GRAPH_PROJECTOR_VERSION = 1;
+export declare const GRAPH_PROJECTOR_VERSION = 2;
 /** 单 job 认领的记录数上限(批内上下文规模可控)。 */
 export declare const GRAPH_JOB_BATCH = 8;
 /** 新蒸馏记录的投影优先级(存量补投影 ≤9999,永不倒挂)。 */

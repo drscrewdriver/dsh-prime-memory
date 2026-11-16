@@ -6,10 +6,10 @@
  * 的序列化约束推导(L1 content 上限、fact 行渲染宽度、上下文装配预算),不对照
  * 外部实现抄数。
  */
-import type { GraphNodeType, GraphRecordStatus } from './types.js';
+import type { ConceptCategory, GraphNodeType, GraphRecordStatus } from './types.js';
 
 /** 节点类型词汇表(提示词枚举与 apply 校验共用;超集即丢弃提案)。 */
-export const GRAPH_NODE_TYPES: readonly GraphNodeType[] = ['person', 'project', 'organization', 'tool', 'place'];
+export const GRAPH_NODE_TYPES: readonly GraphNodeType[] = ['person', 'project', 'organization', 'tool', 'place', 'activity', 'concept'];
 export const GRAPH_NODE_TYPE_SET: ReadonlySet<string> = new Set(GRAPH_NODE_TYPES);
 
 /** 记录生命周期四态(节点/fact/边通用)。 */
@@ -29,10 +29,17 @@ export function isGraphNodeVisible(n: { status: GraphRecordStatus }): boolean {
 /** 因果边四词单源(投影提示词枚举、校验与面板预览加权共用——防两处词表漂移)。 */
 export const GRAPH_CAUSAL_RELATIONS = ['导致', '因为', '修复了', '取代'] as const;
 
+/**
+ * 实体↔概念的专属关系词:实现(实体→概念)/ 引用(通用指向概念)。
+ * 概念的独有价值在"被谁实现"的反向查询,这对词是 graph_concepts 与边表
+ * 之间的连接契约——提示词与校验同源内插。
+ */
+export const GRAPH_CONCEPT_RELATIONS = ['实现', '引用'] as const;
+
 /** 规范中文关系词(提示词给枚举;校验不做白名单——关系是开放词表,只做长度钳制)。
  *  尾部即因果集 GRAPH_CAUSAL_RELATIONS——让"前因后果"跨记录成链;仅当 graph.enabled 时
  *  才参与投影(整块图谱默认关,不碰非图谱用户的蒸馏产物)。 */
-export const GRAPH_RELATION_WORDS = ['使用', '属于', '创建', '参与', '贡献', '依赖', '位于', '相关', ...GRAPH_CAUSAL_RELATIONS] as const;
+export const GRAPH_RELATION_WORDS = ['使用', '属于', '创建', '参与', '贡献', '依赖', '位于', '相关', ...GRAPH_CONCEPT_RELATIONS, ...GRAPH_CAUSAL_RELATIONS] as const;
 
 /** 提案字段上限(校验侧截断/丢弃与提示词内插共用同一组数字)。 */
 export const GRAPH_CAP = {
@@ -71,3 +78,49 @@ export const GRAPH_SOURCE_RECORDS_CAP = 128;
  * 与 explorer 的 `agingWeightOf(..., floor=0.2)` 同值——下限即剔除线，低于它已经暗到看不出。
  */
 export const GRAPH_AGING_CULL_FLOOR = 0.2;
+
+/** 概念分类六档(提示词枚举与 apply 归一共用;非法值回落 other,不整条丢弃)。 */
+export const GRAPH_CONCEPT_CATEGORIES: readonly ConceptCategory[] = ['algorithm', 'mechanism', 'spec', 'principle', 'pattern', 'other'];
+export const GRAPH_CONCEPT_CATEGORY_SET: ReadonlySet<string> = new Set(GRAPH_CONCEPT_CATEGORIES);
+
+/**
+ * 泛称/角色词表(person/organization 建节点的准入黑名单,prompt 与 apply 共用)。
+ *
+ * "用户/助手/AI/开发团队"这类词在任意语境下都指"某类角色"而非"某个实体"——
+ * 裸建节点会让每个会话的"用户"都往同一个黑洞节点上堆 facts(实测"用户"已挂
+ * 158 fact / 12 别名)。带限定符的写法(用户@DSH)不在此列,准入。
+ */
+export const GRAPH_ROLE_WORDS: readonly string[] = [
+  '用户', '客户', '对方', '本人', '助手', '助理', '代理', '智能体', '机器人',
+  'AI', 'Agent', 'LLM', '大模型', '模型', '开发团队', '团队', '维护者',
+  '开发者', '工程师', '测试', '产品', '项目经理', '负责人', '执行人',
+  '主导者', '维护方', '当前会话', '当前执行会话', '会话', '全栈开发者',
+  '插件维护者', 'assistant', 'maintainer', 'steward', 'dev maintainer',
+  'chief steward',
+];
+export const GRAPH_ROLE_SET: ReadonlySet<string> = new Set(GRAPH_ROLE_WORDS.map((w) => w.toLowerCase()));
+
+/**
+ * fact key 规范词表(v0.26.57 属性规范化):实测 4819 种 key、72% 只出现 1 次
+ * ——没有体系就无法聚合("查所有负责人"散落在 负责人/角色/职责/状态 四种写法)。
+ * 映射表把同义写法收敛到规范 key;未命中的 key 原样保留(不硬删——概念表
+ * 冷启动阶段宁欠收敛不误删信息)。**规范 key 之外的 key 落库打「未规范」tag**
+ * 供重投影统计收敛率。
+ */
+export const GRAPH_FACT_KEYS: readonly string[] = [
+  '状态', '定义', '用途', '适用范围', '失效条件', '生效条件', '触发条件', '风险',
+  '版本', '负责人', '成员', '角色', '职责', '职业', '雇主', '所在地', '时间',
+  '原因', '结果', '依据', '结论', '目标', '下一步', '进度', '里程碑', '交付物',
+  '问题', '方案', '步骤', '命令', '配置', '路径', '端口', '地址', '域名', '链接',
+  '成本', '性能', '规模', '数量', '依赖', '替代', '竞争', '评价', '偏好', '约定',
+];
+/** 同义映射(左=模型可能给出的写法,右=规范 key;仅收高频实测变体)。 */
+export const GRAPH_FACT_KEY_SYNONYMS: Readonly<Record<string, string>> = {
+  当前状态: '状态', 本批状态: '状态', 运行状态: '状态', 项目状态: '状态', 进展: '进度',
+  用途定位: '用途', 定位: '用途', 作用: '用途', 功能: '用途',
+  适用场景: '适用范围', 适用条件: '适用范围', 边界: '适用范围',
+  触发时机: '触发条件', 前提: '生效条件', 失效场景: '失效条件',
+  负责人角色: '角色', 协作角色: '角色', 会话角色: '角色', 来源角色: '角色',
+  职业背景: '职业', 岗位方向: '职业', 职位: '职业',
+  核心职责: '职责', 研究职责: '职责', 任务职责: '职责',
+};

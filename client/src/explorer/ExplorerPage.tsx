@@ -34,7 +34,7 @@ const DETAIL_MIN = 260;
 const DETAIL_DEFAULT = 380;
 const DETAIL_MAX_RATIO = 0.55;
 
-/** 类型图例（与 2D/3D 同一族令牌五色）：只列当前图里真实出现的类型；
+/** 类型图例（与 2D/3D 同一族令牌七色）：只列当前图里真实出现的类型；
  *  令牌按**全表索引**配（先配后筛），筛掉前面的类型不得让后面的变色。 */
 const LEGEND_TYPES: Array<[string, string, string]> = [
   ['person', '人', '--dsh-mem-chart-1'],
@@ -42,6 +42,8 @@ const LEGEND_TYPES: Array<[string, string, string]> = [
   ['organization', '组织', '--dsh-mem-chart-3'],
   ['tool', '工具', '--dsh-mem-chart-4'],
   ['place', '地点', '--dsh-mem-chart-5'],
+  ['activity', '活动', '--dsh-mem-chart-6'],
+  ['concept', '概念', '--dsh-mem-chart-7'],
 ];
 
 export function ExplorerPage(props: { rpc: RpcFn; onClose?: () => void; canvasHeight?: number }) {

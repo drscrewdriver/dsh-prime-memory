@@ -158,7 +158,9 @@ describe('泵调度优先级', () => {
 describe('提示词防漂移', () => {
   it('系统提示含全部节点类型与关键上限数字(与 constraints 内插)', () => {
     const prompt = getGraphProjectionSystemPrompt();
-    for (const t of ['person', 'project', 'organization', 'tool', 'place']) expect(prompt).toContain(t);
+    for (const t of ['person', 'project', 'organization', 'tool', 'place', 'activity', 'concept']) expect(prompt).toContain(t);
+    // v0.26.57 本体扩容:概念专属关系词与准入条款必须进提示词
+    for (const w of ['实现', '引用', '泛称不是实体', '路径不是实体']) expect(prompt).toContain(w);
     expect(prompt).toContain('160'); // name 上限
     expect(prompt).toContain('20'); // aliases 上限
     expect(prompt).toContain('12'); // tags 上限
@@ -174,18 +176,25 @@ describe('提示词防漂移', () => {
       nodes: [],
       edges: [],
       records,
-      result: { reason: '', nodes: GRAPH_PROJECTION_EXAMPLE.nodes as never, edges: GRAPH_PROJECTION_EXAMPLE.edges as never },
+      concepts: [],
+      result: {
+        reason: '',
+        nodes: GRAPH_PROJECTION_EXAMPLE.nodes as never,
+        concepts: (GRAPH_PROJECTION_EXAMPLE as { concepts?: unknown[] }).concepts as never,
+        edges: GRAPH_PROJECTION_EXAMPLE.edges as never,
+      },
       allowedRecordIds: new Set(['rec-1', 'rec-2']),
       now: '2026-09-06T08:00:00.000Z',
       idFactory: (p) => `${p}-g${seq++}`,
     });
     expect(outcome.dropped).toBe(0);
     expect(outcome.nodeIds).toHaveLength(3);
-    expect(outcome.edgeIds).toHaveLength(2);
+    expect(outcome.conceptIds).toHaveLength(1);
+    expect(outcome.edgeIds).toHaveLength(3);
   });
 
   it('parseProjection:缺数组字段归一为空;完全不可解析的输出抛错转 fail(可重试)', () => {
-    expect(parseProjection('{"reason":"空"}')).toEqual({ reason: '空', nodes: [], edges: [] });
+    expect(parseProjection('{"reason":"空"}')).toEqual({ reason: '空', nodes: [], concepts: [], edges: [] });
     expect(() => parseProjection('not json at all', noopLogger)).toThrow('JSON');
   });
 });
@@ -205,9 +214,13 @@ describe('端到端投影(假 LLM)', () => {
       noopLogger,
     );
     // 落库:3 节点 2 边,零丢弃;job 完成、台账登记
-    const { nodes, edges } = db.graphStore.loadGraph();
+    const { nodes, edges, concepts } = db.graphStore.loadGraph();
     expect(nodes).toHaveLength(3);
-    expect(edges).toHaveLength(2);
+    expect(concepts).toHaveLength(1);
+    expect(edges).toHaveLength(3);
+    expect(concepts[0]!.category).toBe('mechanism');
+    expect(concepts[0]!.definition.length).toBeGreaterThan(0);
+    expect(concepts[0]!.families).toEqual(['chat']);
     const zhang = nodes.find((n) => n.name === '张三')!;
     expect(zhang.families).toEqual(['chat']); // 来源记录族并集
     expect(zhang.currentState).toContain('负责 GraphX');

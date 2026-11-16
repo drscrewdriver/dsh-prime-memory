@@ -31,15 +31,17 @@ import type { GraphFull } from './graph-canvas-data.js';
 /** 绘制态:全图 / 邻域子图（同一画布组件，只差数据与取景）。 */
 type GraphView = 'full' | 'ego';
 
-/** 五类实体色:直接映射既有图表调色板(CostTab 先例),不引入新色值。 */
+/** 七类实体色:直接映射既有图表调色板(CostTab 先例),不引入新色值;兜底移 chart-8。 */
 const TYPE_COLORS: Record<string, string> = {
   person: 'var(--dsh-mem-chart-1)',
   project: 'var(--dsh-mem-chart-2)',
   organization: 'var(--dsh-mem-chart-3)',
   tool: 'var(--dsh-mem-chart-4)',
   place: 'var(--dsh-mem-chart-5)',
+  activity: 'var(--dsh-mem-chart-6)',
+  concept: 'var(--dsh-mem-chart-7)',
 };
-const FALLBACK_COLOR = 'var(--dsh-mem-chart-6)';
+const FALLBACK_COLOR = 'var(--dsh-mem-chart-8)';
 
 /** 两态画布高度：全图给宽景，邻域留出下方关系清单的位置。 */
 const FULL_H = 470;

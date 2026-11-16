@@ -50,15 +50,17 @@ import type { ClusterAxis, DiskStyle, ClusterShape, EightStyle, Projected, Vec3 
 import { HALL_FALLBACK, HALL_ORDER, hallLabel, defaultHallToken, HALL_GALAXY_COLORS, variantOf } from './hall-palette.js';
 import { NButton } from '../ui/primitives.js';
 
-/** type → 既有图表系列令牌（与 GraphCanvas / GraphTab 同源五色，不引入新色值）。 */
+/** type → 既有图表系列令牌（与 GraphCanvas / GraphTab 同源七色，不引入新色值）。 */
 const TYPE_TOKENS: Record<string, string> = {
   person: '--dsh-mem-chart-1',
   project: '--dsh-mem-chart-2',
   organization: '--dsh-mem-chart-3',
   tool: '--dsh-mem-chart-4',
   place: '--dsh-mem-chart-5',
+  activity: '--dsh-mem-chart-6',
+  concept: '--dsh-mem-chart-7',
 };
-const FALLBACK_TOKEN = '--dsh-mem-chart-6';
+const FALLBACK_TOKEN = '--dsh-mem-chart-8';
 const FALLBACK_COLOR = '#8a8f98';
 
 /** CSS 变量 → 实色（与 GraphCanvas 同款：插件自注入的 theme 样式在容器上生效）。 */

@@ -1,9 +1,10 @@
 import type { DatabaseSync } from 'node:sqlite';
+import type { GraphConceptSearchResult } from '../graph/search.js';
 import { buildFullView } from '../graph/preview.js';
 import type { GraphPreviewResult } from '../graph/preview.js';
 import type { RecordLinksResult } from '../graph/record-links.js';
 import type { ExplorerSelection } from '../graph/select.js';
-import type { GraphEdge, GraphNode, GraphNodeSearchResult, GraphProjectionJob, GraphProjectionResult } from '../graph/types.js';
+import type { GraphConcept, GraphEdge, GraphNode, GraphNodeSearchResult, GraphProjectionJob, GraphProjectionResult } from '../graph/types.js';
 import type { MemoryFamily, MemoryLogger, MemoryRecord } from '../types.js';
 /**
  * 图谱**向量路**单条命中。刻意不复用词法路的 `GraphNodeSearchResult`:
@@ -15,6 +16,21 @@ export interface GraphNodeVecHit {
     node: GraphNode;
     score: number;
 }
+/**
+ * complete 的写面产出(投影收尾向量补算的唯一输入)。
+ *
+ * 刻意分两路不合成一个数组:节点与概念是两张表、两套嵌入形态
+ * (节点用 currentState,概念用 definition),合并会让每个调用方重做类型判别。
+ */
+export interface GraphTouched {
+    nodes: GraphNode[];
+    concepts: GraphConcept[];
+}
+/** 概念向量命中(与 GraphNodeVecHit 同理:向量无"命中哪个字段"语义)。 */
+export interface GraphConceptVecHit {
+    concept: GraphConcept;
+    score: number;
+}
 /** claim 的产出:job 元数据 + 本批真实存在的来源记录(已剔除被删者)。 */
 export interface GraphClaim {
     job: GraphProjectionJob;
@@ -23,13 +39,14 @@ export interface GraphClaim {
 /** complete 的注入缝(测试回滚路径 / 确定性断言用)。 */
 export interface CompleteOptions {
     now?: string;
-    idFactory?: (prefix: 'node' | 'edge' | 'gfact') => string;
+    idFactory?: (prefix: 'node' | 'edge' | 'gfact' | 'gconcept') => string;
 }
 export declare class GraphStore {
     private db;
     private logger;
     private stmtInsertNode;
     private stmtInsertEdge;
+    private stmtInsertConcept;
     /**
      * §F 图谱节点向量列（vec0）。**结构性可选**：维度未定或 vec0 不可用时这三个
      * 语句就是 `undefined`，该路整体 no-op——既不影响图谱的词法检索，也不向上抛。
@@ -37,6 +54,9 @@ export declare class GraphStore {
     private stmtInsertNodeVec?;
     private stmtDeleteNodeVec?;
     private stmtSearchNodeVec?;
+    private stmtInsertConceptVec?;
+    private stmtDeleteConceptVec?;
+    private stmtSearchConceptVec?;
     /** init 是否就绪(未就绪 = 图谱域整体 no-op,不抛错不传染)。 */
     get ready(): boolean;
     /**
@@ -74,6 +94,24 @@ export declare class GraphStore {
     /** 删除节点向量(节点删/合并时用)。未就绪 no-op。 */
     deleteNodeVectors(nodeIds: readonly string[]): void;
     /**
+     * §F 概念向量列(task_13):与 `graph_node_vec` 同模式(vec0 + cosine)、同维度探测、
+     * 同一内层 try/catch 纪律——概念向量列失败绝不能把图谱域整体拖停。
+     * 表名 graph_concept_vec,主键 concept_id。
+     */
+    private prepareConceptVec;
+    /** 概念向量路是否可用(未就绪时下列方法自身 no-op,调用方无需分支)。 */
+    get conceptVecReady(): boolean;
+    /** 写入/覆盖概念向量(先删后插;未就绪/零向量/单条失败静默跳过,绝不抛)。 */
+    upsertConceptVectors(rows: ReadonlyArray<{
+        conceptId: string;
+        embedding: Float32Array;
+        updatedAt?: string;
+    }>): number;
+    /** 删除概念向量(概念删/归档时用;未就绪 no-op)。 */
+    deleteConceptVectors(conceptIds: readonly string[]): void;
+    /** 向量检索概念(cosine 距离升序,score = 1 - distance;未就绪返回空数组)。 */
+    searchConceptsByVector(embedding: Float32Array, topK: number): GraphConceptVecHit[];
+    /**
      * 向量检索节点(按 cosine 距离升序,score = 1 - distance,与 L1 向量路同口径)。
      * 未就绪返回**空数组**——调用方无需判断 `nodeVecReady`,降级是内建的。
      */
@@ -88,9 +126,16 @@ export declare class GraphStore {
     loadGraph(): {
         nodes: GraphNode[];
         edges: GraphEdge[];
+        concepts: GraphConcept[];
     };
     /** 事务内的全图读取(complete 用;调用方负责事务)。 */
     private loadGraphInTx;
+    /** 单概念详情(独立表点查;未就绪/不存在返 null)。 */
+    getConcept(id: string): GraphConcept | null;
+    /** 列出 active 概念(可按 category 过滤;prompt 装配与面板用)。 */
+    listConcepts(category?: string, limit?: number): GraphConcept[];
+    /** 概念词法检索(纯函数 searchGraphConcepts 的存储缝;降级返空不抛)。 */
+    searchConcepts(query: string, limit?: number): GraphConceptSearchResult[];
     /** 事务内按 id 装载 L1 记录(claim 与 complete 共用;调用方负责事务)。 */
     private loadRecordsInTx;
     /** 单节点详情(expand 用;不存在/未就绪返回 null)。 */
@@ -269,7 +314,7 @@ export declare class GraphStore {
      * 返回 touched 节点中 active/disputed 的那批(写面向量收尾的输入,G-vec 缺陷修):
      * 调用方只关心"哪些节点刚被写活",向量补算失败不回滚投影——返回值不参与控制流。
      */
-    complete(jobId: string, result: GraphProjectionResult, opts?: CompleteOptions): GraphNode[];
+    complete(jobId: string, result: GraphProjectionResult, opts?: CompleteOptions): GraphTouched;
     /**
      * 投影失败收尾:attempts 已在 claim 时 +1——根据错误分类选不同封顶:
      * - 永久错误(校验/解析):attempts >= GRAPH_JOB_MAX_ATTEMPTS(3) → dead

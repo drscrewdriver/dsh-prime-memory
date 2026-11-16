@@ -6,7 +6,7 @@
  * ② 顺序无关——坐标只由 id hash 决定,shuffle 输入后每个 id 坐标不变;
  * ③ 扇区归属——节点极角落在其 type 扇区的中段 [0.12,0.88] 分位(组间留白生效);
  * ④ 半径钳制——全部落在 [0.35R, 0.95R];
- * ⑤ 未知 type 独占末位扇区(五类扇隙不被污染,且扇区数 5→6);
+ * ⑤ 未知 type 独占末位扇区(七类扇隙不被污染,且扇区数 7→8);
  * ⑥ 空输入 → 空数组;worldRadius 按短边 0.85。
  */
 import { describe, expect, it } from 'vitest';
@@ -25,7 +25,7 @@ const NODES: SeedInput[] = [
   { id: 'g', type: 'person' },
 ];
 
-const SECTOR_ORDER = ['person', 'project', 'organization', 'tool', 'place'];
+const SECTOR_ORDER = ['person', 'project', 'organization', 'tool', 'place', 'activity', 'concept'];
 
 /** 极角归一到 [0,2π),0 = 扇区起轴(正上方 −π/2)。 */
 function sectorFraction(x: number, y: number, sectors: number): { idx: number; frac: number } {
@@ -65,26 +65,27 @@ describe('seedPositions —— 确定性与形状', () => {
 });
 
 describe('seedPositions —— 分组语义', () => {
-  it('五类节点各归其扇区,且落扇区中段 [0.12,0.88](组间留白)', () => {
+  it('五类节点各归其扇区,且落扇区中段 [0.12,0.88](组间留白;activity/concept 已转正为第六/七扇区)', () => {
     for (const p of seedPositions(NODES, W, H)) {
       const type = NODES.find((n) => n.id === p.id)!.type;
-      const { idx, frac } = sectorFraction(p.x, p.y, 5);
+      const { idx, frac } = sectorFraction(p.x, p.y, 7);
       expect(SECTOR_ORDER[idx]).toBe(type);
       expect(frac).toBeGreaterThanOrEqual(0.12 - 1e-9);
       expect(frac).toBeLessThanOrEqual(0.88 + 1e-9);
     }
   });
 
-  it('未知 type 走独立末位扇区:扇区数变 6,五类扇区归属不受污染', () => {
-    const nodes: SeedInput[] = [...NODES, { id: 'mystery', type: 'concept' }];
+  it('未知 type 走独立末位扇区:扇区数变 8,七类扇区归属不受污染', () => {
+    // activity/concept 在 v0.26.57 转正为第六/七扇区——未知样本必须用**真的**未知名
+    const nodes: SeedInput[] = [...NODES, { id: 'act', type: 'activity' }, { id: 'con', type: 'concept' }, { id: 'mystery', type: 'widget' }];
     const pts = seedPositions(nodes, W, H);
     const m = pts.find((p) => p.id === 'mystery')!;
-    expect(sectorFraction(m.x, m.y, 6).idx).toBe(5); // 末位专属扇区
-    // 同时五类节点在 6 扇区口径下仍各归其位(扇区数变化只影响角度,不影响"同类同扇区"的相对事实)
+    expect(sectorFraction(m.x, m.y, 8).idx).toBe(7); // 末位专属扇区
+    // 七类节点在 8 扇区口径下仍各归其位(扇区数变化只影响角度,不影响"同类同扇区"的相对事实)
     for (const p of pts) {
       if (p.id === 'mystery') continue;
       const type = nodes.find((n) => n.id === p.id)!.type;
-      expect(SECTOR_ORDER[sectorFraction(p.x, p.y, 6).idx]).toBe(type);
+      expect(SECTOR_ORDER[sectorFraction(p.x, p.y, 8).idx]).toBe(type);
     }
   });
 
@@ -92,7 +93,7 @@ describe('seedPositions —— 分组语义', () => {
     const pts = seedPositions(NODES, W, H);
     const ga = pts.filter((p) => p.id === 'a' || p.id === 'g');
     expect(ga.length).toBe(2);
-    expect(sectorFraction(ga[0].x, ga[0].y, 5).idx).toBe(sectorFraction(ga[1].x, ga[1].y, 5).idx);
+    expect(sectorFraction(ga[0].x, ga[0].y, 7).idx).toBe(sectorFraction(ga[1].x, ga[1].y, 7).idx);
   });
 });
 

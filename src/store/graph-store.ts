@@ -20,7 +20,8 @@
 import { randomBytes } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { applyGraphProjection } from '../graph/apply.js';
-import { expandHitRecordIds, searchGraphNodes } from '../graph/search.js';
+import { expandHitRecordIds, searchGraphConcepts, searchGraphNodes } from '../graph/search.js';
+import type { GraphConceptSearchResult } from '../graph/search.js';
 import { buildFullView, buildGraphPreview } from '../graph/preview.js';
 import { isWingId } from '../metadata-validators.js';
 import type { GraphPreviewResult, GraphPreviewStats } from '../graph/preview.js';
@@ -39,6 +40,8 @@ import {
   GRAPH_VEC_SEED_CAP,
 } from '../graph/types.js';
 import type {
+  ConceptCategory,
+  GraphConcept,
   GraphEdge,
   GraphNode,
   GraphNodeSearchResult,
@@ -64,6 +67,23 @@ export interface GraphNodeVecHit {
   score: number;
 }
 
+/**
+ * complete 的写面产出(投影收尾向量补算的唯一输入)。
+ *
+ * 刻意分两路不合成一个数组:节点与概念是两张表、两套嵌入形态
+ * (节点用 currentState,概念用 definition),合并会让每个调用方重做类型判别。
+ */
+export interface GraphTouched {
+  nodes: GraphNode[];
+  concepts: GraphConcept[];
+}
+
+/** 概念向量命中(与 GraphNodeVecHit 同理:向量无"命中哪个字段"语义)。 */
+export interface GraphConceptVecHit {
+  concept: GraphConcept;
+  score: number;
+}
+
 /** claim 的产出:job 元数据 + 本批真实存在的来源记录(已剔除被删者)。 */
 export interface GraphClaim {
   job: GraphProjectionJob;
@@ -73,7 +93,7 @@ export interface GraphClaim {
 /** complete 的注入缝(测试回滚路径 / 确定性断言用)。 */
 export interface CompleteOptions {
   now?: string;
-  idFactory?: (prefix: 'node' | 'edge' | 'gfact') => string;
+  idFactory?: (prefix: 'node' | 'edge' | 'gfact' | 'gconcept') => string;
 }
 
 interface JobRow {
@@ -163,6 +183,23 @@ function rowToNode(r: Record<string, unknown>): GraphNode {
   };
 }
 
+function rowToConcept(r: Record<string, unknown>): GraphConcept {
+  return {
+    id: String(r.concept_id),
+    name: String(r.name),
+    category: (r.category as ConceptCategory) ?? 'other',
+    aliases: parseJsonSafe<string[]>(r.aliases_json as string, []),
+    definition: String(r.definition ?? ''),
+    facts: parseJsonSafe<GraphConcept['facts']>(r.facts_json as string, []),
+    status: r.status as GraphConcept['status'],
+    confidence: Number(r.confidence ?? 0.8),
+    sourceRecordIds: parseJsonSafe<string[]>(r.source_record_ids_json as string, []),
+    families: parseJsonSafe<MemoryFamily[]>(r.families_json as string, []),
+    createdAt: String(r.created_time ?? ''),
+    updatedAt: String(r.updated_time ?? ''),
+  };
+}
+
 function rowToEdge(r: Record<string, unknown>): GraphEdge {
   return {
     id: String(r.edge_id),
@@ -206,6 +243,7 @@ export class GraphStore {
   private logger: MemoryLogger | undefined;
   private stmtInsertNode!: ReturnType<DatabaseSync['prepare']>;
   private stmtInsertEdge!: ReturnType<DatabaseSync['prepare']>;
+  private stmtInsertConcept!: ReturnType<DatabaseSync['prepare']>;
   /**
    * §F 图谱节点向量列（vec0）。**结构性可选**：维度未定或 vec0 不可用时这三个
    * 语句就是 `undefined`，该路整体 no-op——既不影响图谱的词法检索，也不向上抛。
@@ -213,6 +251,11 @@ export class GraphStore {
   private stmtInsertNodeVec?: ReturnType<DatabaseSync['prepare']>;
   private stmtDeleteNodeVec?: ReturnType<DatabaseSync['prepare']>;
   private stmtSearchNodeVec?: ReturnType<DatabaseSync['prepare']>;
+  // 概念向量三件套(task_13):与节点向量**同模式不同表**——嵌入形态不同
+  // (definition 面),共表会让两侧检索互相污染。
+  private stmtInsertConceptVec?: ReturnType<DatabaseSync['prepare']>;
+  private stmtDeleteConceptVec?: ReturnType<DatabaseSync['prepare']>;
+  private stmtSearchConceptVec?: ReturnType<DatabaseSync['prepare']>;
 
   /** init 是否就绪(未就绪 = 图谱域整体 no-op,不抛错不传染)。 */
   get ready(): boolean {
@@ -284,6 +327,21 @@ export class GraphStore {
           projector_version INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_graph_projected_version ON graph_projected_records(projector_version);
+        CREATE TABLE IF NOT EXISTS graph_concepts (
+          concept_id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT 'other',
+          aliases_json TEXT NOT NULL DEFAULT '[]',
+          definition TEXT NOT NULL DEFAULT '',
+          facts_json TEXT NOT NULL DEFAULT '[]',
+          status TEXT NOT NULL DEFAULT 'active',
+          confidence REAL NOT NULL DEFAULT 0.8,
+          source_record_ids_json TEXT NOT NULL DEFAULT '[]',
+          families_json TEXT NOT NULL DEFAULT '[]',
+          created_time TEXT NOT NULL DEFAULT '',
+          updated_time TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_graph_concepts_category ON graph_concepts(category, status);
       `);
       this.stmtInsertNode = db.prepare(`
         INSERT INTO graph_nodes (
@@ -308,9 +366,21 @@ export class GraphStore {
           valid_to=excluded.valid_to, confidence=excluded.confidence,
           source_record_ids_json=excluded.source_record_ids_json, updated_time=excluded.updated_time
       `);
+      this.stmtInsertConcept = db.prepare(`
+        INSERT INTO graph_concepts (
+          concept_id, name, category, aliases_json, definition, facts_json,
+          status, confidence, source_record_ids_json, families_json, created_time, updated_time
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(concept_id) DO UPDATE SET
+          name=excluded.name, category=excluded.category, aliases_json=excluded.aliases_json,
+          definition=excluded.definition, facts_json=excluded.facts_json, status=excluded.status,
+          confidence=excluded.confidence, source_record_ids_json=excluded.source_record_ids_json,
+          families_json=excluded.families_json, updated_time=excluded.updated_time
+      `);
       this.db = db;
       this.prepareNodeVec(db, logger, vec);
-      logger?.info(`${TAG} 图谱表就绪(5 表,projectorVersion=${GRAPH_PROJECTOR_VERSION})`);
+      this.prepareConceptVec(db, logger, vec);
+      logger?.info(`${TAG} 图谱表就绪(6 表,projectorVersion=${GRAPH_PROJECTOR_VERSION})`);
     } catch (err) {
       // 独立降级:图谱域 no-op,不向上抛(强于 costLedger 的冒泡语义——图谱无检索主链路关键)
       this.db = null;
@@ -403,6 +473,99 @@ export class GraphStore {
   }
 
   /**
+   * §F 概念向量列(task_13):与 `graph_node_vec` 同模式(vec0 + cosine)、同维度探测、
+   * 同一内层 try/catch 纪律——概念向量列失败绝不能把图谱域整体拖停。
+   * 表名 graph_concept_vec,主键 concept_id。
+   */
+  private prepareConceptVec(db: DatabaseSync, logger: MemoryLogger | undefined, vec?: { dimensions: number }): void {
+    const dimensions = vec?.dimensions ?? 0;
+    this.stmtInsertConceptVec = undefined;
+    this.stmtDeleteConceptVec = undefined;
+    this.stmtSearchConceptVec = undefined;
+    if (dimensions <= 0) return; // 部署未启用向量:该路结构性不存在
+    try {
+      db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS graph_concept_vec USING vec0(
+          concept_id TEXT PRIMARY KEY,
+          embedding float[${dimensions}] distance_metric=cosine,
+          updated_time TEXT DEFAULT ''
+        )
+      `);
+      this.stmtInsertConceptVec = db.prepare(
+        'INSERT INTO graph_concept_vec (concept_id, embedding, updated_time) VALUES (?, ?, ?)',
+      );
+      this.stmtDeleteConceptVec = db.prepare('DELETE FROM graph_concept_vec WHERE concept_id = ?');
+      this.stmtSearchConceptVec = db.prepare(`
+        SELECT concept_id, distance
+        FROM graph_concept_vec
+        WHERE embedding MATCH ? AND k = ?
+        ORDER BY distance
+      `);
+      logger?.info(`${TAG} 图谱概念向量表就绪(dim=${dimensions})`);
+    } catch (err) {
+      logger?.warn(
+        `${TAG} 图谱概念向量表不可用,概念向量路停用(概念词法检索不受影响): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /** 概念向量路是否可用(未就绪时下列方法自身 no-op,调用方无需分支)。 */
+  get conceptVecReady(): boolean {
+    return this.stmtSearchConceptVec !== undefined;
+  }
+
+  /** 写入/覆盖概念向量(先删后插;未就绪/零向量/单条失败静默跳过,绝不抛)。 */
+  upsertConceptVectors(rows: ReadonlyArray<{ conceptId: string; embedding: Float32Array; updatedAt?: string }>): number {
+    const stmtInsert = this.stmtInsertConceptVec;
+    const stmtDelete = this.stmtDeleteConceptVec;
+    if (!this.db || !stmtInsert || !stmtDelete) return 0;
+    let written = 0;
+    for (const row of rows) {
+      if (isZeroVector(row.embedding)) continue;
+      try {
+        stmtDelete.run(row.conceptId);
+        stmtInsert.run(row.conceptId, vecToBuffer(row.embedding), row.updatedAt ?? '');
+        written++;
+      } catch (err) {
+        this.logger?.warn(`${TAG} 概念向量写入失败(跳过该条): ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    return written;
+  }
+
+  /** 删除概念向量(概念删/归档时用;未就绪 no-op)。 */
+  deleteConceptVectors(conceptIds: readonly string[]): void {
+    const stmtDelete = this.stmtDeleteConceptVec;
+    if (!this.db || !stmtDelete) return;
+    try {
+      for (const id of conceptIds) stmtDelete.run(id);
+    } catch (err) {
+      this.logger?.warn(`${TAG} 概念向量删除失败: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** 向量检索概念(cosine 距离升序,score = 1 - distance;未就绪返回空数组)。 */
+  searchConceptsByVector(embedding: Float32Array, topK: number): GraphConceptVecHit[] {
+    const stmtSearch = this.stmtSearchConceptVec;
+    if (!this.db || !stmtSearch || topK <= 0) return [];
+    try {
+      const rows = stmtSearch.all(vecToBuffer(embedding), topK) as Array<{ concept_id: string; distance: number | null }>;
+      const out: GraphConceptVecHit[] = [];
+      for (const { concept_id, distance } of rows) {
+        if (distance == null || Number.isNaN(distance)) continue;
+        const concept = this.getConcept(concept_id);
+        if (!concept) continue;
+        if (concept.status !== 'active' && concept.status !== 'disputed') continue; // 状态闸,与节点路同口径
+        out.push({ concept, score: 1 - distance });
+      }
+      return out;
+    } catch (err) {
+      this.logger?.warn(`${TAG} 概念向量检索失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
+      return [];
+    }
+  }
+
+  /**
    * 向量检索节点(按 cosine 距离升序,score = 1 - distance,与 L1 向量路同口径)。
    * 未就绪返回**空数组**——调用方无需判断 `nodeVecReady`,降级是内建的。
    */
@@ -452,7 +615,11 @@ export class GraphStore {
   }
 
   /** 事务内的 upsert 体(upsertTouched 与 complete 共用;调用方负责事务)。 */
-  private upsertTouchedInTx(nodes: readonly GraphNode[], edges: readonly GraphEdge[]): void {
+  private upsertTouchedInTx(
+    nodes: readonly GraphNode[],
+    edges: readonly GraphEdge[],
+    concepts: readonly GraphConcept[] = [],
+  ): void {
     const now = new Date().toISOString();
     for (const n of nodes) {
       this.stmtInsertNode.run(
@@ -470,25 +637,72 @@ export class GraphStore {
         JSON.stringify(e.sourceRecordIds), e.createdAt || now, e.updatedAt || now,
       );
     }
+    for (const c of concepts) {
+      this.stmtInsertConcept.run(
+        c.id, c.name, c.category, JSON.stringify(c.aliases), c.definition,
+        JSON.stringify(c.facts), c.status, c.confidence,
+        JSON.stringify(c.sourceRecordIds), JSON.stringify(c.families),
+        c.createdAt || now, c.updatedAt || now,
+      );
+    }
   }
 
   /** 全量读图谱(apply scope 与检索的统一入口;图谱量级为可重建投影,百~千级)。 */
-  loadGraph(): { nodes: GraphNode[]; edges: GraphEdge[] } {
-    if (!this.db) return { nodes: [], edges: [] };
+  loadGraph(): { nodes: GraphNode[]; edges: GraphEdge[]; concepts: GraphConcept[] } {
+    if (!this.db) return { nodes: [], edges: [], concepts: [] };
     try {
       return this.loadGraphInTx();
     } catch (err) {
       this.logger?.warn(`${TAG} 图谱读取失败(返回空): ${err instanceof Error ? err.message : String(err)}`);
-      return { nodes: [], edges: [] };
+      return { nodes: [], edges: [], concepts: [] };
     }
   }
 
   /** 事务内的全图读取(complete 用;调用方负责事务)。 */
-  private loadGraphInTx(): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  private loadGraphInTx(): { nodes: GraphNode[]; edges: GraphEdge[]; concepts: GraphConcept[] } {
     const db = this.db!;
     const nodes = (db.prepare('SELECT * FROM graph_nodes').all() as Array<Record<string, unknown>>).map(rowToNode);
     const edges = (db.prepare('SELECT * FROM graph_edges').all() as Array<Record<string, unknown>>).map(rowToEdge);
-    return { nodes, edges };
+    const concepts = (db.prepare('SELECT * FROM graph_concepts').all() as Array<Record<string, unknown>>).map(rowToConcept);
+    return { nodes, edges, concepts };
+  }
+
+  /** 单概念详情(独立表点查;未就绪/不存在返 null)。 */
+  getConcept(id: string): GraphConcept | null {
+    if (!this.db) return null;
+    try {
+      const row = this.db.prepare('SELECT * FROM graph_concepts WHERE concept_id = ?').get(id) as
+        | Record<string, unknown>
+        | undefined;
+      return row ? rowToConcept(row) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 列出 active 概念(可按 category 过滤;prompt 装配与面板用)。 */
+  listConcepts(category?: string, limit = 200): GraphConcept[] {
+    if (!this.db) return [];
+    try {
+      const rows = (category && category !== 'other'
+        ? this.db.prepare("SELECT * FROM graph_concepts WHERE status = 'active' AND category = ? ORDER BY updated_time DESC LIMIT ?")
+          .all(category, limit)
+        : this.db.prepare("SELECT * FROM graph_concepts WHERE status = 'active' ORDER BY updated_time DESC LIMIT ?")
+          .all(limit)) as Array<Record<string, unknown>>;
+      return rows.map(rowToConcept);
+    } catch {
+      return [];
+    }
+  }
+
+  /** 概念词法检索(纯函数 searchGraphConcepts 的存储缝;降级返空不抛)。 */
+  searchConcepts(query: string, limit = 10): GraphConceptSearchResult[] {
+    if (!this.db) return [];
+    try {
+      return searchGraphConcepts(this.listConcepts(undefined, 2000), query, limit);
+    } catch {
+      return [];
+    }
   }
 
   /** 事务内按 id 装载 L1 记录(claim 与 complete 共用;调用方负责事务)。 */
@@ -916,19 +1130,28 @@ export class GraphStore {
     if (!relation || sourceIds.length === 0) return fail('empty-relation-or-sources');
     try {
       return this.tx(() => {
-        const { nodes, edges } = this.loadGraphInTx();
-        const from = nodes.find((n) => n.id === opts.fromNodeId);
-        const to = nodes.find((n) => n.id === opts.toNodeId);
+        const { nodes, edges, concepts } = this.loadGraphInTx();
+        const fromN = nodes.find((n) => n.id === opts.fromNodeId);
+        const toN = nodes.find((n) => n.id === opts.toNodeId);
+        const fromC = concepts.find((c) => c.id === opts.fromNodeId);
+        const toC = concepts.find((c) => c.id === opts.toNodeId);
+        const from = fromN ?? fromC;
+        const to = toN ?? toC;
         if (!from || !to) return fail('nodes-not-found');
         const records = this.loadRecordsInTx(sourceIds);
         if (records.length === 0) return fail('sources-not-in-l1');
         const now = opts.now ?? new Date().toISOString();
-        const idFactory = (prefix: 'node' | 'edge' | 'gfact') => `${prefix}_${Date.now()}_${randomBytes(3).toString('hex')}`;
+        const idFactory = (prefix: 'node' | 'edge' | 'gfact' | 'gconcept') => `${prefix}_${Date.now()}_${randomBytes(3).toString('hex')}`;
+        // 端点重述:节点提案回述实体(保留其类型);概念端点回述进 concepts(定义原样带回)
         const result: GraphProjectionResult = {
           reason: 'tool-explicit-proposal',
           nodes: [
-            { ref: 'from', name: from.name, type: from.type, sourceRecordIds: sourceIds, status: 'active' },
-            { ref: 'to', name: to.name, type: to.type, sourceRecordIds: sourceIds, status: 'active' },
+            ...(fromN ? [{ ref: 'from', name: fromN.name, type: fromN.type, sourceRecordIds: sourceIds, status: 'active' as const }] : []),
+            ...(toN ? [{ ref: 'to', name: toN.name, type: toN.type, sourceRecordIds: sourceIds, status: 'active' as const }] : []),
+          ],
+          concepts: [
+            ...(fromC ? [{ ref: 'from', name: fromC.name, definition: fromC.definition, sourceRecordIds: sourceIds, status: 'active' as const }] : []),
+            ...(toC ? [{ ref: 'to', name: toC.name, definition: toC.definition, sourceRecordIds: sourceIds, status: 'active' as const }] : []),
           ],
           edges: [{ fromRef: 'from', toRef: 'to', relation, sourceRecordIds: sourceIds, status: 'active' }],
         };
@@ -945,7 +1168,8 @@ export class GraphStore {
         if (outcome.edgeIds.length === 0) return fail('proposal-dropped-by-validator');
         const touchedNodes = nodes.filter((n) => outcome.nodeIds.includes(n.id));
         const touchedEdges = edges.filter((e) => outcome.edgeIds.includes(e.id));
-        this.upsertTouchedInTx(touchedNodes, touchedEdges);
+        const touchedConcepts = concepts.filter((c) => outcome.conceptIds.includes(c.id));
+        this.upsertTouchedInTx(touchedNodes, touchedEdges, touchedConcepts);
         const closedEdgeIds = touchedEdges
           .filter((e) => e.status === 'superseded' && statusBefore.get(e.id) !== 'superseded')
           .map((e) => e.id);
@@ -1060,9 +1284,9 @@ export class GraphStore {
    * 返回 touched 节点中 active/disputed 的那批(写面向量收尾的输入,G-vec 缺陷修):
    * 调用方只关心"哪些节点刚被写活",向量补算失败不回滚投影——返回值不参与控制流。
    */
-  complete(jobId: string, result: GraphProjectionResult, opts?: CompleteOptions): GraphNode[] {
-    if (!this.db) return [];
-    let touchedVecNodes: GraphNode[] = [];
+  complete(jobId: string, result: GraphProjectionResult, opts?: CompleteOptions): GraphTouched {
+    if (!this.db) return { nodes: [], concepts: [] };
+    let touchedVec: GraphTouched = { nodes: [], concepts: [] };
     try {
       const db = this.db;
       const now = opts?.now ?? new Date().toISOString();
@@ -1074,10 +1298,11 @@ export class GraphStore {
         if (row.status !== 'running') return; // 幂等:completed/dead/回收中的重复提交无害跳过
         const wanted = parseJsonSafe<string[]>(row.source_record_ids_json, []);
         const records = this.loadRecordsInTx(wanted);
-        const { nodes, edges } = this.loadGraphInTx();
+        const { nodes, edges, concepts } = this.loadGraphInTx();
         const outcome = applyGraphProjection({
           nodes,
           edges,
+          concepts,
           records,
           result,
           allowedRecordIds: new Set(records.map((r) => r.id)),
@@ -1086,10 +1311,14 @@ export class GraphStore {
         });
         const touchedNodes = nodes.filter((n) => outcome.nodeIds.includes(n.id));
         const touchedEdges = edges.filter((e) => outcome.edgeIds.includes(e.id));
-        this.upsertTouchedInTx(touchedNodes, touchedEdges);
-        // 写面收尾的输入(只递交落库后的 active/disputed 节点):墓碑不需要向量,
-        // 读侧 searchNodesByVector 本就按状态闸过滤陈旧向量行。
-        touchedVecNodes = touchedNodes.filter((n) => n.status === 'active' || n.status === 'disputed');
+        const touchedConcepts = concepts.filter((c) => outcome.conceptIds.includes(c.id));
+        this.upsertTouchedInTx(touchedNodes, touchedEdges, touchedConcepts);
+        // 写面收尾的输入(只递交落库后的 active/disputed 行):墓碑不需要向量,
+        // 读侧向量检索本就按状态闸过滤陈旧向量行。概念与节点同理(task_13)。
+        touchedVec = {
+          nodes: touchedNodes.filter((n) => n.status === 'active' || n.status === 'disputed'),
+          concepts: touchedConcepts.filter((c) => c.status === 'active' || c.status === 'disputed'),
+        };
         db.prepare(`UPDATE graph_projection_jobs SET status = 'completed', error = NULL, updated_time = ? WHERE job_id = ?`).run(now, jobId);
         for (const id of wanted) {
           db.prepare('INSERT OR REPLACE INTO graph_projected_records (record_id, projector_version) VALUES (?, ?)').run(id, GRAPH_PROJECTOR_VERSION);
@@ -1099,14 +1328,14 @@ export class GraphStore {
           this.logger?.warn(`${TAG} 投影校验丢弃 ${outcome.dropped} 条无来源/非法提案(job=${jobId})`);
         }
         this.logger?.info(
-          `${TAG} 投影完成(job=${jobId},来源 ${wanted.length} 条 → 节点 ${touchedNodes.length} / 边 ${touchedEdges.length})`,
+          `${TAG} 投影完成(job=${jobId},来源 ${wanted.length} 条 → 节点 ${touchedNodes.length} / 边 ${touchedEdges.length} / 概念 ${touchedConcepts.length})`,
         );
       }, true);
     } catch (err) {
       // 提交失败:job 仍在 running 态,下次启动 recoverRunning 回收重投
       this.logger?.warn(`${TAG} 投影提交失败(待启动回收重投): ${err instanceof Error ? err.message : String(err)}`);
     }
-    return touchedVecNodes;
+    return touchedVec;
   }
 
   /**
@@ -1232,11 +1461,12 @@ export class GraphStore {
   markSourcesDeleted(deletedIds: readonly string[]): void {
     if (!this.db || deletedIds.length === 0) return;
     try {
-      const { nodes, edges } = this.loadGraph();
+      const { nodes, edges, concepts } = this.loadGraph();
       // 候选来源全集 → L1 存活点查(chunked IN):有任一来源存活即不标
       const sourceIds = new Set<string>();
       for (const n of nodes) for (const id of n.sourceRecordIds) sourceIds.add(id);
       for (const e of edges) for (const id of e.sourceRecordIds) sourceIds.add(id);
+      for (const c of concepts) for (const id of c.sourceRecordIds) sourceIds.add(id);
       if (sourceIds.size === 0) return;
       const alive = new Set<string>();
       for (const chunk of chunkOf([...sourceIds])) {
@@ -1255,7 +1485,10 @@ export class GraphStore {
       const deadEdges = edges.filter(
         (e) => (e.status === 'active' || e.status === 'disputed') && dead(e.sourceRecordIds),
       );
-      if (deadNodes.length === 0 && deadEdges.length === 0) return;
+      const deadConcepts = concepts.filter(
+        (c) => (c.status === 'active' || c.status === 'disputed') && dead(c.sourceRecordIds),
+      );
+      if (deadNodes.length === 0 && deadEdges.length === 0 && deadConcepts.length === 0) return;
       this.tx(() => {
         for (const n of deadNodes) {
           this.db!.prepare(`UPDATE graph_nodes SET status = 'archived', updated_time = ? WHERE node_id = ?`).run(now, n.id);
@@ -1263,8 +1496,11 @@ export class GraphStore {
         for (const e of deadEdges) {
           this.db!.prepare(`UPDATE graph_edges SET status = 'archived', updated_time = ? WHERE edge_id = ?`).run(now, e.id);
         }
+        for (const c of deadConcepts) {
+          this.db!.prepare(`UPDATE graph_concepts SET status = 'archived', updated_time = ? WHERE concept_id = ?`).run(now, c.id);
+        }
       });
-      this.logger?.info(`${TAG} 删除传播:${deadNodes.length} 节点 / ${deadEdges.length} 边来源已全部删除,标 archived`);
+      this.logger?.info(`${TAG} 删除传播:${deadNodes.length} 节点 / ${deadEdges.length} 边 / ${deadConcepts.length} 概念来源已全部删除,标 archived`);
     } catch (err) {
       this.logger?.warn(`${TAG} 删除传播失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -1291,10 +1527,11 @@ export class GraphStore {
   markSourcesRetired(changedIds: readonly string[]): void {
     if (!this.db || changedIds.length === 0) return;
     try {
-      const { nodes, edges } = this.loadGraph();
+      const { nodes, edges, concepts } = this.loadGraph();
       const sourceIds = new Set<string>();
       for (const n of nodes) for (const id of n.sourceRecordIds) sourceIds.add(id);
       for (const e of edges) for (const id of e.sourceRecordIds) sourceIds.add(id);
+      for (const c of concepts) for (const id of c.sourceRecordIds) sourceIds.add(id);
       if (sourceIds.size === 0) return;
       // 现读 L1 行(含已退场软删行——主表行一直在,差别在 marker);
       // 列形状按 l1SelectCols 同款容缺(独立测试夹具/旧库可能没有时间增强列)。
@@ -1326,9 +1563,16 @@ export class GraphStore {
         ids.length > 0 && ids.every((id) => byId.has(id) && !exited(id));
       const toArchive = nodes.filter((n) => (n.status === 'active' || n.status === 'disputed') && allExited(n.sourceRecordIds));
       const toArchiveEdges = edges.filter((e) => (e.status === 'active' || e.status === 'disputed') && allExited(e.sourceRecordIds));
+      const toArchiveConcepts = concepts.filter((c) => (c.status === 'active' || c.status === 'disputed') && allExited(c.sourceRecordIds));
       const toRevive = nodes.filter((n) => n.status === 'archived' && allRevived(n.sourceRecordIds));
       const toReviveEdges = edges.filter((e) => e.status === 'archived' && allRevived(e.sourceRecordIds));
-      if (toArchive.length === 0 && toArchiveEdges.length === 0 && toRevive.length === 0 && toReviveEdges.length === 0) return;
+      const toReviveConcepts = concepts.filter((c) => c.status === 'archived' && allRevived(c.sourceRecordIds));
+      if (
+        toArchive.length + toArchiveEdges.length + toArchiveConcepts.length +
+          toRevive.length + toReviveEdges.length + toReviveConcepts.length ===
+        0
+      )
+        return;
       const nowIso = new Date(now).toISOString();
       this.tx(() => {
         for (const n of toArchive) {
@@ -1337,16 +1581,22 @@ export class GraphStore {
         for (const e of toArchiveEdges) {
           this.db!.prepare(`UPDATE graph_edges SET status = 'archived', updated_time = ? WHERE edge_id = ?`).run(nowIso, e.id);
         }
+        for (const c of toArchiveConcepts) {
+          this.db!.prepare(`UPDATE graph_concepts SET status = 'archived', updated_time = ? WHERE concept_id = ?`).run(nowIso, c.id);
+        }
         for (const n of toRevive) {
           this.db!.prepare(`UPDATE graph_nodes SET status = 'active', updated_time = ? WHERE node_id = ?`).run(nowIso, n.id);
         }
         for (const e of toReviveEdges) {
           this.db!.prepare(`UPDATE graph_edges SET status = 'active', updated_time = ? WHERE edge_id = ?`).run(nowIso, e.id);
         }
+        for (const c of toReviveConcepts) {
+          this.db!.prepare(`UPDATE graph_concepts SET status = 'active', updated_time = ? WHERE concept_id = ?`).run(nowIso, c.id);
+        }
       });
       this.logger?.info(
-        `${TAG} 退场传播(重算清扫):${toArchive.length + toArchiveEdges.length} 项标 archived,` +
-          `${toRevive.length + toReviveEdges.length} 项复活(触发记录 ${changedIds.length} 条)`,
+        `${TAG} 退场传播(重算清扫):${toArchive.length + toArchiveEdges.length + toArchiveConcepts.length} 项标 archived,` +
+          `${toRevive.length + toReviveEdges.length + toReviveConcepts.length} 项复活(触发记录 ${changedIds.length} 条)`,
       );
     } catch (err) {
       this.logger?.warn(`${TAG} 退场传播失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
@@ -1374,7 +1624,9 @@ export class GraphStore {
     try {
       const hit = new Set(disputedRecordIds);
       const now = new Date().toISOString();
-      const nodes = this.loadGraph().nodes;
+      const graph = this.loadGraph();
+      const nodes = graph.nodes;
+      const concepts = graph.concepts;
       const toMark = nodes.filter(
         (n) => n.status === 'active' && n.sourceRecordIds.some((id) => hit.has(id)),
       );
@@ -1382,7 +1634,15 @@ export class GraphStore {
       const toClear = nodes.filter(
         (n) => n.status === 'disputed' && !n.sourceRecordIds.some((id) => hit.has(id)),
       );
-      if (toMark.length === 0 && toClear.length === 0) return { marked: 0, cleared: 0 };
+      // 概念与节点同口径:派生投影说谎是一视同仁的(task_13)
+      const toMarkConcepts = concepts.filter(
+        (c) => c.status === 'active' && c.sourceRecordIds.some((id) => hit.has(id)),
+      );
+      const toClearConcepts = concepts.filter(
+        (c) => c.status === 'disputed' && !c.sourceRecordIds.some((id) => hit.has(id)),
+      );
+      if (toMark.length === 0 && toClear.length === 0 && toMarkConcepts.length === 0 && toClearConcepts.length === 0)
+        return { marked: 0, cleared: 0 };
       this.tx(() => {
         for (const n of toMark) {
           this.db!.prepare(`UPDATE graph_nodes SET status = 'disputed', updated_time = ? WHERE node_id = ?`).run(
@@ -1395,6 +1655,12 @@ export class GraphStore {
             now,
             n.id,
           );
+        }
+        for (const c of toMarkConcepts) {
+          this.db!.prepare(`UPDATE graph_concepts SET status = 'disputed', updated_time = ? WHERE concept_id = ?`).run(now, c.id);
+        }
+        for (const c of toClearConcepts) {
+          this.db!.prepare(`UPDATE graph_concepts SET status = 'active', updated_time = ? WHERE concept_id = ?`).run(now, c.id);
         }
       });
       this.logger?.info(
@@ -1412,7 +1678,7 @@ export class GraphStore {
     if (!this.db) return;
     try {
       this.tx(() => {
-        for (const table of ['graph_nodes', 'graph_edges', 'graph_projection_jobs', 'graph_job_records', 'graph_projected_records']) {
+        for (const table of ['graph_nodes', 'graph_edges', 'graph_concepts', 'graph_projection_jobs', 'graph_job_records', 'graph_projected_records']) {
           this.db!.exec(`DELETE FROM ${table}`);
         }
       });

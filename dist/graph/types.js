@@ -1,5 +1,5 @@
 /** 投影版本号:提示词/校验语义升级时 +1,旧版本 job 全部作废重投影。 */
-export const GRAPH_PROJECTOR_VERSION = 1;
+export const GRAPH_PROJECTOR_VERSION = 2;
 /** 单 job 认领的记录数上限(批内上下文规模可控)。 */
 export const GRAPH_JOB_BATCH = 8;
 /** 新蒸馏记录的投影优先级(存量补投影 ≤9999,永不倒挂)。 */

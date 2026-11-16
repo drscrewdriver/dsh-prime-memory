@@ -10,6 +10,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';
 import { callLLM, parseJsonLogged, resolveLayerTokens } from '../llm.js';
 import {
+  GRAPH_PROMPT_CONCEPTS_CAP,
   buildGraphProjectionPrompt,
   getGraphProjectionSystemPrompt,
 } from '../prompts/graph-projection.js';
@@ -17,7 +18,7 @@ import type { GraphStore } from '../store/graph-store.js';
 import { normalizeEntityName } from '../graph/apply.js';
 import { tokenize } from '../util/text.js';
 import type { MemoryLogger, MemoryRecord } from '../types.js';
-import type { GraphEdge, GraphNode, GraphProjectionResult } from '../graph/types.js';
+import type { GraphConcept, GraphEdge, GraphNode, GraphProjectionResult } from '../graph/types.js';
 import { GRAPH_PROJECTION_CALL_TIMEOUT_MS } from '../graph/types.js';
 import { errDetail } from '../util/filelog.js';
 
@@ -117,6 +118,15 @@ export function nodeEmbedText(node: GraphNode): string {
 }
 
 /**
+ * 概念向量化的嵌入文本(task_13,与 nodeEmbedText 同构):
+ * 概念名 + 别名 + 定义串。定义是概念的"语义面"对应实体的"当前状态"——
+ * 缺 definition 的概念在 apply 层就被拒了,到这里必然非空。
+ */
+export function conceptEmbedText(concept: GraphConcept): string {
+  return [concept.name, ...(concept.aliases ?? []), concept.definition].filter((s) => s && s.trim()).join(' ');
+}
+
+/**
  * 投影收尾的节点向量补写(G-vec 缺陷修:此前 upsertNodeVectors 生产零调用点,
  * 嵌入开着时 graph_node_vec 永远是 0 行,"向量种子"读路结构性空转)。
  *
@@ -147,6 +157,33 @@ export async function writeNodeVectorsAfterComplete(
 }
 
 /**
+ * 投影收尾的概念向量补写(task_13):与节点路同一失败隔离纪律——
+ * 嵌入失败/表未就绪只 warn,向量是召回增益,缺了它概念词法路照常。
+ */
+export async function writeConceptVectorsAfterComplete(
+  graphs: GraphStore,
+  touched: readonly GraphConcept[],
+  embed: ((text: string) => Promise<Float32Array | undefined>) | undefined,
+  logger: MemoryLogger,
+): Promise<number> {
+  if (!graphs.conceptVecReady || !embed || touched.length === 0) return 0;
+  const rows: Array<{ conceptId: string; embedding: Float32Array; updatedAt?: string }> = [];
+  for (const c of touched) {
+    if (c.status !== 'active' && c.status !== 'disputed') continue;
+    try {
+      const v = await embed(conceptEmbedText(c));
+      if (v && v.length > 0) rows.push({ conceptId: c.id, embedding: v, updatedAt: c.updatedAt });
+    } catch (err) {
+      logger.warn(`[memory] 概念向量计算失败(该概念跳过,词法路不受影响): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  if (rows.length === 0) return 0;
+  const written = graphs.upsertConceptVectors(rows);
+  if (written > 0) logger.debug?.(`[memory] 概念向量随投影写入 ${written} 条`);
+  return written;
+}
+
+/**
  * 执行一次图谱投影(claim 一个 job → LLM → 校验落库;无 job 时静默返回)。
  * 返回是否实际认领了任务(泵据此决定是否续排)。失败转 fail(退避/封顶由
  * GraphStore 管),不向 runner 上抛。
@@ -172,8 +209,13 @@ export async function runGraphProjection(
     const graph = graphs.loadGraph();
     const ctxNodes = selectContextNodes(records, graph.nodes);
     const ctxEdges = selectContextEdges(ctxNodes, graph.edges);
+    // 概念上下文:active 按更新时间 top-N(控制 prompt 规模;合并对照只需近期高频)
+    const ctxConcepts = graph.concepts
+      .filter((c) => c.status === 'active' || c.status === 'disputed')
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+      .slice(0, GRAPH_PROMPT_CONCEPTS_CAP);
     const hints = externalHints === undefined ? [] : await externalHints().catch(() => []);
-    const basePrompt = buildGraphProjectionPrompt({ records, nodes: ctxNodes, edges: ctxEdges });
+    const basePrompt = buildGraphProjectionPrompt({ records, nodes: ctxNodes, edges: ctxEdges, concepts: ctxConcepts });
     const userPrompt = hints.length === 0
       ? basePrompt
       : `${basePrompt}\n\n## 外部图谱参考(其他记忆服务;只作关系线索,节点/边仍须由本地记录支撑)\n${hints.join('\n')}`;
@@ -188,9 +230,10 @@ export async function runGraphProjection(
       signal: AbortSignal.timeout(GRAPH_PROJECTION_CALL_TIMEOUT_MS),
     });
     const touched = graphs.complete(job.id, parseProjection(raw, logger), { now: new Date().toISOString() });
-    // 投影落库后的向量收尾(G-vec 缺陷修):事务外做——嵌入是网络/推理调用,
-    // LLM 与嵌入永不进事务缝是本文件头注释写死的既有纪律。
-    await writeNodeVectorsAfterComplete(graphs, touched, embedNode, logger);
+    // 投影落库后的向量收尾(G-vec 缺陷修 + task_13):事务外做——嵌入是网络/推理调用,
+    // LLM 与嵌入永不进事务缝是本文件头注释写死的既有纪律。节点与概念共用同一 embed 缝。
+    await writeNodeVectorsAfterComplete(graphs, touched.nodes, embedNode, logger);
+    await writeConceptVectorsAfterComplete(graphs, touched.concepts, embedNode, logger);
   } catch (err) {
     const detail = errDetail(err);
     logger.warn(`[memory] 图谱投影失败(job=${job.id},attempts=${job.attempts}): ${detail}`);
@@ -206,6 +249,7 @@ export function parseProjection(raw: string, logger?: MemoryLogger): GraphProjec
   return {
     reason: typeof parsed?.reason === 'string' ? parsed.reason : '',
     nodes: Array.isArray(parsed?.nodes) ? parsed.nodes : [],
+    concepts: Array.isArray(parsed?.concepts) ? parsed.concepts : [],
     edges: Array.isArray(parsed?.edges) ? parsed.edges : [],
   };
 }
