@@ -45665,7 +45665,7 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
-		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral") {
+		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral", armSpread = 0.55) {
 		  if (shape === "sphere") return buildClusterLayoutByAxis(nodes, axis);
 		  const out = /* @__PURE__ */ new Map();
 		  const baseCount = /* @__PURE__ */ new Map();
@@ -45790,8 +45790,22 @@ var __create = Object.create;
 		        const rr1 = R0 * Math.pow(K, s1);
 		        const rt = rr0 + rand01(`s:${n.id}`) * (rr1 - rr0);
 		        const s = Math.log(rt / R0) / Math.log(K);
-		        const radius = rt + (rand01(`a:${n.id}`) - 0.5) * 2 * (12 + 22 * (s1 - s0));
-		        const theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (0.02 + 0.06 * (s1 - s0));
+		        const fan = s * s * armSpread;
+		        const rJit = (12 + 22 * (s1 - s0)) * (1 + fan * 2.6);
+		        let radius = rt + (rand01(`a:${n.id}`) - 0.5) * 2 * rJit;
+		        let theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (0.03 + fan * 0.62);
+		        if (s > 0.5 && armSpread > 0) {
+		          const tipP = rand01(`t:${n.id}`);
+		          const tipChance = 0.38 * armSpread;
+		          if (tipP < tipChance) {
+		            const ext = tipP / Math.max(1e-6, tipChance) * (0.05 + 0.29 * armSpread);
+		            const sExt = Math.min(1.12, s + ext);
+		            const rExt = R0 * Math.pow(K, sExt);
+		            const narrow = 1 / (1 + ext * 6);
+		            radius = rExt + (rand01(`a:${n.id}`) - 0.5) * 2 * rJit * narrow;
+		            theta = base + sExt * chord + (rand01(`b:${n.id}`) - 0.5) * (0.03 + fan * 0.62) * narrow;
+		          }
+		        }
 		        out.set(n.id, {
 		          x: Math.cos(theta) * radius,
 		          y: (rand01(`s:${n.id}:y`) - 0.5) * 34,
@@ -46051,7 +46065,6 @@ var __create = Object.create;
 		  flowStyleRef.current = flowStyle;
 		  const flowAccRef = (0, import_react33.useRef)(0);
 		  const flowLastRef = (0, import_react33.useRef)(0);
-		  const flowPrevRef = (0, import_react33.useRef)(null);
 		  const [starry, setStarry] = (0, import_react33.useState)(true);
 		  const [twinkleOn, setTwinkleOn] = (0, import_react33.useState)(true);
 		  const [axis, setAxis] = (0, import_react33.useState)("type");
@@ -46060,6 +46073,9 @@ var __create = Object.create;
 		  const [variant, setVariant] = (0, import_react33.useState)(0.35);
 		  const [shape, setShape] = (0, import_react33.useState)("sphere");
 		  const [diskStyle, setDiskStyle] = (0, import_react33.useState)("spiral");
+		  const [armSpread, setArmSpread] = (0, import_react33.useState)(0.55);
+		  const armSpreadRef = (0, import_react33.useRef)(0.55);
+		  armSpreadRef.current = armSpread;
 		  const shapeRef = (0, import_react33.useRef)("sphere");
 		  const diskStyleRef = (0, import_react33.useRef)("spiral");
 		  diskStyleRef.current = diskStyle;
@@ -46123,8 +46139,8 @@ var __create = Object.create;
 		  const nodeKeySeed = (0, import_react33.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
 		  const axisNodes = (0, import_react33.useMemo)(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: n.hall })), [full]);
 		  const clusterLayout = (0, import_react33.useMemo)(
-		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle),
-		    [axisNodes, axis, shape, diskStyle]
+		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current),
+		    [axisNodes, axis, shape, diskStyle, armSpread]
 		  );
 		  const layoutRef = (0, import_react33.useRef)(clusterLayout);
 		  const egoLayoutRef = (0, import_react33.useRef)(null);
@@ -46372,7 +46388,6 @@ var __create = Object.create;
 		      return lerpLayout(tr.from, tr.to, k);
 		    };
 		    let lastProjected = [];
-		    let tailLayout = null;
 		    const frame = (now) => {
 		      raf = 0;
 		      if (disposed) return;
@@ -46384,23 +46399,8 @@ var __create = Object.create;
 		        flowLastRef.current = now;
 		        flowAccRef.current += dt * flowSpeedRef.current;
 		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === "auto" ? void 0 : flowStyleRef.current);
-		        const prev = flowPrevRef.current;
-		        if (prev && prev.size === layout.size) {
-		          const tail = /* @__PURE__ */ new Map();
-		          const K = 11;
-		          for (const [id, q] of layout) {
-		            const q0 = prev.get(id);
-		            if (!q0) continue;
-		            tail.set(id, { x: q.x - (q.x - q0.x) * K, y: q.y - (q.y - q0.y) * K, z: q.z - (q.z - q0.z) * K });
-		          }
-		          if (tail.size > 0) tailLayout = tail;
-		        }
-		        flowPrevRef.current = layout;
 		        edgeDirty = true;
 		        nodeDirty = true;
-		      } else {
-		        flowPrevRef.current = null;
-		        tailLayout = null;
 		      }
 		      const ego = modeRef.current === "ego";
 		      const metas = metasRef.current;
@@ -46413,9 +46413,6 @@ var __create = Object.create;
 		      }
 		      const projected = projectAll(layout, cam, { w: vw, h: vh }, void 0, now, driftOn && !ego);
 		      lastProjected = projected;
-		      const tailProjected = tailLayout ? projectAll(tailLayout, cam, { w: vw, h: vh }, void 0, now, false) : null;
-		      const tailById = /* @__PURE__ */ new Map();
-		      if (tailProjected) for (const q of tailProjected) tailById.set(q.id, q);
 		      const activeKey = `${hover ?? ""}|${focus ?? ""}|${emph ?? ""}`;
 		      if (activeKey !== lastActiveKey) {
 		        lastActiveKey = activeKey;
@@ -46462,27 +46459,6 @@ var __create = Object.create;
 		        const c = nctx;
 		        c.clearRect(0, 0, vw, vh);
 		        const dimmed = (m) => viewRef.current === "hallFocus" && !focusHallsRef.current.includes(m.hall);
-		        if (tailById.size > 0) {
-		          c.globalCompositeOperation = "lighter";
-		          c.lineCap = "round";
-		          for (const p of projected) {
-		            if (activeIds.has(p.id)) continue;
-		            const tq = tailById.get(p.id);
-		            const m = metas.get(p.id);
-		            if (!tq || !m) continue;
-		            const dim = dimmed(m);
-		            const rr0 = Math.max(0.8, m.base * p.f * 1.75 * (dim ? 0.7 : 1));
-		            c.globalAlpha = brightnessFor(p.f, agingOn ? m.aging : null, true) * (dim ? 0.22 : 1) * 0.34;
-		            c.strokeStyle = m.color;
-		            c.lineWidth = Math.max(1, rr0 * 1.15);
-		            c.beginPath();
-		            c.moveTo(p.x, p.y);
-		            c.lineTo(tq.x, tq.y);
-		            c.stroke();
-		          }
-		          c.globalCompositeOperation = "source-over";
-		          c.globalAlpha = 1;
-		        }
 		        for (const p of projected) {
 		          if (activeIds.has(p.id)) continue;
 		          const m = metas.get(p.id);
@@ -46937,6 +46913,10 @@ var __create = Object.create;
 		              d
 		            )) }) : null
 		          ] }),
+		          shape === "disk" && diskStyle === "spiral" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }, children: [
+		            "散度",
+		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("input", { type: "range", min: 0, max: 1, step: 0.05, value: armSpread, onChange: (e) => setArmSpread(Number(e.target.value)) })
+		          ] }) : null,
 		          toggle("流转", flowOn, setFlowOn),
 		          flowOn && shape !== "sphere" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)(import_jsx_runtime33.Fragment, { children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden", marginLeft: 6 }, children: ["auto", "spin", "eight"].map((f) => {

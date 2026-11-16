@@ -192,7 +192,14 @@ export type ClusterShape = 'sphere' | 'disk' | 'lemniscate';
  *   簇内点沿臂向长散布 + 垂直臂向窄 + y 薄层 ±28(横向盘状展开,z→y 稍微错开);
  * - lemniscate: 簇心沿 ∞ 曲线 x=A·cos t / z=A·sin t·cos t 均布,簇内沿环向散布 + y 薄层。
  */
-export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: ClusterAxis, shape: ClusterShape, diskStyle: DiskStyle = 'spiral'): Map<string, Vec3> {
+export function buildClusterShapeLayout(
+  nodes: readonly LayoutNode[],
+  axis: ClusterAxis,
+  shape: ClusterShape,
+  diskStyle: DiskStyle = 'spiral',
+  /** 悬臂散度 0~1:0 = 等宽细带(均匀),1 = 外沿大幅扇开成稀疏星尘尖端。仅 spiral 生效。 */
+  armSpread = 0.55,
+): Map<string, Vec3> {
   if (shape === 'sphere') return buildClusterLayoutByAxis(nodes, axis);
   const out = new Map<string, Vec3>();
   /**
@@ -348,8 +355,31 @@ export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: Clus
         const rr1 = R0 * Math.pow(K, s1);
         const rt = rr0 + rand01(`s:${n.id}`) * (rr1 - rr0);
         const s = Math.log(rt / R0) / Math.log(K);
-        const radius = rt + (rand01(`a:${n.id}`) - 0.5) * 2 * (12 + 22 * (s1 - s0));
-        const theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (0.02 + 0.06 * (s1 - s0));
+        // 散度:内圈紧凑、外沿散开(∝ s²)——臂在盘心是实心星流带,到外沿渐散成稀疏星尘,
+        // 这正是参考星系"外部尖端"的形状来源(不是等宽细带)。
+        // 散度(armSpread):角向张开量按**绝对 s** 增长(∝ s²),不是按簇自身弧长——
+        // 盘心 s≈0 时几乎不张(实心星流带),外沿 s≈1 张开到 ±0.16rad(≈9°),
+        // 同样多的点摊在更宽的扇面上 → 外沿自然稀疏、读作"星尘尖端"而不是等宽细带。
+        const fan = s * s * armSpread; // 0(盘心)→ armSpread(外沿)
+        const rJit = (12 + 22 * (s1 - s0)) * (1 + fan * 2.6);
+        let radius = rt + (rand01(`a:${n.id}`) - 0.5) * 2 * rJit;
+        let theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (0.03 + fan * 0.62);
+        // 尾迹长射:外沿段(s>0.55)按概率抽出一部分点,沿臂继续向外延伸成稀疏长尖——
+        // 参考星系"外部尖端"就是这个形状:内圈是实心星流带,末端拖出细长星尘尾巴。
+        if (s > 0.5 && armSpread > 0) {
+          const tipP = rand01(`t:${n.id}`);
+          const tipChance = 0.38 * armSpread; // 散度 0 → 无尖端;散度 1 → 38% 的点进尖端
+          if (tipP < tipChance) {
+            // 尖端只在臂末端再往外延伸一小截(0.05~0.34 s),不越出盘的外包络;
+            // 横向抖动大幅收窄 → 读作"射出去的细长星尘",不是又散开一团。
+            const ext = (tipP / Math.max(1e-6, tipChance)) * (0.05 + 0.29 * armSpread);
+            const sExt = Math.min(1.12, s + ext);
+            const rExt = R0 * Math.pow(K, sExt);
+            const narrow = 1 / (1 + ext * 6);
+            radius = rExt + (rand01(`a:${n.id}`) - 0.5) * 2 * rJit * narrow;
+            theta = base + sExt * chord + (rand01(`b:${n.id}`) - 0.5) * (0.03 + fan * 0.62) * narrow;
+          }
+        }
         out.set(n.id, {
           x: Math.cos(theta) * radius,
           y: (rand01(`s:${n.id}:y`) - 0.5) * 34,

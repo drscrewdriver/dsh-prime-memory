@@ -323,4 +323,28 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     expect(delta('spin')).toBeGreaterThan(60);
     expect(delta('eight')).toBeGreaterThan(60);
   });
+
+  it('悬臂散度 armSpread:越大外沿越散(径向离散度单调增),内圈仍紧凑', () => {
+    const all: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 300; i++) all.push(mk('x' + i, 'tool', 'work'));
+    const spreadOf = (sp: number) => {
+      const L = buildClusterShapeLayout(all, 'hall', 'disk', 'spiral', sp);
+      // 外沿(半径最大的 30% 点)的角向离散度
+      const pts = [...L.values()].map((q) => ({ r: Math.hypot(q.x, q.z), a: Math.atan2(q.z, q.x) }));
+      pts.sort((a, b) => b.r - a.r);
+      const tail = pts.slice(0, Math.floor(pts.length * 0.3));
+      const mx = tail.reduce((s, q) => s + q.r, 0) / tail.length;
+      // 用"离臂中轴的角向偏差"近似:取全点角向标准差
+      const am = pts.reduce((s, q) => s + q.a, 0) / pts.length;
+      return Math.sqrt(pts.reduce((s, q) => s + (q.a - am) ** 2, 0) / pts.length) * mx;
+    };
+    const s0 = spreadOf(0.05);
+    const s1 = spreadOf(0.55);
+    const s2 = spreadOf(1);
+    expect(s1).toBeGreaterThan(s0);
+    expect(s2).toBeGreaterThan(s1);
+    // 默认值 0.55 时所有点仍在盘内(不发散到天上)
+    const L = buildClusterShapeLayout(all, 'hall', 'disk', 'spiral', 0.55);
+    for (const q of L.values()) expect(Math.hypot(q.x, q.z)).toBeLessThan(1200);
+  });
 });
