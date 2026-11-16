@@ -78,7 +78,9 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     for (let i = 0; i < 50; i++) { const q = L.get('bb' + i)!; bx += q.x; bz += q.z; }
     const bbR = Math.hypot(bx / 50, bz / 50);
     expect(bbR).toBeGreaterThan(100); // 臂头段在内圈(~150-430 臂半径带)
-    // 六臂角向均分:bilibili 臂与每个小簇簇心的角距 ≥ 0.3 rad(臂间 60°=1.05 rad,同臂簇才贴近)
+    // 六臂角向均分(按 chord 参数化的双峰判据):同臂簇的角距随 chord 放大
+    // (Δs·chord,chord=2.45 时同臂相邻簇可达 ~0.45 rad),异臂角距则恒为 2π/6=1.047 的倍数。
+    // 所以判据是"要么近(同臂)、要么约 1.047 的整数倍(异臂)",中间地带(0.5~0.95)不该有点。
     const ang = (x: number, z: number) => Math.atan2(z, x);
     const bbA = ang(bx / 50, bz / 50);
     for (const h of ['work', 'learning', 'health', 'finance', 'journey', 'creative']) {
@@ -86,7 +88,8 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
       for (let i = 0; i < 3; i++) { const q = L.get(h + i)!; cx += q.x; cz += q.z; }
       cx /= 3; cz /= 3;
       const d = Math.abs(ang(cx, cz) - bbA);
-      expect(Math.min(d, Math.PI * 2 - d)).toBeGreaterThan(0.3);
+      const sep = Math.min(d, Math.PI * 2 - d);
+      expect(sep < 0.5 || sep > 0.95).toBe(true);
       expect(Math.hypot(cx, cz)).toBeGreaterThan(60); // 簇心在臂半径带内(散布偏移后仍>60)
     }
   });
@@ -346,5 +349,43 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     // 默认值 0.55 时所有点仍在盘内(不发散到天上)
     const L = buildClusterShapeLayout(all, 'hall', 'disk', 'spiral', 0.55);
     for (const q of L.values()) expect(Math.hypot(q.x, q.z)).toBeLessThan(1200);
+  });
+
+  it('圆盘 discSeed:同种子逐位一致,不同种子朝向/布局不同(每次进入随机角度)', () => {
+    const ns: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 120; i++) ns.push(mk('d' + i, 'tool', 'work'));
+    const a = buildClusterShapeLayout(ns, 'hall', 'disk', 'disc', 0.55, 3);
+    const b = buildClusterShapeLayout(ns, 'hall', 'disk', 'disc', 0.55, 3);
+    const c = buildClusterShapeLayout(ns, 'hall', 'disk', 'disc', 0.55, 4);
+    expect([...a.entries()]).toEqual([...b.entries()]); // 同种子可回放
+    let diff = 0;
+    for (const [id, q] of a) { const q2 = c.get(id)!; diff = Math.max(diff, Math.hypot(q.x - q2.x, q.z - q2.z)); }
+    expect(diff).toBeGreaterThan(50); // 不同种子确实换朝向
+    for (const q of a.values()) expect(Math.hypot(q.x, q.z)).toBeLessThan(1200);
+  });
+
+  it('核球:盘类形态中心有实料(半径<R0 的点占比 ≥10%),不留空洞', () => {
+    const ns: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 400; i++) ns.push(mk('b' + i, 'tool', i % 2 ? 'work' : 'learning'));
+    for (const st of ['spiral', 'legacy', 'disc'] as const) {
+      const L = buildClusterShapeLayout(ns, 'hall', 'disk', st);
+      const near = [...L.values()].filter((q) => Math.hypot(q.x, q.z) < 150).length;
+      expect(near / L.size).toBeGreaterThan(0.1);
+    }
+  });
+
+  it('巨簇拆半对 hall 轴同样生效:占比 >40% 的组拆成 3 份,不独占一臂', () => {
+    const ns: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 800; i++) ns.push(mk('w' + i, 'tool', 'work'));
+    for (const h of ['learning', 'health', 'finance']) for (let i = 0; i < 40; i++) ns.push(mk(h + i, 'person', h));
+    const L = buildClusterShapeLayout(ns, 'hall', 'disk', 'spiral');
+    // work 占 87% → 拆 3 份;六臂里 work 的 3 个子簇应分散在 ≥3 条不同臂上
+    const arms = new Set<number>();
+    for (const [id, q] of L) {
+      if (!id.startsWith('w')) continue;
+      const a = Math.atan2(q.z / 0.82, q.x);
+      arms.add(Math.round(((a + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 3)));
+    }
+    expect(arms.size).toBeGreaterThanOrEqual(3);
   });
 });

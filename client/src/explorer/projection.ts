@@ -199,6 +199,8 @@ export function buildClusterShapeLayout(
   diskStyle: DiskStyle = 'spiral',
   /** 悬臂散度 0~1:0 = 等宽细带(均匀),1 = 外沿大幅扇开成稀疏星尘尖端。仅 spiral 生效。 */
   armSpread = 0.55,
+  /** 圆盘(吸积盘)的随机种子:决定臂数与整体朝向。0 = 固定默认;每次进入随机 = 每次不同角度。 */
+  discSeed = 0,
 ): Map<string, Vec3> {
   if (shape === 'sphere') return buildClusterLayoutByAxis(nodes, axis);
   const out = new Map<string, Vec3>();
@@ -215,16 +217,24 @@ export function buildClusterShapeLayout(
   }
   const sumAll = nodes.length || 1;
   const splitSet = new Set<string>();
-  if (axis === 'type') {
-    for (const [b, c] of baseCount) {
-      if (c >= Math.max(50, sumAll * 0.22) && baseCount.size > 1) splitSet.add(b);
-    }
+  // 拆半阈值对所有轴生效:type 轴 tool 常占一半以上,hall 轴 work 同样能占 50%+。
+  // 不拆的话超大簇会独占一整条臂(臂上堆 800 点成实心肥虫,其余臂稀稀拉拉)。
+  for (const [b, c] of baseCount) {
+    if (c >= Math.max(50, sumAll * 0.22) && baseCount.size > 1) splitSet.add(b);
   }
   /** 形态布局内的组键:type 轴超大组拆半,其余同 groupKeyOf。 */
+  /** 每个被拆组拆成几份:占比越高拆得越多(最大 3),避免巨簇独占一条臂。 */
+  const splitParts = new Map<string, number>();
+  for (const b of splitSet) {
+    const frac = (baseCount.get(b) ?? 0) / sumAll;
+    splitParts.set(b, frac > 0.4 ? 3 : 2);
+  }
   const keyOf = (n: LayoutNode): string => {
     const b = groupKeyOf(n, axis);
     if (!splitSet.has(b)) return b;
-    return `${b}#${rand01(`x:${n.id}`) < 0.5 ? 0 : 1}`;
+    const parts = splitParts.get(b) ?? 2;
+    const r = rand01(`x:${n.id}`);
+    return `${b}#${Math.min(parts - 1, Math.floor(r * parts))}`;
   };
   const groups = groupOrder(nodes.map(keyOf), axis);
   const centers = new Map<string, Vec3>();
@@ -241,13 +251,16 @@ export function buildClusterShapeLayout(
    * 拼起来都是一条从核球连续卷到外沿的星流带,而不是一串孤立的短棒。
    */
   /** 旋臂半径带:核球边缘 150 → 盘外沿 640(对数螺线两端)。 */
-  const R0 = 115;
-  const REND = 640;
-  const armSpan = new Map<string, { base: number; chord: number; s0: number; s1: number }>();
-  const placeOnArms = (bins: string[][], chord: number): void => {
+  const R0 = 150;
+  const REND = 570;
+  const armSpan = new Map<string, { base: number; chord: number; s0: number; s1: number; r0: number }>();
+  /** disc 用:簇 → 序号(决定它占哪条径向扇区)。 */
+  const groupIdx = new Map<string, number>();
+  groups.forEach((k, i) => groupIdx.set(k, i));
+  const placeOnArms = (bins: string[][], chord: number, rot = 0, r0 = R0): void => {
     const N = bins.length;
     bins.forEach((bin, arm) => {
-      const base = (arm / N) * Math.PI * 2 + rand01(`c:arm${arm}`) * 0.16;
+      const base = (arm / N) * Math.PI * 2 + rot + rand01(`c:arm${arm}`) * 0.16;
       // 臂内按大小降序:大簇占长弧段且靠内(臂头),小簇靠外
       const ordered = [...bin].sort((a, b) => (countOf.get(b) ?? 0) - (countOf.get(a) ?? 0));
       // s 段按「簇数均分 + 权重轻度调制」:纯按权重会让大簇独占内半臂、
@@ -262,11 +275,11 @@ export function buildClusterShapeLayout(
         const s0 = 0.02 + (acc / wSum) * 0.96;
         const s1 = 0.02 + ((acc + w) / wSum) * 0.96;
         acc += w;
-        armSpan.set(key, { base, chord, s0, s1 });
+        armSpan.set(key, { base, chord, s0, s1, r0 });
         // 簇心取弧段中点(标签/拾取用)
         const sm = (s0 + s1) / 2;
         const theta = base + sm * chord;
-        const radius = R0 * Math.pow(REND / R0, sm); // 对数螺线:径向指数外推
+        const radius = r0 * Math.pow(REND / r0, sm); // 对数螺线:径向指数外推
         centers.set(key, {
           x: Math.cos(theta) * radius,
           y: (rand01(`r:${key}:y`) - 0.5) * 26,
@@ -292,30 +305,34 @@ export function buildClusterShapeLayout(
     return bins;
   };
   if (shape === 'disk' && diskStyle === 'disc') {
-    // ── 圆盘:簇按黄金角铺满整个盘面(不是环带、不是臂) ──
-    // 黄金角 2.39996 rad 保证任意簇数下角向都不出现"扎堆/留空";半径按 √(i/N) 取,
-    // 于是簇在**面积**上均匀——读作一张匀致实心的圆盘,而不是同心圆串。
-    // 配合下面 disc 的等向散布,相邻簇边界互相咬合成一整片(混合盘)。
+    // ── 吸积盘(accretion disk)──
+    // 与"均匀靶纸"的区别在**差速旋进**:每个点按半径转 Δθ = swirl·ln(r/r0),
+    // 内圈卷得紧、外圈拖得开 → 整盘呈对数螺旋纹,这才是吸积盘/旋涡星云的观感。
+    // 骨架用黄金角铺满(任意簇数都不留空、不偏心),半径 r^0.72 偏置(中心密外沿疏),
+    // 整体朝向与旋进强度由 discSeed 决定 → 每次进入/切换都是不同角度的盘。
     const GA = Math.PI * (3 - Math.sqrt(5));
+    const rot = rand01(`disc:${discSeed}:rot`) * Math.PI * 2;
+    const seedJ = rand01(`disc:${discSeed}:j`) * 0.5;
     groups.forEach((key, i) => {
-      const theta = i * GA + rand01(`c:${key}`) * 0.35;
-      const rr = Math.sqrt((i + 0.5) / total);
-      const radius = 120 + rr * 520 + rand01(`r:${key}`) * 40;
+      const rr = Math.pow((i + 0.5 + seedJ) / total, 0.72);
+      const radius = 110 + rr * 520;
+      const theta = i * GA + rot + (rand01(`c:${key}`) - 0.5) * 0.42;
       centers.set(key, {
         x: Math.cos(theta) * radius,
-        y: (rand01(`r:${key}:y`) - 0.5) * 34,
+        y: (rand01(`r:${key}:y`) - 0.5) * 30,
         z: Math.sin(theta) * radius * 0.82,
       });
     });
   }
-  if (shape === 'disk' && diskStyle === 'spiral') {
-    // 六臂星系:6 臂共用同一扫掠 θ=base+s·1.55 → 任意半径处臂距恒为 2π/6=1.047 rad,
-    // 永不交缠;1.55 rad 卷曲 ≈ 23° 螺旋角,是典型星系的放射-旋纹折中。
-    placeOnArms(binPack(6), 1.55);
+    if (shape === 'disk' && diskStyle === 'spiral') {
+    // 六臂星系:6 臂共用同一扫掠 θ=base+s·chord → 任意半径处臂距恒为 2π/6=1.047 rad,永不交缠。
+    // 螺旋角 = atan(chord / ln(REND/R0))。1.55 对应 42°——内圈卷成钩、外圈贴切线,
+    // 正是"有个臂卷起来 + 向无穷远直射"的病根;2.45 对应 ≈32°,臂舒展而仍有旋纹。
+    placeOnArms(binPack(6), 2.45);
   }
   if (shape === 'disk' && diskStyle === 'legacy') {
-    // 双臂螺旋:相位差 π、共用扫掠 1.55 rad → 两条分明旋臂,绝不并成一条
-    placeOnArms(binPack(2), 1.55);
+    // 双臂螺旋:相位差 π、共用扫掠 → 两条分明旋臂,绝不并成一条
+    placeOnArms(binPack(2), 2.45);
   }
   if (shape === 'disk' && diskStyle === 'flat') {
     // 平铺:所有簇环形均布一圈,半径随序外推成同心环带,无臂结构
@@ -348,6 +365,20 @@ export function buildClusterShapeLayout(
       if (span) {
         // 臂段分布:点在自己的弧段内独立取 s → 簇铺成弧,相邻簇首尾相接成连续星流带
         const { base, chord, s0, s1 } = span;
+        const R0 = span.r0; // 本臂内半径(disc 更靠核球)
+        // 核球(bulge):按比例抽 12% 的点铺进核心球(半径 0~R0·1.15,密度 ∝ r²)——
+        // 否则臂从 R0 才起笔,盘心是一块空洞,读起来像"甜甜圈"而不是星系。
+        // 核球点不参与臂的角向/径向抖动,颜色仍按原簇 → 核球是各色混杂的亮核。
+        if (rand01(`k:${n.id}`) < 0.2) {
+          const rb = R0 * 1.05 * Math.pow(rand01(`k2:${n.id}`), 1.7);
+          const ab = rand01(`k3:${n.id}`) * Math.PI * 2;
+          out.set(n.id, {
+            x: Math.cos(ab) * rb,
+            y: (rand01(`s:${n.id}:y`) - 0.5) * 26,
+            z: Math.sin(ab) * rb * 0.82,
+          });
+          continue;
+        }
         // 半径均匀重采样:对数螺线下 dr/ds ∝ r 会把点堆在内圈;先均匀取 r 再反解 s,
         // 臂的每一段密度一致,整条臂才一路连续长到外沿。
         const K = REND / R0;
@@ -360,25 +391,22 @@ export function buildClusterShapeLayout(
         // 散度(armSpread):角向张开量按**绝对 s** 增长(∝ s²),不是按簇自身弧长——
         // 盘心 s≈0 时几乎不张(实心星流带),外沿 s≈1 张开到 ±0.16rad(≈9°),
         // 同样多的点摊在更宽的扇面上 → 外沿自然稀疏、读作"星尘尖端"而不是等宽细带。
-        const fan = s * s * armSpread; // 0(盘心)→ armSpread(外沿)
-        const rJit = (12 + 22 * (s1 - s0)) * (1 + fan * 2.6);
+        // 散度:盘心 s≈0 收紧成实心星流带,s→1 逐渐摊宽成稀疏星尘。
+        // 张开量按 s² 走(外沿才明显),径向抖动同步放大——但都有上限,不会把点甩出臂外。
+        const isDisc = diskStyle === 'disc';
+        // 吸积盘的纹路靠"密绕"读出来,抖动必须收紧(否则糊成一团失掉旋涡纹);
+        // 悬臂则吃散度参数,外沿扇开成稀疏星尘。
+        const fan = isDisc ? s * s * 0.12 : s * s * armSpread;
+        const rJit = (isDisc ? 7 : 10 + 16 * (s1 - s0)) * (1 + fan * 1.9);
         let radius = rt + (rand01(`a:${n.id}`) - 0.5) * 2 * rJit;
-        let theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (0.03 + fan * 0.62);
-        // 尾迹长射:外沿段(s>0.55)按概率抽出一部分点,沿臂继续向外延伸成稀疏长尖——
-        // 参考星系"外部尖端"就是这个形状:内圈是实心星流带,末端拖出细长星尘尾巴。
-        if (s > 0.5 && armSpread > 0) {
-          const tipP = rand01(`t:${n.id}`);
-          const tipChance = 0.38 * armSpread; // 散度 0 → 无尖端;散度 1 → 38% 的点进尖端
-          if (tipP < tipChance) {
-            // 尖端只在臂末端再往外延伸一小截(0.05~0.34 s),不越出盘的外包络;
-            // 横向抖动大幅收窄 → 读作"射出去的细长星尘",不是又散开一团。
-            const ext = (tipP / Math.max(1e-6, tipChance)) * (0.05 + 0.29 * armSpread);
-            const sExt = Math.min(1.12, s + ext);
-            const rExt = R0 * Math.pow(K, sExt);
-            const narrow = 1 / (1 + ext * 6);
-            radius = rExt + (rand01(`a:${n.id}`) - 0.5) * 2 * rJit * narrow;
-            theta = base + sExt * chord + (rand01(`b:${n.id}`) - 0.5) * (0.03 + fan * 0.62) * narrow;
-          }
+        let theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (isDisc ? 0.05 + fan * 0.5 : 0.035 + fan * 0.5);
+
+        // 尖端收束:外沿最外侧 12% 的点把横向抖动压回去(1/(1+ext*5))——
+        // 臂末端是"渐渐收细的星尘尾",不是越往外越宽的扇面、更不是射向无穷远的射线。
+        if (s > 0.88) {
+          const k2 = 1 / (1 + (s - 0.88) * 26);
+          radius = rt + (radius - rt) * k2;
+          theta = base + s * chord + (theta - (base + s * chord)) * k2;
         }
         out.set(n.id, {
           x: Math.cos(theta) * radius,
@@ -388,6 +416,17 @@ export function buildClusterShapeLayout(
       } else {
         // 圆盘/平铺:簇心团块散布。disc 的散布更大且更扁 → 相邻簇边界咬合成一整片圆盘(混合观感);
         // flat 保持小块状,好让"平铺环带"的层次读得出来。
+        // disc 核球:同样按 20% 铺进核心球(否则吸积盘中心是空洞,不像盘)。
+        if (diskStyle === 'disc' && rand01(`k:${n.id}`) < 0.2) {
+          const rb = 115 * Math.pow(rand01(`k2:${n.id}`), 1.7);
+          const ab = rand01(`k3:${n.id}`) * Math.PI * 2;
+          out.set(n.id, {
+            x: Math.cos(ab) * rb,
+            y: (rand01(`s:${n.id}:y`) - 0.5) * 26,
+            z: Math.sin(ab) * rb * 0.82,
+          });
+          continue;
+        }
         const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
         const a = rand01(`a:${n.id}`) * Math.PI * 2;
         const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
@@ -396,11 +435,22 @@ export function buildClusterShapeLayout(
         // disc:散布半径 ∝ 盘面/√N(每簇应占的等效面积半径)×1.7——相邻簇边界互相咬合,
         // 整张盘读作连成一片的混合圆盘;平铺保持小块状以保留环带层次。
         const discSpread = discMode ? (520 / Math.sqrt(Math.max(1, total))) * 1.7 : 0;
+        // 吸积盘旋涡纹:把点沿其半径再转一个 Δθ = swirl·ln(r/110)(差速)——
+        // 簇心与簇内点同吃同一变换,整盘才是连贯的对数螺旋纹,而不是"各转各的"。
+        const swirlD = discMode ? 1.9 + rand01(`disc:${discSeed}:sw`) * 1.1 : 0;
         const rr2 = discMode
           ? Math.sqrt(rand01(`s:${n.id}`)) * discSpread
           : 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 90;
         let px2 = c.x + Math.sin(b) * Math.cos(a) * rr2;
         let pz2 = c.z + Math.sin(b) * Math.sin(a) * rr2;
+        if (discMode && swirlD > 0) {
+          const rp0 = Math.hypot(px2, pz2) || 1;
+          const dth = swirlD * Math.log(rp0 / 110);
+          const cs = Math.cos(dth), sn = Math.sin(dth);
+          const nx = px2 * cs - pz2 * sn;
+          const nz = px2 * sn + pz2 * cs;
+          px2 = nx; pz2 = nz;
+        }
         if (discMode) {
           // 外沿裁剪:超出盘半径的点沿径向夹回 → 圆盘边界干净,不散成云
           const rp = Math.hypot(px2, pz2);

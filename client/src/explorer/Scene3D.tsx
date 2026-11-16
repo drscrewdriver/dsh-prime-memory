@@ -155,6 +155,20 @@ export function Scene3D(props: {
   const [diskStyle, setDiskStyle] = useState<DiskStyle>('spiral');
   /** 悬臂散度 0~1:内圈紧凑、外沿扇开成稀疏星尘尖端。仅「悬臂」生效。 */
   const [armSpread, setArmSpread] = useState(0.55);
+  /** 圆盘(吸积盘)种子:每次进入「圆盘」重新掷一次 → 臂数与整体朝向都不同,不永远同一角度。 */
+  const [discSeed, setDiscSeed] = useState(0);
+  const discSeedRef = useRef(0);
+  discSeedRef.current = discSeed;
+  // React 官方「render 期调整 state」模式:切到 disc 时立刻换种子,不经过 effect 的额外一帧。
+  const discGateRef = useRef<DiskStyle>(diskStyle);
+  if (discGateRef.current !== diskStyle) {
+    discGateRef.current = diskStyle;
+    if (diskStyle === 'disc') {
+      const s = Math.floor(Math.random() * 100000) + 1;
+      discSeedRef.current = s;
+      setDiscSeed(s);
+    }
+  }
   const armSpreadRef = useRef(0.55);
   armSpreadRef.current = armSpread;
   const shapeRef = useRef<ClusterShape>('sphere');
@@ -236,8 +250,8 @@ export function Scene3D(props: {
   const axisNodes = useMemo(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: (n as { hall?: string }).hall })), [full]);
   /** clusterLayout 由 full+axis 派生:轴切换会换布局引用,但硬落位 effect 只认 [full](F4)。 */
   const clusterLayout = useMemo(
-    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current),
-    [axisNodes, axis, shape, diskStyle, armSpread],
+    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current, discSeedRef.current),
+    [axisNodes, axis, shape, diskStyle, armSpread, discSeed],
   );
   const layoutRef = useRef<Map<string, Vec3>>(clusterLayout);
   const egoLayoutRef = useRef<Map<string, Vec3> | null>(null);

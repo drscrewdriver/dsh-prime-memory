@@ -45665,7 +45665,7 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
-		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral", armSpread = 0.55) {
+		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral", armSpread = 0.55, discSeed = 0) {
 		  if (shape === "sphere") return buildClusterLayoutByAxis(nodes, axis);
 		  const out = /* @__PURE__ */ new Map();
 		  const baseCount = /* @__PURE__ */ new Map();
@@ -45675,15 +45675,20 @@ var __create = Object.create;
 		  }
 		  const sumAll = nodes.length || 1;
 		  const splitSet = /* @__PURE__ */ new Set();
-		  if (axis === "type") {
-		    for (const [b, c] of baseCount) {
-		      if (c >= Math.max(50, sumAll * 0.22) && baseCount.size > 1) splitSet.add(b);
-		    }
+		  for (const [b, c] of baseCount) {
+		    if (c >= Math.max(50, sumAll * 0.22) && baseCount.size > 1) splitSet.add(b);
+		  }
+		  const splitParts = /* @__PURE__ */ new Map();
+		  for (const b of splitSet) {
+		    const frac = (baseCount.get(b) ?? 0) / sumAll;
+		    splitParts.set(b, frac > 0.4 ? 3 : 2);
 		  }
 		  const keyOf = (n) => {
 		    const b = groupKeyOf(n, axis);
 		    if (!splitSet.has(b)) return b;
-		    return `${b}#${rand01(`x:${n.id}`) < 0.5 ? 0 : 1}`;
+		    const parts = splitParts.get(b) ?? 2;
+		    const r = rand01(`x:${n.id}`);
+		    return `${b}#${Math.min(parts - 1, Math.floor(r * parts))}`;
 		  };
 		  const groups = groupOrder(nodes.map(keyOf), axis);
 		  const centers = /* @__PURE__ */ new Map();
@@ -45693,13 +45698,15 @@ var __create = Object.create;
 		    const g = keyOf(n);
 		    countOf.set(g, (countOf.get(g) ?? 0) + 1);
 		  }
-		  const R0 = 115;
-		  const REND = 640;
+		  const R0 = 150;
+		  const REND = 570;
 		  const armSpan = /* @__PURE__ */ new Map();
-		  const placeOnArms = (bins, chord) => {
+		  const groupIdx = /* @__PURE__ */ new Map();
+		  groups.forEach((k, i) => groupIdx.set(k, i));
+		  const placeOnArms = (bins, chord, rot = 0, r0 = R0) => {
 		    const N = bins.length;
 		    bins.forEach((bin, arm) => {
-		      const base = arm / N * Math.PI * 2 + rand01(`c:arm${arm}`) * 0.16;
+		      const base = arm / N * Math.PI * 2 + rot + rand01(`c:arm${arm}`) * 0.16;
 		      const ordered = [...bin].sort((a, b) => (countOf.get(b) ?? 0) - (countOf.get(a) ?? 0));
 		      const mods = ordered.map((k) => Math.pow(countOf.get(k) ?? 1, 0.5));
 		      const wSum = mods.reduce((a, b) => a + b, 0) || 1;
@@ -45710,10 +45717,10 @@ var __create = Object.create;
 		        const s0 = 0.02 + acc / wSum * 0.96;
 		        const s1 = 0.02 + (acc + w) / wSum * 0.96;
 		        acc += w;
-		        armSpan.set(key, { base, chord, s0, s1 });
+		        armSpan.set(key, { base, chord, s0, s1, r0 });
 		        const sm = (s0 + s1) / 2;
 		        const theta = base + sm * chord;
-		        const radius = R0 * Math.pow(REND / R0, sm);
+		        const radius = r0 * Math.pow(REND / r0, sm);
 		        centers.set(key, {
 		          x: Math.cos(theta) * radius,
 		          y: (rand01(`r:${key}:y`) - 0.5) * 26,
@@ -45739,22 +45746,24 @@ var __create = Object.create;
 		  };
 		  if (shape === "disk" && diskStyle === "disc") {
 		    const GA = Math.PI * (3 - Math.sqrt(5));
+		    const rot = rand01(`disc:${discSeed}:rot`) * Math.PI * 2;
+		    const seedJ = rand01(`disc:${discSeed}:j`) * 0.5;
 		    groups.forEach((key, i) => {
-		      const theta = i * GA + rand01(`c:${key}`) * 0.35;
-		      const rr = Math.sqrt((i + 0.5) / total);
-		      const radius = 120 + rr * 520 + rand01(`r:${key}`) * 40;
+		      const rr = Math.pow((i + 0.5 + seedJ) / total, 0.72);
+		      const radius = 110 + rr * 520;
+		      const theta = i * GA + rot + (rand01(`c:${key}`) - 0.5) * 0.42;
 		      centers.set(key, {
 		        x: Math.cos(theta) * radius,
-		        y: (rand01(`r:${key}:y`) - 0.5) * 34,
+		        y: (rand01(`r:${key}:y`) - 0.5) * 30,
 		        z: Math.sin(theta) * radius * 0.82
 		      });
 		    });
 		  }
 		  if (shape === "disk" && diskStyle === "spiral") {
-		    placeOnArms(binPack(6), 1.55);
+		    placeOnArms(binPack(6), 2.45);
 		  }
 		  if (shape === "disk" && diskStyle === "legacy") {
-		    placeOnArms(binPack(2), 1.55);
+		    placeOnArms(binPack(2), 2.45);
 		  }
 		  if (shape === "disk" && diskStyle === "flat") {
 		    groups.forEach((key, i) => {
@@ -45785,26 +45794,31 @@ var __create = Object.create;
 		      const span = armSpan.get(gk);
 		      if (span) {
 		        const { base, chord, s0, s1 } = span;
-		        const K = REND / R0;
-		        const rr0 = R0 * Math.pow(K, s0);
-		        const rr1 = R0 * Math.pow(K, s1);
+		        const R02 = span.r0;
+		        if (rand01(`k:${n.id}`) < 0.2) {
+		          const rb = R02 * 1.05 * Math.pow(rand01(`k2:${n.id}`), 1.7);
+		          const ab = rand01(`k3:${n.id}`) * Math.PI * 2;
+		          out.set(n.id, {
+		            x: Math.cos(ab) * rb,
+		            y: (rand01(`s:${n.id}:y`) - 0.5) * 26,
+		            z: Math.sin(ab) * rb * 0.82
+		          });
+		          continue;
+		        }
+		        const K = REND / R02;
+		        const rr0 = R02 * Math.pow(K, s0);
+		        const rr1 = R02 * Math.pow(K, s1);
 		        const rt = rr0 + rand01(`s:${n.id}`) * (rr1 - rr0);
-		        const s = Math.log(rt / R0) / Math.log(K);
-		        const fan = s * s * armSpread;
-		        const rJit = (12 + 22 * (s1 - s0)) * (1 + fan * 2.6);
+		        const s = Math.log(rt / R02) / Math.log(K);
+		        const isDisc = diskStyle === "disc";
+		        const fan = isDisc ? s * s * 0.12 : s * s * armSpread;
+		        const rJit = (isDisc ? 7 : 10 + 16 * (s1 - s0)) * (1 + fan * 1.9);
 		        let radius = rt + (rand01(`a:${n.id}`) - 0.5) * 2 * rJit;
-		        let theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (0.03 + fan * 0.62);
-		        if (s > 0.5 && armSpread > 0) {
-		          const tipP = rand01(`t:${n.id}`);
-		          const tipChance = 0.38 * armSpread;
-		          if (tipP < tipChance) {
-		            const ext = tipP / Math.max(1e-6, tipChance) * (0.05 + 0.29 * armSpread);
-		            const sExt = Math.min(1.12, s + ext);
-		            const rExt = R0 * Math.pow(K, sExt);
-		            const narrow = 1 / (1 + ext * 6);
-		            radius = rExt + (rand01(`a:${n.id}`) - 0.5) * 2 * rJit * narrow;
-		            theta = base + sExt * chord + (rand01(`b:${n.id}`) - 0.5) * (0.03 + fan * 0.62) * narrow;
-		          }
+		        let theta = base + s * chord + (rand01(`b:${n.id}`) - 0.5) * (isDisc ? 0.05 + fan * 0.5 : 0.035 + fan * 0.5);
+		        if (s > 0.88) {
+		          const k2 = 1 / (1 + (s - 0.88) * 26);
+		          radius = rt + (radius - rt) * k2;
+		          theta = base + s * chord + (theta - (base + s * chord)) * k2;
 		        }
 		        out.set(n.id, {
 		          x: Math.cos(theta) * radius,
@@ -45812,14 +45826,34 @@ var __create = Object.create;
 		          z: Math.sin(theta) * radius * 0.82
 		        });
 		      } else {
+		        if (diskStyle === "disc" && rand01(`k:${n.id}`) < 0.2) {
+		          const rb = 115 * Math.pow(rand01(`k2:${n.id}`), 1.7);
+		          const ab = rand01(`k3:${n.id}`) * Math.PI * 2;
+		          out.set(n.id, {
+		            x: Math.cos(ab) * rb,
+		            y: (rand01(`s:${n.id}:y`) - 0.5) * 26,
+		            z: Math.sin(ab) * rb * 0.82
+		          });
+		          continue;
+		        }
 		        const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
 		        const a = rand01(`a:${n.id}`) * Math.PI * 2;
 		        const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
 		        const discMode = diskStyle === "disc";
 		        const discSpread = discMode ? 520 / Math.sqrt(Math.max(1, total)) * 1.7 : 0;
+		        const swirlD = discMode ? 1.9 + rand01(`disc:${discSeed}:sw`) * 1.1 : 0;
 		        const rr2 = discMode ? Math.sqrt(rand01(`s:${n.id}`)) * discSpread : 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 90;
 		        let px2 = c.x + Math.sin(b) * Math.cos(a) * rr2;
 		        let pz2 = c.z + Math.sin(b) * Math.sin(a) * rr2;
+		        if (discMode && swirlD > 0) {
+		          const rp0 = Math.hypot(px2, pz2) || 1;
+		          const dth = swirlD * Math.log(rp0 / 110);
+		          const cs = Math.cos(dth), sn = Math.sin(dth);
+		          const nx = px2 * cs - pz2 * sn;
+		          const nz = px2 * sn + pz2 * cs;
+		          px2 = nx;
+		          pz2 = nz;
+		        }
 		        if (discMode) {
 		          const rp = Math.hypot(px2, pz2);
 		          const RMAX = 640;
@@ -46074,6 +46108,18 @@ var __create = Object.create;
 		  const [shape, setShape] = (0, import_react33.useState)("sphere");
 		  const [diskStyle, setDiskStyle] = (0, import_react33.useState)("spiral");
 		  const [armSpread, setArmSpread] = (0, import_react33.useState)(0.55);
+		  const [discSeed, setDiscSeed] = (0, import_react33.useState)(0);
+		  const discSeedRef = (0, import_react33.useRef)(0);
+		  discSeedRef.current = discSeed;
+		  const discGateRef = (0, import_react33.useRef)(diskStyle);
+		  if (discGateRef.current !== diskStyle) {
+		    discGateRef.current = diskStyle;
+		    if (diskStyle === "disc") {
+		      const s = Math.floor(Math.random() * 1e5) + 1;
+		      discSeedRef.current = s;
+		      setDiscSeed(s);
+		    }
+		  }
 		  const armSpreadRef = (0, import_react33.useRef)(0.55);
 		  armSpreadRef.current = armSpread;
 		  const shapeRef = (0, import_react33.useRef)("sphere");
@@ -46139,8 +46185,8 @@ var __create = Object.create;
 		  const nodeKeySeed = (0, import_react33.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
 		  const axisNodes = (0, import_react33.useMemo)(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: n.hall })), [full]);
 		  const clusterLayout = (0, import_react33.useMemo)(
-		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current),
-		    [axisNodes, axis, shape, diskStyle, armSpread]
+		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current, discSeedRef.current),
+		    [axisNodes, axis, shape, diskStyle, armSpread, discSeed]
 		  );
 		  const layoutRef = (0, import_react33.useRef)(clusterLayout);
 		  const egoLayoutRef = (0, import_react33.useRef)(null);
