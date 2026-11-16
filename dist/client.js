@@ -45969,20 +45969,13 @@ var __create = Object.create;
 		      let y2 = p.y;
 		      if (amp > 0 && rr > R0s * 1.02) {
 		        const s = Math.log(rr / R0s) / lnK;
-		        const rOf = (ss) => R0s * Math.pow(RENDs / R0s, ss);
-		        const armSpan2 = Math.PI * 2 / 6;
-		        const baseRaw = ang - s * chordS;
-		        const base2 = Math.round(baseRaw / armSpan2) * armSpan2;
-		        const dth = ang - (base2 + s * chordS);
-		        const dr = rr - rOf(s);
-		        const ANCHOR = 0.42;
-		        const L = Math.max(0.4, Math.min(2.1, 1 + Math.sin(ts * 7e-4 + base2 * 3) * 0.55 * amp));
-		        const s2 = s <= ANCHOR ? s : ANCHOR + (s - ANCHOR) * L;
-		        const r2 = rOf(s2) + dr;
-		        const th2 = base2 + s2 * chordS + dth;
+		        const L = Math.max(0.55, Math.min(1.45, 1 + Math.sin(ts * 7e-4) * 0.45 * amp));
+		        const ds = s * (L - 1);
+		        const r2 = rr * Math.exp(ds * lnK);
+		        const th2 = ang + ds * chordS;
 		        x2 = Math.cos(th2) * r2;
 		        z2 = Math.sin(th2) * r2 * 0.82;
-		        y2 = p.y + Math.sin(ts * 7e-4 + base2 * 3) * 5 * amp;
+		        y2 = p.y + Math.sin(ts * 7e-4) * 4 * amp;
 		      } else {
 		        x2 = p.x;
 		        z2 = p.z;

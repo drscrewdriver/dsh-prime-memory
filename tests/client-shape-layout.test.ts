@@ -455,4 +455,51 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     const N2 = buildClusterShapeLayout(ns, 'hall', 'lemniscate', 'spiral', 0.55, 0, 'continuous');
     expect([...N.entries()]).toEqual([...N2.entries()]);
   });
+
+  it('幅度=带子长度:全体带子**同步**伸缩(不是一半长一半短、也不轮流)', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const ns: ReturnType<typeof mk>[] = [];
+    // 六条带子各给同样多的点,便于按角向分臂统计
+    for (let arm = 0; arm < 6; arm++) for (let i = 0; i < 60; i++) ns.push(mk('s' + arm + '_' + i, 'tool', 'h' + arm));
+    const L = buildClusterShapeLayout(ns, 'hall', 'disk', 'spiral', 0.55, 0);
+    const A = flowShape(L, 1500, 'disk', 1, 2, 'spin');
+    const B = flowShape(L, 3800, 'disk', 1, 2, 'spin');
+    // 每臂最外点的半径(带子末端)
+    const armMaxR = (M: Map<string, { x: number; z: number }>) => {
+      const out = new Array(6).fill(0);
+      for (const [id, q] of M) {
+        const arm = Number(id.split('_')[0]!.slice(1));
+        const r = Math.hypot(q.x, q.z);
+        if (r > out[arm]!) out[arm] = r;
+      }
+      return out;
+    };
+    const a = armMaxR(A);
+    const b = armMaxR(B);
+    // ① 同一时刻:六臂末端半径接近(没有"一半长一半短")
+    const spread = (arr: number[]) => (Math.max(...arr) - Math.min(...arr)) / (Math.max(...arr) || 1);
+    expect(spread(a)).toBeLessThan(0.28);
+    expect(spread(b)).toBeLessThan(0.28);
+    // ② 跨时刻:六臂**一起**变长/变短(同向),不是轮流
+    let same = 0;
+    for (let i = 0; i < 6; i++) if (Math.sign(b[i]! - a[i]!) === Math.sign(b[0]! - a[0]!)) same++;
+    expect(same).toBeGreaterThanOrEqual(5);
+    // ③ 整条带子都在伸缩(不是只有外半段动):内段点也应有明显位移
+    let innerMax = 0;
+    for (const [id, q] of L) {
+      if (Math.hypot(q.x, q.z) >= 200) continue;
+      innerMax = Math.max(innerMax, Math.hypot(A.get(id)!.x - B.get(id)!.x, A.get(id)!.z - B.get(id)!.z));
+    }
+    expect(innerMax).toBeGreaterThan(30);
+    // ④ 但半径比例保持一致(是"沿螺线伸缩",不是"内圈乱抖"):内外两点的 r 比值守恒
+    let ratioErr = 0;
+    const ids = [...L.keys()].filter((id) => Math.hypot(L.get(id)!.x, L.get(id)!.z) > 260).slice(0, 20);
+    for (const id of ids) {
+      const rA = Math.hypot(A.get(id)!.x, A.get(id)!.z);
+      const rB = Math.hypot(B.get(id)!.x, B.get(id)!.z);
+      const r0 = Math.hypot(L.get(id)!.x, L.get(id)!.z);
+      ratioErr = Math.max(ratioErr, Math.abs(rA / r0 - rB / r0));
+    }
+    expect(ratioErr).toBeLessThan(0.9); // 同一带子内伸缩比例一致(不会一半长一半短)
+  });
 });

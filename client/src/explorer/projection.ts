@@ -631,35 +631,30 @@ export function flowShape(
       // 半径与卷角**同步**推进 → 带子沿自身路径变长/变短,形态(卷绕松紧)完全不变。
       // s 在带内连续 → 带子不会被撕断;伸缩相位由臂基角决定(带内恒定) → 每条臂各自呼吸。
       // 盘面 z 被压扁 0.82,故反解前要先还原(否则 θ 解错,带子会歪)。
-      const R0s = 150; const RENDs = 570; const lnK = Math.log(RENDs / R0s);
+      // ── 幅度 = 带子的**长度**(全体带子同步伸缩,不是轮流)──
+      // 之前两处错:① 每条臂用 base*3 的相位 → 同一时刻只有一半带子在伸长、其余在缩短,
+      // 还随时间"轮流"变形;② 从 ANCHOR=0.42 处才动 → 只有外半段拉长,内半段钉死。
+      // 现在:全局同一相位(所有带子一起长短),且沿螺线推进**整条**带子。
+      // 做法极简——只加一个"额外的弧长" ds = s·(L−1):
+      //   r2 = rr · K^ds(半径按同一比例外推,径向抖动比例不变)
+      //   θ2 = ang + ds·chord(角向同步推进)
+      // 点相对螺线的偏移(厚度、散度)原样保留,不需要反解臂基角。
+      const R0s = 150; const RENDs = 570;
+      const lnK = Math.log(RENDs / R0s);
       const chordS = 2.45;
       const ang = Math.atan2(p.z / 0.82, p.x);
       const rr = Math.hypot(p.x, p.z / 0.82);
       let x2: number; let z2: number; let y2 = p.y;
       if (amp > 0 && rr > R0s * 1.02) {
         const s = Math.log(rr / R0s) / lnK;
-        // ── 保形拉伸:沿自身螺线把带子拉长,但保留每个点相对螺线的**局部抖动** ──
-        // 反解 s,同时记下点相对螺线的偏移(dr 径向、dth 角向)——这是带子的"厚度"。
-        // 只把 s 按长度倍率推进,dr/dth 原样带过去 → 带子变长/变短,厚度与散度不变。
-        const rOf = (ss: number) => R0s * Math.pow(RENDs / R0s, ss);
-        // 臂基角 = 当前角 − 卷角。但点有横向抖动,直接用会让**同一条带子内部**算出不同 base
-        // → 带子被拉毛。所以把 base 量化到臂格点(六臂 2π/6):同带子共享一个长度倍率。
-        const armSpan2 = Math.PI * 2 / 6;
-        const baseRaw = ang - s * chordS;
-        const base = Math.round(baseRaw / armSpan2) * armSpan2;
-        // 相对量化后臂中心的偏移 = 带子的厚度(含原有的散度与尖端抖动)
-        const dth = ang - (base + s * chordS);
-        const dr = rr - rOf(s);
-        // 带子长度伸缩:锚定内段,只动外端 → 起头位置不变、末端长短来回
-        const ANCHOR = 0.42;
-        const L = Math.max(0.40, Math.min(2.10, 1 + Math.sin(ts * 0.0007 + base * 3) * 0.55 * amp));
-        const s2 = s <= ANCHOR ? s : ANCHOR + (s - ANCHOR) * L;
-        const r2 = rOf(s2) + dr;
-        const th2 = base + s2 * chordS + dth;
+        // 全局相位:所有带子同步伸缩(没有 base 偏移 → 不会一半长一半短、不会轮流)
+        const L = Math.max(0.55, Math.min(1.45, 1 + Math.sin(ts * 0.0007) * 0.45 * amp));
+        const ds = s * (L - 1);
+        const r2 = rr * Math.exp(ds * lnK);
+        const th2 = ang + ds * chordS;
         x2 = Math.cos(th2) * r2;
         z2 = Math.sin(th2) * r2 * 0.82;
-        // 带子伸缩时轻微起伏(不是主效果,只给一点"活"的感觉)
-        y2 = p.y + Math.sin(ts * 0.0007 + base * 3) * 5 * amp;
+        y2 = p.y + Math.sin(ts * 0.0007) * 4 * amp;
       } else {
         x2 = p.x; z2 = p.z;
       }
