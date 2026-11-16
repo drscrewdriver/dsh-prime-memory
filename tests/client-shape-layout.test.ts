@@ -313,18 +313,28 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     expect(diff).toBeGreaterThan(50);
   });
 
-  it('幅度加强:amp=2 的平均形变足以肉眼可见(> 60 单位)', async () => {
+  it('幅度=带子长度:只推外段(内段锚定),臂末端明显伸缩,包络不失控', async () => {
     const { flowShape } = await import('../client/src/explorer/projection.js');
     const L = buildClusterShapeLayout(nodes, 'hall', 'disk');
-    const delta = (style: 'spin' | 'eight') => {
-      const A = flowShape(L, 30000, 'disk', 1, 0, style);
-      const B = flowShape(L, 30000, 'disk', 1, 2, style);
-      let s = 0;
-      for (const [id, q] of A) { const b = B.get(id)!; s += Math.hypot(q.x - b.x, q.y - b.y, q.z - b.z); }
-      return s / A.size;
-    };
-    expect(delta('spin')).toBeGreaterThan(60);
-    expect(delta('eight')).toBeGreaterThan(60);
+    const A = flowShape(L, 30000, 'disk', 1, 0, 'spin');
+    const B = flowShape(L, 30000, 'disk', 1, 2, 'spin');
+    let innerMax = 0;
+    let outerMax = 0;
+    for (const [id, q] of L) {
+      const r0 = Math.hypot(q.x, q.z);
+      const d = Math.hypot(A.get(id)!.x - B.get(id)!.x, A.get(id)!.z - B.get(id)!.z);
+      if (r0 < 200) innerMax = Math.max(innerMax, d);
+      else outerMax = Math.max(outerMax, d);
+    }
+    expect(innerMax).toBeLessThan(30); // 内段锚定:几乎不动
+    expect(outerMax).toBeGreaterThan(120); // 外段:明显伸缩
+    for (const q of B.values()) expect(Math.hypot(q.x, q.z)).toBeLessThan(1800);
+    // eight 风格仍按原样吃 amp
+    const E0 = flowShape(L, 30000, 'disk', 1, 0, 'eight');
+    const E2 = flowShape(L, 30000, 'disk', 1, 2, 'eight');
+    let eSum = 0;
+    for (const [id, q] of E0) { const b = E2.get(id)!; eSum += Math.hypot(q.x - b.x, q.z - b.z); }
+    expect(eSum / E0.size).toBeGreaterThan(60);
   });
 
   it('悬臂散度 armSpread:越大外沿越散(径向离散度单调增),内圈仍紧凑', () => {

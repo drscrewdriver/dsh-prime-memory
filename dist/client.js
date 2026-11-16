@@ -45923,15 +45923,41 @@ var __create = Object.create;
 		    }
 		    if (style === "spin") {
 		      const a = 0.1 * 0.0167 * ts;
+		      const R0s = 150;
+		      const RENDs = 570;
+		      const lnK = Math.log(RENDs / R0s);
+		      const chordS = 2.45;
+		      const ang = Math.atan2(p.z / 0.82, p.x);
+		      const rr = Math.hypot(p.x, p.z / 0.82);
+		      let x2;
+		      let z2;
+		      let y2 = p.y;
+		      if (amp > 0 && rr > R0s * 1.02) {
+		        const s = Math.log(rr / R0s) / lnK;
+		        const rOf = (ss) => R0s * Math.pow(RENDs / R0s, ss);
+		        const armSpan2 = Math.PI * 2 / 6;
+		        const baseRaw = ang - s * chordS;
+		        const base2 = Math.round(baseRaw / armSpan2) * armSpan2;
+		        const dth = ang - (base2 + s * chordS);
+		        const dr = rr - rOf(s);
+		        const ANCHOR = 0.42;
+		        const L = Math.max(0.4, Math.min(2.1, 1 + Math.sin(ts * 7e-4 + base2 * 3) * 0.55 * amp));
+		        const s2 = s <= ANCHOR ? s : ANCHOR + (s - ANCHOR) * L;
+		        const r2 = rOf(s2) + dr;
+		        const th2 = base2 + s2 * chordS + dth;
+		        x2 = Math.cos(th2) * r2;
+		        z2 = Math.sin(th2) * r2 * 0.82;
+		        y2 = p.y + Math.sin(ts * 7e-4 + base2 * 3) * 5 * amp;
+		      } else {
+		        x2 = p.x;
+		        z2 = p.z;
+		      }
 		      const cy = Math.cos(a);
 		      const sy = Math.sin(a);
-		      const ang = Math.atan2(p.z, p.x);
-		      const pulse = amp > 0 ? 1 + Math.sin(ts * 6e-4 + ang * 2) * 0.22 * amp : 1;
-		      const breathe = amp > 0 ? Math.sin(ts * 9e-4 + ang * 3) * 26 * amp : 0;
 		      out.set(id, {
-		        x: (p.x * cy - p.z * sy) * pulse,
-		        y: p.y + breathe,
-		        z: (p.x * sy + p.z * cy) * pulse
+		        x: x2 * cy - z2 * sy,
+		        y: y2,
+		        z: x2 * sy + z2 * cy
 		      });
 		    } else {
 		      const om = ts / 2e4;

@@ -565,16 +565,49 @@ export function flowShape(
       // 差速旋转(内快外慢)会让任意螺旋臂随 t 无限剪切,转一会儿就缠绕成一团。
       // t 由调用方按 ∫speed·dt 累加,故改速度时相位连续。
       const a = 0.10 * 0.0167 * ts; // rad
+      // ── 幅度 = 带子的**长度**(沿自身对数螺线伸缩)──
+      // 悬臂是几条超长的带子按对数螺线卷起来。幅度该控制的是带子有多长,
+      // 不是卷得多紧。做法:反解点在自己的螺线上的参数 s,再整体 s' = s·L:
+      // 半径与卷角**同步**推进 → 带子沿自身路径变长/变短,形态(卷绕松紧)完全不变。
+      // s 在带内连续 → 带子不会被撕断;伸缩相位由臂基角决定(带内恒定) → 每条臂各自呼吸。
+      // 盘面 z 被压扁 0.82,故反解前要先还原(否则 θ 解错,带子会歪)。
+      const R0s = 150; const RENDs = 570; const lnK = Math.log(RENDs / R0s);
+      const chordS = 2.45;
+      const ang = Math.atan2(p.z / 0.82, p.x);
+      const rr = Math.hypot(p.x, p.z / 0.82);
+      let x2: number; let z2: number; let y2 = p.y;
+      if (amp > 0 && rr > R0s * 1.02) {
+        const s = Math.log(rr / R0s) / lnK;
+        // ── 保形拉伸:沿自身螺线把带子拉长,但保留每个点相对螺线的**局部抖动** ──
+        // 反解 s,同时记下点相对螺线的偏移(dr 径向、dth 角向)——这是带子的"厚度"。
+        // 只把 s 按长度倍率推进,dr/dth 原样带过去 → 带子变长/变短,厚度与散度不变。
+        const rOf = (ss: number) => R0s * Math.pow(RENDs / R0s, ss);
+        // 臂基角 = 当前角 − 卷角。但点有横向抖动,直接用会让**同一条带子内部**算出不同 base
+        // → 带子被拉毛。所以把 base 量化到臂格点(六臂 2π/6):同带子共享一个长度倍率。
+        const armSpan2 = Math.PI * 2 / 6;
+        const baseRaw = ang - s * chordS;
+        const base = Math.round(baseRaw / armSpan2) * armSpan2;
+        // 相对量化后臂中心的偏移 = 带子的厚度(含原有的散度与尖端抖动)
+        const dth = ang - (base + s * chordS);
+        const dr = rr - rOf(s);
+        // 带子长度伸缩:锚定内段,只动外端 → 起头位置不变、末端长短来回
+        const ANCHOR = 0.42;
+        const L = Math.max(0.40, Math.min(2.10, 1 + Math.sin(ts * 0.0007 + base * 3) * 0.55 * amp));
+        const s2 = s <= ANCHOR ? s : ANCHOR + (s - ANCHOR) * L;
+        const r2 = rOf(s2) + dr;
+        const th2 = base + s2 * chordS + dth;
+        x2 = Math.cos(th2) * r2;
+        z2 = Math.sin(th2) * r2 * 0.82;
+        // 带子伸缩时轻微起伏(不是主效果,只给一点"活"的感觉)
+        y2 = p.y + Math.sin(ts * 0.0007 + base * 3) * 5 * amp;
+      } else {
+        x2 = p.x; z2 = p.z;
+      }
       const cy = Math.cos(a); const sy = Math.sin(a);
-      // 幅度:整体**径向呼吸**(角向相位差 → 星臂像在轻微伸展,±7% 半径脉动),
-      // 加垂直波。有界、不累积 → 不会破坏"臂不缠绕"的前提。
-      const ang = Math.atan2(p.z, p.x);
-      const pulse = amp > 0 ? 1 + Math.sin(ts * 0.0006 + ang * 2) * 0.22 * amp : 1;
-      const breathe = amp > 0 ? Math.sin(ts * 0.0009 + ang * 3) * 26 * amp : 0;
       out.set(id, {
-        x: (p.x * cy - p.z * sy) * pulse,
-        y: p.y + breathe,
-        z: (p.x * sy + p.z * cy) * pulse,
+        x: x2 * cy - z2 * sy,
+        y: y2,
+        z: x2 * sy + z2 * cy,
       });
     } else {
       // 8 字真轨道流:反解每点固有轨道相位 φ0,φ = φ0 + om·t 沿 ∞ 曲线推进。
