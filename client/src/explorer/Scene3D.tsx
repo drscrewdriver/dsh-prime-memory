@@ -45,7 +45,7 @@ import {
   projectAll,
   zoomBy,
 } from './projection.js';
-import type { ClusterAxis, DiskStyle, ClusterShape, Projected, Vec3 } from './projection.js';
+import type { ClusterAxis, DiskStyle, ClusterShape, EightStyle, Projected, Vec3 } from './projection.js';
 import { HALL_FALLBACK, HALL_ORDER, hallLabel, defaultHallToken, HALL_GALAXY_COLORS, variantOf } from './hall-palette.js';
 import { NButton } from '../ui/primitives.js';
 
@@ -157,6 +157,10 @@ export function Scene3D(props: {
   const [armSpread, setArmSpread] = useState(0.55);
   /** 圆盘(吸积盘)种子:每次进入「圆盘」重新掷一次 → 臂数与整体朝向都不同,不永远同一角度。 */
   const [discSeed, setDiscSeed] = useState(0);
+  /** 8 字子风格:成簇(按簇分段)/ 连续(全体混编成一条扭转无限环,弱化类型聚类)。 */
+  const [eightStyle, setEightStyle] = useState<EightStyle>('cluster');
+  const eightStyleRef = useRef<EightStyle>('cluster');
+  eightStyleRef.current = eightStyle;
   const discSeedRef = useRef(0);
   discSeedRef.current = discSeed;
   // React 官方「render 期调整 state」模式:切到 disc 时立刻换种子,不经过 effect 的额外一帧。
@@ -250,8 +254,8 @@ export function Scene3D(props: {
   const axisNodes = useMemo(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: (n as { hall?: string }).hall })), [full]);
   /** clusterLayout 由 full+axis 派生:轴切换会换布局引用,但硬落位 effect 只认 [full](F4)。 */
   const clusterLayout = useMemo(
-    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current, discSeedRef.current),
-    [axisNodes, axis, shape, diskStyle, armSpread, discSeed],
+    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current, discSeedRef.current, eightStyleRef.current),
+    [axisNodes, axis, shape, diskStyle, armSpread, discSeed, eightStyle],
   );
   const layoutRef = useRef<Map<string, Vec3>>(clusterLayout);
   const egoLayoutRef = useRef<Map<string, Vec3> | null>(null);
@@ -1138,6 +1142,26 @@ export function Scene3D(props: {
                   }}
                 >
                   {d === 'disc' ? '圆盘' : d === 'legacy' ? '双臂' : d === 'spiral' ? '悬臂' : '平铺'}
+                </button>
+              ))}
+            </span>
+          ) : null}
+          {shape === 'lemniscate' ? (
+            <span style={{ display: 'inline-flex', gap: 0, borderLeft: '1px solid rgba(127,177,255,0.3)' }}>
+              {(['cluster', 'continuous'] as const).map((e) => (
+                <button
+                  key={e}
+                  onClick={() => setEightStyle(e)}
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 8px',
+                    cursor: 'pointer',
+                    border: 'none',
+                    color: eightStyle === e ? ui.accent : ui.text,
+                    background: eightStyle === e ? 'rgba(127,177,255,0.14)' : 'transparent',
+                  }}
+                >
+                  {e === 'cluster' ? '成簇' : '连续'}
                 </button>
               ))}
             </span>

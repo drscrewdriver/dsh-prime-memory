@@ -201,6 +201,8 @@ export function buildClusterShapeLayout(
   armSpread = 0.55,
   /** 圆盘(吸积盘)的随机种子:决定臂数与整体朝向。0 = 固定默认;每次进入随机 = 每次不同角度。 */
   discSeed = 0,
+  /** 8 字子风格:成簇(按簇分段)/ 连续(全体混编成一条扭转带)。仅 lemniscate 生效。 */
+  eightStyle: EightStyle = 'cluster',
 ): Map<string, Vec3> {
   if (shape === 'sphere') return buildClusterLayoutByAxis(nodes, axis);
   const out = new Map<string, Vec3>();
@@ -347,19 +349,69 @@ export function buildClusterShapeLayout(
     });
   }
   if (shape === 'lemniscate') {
-    groups.forEach((key, i) => {
-      const jitter = rand01(`c:${key}`) * 0.5;
-      const t8 = (i / total) * Math.PI * 2 + jitter;
-      const A = 560 + rand01(`r:${key}`) * 80;
-      centers.set(key, {
-        x: Math.cos(t8) * A,
-        y: (rand01(`r:${key}:y`) - 0.5) * 36,
-        z: Math.sin(t8) * Math.cos(t8) * A * 0.72,
+    // 两种子风格共用同一条 ∞ 曲线参数化:x = A·cosφ, z = A·sinφ·cosφ(A 按簇固定)。
+    // cluster:簇心按 φ 分段 → 每个簇聚在曲线的一段(既有行为,保留可回放);
+    // continuous:簇心**不按 φ 分段**,全部落在同一条曲线上但 φ 由簇序 + 全局相位打散,
+    //            真正"弱化聚类"的部分在点级采样(见下方 continuous 分支)。
+    if (eightStyle === 'continuous') {
+      // 连续 8 字:簇心只作"带子里的锚",φ 按黄金角铺满整条曲线 → 簇与簇沿环交替,
+      // 不形成整段单色块;真正决定形态的是下面点级的连续采样。
+      const GA8 = Math.PI * (3 - Math.sqrt(5));
+      groups.forEach((key, i) => {
+        const phi = (i * GA8) % (Math.PI * 2);
+        const A = 560 + rand01(`r:${key}`) * 80;
+        centers.set(key, {
+          x: Math.cos(phi) * A,
+          y: (rand01(`r:${key}:y`) - 0.5) * 26,
+          z: Math.sin(phi) * Math.cos(phi) * A * 0.72,
+        });
       });
-    });
+    } else {
+      groups.forEach((key, i) => {
+        const jitter = rand01(`c:${key}`) * 0.5;
+        const t8 = (i / total) * Math.PI * 2 + jitter;
+        const A = 560 + rand01(`r:${key}`) * 80;
+        centers.set(key, {
+          x: Math.cos(t8) * A,
+          y: (rand01(`r:${key}:y`) - 0.5) * 36,
+          z: Math.sin(t8) * Math.cos(t8) * A * 0.72,
+        });
+      });
+    }
   }
   for (const n of nodes) {
     const gk = keyOf(n);
+    if (shape === 'lemniscate' && eightStyle === 'continuous') {
+      // ── 连续 8 字(莫比乌斯式无限环)──
+      // 核心:点的 φ **不再按簇分段**,而是全体混编沿 ∞ 曲线均匀铺开(u = 全局均匀 + 极小抖动),
+      // 于是曲线是一条连续不断的带子,颜色沿环交替流动 —— 弱化了类型聚类。
+      // 扭转:带的"厚度"沿切向做 u/2 旋转(莫比乌斯带的关键:走一圈翻一次面),
+      //       横向偏移用 (cos(u/2), sin(u/2)) 而非固定方向 → 带子在环上自我扭转。
+      const A = 560;
+      const u = (rand01(`s:${n.id}`) + (rand01(`u2:${n.id}`) - 0.5) * 0.006) * Math.PI * 2;
+      // 带半宽:中心略窄、两端(∞ 交叉处)略宽,读起来像被拉开的绸带
+      const halfW = 34 + 18 * Math.abs(Math.cos(u));
+      const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
+      // 莫比乌斯扭转:横向方向随 u/2 旋转
+      const twist = u / 2;
+      // 曲线位置
+      const cx8 = Math.cos(u) * A;
+      const cz8 = Math.sin(u) * Math.cos(u) * A * 0.72;
+      // 切向(对 u 求导后归一)与法向 → 横向偏移沿法向铺开,并叠扭转分量到 y
+      const dx = -Math.sin(u) * A;
+      const dz = (Math.cos(u) * Math.cos(u) - Math.sin(u) * Math.sin(u)) * A * 0.72;
+      const dl = Math.hypot(dx, dz) || 1;
+      const nx = -dz / dl; const nz = dx / dl; // 平面内法向
+      // 扭转把一部分横向偏移转到竖直方向 → 环在交叉处翻面
+      const twistY = Math.sin(twist) * w * 0.62;
+      const twistN = Math.cos(twist) * w;
+      out.set(n.id, {
+        x: cx8 + nx * twistN,
+        y: (rand01(`r:${gk}:y`) - 0.5) * 12 + twistY,
+        z: cz8 + nz * twistN,
+      });
+      continue;
+    }
     if (shape === 'disk') {
       const span = armSpan.get(gk);
       if (span) {
@@ -494,6 +546,14 @@ export function buildClusterShapeLayout(
  * 纯函数:base 布局不动,返回新 Map;主循环每帧调用(开销 = 一次 Map 遍历,千点级无感)。
  */
 export type FlowStyle = 'spin' | 'eight' | 'accretion';
+
+/**
+ * 8 字子风格:
+ * - cluster:  按簇分角度成团(既有行为),每个簇在 ∞ 曲线的一段上成团块;
+ * - continuous: **连续 8 字**——所有点沿 ∞ 曲线均匀铺开、混编(弱化类型聚类),
+ *   带宽沿切向做 u/2 扭转 → 读作一条莫比乌斯式的连续无限环。
+ */
+export type EightStyle = 'cluster' | 'continuous';
 
 /**
  * 形态动画帧变换（炫技档）。样式与形态解耦——任意盘/环都可选自转或 8 字流：

@@ -45665,7 +45665,7 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
-		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral", armSpread = 0.55, discSeed = 0) {
+		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral", armSpread = 0.55, discSeed = 0, eightStyle = "cluster") {
 		  if (shape === "sphere") return buildClusterLayoutByAxis(nodes, axis);
 		  const out = /* @__PURE__ */ new Map();
 		  const baseCount = /* @__PURE__ */ new Map();
@@ -45777,19 +45777,54 @@ var __create = Object.create;
 		    });
 		  }
 		  if (shape === "lemniscate") {
-		    groups.forEach((key, i) => {
-		      const jitter = rand01(`c:${key}`) * 0.5;
-		      const t8 = i / total * Math.PI * 2 + jitter;
-		      const A = 560 + rand01(`r:${key}`) * 80;
-		      centers.set(key, {
-		        x: Math.cos(t8) * A,
-		        y: (rand01(`r:${key}:y`) - 0.5) * 36,
-		        z: Math.sin(t8) * Math.cos(t8) * A * 0.72
+		    if (eightStyle === "continuous") {
+		      const GA8 = Math.PI * (3 - Math.sqrt(5));
+		      groups.forEach((key, i) => {
+		        const phi = i * GA8 % (Math.PI * 2);
+		        const A = 560 + rand01(`r:${key}`) * 80;
+		        centers.set(key, {
+		          x: Math.cos(phi) * A,
+		          y: (rand01(`r:${key}:y`) - 0.5) * 26,
+		          z: Math.sin(phi) * Math.cos(phi) * A * 0.72
+		        });
 		      });
-		    });
+		    } else {
+		      groups.forEach((key, i) => {
+		        const jitter = rand01(`c:${key}`) * 0.5;
+		        const t8 = i / total * Math.PI * 2 + jitter;
+		        const A = 560 + rand01(`r:${key}`) * 80;
+		        centers.set(key, {
+		          x: Math.cos(t8) * A,
+		          y: (rand01(`r:${key}:y`) - 0.5) * 36,
+		          z: Math.sin(t8) * Math.cos(t8) * A * 0.72
+		        });
+		      });
+		    }
 		  }
 		  for (const n of nodes) {
 		    const gk = keyOf(n);
+		    if (shape === "lemniscate" && eightStyle === "continuous") {
+		      const A = 560;
+		      const u = (rand01(`s:${n.id}`) + (rand01(`u2:${n.id}`) - 0.5) * 6e-3) * Math.PI * 2;
+		      const halfW = 34 + 18 * Math.abs(Math.cos(u));
+		      const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
+		      const twist = u / 2;
+		      const cx8 = Math.cos(u) * A;
+		      const cz8 = Math.sin(u) * Math.cos(u) * A * 0.72;
+		      const dx = -Math.sin(u) * A;
+		      const dz = (Math.cos(u) * Math.cos(u) - Math.sin(u) * Math.sin(u)) * A * 0.72;
+		      const dl = Math.hypot(dx, dz) || 1;
+		      const nx = -dz / dl;
+		      const nz = dx / dl;
+		      const twistY = Math.sin(twist) * w * 0.62;
+		      const twistN = Math.cos(twist) * w;
+		      out.set(n.id, {
+		        x: cx8 + nx * twistN,
+		        y: (rand01(`r:${gk}:y`) - 0.5) * 12 + twistY,
+		        z: cz8 + nz * twistN
+		      });
+		      continue;
+		    }
 		    if (shape === "disk") {
 		      const span = armSpan.get(gk);
 		      if (span) {
@@ -46161,6 +46196,9 @@ var __create = Object.create;
 		  const [diskStyle, setDiskStyle] = (0, import_react33.useState)("spiral");
 		  const [armSpread, setArmSpread] = (0, import_react33.useState)(0.55);
 		  const [discSeed, setDiscSeed] = (0, import_react33.useState)(0);
+		  const [eightStyle, setEightStyle] = (0, import_react33.useState)("cluster");
+		  const eightStyleRef = (0, import_react33.useRef)("cluster");
+		  eightStyleRef.current = eightStyle;
 		  const discSeedRef = (0, import_react33.useRef)(0);
 		  discSeedRef.current = discSeed;
 		  const discGateRef = (0, import_react33.useRef)(diskStyle);
@@ -46237,8 +46275,8 @@ var __create = Object.create;
 		  const nodeKeySeed = (0, import_react33.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
 		  const axisNodes = (0, import_react33.useMemo)(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: n.hall })), [full]);
 		  const clusterLayout = (0, import_react33.useMemo)(
-		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current, discSeedRef.current),
-		    [axisNodes, axis, shape, diskStyle, armSpread, discSeed]
+		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current, discSeedRef.current, eightStyleRef.current),
+		    [axisNodes, axis, shape, diskStyle, armSpread, discSeed, eightStyle]
 		  );
 		  const layoutRef = (0, import_react33.useRef)(clusterLayout);
 		  const egoLayoutRef = (0, import_react33.useRef)(null);
@@ -47010,6 +47048,22 @@ var __create = Object.create;
 		                children: d === "disc" ? "圆盘" : d === "legacy" ? "双臂" : d === "spiral" ? "悬臂" : "平铺"
 		              },
 		              d
+		            )) }) : null,
+		            shape === "lemniscate" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, borderLeft: "1px solid rgba(127,177,255,0.3)" }, children: ["cluster", "continuous"].map((e) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		              "button",
+		              {
+		                onClick: () => setEightStyle(e),
+		                style: {
+		                  fontSize: 11,
+		                  padding: "2px 8px",
+		                  cursor: "pointer",
+		                  border: "none",
+		                  color: eightStyle === e ? ui.accent : ui.text,
+		                  background: eightStyle === e ? "rgba(127,177,255,0.14)" : "transparent"
+		                },
+		                children: e === "cluster" ? "成簇" : "连续"
+		              },
+		              e
 		            )) }) : null
 		          ] }),
 		          shape === "disk" && diskStyle === "spiral" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }, children: [

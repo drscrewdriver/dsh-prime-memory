@@ -420,4 +420,39 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     const F0 = flowShape(L, 0, 'disk', 0, 1, 'accretion');
     for (const [id, q] of F0) { const b = L.get(id)!; expect(Math.hypot(q.x - b.x, q.z - b.z)).toBeLessThan(1e-6); }
   });
+
+  it('8字连续 continuous:全体混编成一条连续环(弱化聚类),带子有莫比乌斯扭转', () => {
+    const ns: ReturnType<typeof mk>[] = [];
+    const halls = ['work', 'learning', 'health', 'finance', 'journey', 'creative'];
+    for (const h of halls) for (let i = 0; i < 80; i++) ns.push(mk(h + i, 'tool', h));
+    const C = buildClusterShapeLayout(ns, 'hall', 'lemniscate', 'spiral', 0.55, 0, 'cluster');
+    const N = buildClusterShapeLayout(ns, 'hall', 'lemniscate', 'spiral', 0.55, 0, 'continuous');
+    // ① 连续:点的 φ 均匀铺满整条曲线 → 按 φ 分 12 格,每格都非空
+    const bins = new Array(12).fill(0);
+    for (const q of N.values()) {
+      const phi = Math.atan2(q.z / 0.72, q.x);
+      bins[Math.min(11, Math.max(0, Math.floor(((phi + Math.PI) / (Math.PI * 2)) * 12)))]! += 1;
+    }
+    expect(bins.filter((c) => c > 0).length).toBe(12);
+    // ② 弱化聚类:同簇点沿环的分布更散(同簇点 φ 跨度的中位数,continuous > cluster)
+    const spreadOf = (M: Map<string, { x: number; z: number }>) => {
+      const vals: number[] = [];
+      for (const h of halls) {
+        const phis: number[] = [];
+        for (let i = 0; i < 80; i++) { const q = M.get(h + i)!; phis.push(Math.atan2(q.z / 0.72, q.x)); }
+        phis.sort((a, b) => a - b);
+        vals.push(phis[phis.length - 1]! - phis[0]!);
+      }
+      vals.sort((a, b) => a - b);
+      return vals[Math.floor(vals.length / 2)]!;
+    };
+    expect(spreadOf(N)).toBeGreaterThan(spreadOf(C));
+    // ③ 莫比乌斯扭转:y 的跨度不再接近 0(带子翻面会产生竖直分量)
+    const ys = [...N.values()].map((q) => q.y);
+    const span = Math.max(...ys) - Math.min(...ys);
+    expect(span).toBeGreaterThan(20);
+    // ④ 确定性
+    const N2 = buildClusterShapeLayout(ns, 'hall', 'lemniscate', 'spiral', 0.55, 0, 'continuous');
+    expect([...N.entries()]).toEqual([...N2.entries()]);
+  });
 });
