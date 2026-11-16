@@ -34,6 +34,7 @@ import {
   SHELL_GAP,
   TRANSITION_MS,
   brightnessFor,
+  applyArmLength,
   buildClusterShapeLayout,
   buildEgoLayout,
   flowShape,
@@ -571,6 +572,12 @@ export function Scene3D(props: {
       refreshColors();
       const cam = camRef.current;
       let layout = activeLayout(now);
+      // ── 幅度 = 悬臂**带子的长度**(纯静态几何,与流转无关)──
+      // 单独在流转之外施加:所以关掉流转、或转速压到最低时,拉幅度照样能看到带子变长/变短,
+      // 而画面**静止**——伸缩不来自时间,只来自 amp。只对盘状生效(球/8字没有带子概念)。
+      if (shapeRef.current === 'disk' && modeRef.current === 'cluster' && Math.abs(flowAmpRef.current - 1) > 1e-6) {
+        layout = applyArmLength(layout, flowAmpRef.current);
+      }
       // 形态流转(炫技档):盘=差速自转,环=8字轨道流动;ego 聚焦时不转(壳层语义优先)。
       if (flowRef.current && shapeRef.current !== 'sphere' && modeRef.current === 'cluster') {
         // dt 夹到 100ms：标签页挂起后回来不会一步跳很远
@@ -580,7 +587,11 @@ export function Scene3D(props: {
         // 圆盘(auto 档)走吸积盘流:每颗粒子有自己的轨道(开普勒差速 + 点级个体差),
         // 而不是整盘刚体转。圆盘无臂结构,差速剪切只会让纹路更旋涡,不会被缠成一团。
         const autoStyle = shapeRef.current === 'disk' && diskStyleRef.current === 'disc' ? 'accretion' : undefined;
-        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === 'auto' ? autoStyle : flowStyleRef.current);
+        const useStyle = flowStyleRef.current === 'auto' ? autoStyle : flowStyleRef.current;
+        // 幅度只喂给 8 字流(它的"幅度"= 点级游走/带宽);盘状/圆盘的幅度已由上面的
+        // applyArmLength 静态施加,这里必须传 1,否则又会出现"不动却自己伸缩"。
+        const flowAmp = useStyle === 'eight' ? flowAmpRef.current : 1;
+        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmp, useStyle);
         edgeDirty = true;
         nodeDirty = true;
       }

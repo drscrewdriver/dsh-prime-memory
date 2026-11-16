@@ -45923,6 +45923,27 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
+		function applyArmLength(base, amp) {
+		  const L = Math.max(0.35, 1 + (amp - 1) * 0.45);
+		  if (Math.abs(L - 1) < 1e-6) return new Map(base);
+		  const R0 = 150;
+		  const lnK = Math.log(570 / R0);
+		  const chord = 2.45;
+		  const out = /* @__PURE__ */ new Map();
+		  for (const [id, p] of base) {
+		    const rr = Math.hypot(p.x, p.z / 0.82);
+		    if (rr <= R0 * 1.02) {
+		      out.set(id, p);
+		      continue;
+		    }
+		    const s = Math.log(rr / R0) / lnK;
+		    const ds = s * (L - 1);
+		    const r2 = rr * Math.exp(ds * lnK);
+		    const th2 = Math.atan2(p.z / 0.82, p.x) + ds * chord;
+		    out.set(id, { x: Math.cos(th2) * r2, y: p.y, z: Math.sin(th2) * r2 * 0.82 });
+		  }
+		  return out;
+		}
 		function flowShape(base, t, shape, speed = 1, amp = 1, flowStyle) {
 		  const out = /* @__PURE__ */ new Map();
 		  if (shape === "sphere") return out;
@@ -45958,34 +45979,12 @@ var __create = Object.create;
 		    }
 		    if (style === "spin") {
 		      const a = 0.1 * 0.0167 * ts;
-		      const R0s = 150;
-		      const RENDs = 570;
-		      const lnK = Math.log(RENDs / R0s);
-		      const chordS = 2.45;
-		      const ang = Math.atan2(p.z / 0.82, p.x);
-		      const rr = Math.hypot(p.x, p.z / 0.82);
-		      let x2;
-		      let z2;
-		      let y2 = p.y;
-		      if (amp > 0 && rr > R0s * 1.02) {
-		        const s = Math.log(rr / R0s) / lnK;
-		        const L = Math.max(0.55, Math.min(1.45, 1 + Math.sin(ts * 7e-4) * 0.45 * amp));
-		        const ds = s * (L - 1);
-		        const r2 = rr * Math.exp(ds * lnK);
-		        const th2 = ang + ds * chordS;
-		        x2 = Math.cos(th2) * r2;
-		        z2 = Math.sin(th2) * r2 * 0.82;
-		        y2 = p.y + Math.sin(ts * 7e-4) * 4 * amp;
-		      } else {
-		        x2 = p.x;
-		        z2 = p.z;
-		      }
 		      const cy = Math.cos(a);
 		      const sy = Math.sin(a);
 		      out.set(id, {
-		        x: x2 * cy - z2 * sy,
-		        y: y2,
-		        z: x2 * sy + z2 * cy
+		        x: p.x * cy - p.z * sy,
+		        y: p.y,
+		        z: p.x * sy + p.z * cy
 		      });
 		    } else {
 		      const om = ts / 2e4;
@@ -46523,12 +46522,17 @@ var __create = Object.create;
 		      refreshColors();
 		      const cam = camRef.current;
 		      let layout = activeLayout(now);
+		      if (shapeRef.current === "disk" && modeRef.current === "cluster" && Math.abs(flowAmpRef.current - 1) > 1e-6) {
+		        layout = applyArmLength(layout, flowAmpRef.current);
+		      }
 		      if (flowRef.current && shapeRef.current !== "sphere" && modeRef.current === "cluster") {
 		        const dt = flowLastRef.current === 0 ? 0 : Math.min(100, Math.max(0, now - flowLastRef.current));
 		        flowLastRef.current = now;
 		        flowAccRef.current += dt * flowSpeedRef.current;
 		        const autoStyle = shapeRef.current === "disk" && diskStyleRef.current === "disc" ? "accretion" : void 0;
-		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === "auto" ? autoStyle : flowStyleRef.current);
+		        const useStyle = flowStyleRef.current === "auto" ? autoStyle : flowStyleRef.current;
+		        const flowAmp2 = useStyle === "eight" ? flowAmpRef.current : 1;
+		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmp2, useStyle);
 		        edgeDirty = true;
 		        nodeDirty = true;
 		      }

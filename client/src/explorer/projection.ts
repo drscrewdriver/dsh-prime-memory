@@ -561,6 +561,43 @@ export type EightStyle = 'cluster' | 'continuous';
  * - eight: 真 8 字轨道流（点沿 ∞ 曲线 x=A·cosφ / z=A·sinφ·cosφ 连续推进），对任意形态通用。
  * 纯几何驱动，只吃 (t, 布局, 参数)，不含状态 → 同一 t 必得同一帧（可回放）。
  */
+/**
+ * 幅度 = 悬臂**带子的长度**(纯静态几何参数,不吃时间)。
+ *
+ * 悬臂是几条超长的带子按对数螺线卷起来,幅度控制"带子多长":
+ *   amp = 1 → 原始长度(中性,逐点原样返回)
+ *   amp = 0 → 缩短 45%;amp = 2 → 拉长 45%
+ *
+ * 实现:沿自身螺线加一段额外弧长 ds = s·(L−1),半径与卷角同步推进:
+ *   r2 = rr · K^ds,θ2 = ang + ds·chord
+ * 点相对螺线的偏移(带厚、散度)原样保留,所以带子不会被撕开。
+ *
+ * **与流转的隔离**:这里不接收 t,也不接收 speed —— 幅度只改形状,不改动态。
+ * (旧实现用 sin(ts·0.0007·amp) 让带子呼吸,于是"转速拉到最低几乎不转,画面却还在伸缩",
+ * 那是把吸积盘/8字流的动态特性错给了悬臂。)
+ */
+export function applyArmLength(
+  base: ReadonlyMap<string, Vec3>,
+  amp: number,
+): Map<string, Vec3> {
+  const L = Math.max(0.35, 1 + (amp - 1) * 0.45);
+  if (Math.abs(L - 1) < 1e-6) return new Map(base);
+  const R0 = 150;
+  const lnK = Math.log(570 / R0);
+  const chord = 2.45;
+  const out = new Map<string, Vec3>();
+  for (const [id, p] of base) {
+    const rr = Math.hypot(p.x, p.z / 0.82);
+    if (rr <= R0 * 1.02) { out.set(id, p); continue; }
+    const s = Math.log(rr / R0) / lnK;
+    const ds = s * (L - 1);
+    const r2 = rr * Math.exp(ds * lnK);
+    const th2 = Math.atan2(p.z / 0.82, p.x) + ds * chord;
+    out.set(id, { x: Math.cos(th2) * r2, y: p.y, z: Math.sin(th2) * r2 * 0.82 });
+  }
+  return out;
+}
+
 export function flowShape(
   base: ReadonlyMap<string, Vec3>,
   t: number,
@@ -624,45 +661,16 @@ export function flowShape(
       // **刚体自转**:全盘同一角速度(与半径无关)。这是星臂不变形的唯一前提——
       // 差速旋转(内快外慢)会让任意螺旋臂随 t 无限剪切,转一会儿就缠绕成一团。
       // t 由调用方按 ∫speed·dt 累加,故改速度时相位连续。
+      //
+      // 幅度(带子长度)不在这里:它是**纯静态几何**,由调用方在 layout 上先施加
+      // applyArmLength(base, amp) 完成。spin 只负责转,不吃 amp、不吃形变,
+      // 所以转速再低形状也静止 —— 不会出现盘几乎不动却还在伸缩。
       const a = 0.10 * 0.0167 * ts; // rad
-      // ── 幅度 = 带子的**长度**(沿自身对数螺线伸缩)──
-      // 悬臂是几条超长的带子按对数螺线卷起来。幅度该控制的是带子有多长,
-      // 不是卷得多紧。做法:反解点在自己的螺线上的参数 s,再整体 s' = s·L:
-      // 半径与卷角**同步**推进 → 带子沿自身路径变长/变短,形态(卷绕松紧)完全不变。
-      // s 在带内连续 → 带子不会被撕断;伸缩相位由臂基角决定(带内恒定) → 每条臂各自呼吸。
-      // 盘面 z 被压扁 0.82,故反解前要先还原(否则 θ 解错,带子会歪)。
-      // ── 幅度 = 带子的**长度**(全体带子同步伸缩,不是轮流)──
-      // 之前两处错:① 每条臂用 base*3 的相位 → 同一时刻只有一半带子在伸长、其余在缩短,
-      // 还随时间"轮流"变形;② 从 ANCHOR=0.42 处才动 → 只有外半段拉长,内半段钉死。
-      // 现在:全局同一相位(所有带子一起长短),且沿螺线推进**整条**带子。
-      // 做法极简——只加一个"额外的弧长" ds = s·(L−1):
-      //   r2 = rr · K^ds(半径按同一比例外推,径向抖动比例不变)
-      //   θ2 = ang + ds·chord(角向同步推进)
-      // 点相对螺线的偏移(厚度、散度)原样保留,不需要反解臂基角。
-      const R0s = 150; const RENDs = 570;
-      const lnK = Math.log(RENDs / R0s);
-      const chordS = 2.45;
-      const ang = Math.atan2(p.z / 0.82, p.x);
-      const rr = Math.hypot(p.x, p.z / 0.82);
-      let x2: number; let z2: number; let y2 = p.y;
-      if (amp > 0 && rr > R0s * 1.02) {
-        const s = Math.log(rr / R0s) / lnK;
-        // 全局相位:所有带子同步伸缩(没有 base 偏移 → 不会一半长一半短、不会轮流)
-        const L = Math.max(0.55, Math.min(1.45, 1 + Math.sin(ts * 0.0007) * 0.45 * amp));
-        const ds = s * (L - 1);
-        const r2 = rr * Math.exp(ds * lnK);
-        const th2 = ang + ds * chordS;
-        x2 = Math.cos(th2) * r2;
-        z2 = Math.sin(th2) * r2 * 0.82;
-        y2 = p.y + Math.sin(ts * 0.0007) * 4 * amp;
-      } else {
-        x2 = p.x; z2 = p.z;
-      }
       const cy = Math.cos(a); const sy = Math.sin(a);
       out.set(id, {
-        x: x2 * cy - z2 * sy,
-        y: y2,
-        z: x2 * sy + z2 * cy,
+        x: p.x * cy - p.z * sy,
+        y: p.y,
+        z: p.x * sy + p.z * cy,
       });
     } else {
       // 8 字真轨道流:反解每点固有轨道相位 φ0,φ = φ0 + om·t 沿 ∞ 曲线推进。

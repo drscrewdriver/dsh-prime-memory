@@ -153,7 +153,7 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     }
     // 环显式 spin:半径守恒(spin 只绕 y 转)
     const Ll = buildClusterShapeLayout(nodes, 'hall', 'lemniscate');
-    const s1 = flowShape(Ll, 8000, 'lemniscate', 1, 0, 'spin'); // amp=0 才谈半径守恒
+    const s1 = flowShape(Ll, 8000, 'lemniscate', 1, 1, 'spin'); // amp=1 才是中性(纯刚体)
     for (const [id, q] of s1) {
       const b = Ll.get(id)!;
       expect(Math.hypot(q.x, q.z)).toBeCloseTo(Math.hypot(b.x, b.z), 6);
@@ -214,7 +214,7 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     // 覆盖低速到高速、短时到长时(低速缠绕正是因为剪切随时长累积)
     for (const speed of [0.1, 1, 3]) {
       for (const time of [1000, 60000, 600000, 3600000]) {
-        const S = flowShape(L, time * speed, 'disk', 1, 0, 'spin'); // t 已含 speed 累加;amp=0 才谈刚体
+        const S = flowShape(L, time * speed, 'disk', 1, 1, 'spin'); // t 已含 speed 累加;amp=1 是纯刚体(无长度变化)
         for (const [key, d] of d0) {
           const [ia, ib] = key.split('|');
           const a = S.get(ia!)!, b = S.get(ib!)!;
@@ -255,21 +255,27 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     expect(Number.isFinite(Math.hypot(hx, hz))).toBe(true);
   });
 
-  it('幅度参数真实生效:amp 越大,同一时刻的形变越大(spin 与 eight 都吃)', async () => {
-    const { flowShape } = await import('../client/src/explorer/projection.js');
+  it('幅度参数真实生效:amp 越大,同一时刻的形变越大(spin 吃带长、eight 吃游走)', async () => {
+    const { flowShape, applyArmLength } = await import('../client/src/explorer/projection.js');
     const L = buildClusterShapeLayout(nodes, 'hall', 'disk');
-    // 同一 t、同一 style,只改 amp → 两次输出的平均点间距离 = 幅度的实际视觉强度
-    const delta = (style: 'spin' | 'eight') => {
-      const A = flowShape(L, 30000, 'disk', 1, 0, style);
-      const B = flowShape(L, 30000, 'disk', 1, 2, style);
+    // spin:幅度 = 静态带子长度(applyArmLength),再交给 spin 纯旋转
+    const spinDelta = () => {
+      const A = flowShape(applyArmLength(L, 0), 30000, 'disk', 1, 1, 'spin');
+      const B = flowShape(applyArmLength(L, 2), 30000, 'disk', 1, 1, 'spin');
       let s = 0;
       for (const [id, q] of A) { const b = B.get(id)!; s += Math.hypot(q.x - b.x, q.y - b.y, q.z - b.z); }
       return s / A.size;
     };
-    // spin:amp 0 无脉动、amp 2 有 ±14% 半径脉动 + 垂直波 → 平均位移应达数十单位量级
-    expect(delta('spin')).toBeGreaterThan(15);
-    // eight:amp 2 的游走幅度(57)远大于 amp 0(5)
-    expect(delta('eight')).toBeGreaterThan(15);
+    expect(spinDelta()).toBeGreaterThan(15);
+    // eight:amp 2 的游走幅度远大于 amp 0
+    const eightDelta = () => {
+      const A = flowShape(L, 30000, 'disk', 1, 0, 'eight');
+      const B = flowShape(L, 30000, 'disk', 1, 2, 'eight');
+      let s = 0;
+      for (const [id, q] of A) { const b = B.get(id)!; s += Math.hypot(q.x - b.x, q.y - b.y, q.z - b.z); }
+      return s / A.size;
+    };
+    expect(eightDelta()).toBeGreaterThan(15);
   });
 
   it('相位连续:同一条累计时间轴下改速度不跳(累加语义)', async () => {
@@ -313,28 +319,44 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     expect(diff).toBeGreaterThan(50);
   });
 
-  it('幅度=带子长度:只推外段(内段锚定),臂末端明显伸缩,包络不失控', async () => {
-    const { flowShape } = await import('../client/src/explorer/projection.js');
+  it('幅度=带子长度:纯静态几何参数,与时间完全无关(转速为 0 时绝不伸缩)', async () => {
+    const { flowShape, applyArmLength } = await import('../client/src/explorer/projection.js');
     const L = buildClusterShapeLayout(nodes, 'hall', 'disk');
-    const A = flowShape(L, 30000, 'disk', 1, 0, 'spin');
-    const B = flowShape(L, 30000, 'disk', 1, 2, 'spin');
-    let innerMax = 0;
-    let outerMax = 0;
+    // ① 同一 amp 下,不同时刻的**形状**完全一致(只有自转相位不同,不含任何脉动)
+    const A = flowShape(applyArmLength(L, 2), 30000, 'disk', 1, 1, 'spin');
+    const B = flowShape(applyArmLength(L, 2), 51000, 'disk', 1, 1, 'spin');
+    const rad = (M: Map<string, { x: number; z: number }>) => {
+      const out: number[] = [];
+      for (const [, q] of M) out.push(Math.hypot(q.x, q.z));
+      return out.sort((a, b) => a - b);
+    };
+    const ra = rad(A); const rb = rad(B);
+    // 半径谱(与朝向无关)应逐点相同 → 没有随时间伸缩
+    let maxR = 0;
+    for (let i = 0; i < ra.length; i++) maxR = Math.max(maxR, Math.abs(ra[i]! - rb[i]!));
+    expect(maxR).toBeLessThan(0.5);
+    // ② amp 越大带子越长(末端半径单调增),内段也一起变(整条带子)
+    const L0 = applyArmLength(L, 0);
+    const L1 = applyArmLength(L, 1);
+    const L2 = applyArmLength(L, 2);
+    const tipR = (M: Map<string, { x: number; z: number }>) => Math.max(...[...M.values()].map((q) => Math.hypot(q.x, q.z)));
+    expect(tipR(L0)).toBeLessThan(tipR(L1));
+    expect(tipR(L1)).toBeLessThan(tipR(L2));
+    // amp=1 是中性:与不施加幅度时逐点一致
+    // amp=1 是中性:与 base 逐点完全一致
     for (const [id, q] of L) {
-      const r0 = Math.hypot(q.x, q.z);
-      const d = Math.hypot(A.get(id)!.x - B.get(id)!.x, A.get(id)!.z - B.get(id)!.z);
-      if (r0 < 200) innerMax = Math.max(innerMax, d);
-      else outerMax = Math.max(outerMax, d);
+      const q1 = L1.get(id)!;
+      expect(Math.hypot(q1.x - q.x, q1.z - q.z)).toBeLessThan(1e-9);
     }
-    expect(innerMax).toBeLessThan(30); // 内段锚定:几乎不动
-    expect(outerMax).toBeGreaterThan(120); // 外段:明显伸缩
-    for (const q of B.values()) expect(Math.hypot(q.x, q.z)).toBeLessThan(1800);
-    // eight 风格仍按原样吃 amp
-    const E0 = flowShape(L, 30000, 'disk', 1, 0, 'eight');
-    const E2 = flowShape(L, 30000, 'disk', 1, 2, 'eight');
-    let eSum = 0;
-    for (const [id, q] of E0) { const b = E2.get(id)!; eSum += Math.hypot(q.x - b.x, q.z - b.z); }
-    expect(eSum / E0.size).toBeGreaterThan(60);
+    // ③ 内段也伸缩(不是只有外半段):r<200 的点位移明显
+    let innerMax = 0;
+    for (const [id, q] of L) {
+      if (Math.hypot(q.x, q.z) >= 200) continue;
+      innerMax = Math.max(innerMax, Math.hypot(L0.get(id)!.x - L2.get(id)!.x, L0.get(id)!.z - L2.get(id)!.z));
+    }
+    expect(innerMax).toBeGreaterThan(10);
+    // ④ 包络不失控
+    for (const q of L2.values()) expect(Math.hypot(q.x, q.z)).toBeLessThan(1800);
   });
 
   it('悬臂散度 armSpread:越大外沿越散(径向离散度单调增),内圈仍紧凑', () => {
@@ -456,15 +478,11 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     expect([...N.entries()]).toEqual([...N2.entries()]);
   });
 
-  it('幅度=带子长度:全体带子**同步**伸缩(不是一半长一半短、也不轮流)', async () => {
-    const { flowShape } = await import('../client/src/explorer/projection.js');
+  it('幅度=带子长度:全体带子**同步**且**与时间无关**(不会自己呼吸/轮流)', async () => {
+    const { flowShape, applyArmLength } = await import('../client/src/explorer/projection.js');
     const ns: ReturnType<typeof mk>[] = [];
-    // 六条带子各给同样多的点,便于按角向分臂统计
     for (let arm = 0; arm < 6; arm++) for (let i = 0; i < 60; i++) ns.push(mk('s' + arm + '_' + i, 'tool', 'h' + arm));
     const L = buildClusterShapeLayout(ns, 'hall', 'disk', 'spiral', 0.55, 0);
-    const A = flowShape(L, 1500, 'disk', 1, 2, 'spin');
-    const B = flowShape(L, 3800, 'disk', 1, 2, 'spin');
-    // 每臂最外点的半径(带子末端)
     const armMaxR = (M: Map<string, { x: number; z: number }>) => {
       const out = new Array(6).fill(0);
       for (const [id, q] of M) {
@@ -474,32 +492,26 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
       }
       return out;
     };
-    const a = armMaxR(A);
-    const b = armMaxR(B);
-    // ① 同一时刻:六臂末端半径接近(没有"一半长一半短")
     const spread = (arr: number[]) => (Math.max(...arr) - Math.min(...arr)) / (Math.max(...arr) || 1);
+    // ① 同一 amp、不同时刻:六臂末端半径谱**逐条不变**(没有随时间伸缩)
+    const A = flowShape(applyArmLength(L, 2), 1500, 'disk', 1, 1, 'spin');
+    const B = flowShape(applyArmLength(L, 2), 3800, 'disk', 1, 1, 'spin');
+    const C = flowShape(applyArmLength(L, 2), 900000, 'disk', 1, 1, 'spin'); // 极远时刻也不该自己变
+    const a = armMaxR(A); const b = armMaxR(B); const c = armMaxR(C);
+    for (let i = 0; i < 6; i++) {
+      expect(Math.abs(b[i]! - a[i]!)).toBeLessThan(0.5);
+      expect(Math.abs(c[i]! - a[i]!)).toBeLessThan(0.5);
+    }
+    // ② 同一时刻六臂等长(没有"一半长一半短")
     expect(spread(a)).toBeLessThan(0.28);
-    expect(spread(b)).toBeLessThan(0.28);
-    // ② 跨时刻:六臂**一起**变长/变短(同向),不是轮流
-    let same = 0;
-    for (let i = 0; i < 6; i++) if (Math.sign(b[i]! - a[i]!) === Math.sign(b[0]! - a[0]!)) same++;
-    expect(same).toBeGreaterThanOrEqual(5);
-    // ③ 整条带子都在伸缩(不是只有外半段动):内段点也应有明显位移
+    // ③ 整条带子都在伸缩(不是只有外半段动)
     let innerMax = 0;
-    for (const [id, q] of L) {
+    const Ln = applyArmLength(L, 0);
+    const A0 = flowShape(Ln, 1500, 'disk', 1, 1, 'spin');
+    for (const [id, q] of Ln) {
       if (Math.hypot(q.x, q.z) >= 200) continue;
-      innerMax = Math.max(innerMax, Math.hypot(A.get(id)!.x - B.get(id)!.x, A.get(id)!.z - B.get(id)!.z));
+      innerMax = Math.max(innerMax, Math.hypot(A0.get(id)!.x - A.get(id)!.x, A0.get(id)!.z - A.get(id)!.z));
     }
-    expect(innerMax).toBeGreaterThan(30);
-    // ④ 但半径比例保持一致(是"沿螺线伸缩",不是"内圈乱抖"):内外两点的 r 比值守恒
-    let ratioErr = 0;
-    const ids = [...L.keys()].filter((id) => Math.hypot(L.get(id)!.x, L.get(id)!.z) > 260).slice(0, 20);
-    for (const id of ids) {
-      const rA = Math.hypot(A.get(id)!.x, A.get(id)!.z);
-      const rB = Math.hypot(B.get(id)!.x, B.get(id)!.z);
-      const r0 = Math.hypot(L.get(id)!.x, L.get(id)!.z);
-      ratioErr = Math.max(ratioErr, Math.abs(rA / r0 - rB / r0));
-    }
-    expect(ratioErr).toBeLessThan(0.9); // 同一带子内伸缩比例一致(不会一半长一半短)
+    expect(innerMax).toBeGreaterThan(10);
   });
 });
