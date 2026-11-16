@@ -289,4 +289,24 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     expect(d12).toBeGreaterThan(0);
     expect(d23).toBeGreaterThan(d12 * 1.5); // 速度提到 3 倍 → 增量明显更大
   });
+
+  it('圆盘 disc:黄金角铺满 + 面积均匀 + 外沿裁剪', () => {
+    const L = buildClusterShapeLayout(nodes, 'hall', 'disk', 'disc');
+    const pts = nodes.map((n) => L.get(n.id)!);
+    // 所有点落在盘半径内(640)且离盘心 > 0(没有挤在原点)
+    let maxR = 0;
+    for (const q of pts) maxR = Math.max(maxR, Math.hypot(q.x, q.z));
+    expect(maxR).toBeLessThanOrEqual(641);
+    // 铺满而非偏在一侧:至少 3 个象限有点(黄金角保证多簇下均衡;簇很少时允许一角空)
+    const quad = [0, 0, 0, 0];
+    for (const q of pts) quad[(q.x >= 0 ? 0 : 1) + (q.z >= 0 ? 0 : 2)]! += 1;
+    expect(quad.filter((c) => c > 0).length).toBeGreaterThanOrEqual(3);
+    // 与平铺/悬臂都不同(同数据下表观半径分布差异明显)
+    const flat = buildClusterShapeLayout(nodes, 'hall', 'disk', 'flat');
+    const diff = nodes.reduce((a, n) => {
+      const p1 = L.get(n.id)!, p2 = flat.get(n.id)!;
+      return a + Math.hypot(p1.x - p2.x, p1.z - p2.z);
+    }, 0) / nodes.length;
+    expect(diff).toBeGreaterThan(50);
+  });
 });

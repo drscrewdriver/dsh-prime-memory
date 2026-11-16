@@ -45737,6 +45737,19 @@ var __create = Object.create;
 		    }
 		    return bins;
 		  };
+		  if (shape === "disk" && diskStyle === "disc") {
+		    const GA = Math.PI * (3 - Math.sqrt(5));
+		    groups.forEach((key, i) => {
+		      const theta = i * GA + rand01(`c:${key}`) * 0.35;
+		      const rr = Math.sqrt((i + 0.5) / total);
+		      const radius = 120 + rr * 520 + rand01(`r:${key}`) * 40;
+		      centers.set(key, {
+		        x: Math.cos(theta) * radius,
+		        y: (rand01(`r:${key}:y`) - 0.5) * 34,
+		        z: Math.sin(theta) * radius * 0.82
+		      });
+		    });
+		  }
 		  if (shape === "disk" && diskStyle === "spiral") {
 		    placeOnArms(binPack(6), 1.55);
 		  }
@@ -45788,11 +45801,24 @@ var __create = Object.create;
 		        const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
 		        const a = rand01(`a:${n.id}`) * Math.PI * 2;
 		        const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
-		        const rr2 = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 90;
+		        const discMode = diskStyle === "disc";
+		        const discSpread = discMode ? 520 / Math.sqrt(Math.max(1, total)) * 1.7 : 0;
+		        const rr2 = discMode ? Math.sqrt(rand01(`s:${n.id}`)) * discSpread : 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 90;
+		        let px2 = c.x + Math.sin(b) * Math.cos(a) * rr2;
+		        let pz2 = c.z + Math.sin(b) * Math.sin(a) * rr2;
+		        if (discMode) {
+		          const rp = Math.hypot(px2, pz2);
+		          const RMAX = 640;
+		          if (rp > RMAX) {
+		            const k2 = RMAX / rp;
+		            px2 *= k2;
+		            pz2 *= k2;
+		          }
+		        }
 		        out.set(n.id, {
-		          x: c.x + Math.sin(b) * Math.cos(a) * rr2,
-		          y: c.y + Math.cos(b) * rr2 * 0.5,
-		          z: c.z + Math.sin(b) * Math.sin(a) * rr2
+		          x: px2,
+		          y: c.y + Math.cos(b) * rr2 * (discMode ? 0.16 : 0.5),
+		          z: pz2
 		        });
 		      }
 		    } else {
@@ -46853,7 +46879,7 @@ var __create = Object.create;
 		              },
 		              s
 		            )),
-		            shape === "disk" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, borderLeft: "1px solid rgba(127,177,255,0.3)" }, children: ["legacy", "flat", "spiral"].map((d) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+		            shape === "disk" ? /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { style: { display: "inline-flex", gap: 0, borderLeft: "1px solid rgba(127,177,255,0.3)" }, children: ["disc", "legacy", "spiral", "flat"].map((d) => /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
 		              "button",
 		              {
 		                onClick: () => setDiskStyle(d),
@@ -46865,7 +46891,7 @@ var __create = Object.create;
 		                  color: diskStyle === d ? ui.accent : ui.text,
 		                  background: diskStyle === d ? "rgba(127,177,255,0.14)" : "transparent"
 		                },
-		                children: d === "legacy" ? "双臂" : d === "flat" ? "平铺" : "悬臂"
+		                children: d === "disc" ? "圆盘" : d === "legacy" ? "双臂" : d === "spiral" ? "悬臂" : "平铺"
 		              },
 		              d
 		            )) }) : null

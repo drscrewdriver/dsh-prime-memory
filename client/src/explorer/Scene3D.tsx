@@ -1103,7 +1103,7 @@ export function Scene3D(props: {
           ))}
           {shape === 'disk' ? (
             <span style={{ display: 'inline-flex', gap: 0, borderLeft: '1px solid rgba(127,177,255,0.3)' }}>
-              {(['legacy', 'flat', 'spiral'] as const).map((d) => (
+              {(['disc', 'legacy', 'spiral', 'flat'] as const).map((d) => (
                 <button
                   key={d}
                   onClick={() => setDiskStyle(d)}
@@ -1116,7 +1116,7 @@ export function Scene3D(props: {
                     background: diskStyle === d ? 'rgba(127,177,255,0.14)' : 'transparent',
                   }}
                 >
-                  {d === 'legacy' ? '双臂' : d === 'flat' ? '平铺' : '悬臂'}
+                  {d === 'disc' ? '圆盘' : d === 'legacy' ? '双臂' : d === 'spiral' ? '悬臂' : '平铺'}
                 </button>
               ))}
             </span>

@@ -179,7 +179,7 @@ export function buildClusterLayoutByAxis(nodes: readonly LayoutNode[], axis: Clu
 // ── 聚类形态（星系盘 / 8 字环）：簇心排布可换,种子前缀一个不改 ──────────
 /** 聚类形态：sphere = 既有球面堆；disk = 横向星系盘（双臂螺旋,z 薄层错开）；lemniscate = 8 字回环。 */
 /** disk 子风格:legacy = 既有双臂轮转;flat = 平铺(全簇环形均布一圈);spiral = 星系悬臂(巨簇独臂+其余双弧段)。 */
-export type DiskStyle = 'legacy' | 'flat' | 'spiral';
+export type DiskStyle = 'disc' | 'legacy' | 'flat' | 'spiral';
 export type ClusterShape = 'sphere' | 'disk' | 'lemniscate';
 
 /**
@@ -284,6 +284,23 @@ export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: Clus
     }
     return bins;
   };
+  if (shape === 'disk' && diskStyle === 'disc') {
+    // ── 圆盘:簇按黄金角铺满整个盘面(不是环带、不是臂) ──
+    // 黄金角 2.39996 rad 保证任意簇数下角向都不出现"扎堆/留空";半径按 √(i/N) 取,
+    // 于是簇在**面积**上均匀——读作一张匀致实心的圆盘,而不是同心圆串。
+    // 配合下面 disc 的等向散布,相邻簇边界互相咬合成一整片(混合盘)。
+    const GA = Math.PI * (3 - Math.sqrt(5));
+    groups.forEach((key, i) => {
+      const theta = i * GA + rand01(`c:${key}`) * 0.35;
+      const rr = Math.sqrt((i + 0.5) / total);
+      const radius = 120 + rr * 520 + rand01(`r:${key}`) * 40;
+      centers.set(key, {
+        x: Math.cos(theta) * radius,
+        y: (rand01(`r:${key}:y`) - 0.5) * 34,
+        z: Math.sin(theta) * radius * 0.82,
+      });
+    });
+  }
   if (shape === 'disk' && diskStyle === 'spiral') {
     // 六臂星系:6 臂共用同一扫掠 θ=base+s·1.55 → 任意半径处臂距恒为 2π/6=1.047 rad,
     // 永不交缠;1.55 rad 卷曲 ≈ 23° 螺旋角,是典型星系的放射-旋纹折中。
@@ -339,15 +356,35 @@ export function buildClusterShapeLayout(nodes: readonly LayoutNode[], axis: Clus
           z: Math.sin(theta) * radius * 0.82,
         });
       } else {
-        // 平铺:簇心团块散布
+        // 圆盘/平铺:簇心团块散布。disc 的散布更大且更扁 → 相邻簇边界咬合成一整片圆盘(混合观感);
+        // flat 保持小块状,好让"平铺环带"的层次读得出来。
         const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
         const a = rand01(`a:${n.id}`) * Math.PI * 2;
         const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
-        const rr2 = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 90;
+        const discMode = diskStyle === 'disc';
+        // disc 用 sqrt 分布(面积均匀,盘内密度一致、外沿收得干净);flat 保持小块状。
+        // disc:散布半径 ∝ 盘面/√N(每簇应占的等效面积半径)×1.7——相邻簇边界互相咬合,
+        // 整张盘读作连成一片的混合圆盘;平铺保持小块状以保留环带层次。
+        const discSpread = discMode ? (520 / Math.sqrt(Math.max(1, total))) * 1.7 : 0;
+        const rr2 = discMode
+          ? Math.sqrt(rand01(`s:${n.id}`)) * discSpread
+          : 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 90;
+        let px2 = c.x + Math.sin(b) * Math.cos(a) * rr2;
+        let pz2 = c.z + Math.sin(b) * Math.sin(a) * rr2;
+        if (discMode) {
+          // 外沿裁剪:超出盘半径的点沿径向夹回 → 圆盘边界干净,不散成云
+          const rp = Math.hypot(px2, pz2);
+          const RMAX = 640;
+          if (rp > RMAX) {
+            const k2 = RMAX / rp;
+            px2 *= k2;
+            pz2 *= k2;
+          }
+        }
         out.set(n.id, {
-          x: c.x + Math.sin(b) * Math.cos(a) * rr2,
-          y: c.y + Math.cos(b) * rr2 * 0.5,
-          z: c.z + Math.sin(b) * Math.sin(a) * rr2,
+          x: px2,
+          y: c.y + Math.cos(b) * rr2 * (discMode ? 0.16 : 0.5),
+          z: pz2,
         });
       }
     } else {
