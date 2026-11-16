@@ -493,7 +493,7 @@ export function buildClusterShapeLayout(
  * 纯几何驱动——只吃点位，不需要簇归属信息；确定性：同一帧同一批点位置恒定。
  * 纯函数:base 布局不动,返回新 Map;主循环每帧调用(开销 = 一次 Map 遍历,千点级无感)。
  */
-export type FlowStyle = 'spin' | 'eight';
+export type FlowStyle = 'spin' | 'eight' | 'accretion';
 
 /**
  * 形态动画帧变换（炫技档）。样式与形态解耦——任意盘/环都可选自转或 8 字流：
@@ -514,8 +514,52 @@ export function flowShape(
   const style: FlowStyle = flowStyle ?? (shape === 'lemniscate' ? 'eight' : 'spin');
   // 统一时相:ts = t × speed。speed=0 时整体冻结(含幅度摆动),调速度也不会让相位跳。
   const ts = t * speed;
+  // speed=0 且相位为 0 = 真正的"静止"态:直接返回 base 副本。
+  // (点级相位 jp 在 ts=0 时仍会给出非零偏移,若不早退,speed=0 就不是原样,违背冻结语义。)
+  if (ts === 0) {
+    for (const id of base.keys()) out.set(id, base.get(id)!);
+    return out;
+  }
   for (const id of base.keys()) {
     const p = base.get(id)!;
+    if (style === 'accretion') {
+      // ── 吸积盘流(accretion)──
+      // 与刚体自转的根本区别:**每个粒子有自己的轨道**。三层随机叠加:
+      //  ① 开普勒差速 ω ∝ r^-1.5 —— 内圈快、外圈慢,盘面自然剪出旋涡纹;
+      //  ② 点级角速度个体差(±18%)—— 同半径的点也不同步,读作"散粒在流动"而不是整盘刚性转;
+      //  ③ 点级相位偏移 + 不同周期的径向游走 / 垂直起伏 —— 每颗粒子有自己的呼吸节奏。
+      // 圆盘是黄金角铺满、没有臂结构,所以差速剪切只会让纹路更旋涡,**不会**像悬臂那样被缠成一团
+      // (这正是悬臂必须用刚体的原因,两者约束不同)。
+      const r0 = Math.hypot(p.x, p.z) || 1;
+      const jp = rand01('f2:' + id) * Math.PI * 2; // 点级相位
+      const jp2 = rand01('f3:' + id) * Math.PI * 2; // 第二相位(漂移用,与 jp 不同步)
+      const jw = (rand01('f:' + id) - 0.5) * 0.9; // 点级角速度个体差 ±45%
+      // 开普勒差速:基准角速度对齐刚体自转量级(0.0011 rad/ms @ r=180),
+      // 再乘 (180/r)^0.9 —— 内圈快约 1.8 倍、外沿慢到 0.3 倍,差速比 6:1,
+      // 盘面剪出清晰旋涡纹;指数取 0.9 而非 1.5,避免内圈快到糊成一团。
+      // ts 由调用方累加 → 改速度相位连续。
+      const om = 0.0011 * Math.pow(180 / Math.max(60, r0), 0.9) * (1 + jw);
+      const a = om * ts;
+      const cy = Math.cos(a); const sy = Math.sin(a);
+      // 径向游走:每点自己的周期(0.6~1.4 倍频)与相位 → 盘面像在"吸气",不是整体缩放
+      const fr = 0.6 + rand01('f4:' + id) * 0.8;
+      const rw = 1 + Math.sin(ts * 0.0008 * fr + jp) * (0.08 + 0.16 * amp);
+      // 垂直起伏:点级不同步,幅度放大
+      const dy = Math.sin(ts * 0.0011 * fr + jp * 2.3) * (6 + 30 * amp);
+      // **随机游走(布朗式抖动)**:每颗粒子沿盘面切向 + 径向各叠一个独立的小幅漂移,
+      // 频率与相位都按点不同(0.5~1.8 倍频)→ 读作"一群散粒各自游动",而不是一块整盘在转。
+      // 幅度按半径缩放(内圈小、外圈大),避免盘心糊成一团。
+      const rScale = 0.35 + 0.65 * Math.min(1, r0 / 480);
+      const fw = 0.5 + rand01('f5:' + id) * 1.3;
+      const tang = Math.sin(ts * 0.0016 * fw + jp2) * (4 + 13 * amp) * rScale;
+      const rad = Math.cos(ts * 0.0013 * fw + jp2 * 1.7) * (4 + 13 * amp) * rScale;
+      // 切向 = 半径方向的垂直;径向 = 半径方向
+      const ux = p.x / r0, uz = p.z / r0;
+      const bx = (p.x * cy - p.z * sy) * rw - uz * tang + ux * rad;
+      const bz = (p.x * sy + p.z * cy) * rw + ux * tang + uz * rad;
+      out.set(id, { x: bx, y: p.y + dy, z: bz });
+      continue;
+    }
     if (style === 'spin') {
       // **刚体自转**:全盘同一角速度(与半径无关)。这是星臂不变形的唯一前提——
       // 差速旋转(内快外慢)会让任意螺旋臂随 t 无限剪切,转一会儿就缠绕成一团。

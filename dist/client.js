@@ -45893,8 +45893,34 @@ var __create = Object.create;
 		  if (shape === "sphere") return out;
 		  const style = flowStyle ?? (shape === "lemniscate" ? "eight" : "spin");
 		  const ts = t * speed;
+		  if (ts === 0) {
+		    for (const id of base.keys()) out.set(id, base.get(id));
+		    return out;
+		  }
 		  for (const id of base.keys()) {
 		    const p = base.get(id);
+		    if (style === "accretion") {
+		      const r0 = Math.hypot(p.x, p.z) || 1;
+		      const jp = rand01("f2:" + id) * Math.PI * 2;
+		      const jp2 = rand01("f3:" + id) * Math.PI * 2;
+		      const jw = (rand01("f:" + id) - 0.5) * 0.9;
+		      const om = 11e-4 * Math.pow(180 / Math.max(60, r0), 0.9) * (1 + jw);
+		      const a = om * ts;
+		      const cy = Math.cos(a);
+		      const sy = Math.sin(a);
+		      const fr = 0.6 + rand01("f4:" + id) * 0.8;
+		      const rw = 1 + Math.sin(ts * 8e-4 * fr + jp) * (0.08 + 0.16 * amp);
+		      const dy = Math.sin(ts * 11e-4 * fr + jp * 2.3) * (6 + 30 * amp);
+		      const rScale = 0.35 + 0.65 * Math.min(1, r0 / 480);
+		      const fw = 0.5 + rand01("f5:" + id) * 1.3;
+		      const tang = Math.sin(ts * 16e-4 * fw + jp2) * (4 + 13 * amp) * rScale;
+		      const rad = Math.cos(ts * 13e-4 * fw + jp2 * 1.7) * (4 + 13 * amp) * rScale;
+		      const ux = p.x / r0, uz = p.z / r0;
+		      const bx = (p.x * cy - p.z * sy) * rw - uz * tang + ux * rad;
+		      const bz = (p.x * sy + p.z * cy) * rw + ux * tang + uz * rad;
+		      out.set(id, { x: bx, y: p.y + dy, z: bz });
+		      continue;
+		    }
 		    if (style === "spin") {
 		      const a = 0.1 * 0.0167 * ts;
 		      const cy = Math.cos(a);
@@ -46444,7 +46470,8 @@ var __create = Object.create;
 		        const dt = flowLastRef.current === 0 ? 0 : Math.min(100, Math.max(0, now - flowLastRef.current));
 		        flowLastRef.current = now;
 		        flowAccRef.current += dt * flowSpeedRef.current;
-		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === "auto" ? void 0 : flowStyleRef.current);
+		        const autoStyle = shapeRef.current === "disk" && diskStyleRef.current === "disc" ? "accretion" : void 0;
+		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === "auto" ? autoStyle : flowStyleRef.current);
 		        edgeDirty = true;
 		        nodeDirty = true;
 		      }

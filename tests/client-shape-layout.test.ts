@@ -388,4 +388,26 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     }
     expect(arms.size).toBeGreaterThanOrEqual(3);
   });
+
+  it('吸积盘流 accretion:点级随机(同半径不同步),且不越出盘包络、可回放', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const ns: ReturnType<typeof mk>[] = [];
+    for (let i = 0; i < 400; i++) ns.push(mk('a' + i, 'tool', i % 2 ? 'work' : 'learning'));
+    const L = buildClusterShapeLayout(ns, 'hall', 'disk', 'disc');
+    const A = flowShape(L, 5000, 'disk', 1, 1, 'accretion');
+    const B = flowShape(L, 5000, 'disk', 1, 1, 'accretion');
+    expect([...A.entries()]).toEqual([...B.entries()]); // 同一 t 可回放
+    // 同半径两点的角位移不同(点级个体差 → 不是刚体转)
+    const byR = [...L.entries()].filter(([, q]) => Math.hypot(q.x, q.z) > 200 && Math.hypot(q.x, q.z) < 240).slice(0, 2);
+    if (byR.length === 2) {
+      const ang = (q: { x: number; z: number }) => Math.atan2(q.z, q.x);
+      const d0 = ang(byR[0]![1]) - ang(byR[1]![1]);
+      const d1 = ang(A.get(byR[0]![0])!) - ang(A.get(byR[1]![0])!);
+      expect(Math.abs(d1 - d0)).toBeGreaterThan(1e-4);
+    }
+    for (const q of A.values()) expect(Math.hypot(q.x, q.z)).toBeLessThan(1400);
+    // speed=0 冻结
+    const F0 = flowShape(L, 0, 'disk', 0, 1, 'accretion');
+    for (const [id, q] of F0) { const b = L.get(id)!; expect(Math.hypot(q.x - b.x, q.z - b.z)).toBeLessThan(1e-6); }
+  });
 });

@@ -573,7 +573,10 @@ export function Scene3D(props: {
         const dt = flowLastRef.current === 0 ? 0 : Math.min(100, Math.max(0, now - flowLastRef.current));
         flowLastRef.current = now;
         flowAccRef.current += dt * flowSpeedRef.current;
-        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === 'auto' ? undefined : flowStyleRef.current);
+        // 圆盘(auto 档)走吸积盘流:每颗粒子有自己的轨道(开普勒差速 + 点级个体差),
+        // 而不是整盘刚体转。圆盘无臂结构,差速剪切只会让纹路更旋涡,不会被缠成一团。
+        const autoStyle = shapeRef.current === 'disk' && diskStyleRef.current === 'disc' ? 'accretion' : undefined;
+        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === 'auto' ? autoStyle : flowStyleRef.current);
         edgeDirty = true;
         nodeDirty = true;
       }
