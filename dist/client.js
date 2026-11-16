@@ -45818,27 +45818,39 @@ var __create = Object.create;
 		  const out = /* @__PURE__ */ new Map();
 		  if (shape === "sphere") return out;
 		  const style = flowStyle ?? (shape === "lemniscate" ? "eight" : "spin");
+		  const ts = t * speed;
 		  for (const id of base.keys()) {
 		    const p = base.get(id);
 		    if (style === "spin") {
-		      const a = 0.1 * speed * 0.0167 * t;
+		      const a = 0.1 * 0.0167 * ts;
 		      const cy = Math.cos(a);
 		      const sy = Math.sin(a);
-		      const breathe = amp > 0 ? Math.sin(t * 4e-4 + (p.x + p.z) * 12e-4) * 2.2 * amp : 0;
-		      out.set(id, { x: p.x * cy - p.z * sy, y: p.y + breathe, z: p.x * sy + p.z * cy });
+		      const ang = Math.atan2(p.z, p.x);
+		      const pulse = amp > 0 ? 1 + Math.sin(ts * 6e-4 + ang * 2) * 0.07 * amp : 1;
+		      const breathe = amp > 0 ? Math.sin(ts * 9e-4 + ang * 3) * 9 * amp : 0;
+		      out.set(id, {
+		        x: (p.x * cy - p.z * sy) * pulse,
+		        y: p.y + breathe,
+		        z: (p.x * sy + p.z * cy) * pulse
+		      });
 		    } else {
-		      const om = t / 2e4 * speed;
+		      const om = ts / 2e4;
 		      const off = (rand01("f:" + id) - 0.5) * 0.6;
 		      const r0 = Math.hypot(p.x, p.z) || 1;
 		      const ct = Math.max(-1, Math.min(1, p.x / r0));
 		      let t8 = Math.acos(ct);
 		      if (Math.sin(t8) * Math.cos(t8) * (p.z / r0) < 0) t8 = Math.PI * 2 - t8;
 		      const ph = t8 + om + off;
-		      const jit = rand01("j:" + id) * 0.06 - 0.03;
+		      const jit = (rand01("j:" + id) - 0.5) * (0.06 + 0.5 * amp);
 		      const A = Math.min(r0 * 2.2, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
 		      const x = Math.cos(ph) * A;
 		      const z = Math.sin(ph) * Math.cos(ph) * A;
-		      out.set(id, { x: x + Math.sin(ph * 3.1) * 5 * amp, y: p.y + Math.cos(ph * 2.3) * 4 * amp, z: z + Math.sin(ph * 2.7) * 5 * amp });
+		      const wob = 5 + 26 * amp;
+		      out.set(id, {
+		        x: x + Math.sin(ph * 3.1) * wob,
+		        y: p.y + Math.cos(ph * 2.3) * wob * 0.8,
+		        z: z + Math.sin(ph * 2.7) * wob
+		      });
 		    }
 		  }
 		  return out;
@@ -46011,6 +46023,8 @@ var __create = Object.create;
 		  const [flowStyle, setFlowStyle] = (0, import_react33.useState)("auto");
 		  const flowStyleRef = (0, import_react33.useRef)("auto");
 		  flowStyleRef.current = flowStyle;
+		  const flowAccRef = (0, import_react33.useRef)(0);
+		  const flowLastRef = (0, import_react33.useRef)(0);
 		  const [starry, setStarry] = (0, import_react33.useState)(true);
 		  const [twinkleOn, setTwinkleOn] = (0, import_react33.useState)(true);
 		  const [axis, setAxis] = (0, import_react33.useState)("type");
@@ -46338,7 +46352,10 @@ var __create = Object.create;
 		      const cam = camRef.current;
 		      let layout = activeLayout(now);
 		      if (flowRef.current && shapeRef.current !== "sphere" && modeRef.current === "cluster") {
-		        layout = flowShape(layout, now, shapeRef.current, flowSpeedRef.current, flowAmpRef.current, flowStyleRef.current === "auto" ? void 0 : flowStyleRef.current);
+		        const dt = flowLastRef.current === 0 ? 0 : Math.min(100, Math.max(0, now - flowLastRef.current));
+		        flowLastRef.current = now;
+		        flowAccRef.current += dt * flowSpeedRef.current;
+		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === "auto" ? void 0 : flowStyleRef.current);
 		        edgeDirty = true;
 		        nodeDirty = true;
 		      }
@@ -46509,6 +46526,7 @@ var __create = Object.create;
 		        ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
 		        needsPresent = false;
 		      }
+		      if (!flowRef.current) flowLastRef.current = 0;
 		      running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || driftOn && !ego || flowRef.current && shapeRef.current !== "sphere" && modeRef.current === "cluster";
 		      if (running) raf = requestAnimationFrame(frame);
 		    };
@@ -46831,7 +46849,7 @@ var __create = Object.create;
 		                  color: shape === s ? ui.accent : ui.text,
 		                  background: shape === s ? "rgba(127,177,255,0.14)" : "transparent"
 		                },
-		                children: s === "sphere" ? "球" : s === "disk" ? "圆盘" : "8字"
+		                children: s === "sphere" ? "球" : s === "disk" ? "盘状" : "8字"
 		              },
 		              s
 		            )),

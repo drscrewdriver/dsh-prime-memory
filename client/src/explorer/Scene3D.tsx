@@ -135,6 +135,10 @@ export function Scene3D(props: {
   const [flowStyle, setFlowStyle] = useState<'spin' | 'eight' | 'auto'>('auto');
   const flowStyleRef = useRef<'spin' | 'eight' | 'auto'>('auto');
   flowStyleRef.current = flowStyle;
+  /** 流转相位累加器（毫秒当量）：每帧 += dt×speed。速度滑杆改的是「速率」而非「时间轴」，
+   * 相位因此连续——这是「调速度相位会跳」的病根。 */
+  const flowAccRef = useRef(0);
+  const flowLastRef = useRef(0);
   /** 主题：星空（暗底+星点，默认）/ 白底（浅色）。 */
   const [starry, setStarry] = useState(true);
   /** 呼吸：只有激活元素（hover 命中/焦点）错相脉冲，背景星恒静。
@@ -547,7 +551,11 @@ export function Scene3D(props: {
       let layout = activeLayout(now);
       // 形态流转(炫技档):盘=差速自转,环=8字轨道流动;ego 聚焦时不转(壳层语义优先)。
       if (flowRef.current && shapeRef.current !== 'sphere' && modeRef.current === 'cluster') {
-        layout = flowShape(layout, now, shapeRef.current, flowSpeedRef.current, flowAmpRef.current, flowStyleRef.current === 'auto' ? undefined : flowStyleRef.current);
+        // dt 夹到 100ms：标签页挂起后回来不会一步跳很远
+        const dt = flowLastRef.current === 0 ? 0 : Math.min(100, Math.max(0, now - flowLastRef.current));
+        flowLastRef.current = now;
+        flowAccRef.current += dt * flowSpeedRef.current;
+        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === 'auto' ? undefined : flowStyleRef.current);
         edgeDirty = true;
         nodeDirty = true;
       }
@@ -754,6 +762,7 @@ export function Scene3D(props: {
 
       // 空闲停摆（取证方向③）：无脏/无呼吸/无过渡/无待上屏 → 停 rAF，事件唤醒；
       // 单帧超支时不再“逐帧追不上”，而是压根不排帧——掉帧闪烁的根源拆除。
+      if (!flowRef.current) flowLastRef.current = 0;
       running = edgeDirty || nodeDirty || needsPresent || breathing || transRef.current !== null || (driftOn && !ego) || (flowRef.current && shapeRef.current !== 'sphere' && modeRef.current === 'cluster');
       if (running) raf = requestAnimationFrame(frame);
     };
@@ -1089,7 +1098,7 @@ export function Scene3D(props: {
                 background: shape === s ? 'rgba(127,177,255,0.14)' : 'transparent',
               }}
             >
-              {s === 'sphere' ? '球' : s === 'disk' ? '圆盘' : '8字'}
+              {s === 'sphere' ? '球' : s === 'disk' ? '盘状' : '8字'}
             </button>
           ))}
           {shape === 'disk' ? (

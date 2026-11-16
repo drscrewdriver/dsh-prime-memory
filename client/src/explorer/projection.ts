@@ -395,32 +395,47 @@ export function flowShape(
   const out = new Map<string, Vec3>();
   if (shape === 'sphere') return out; // 球面堆不流转(调用方直接跳过)
   const style: FlowStyle = flowStyle ?? (shape === 'lemniscate' ? 'eight' : 'spin');
+  // 统一时相:ts = t × speed。speed=0 时整体冻结(含幅度摆动),调速度也不会让相位跳。
+  const ts = t * speed;
   for (const id of base.keys()) {
     const p = base.get(id)!;
     if (style === 'spin') {
       // **刚体自转**:全盘同一角速度(与半径无关)。这是星臂不变形的唯一前提——
-      // 差速旋转(内快外慢)会让任意螺旋臂随 t 无限剪切,转一会儿就缠绕成一团
-      // (低速只是慢,剪切量照样随时长累积)。所以这里刻意不用 1/r 权重。
-      const a = 0.10 * speed * 0.0167 * t; // rad,约 0.1 rad/s @ speed=1
+      // 差速旋转(内快外慢)会让任意螺旋臂随 t 无限剪切,转一会儿就缠绕成一团。
+      // t 由调用方按 ∫speed·dt 累加,故改速度时相位连续。
+      const a = 0.10 * 0.0167 * ts; // rad
       const cy = Math.cos(a); const sy = Math.sin(a);
-      // 生命感用**有界**摆动补:只动 y(呼吸),或极小的径向抖动——不参与角向累积。
-      const breathe = amp > 0 ? Math.sin(t * 0.0004 + (p.x + p.z) * 0.0012) * 2.2 * amp : 0;
-      out.set(id, { x: p.x * cy - p.z * sy, y: p.y + breathe, z: p.x * sy + p.z * cy });
+      // 幅度:整体**径向呼吸**(角向相位差 → 星臂像在轻微伸展,±7% 半径脉动),
+      // 加垂直波。有界、不累积 → 不会破坏"臂不缠绕"的前提。
+      const ang = Math.atan2(p.z, p.x);
+      const pulse = amp > 0 ? 1 + Math.sin(ts * 0.0006 + ang * 2) * 0.07 * amp : 1;
+      const breathe = amp > 0 ? Math.sin(ts * 0.0009 + ang * 3) * 9 * amp : 0;
+      out.set(id, {
+        x: (p.x * cy - p.z * sy) * pulse,
+        y: p.y + breathe,
+        z: (p.x * sy + p.z * cy) * pulse,
+      });
     } else {
       // 8 字真轨道流:反解每点固有轨道相位 φ0,φ = φ0 + om·t 沿 ∞ 曲线推进。
-      const om = (t / 20000) * speed;
+      const om = ts / 20000;
       const off = (rand01('f:' + id) - 0.5) * 0.6; // 点级小偏移,带子错落
       const r0 = Math.hypot(p.x, p.z) || 1;
       const ct = Math.max(-1, Math.min(1, p.x / r0));
       let t8 = Math.acos(ct);
       if (Math.sin(t8) * Math.cos(t8) * (p.z / r0) < 0) t8 = Math.PI * 2 - t8;
       const ph = t8 + om + off;
-      const jit = rand01('j:' + id) * 0.06 - 0.03; // A 的微小个体差,流起来有层次
+      // 幅度:放大 A 的个体差(整条星尘带的径向厚度),并放大点级游走
+      const jit = (rand01('j:' + id) - 0.5) * (0.06 + 0.5 * amp);
       // 反解 A 时夹到 2.2×r0 上限——否则贴 z 轴的点(|cos|≈0)会算出巨大 A 飞出画面
       const A = Math.min(r0 * 2.2, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
       const x = Math.cos(ph) * A;
       const z = Math.sin(ph) * Math.cos(ph) * A;
-      out.set(id, { x: x + Math.sin(ph * 3.1) * 5 * amp, y: p.y + Math.cos(ph * 2.3) * 4 * amp, z: z + Math.sin(ph * 2.7) * 5 * amp });
+      const wob = 5 + 26 * amp; // 幅度 0→5(几乎不动),2→57(明显荡漾)
+      out.set(id, {
+        x: x + Math.sin(ph * 3.1) * wob,
+        y: p.y + Math.cos(ph * 2.3) * wob * 0.8,
+        z: z + Math.sin(ph * 2.7) * wob,
+      });
     }
   }
   return out;

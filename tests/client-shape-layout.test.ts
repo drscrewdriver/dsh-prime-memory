@@ -126,13 +126,13 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     const aA = [...sA.values()].map((p) => p.x.toFixed(5)).join(',');
     const bB = [...sB.values()].map((p) => p.x.toFixed(5)).join(',');
     expect(aA).toBe(bB);
-    // disk:speed=0 时位置不变
+    // disk:speed=0 → 时相冻结(不同 t 得到同一帧;幅度摆动也不动)
     const Ld = buildClusterShapeLayout(nodes, 'hall', 'disk');
-    const d0 = flowShape(Ld, 99999, 'disk', 0, 1);
-    for (const [id, q] of d0) {
-      const base = Ld.get(id)!;
-      expect(Math.hypot(q.x - base.x, q.z - base.z)).toBeLessThan(0.001);
-    }
+    const dA = flowShape(Ld, 99999, 'disk', 0, 1);
+    const dB = flowShape(Ld, 5000000, 'disk', 0, 1);
+    const ka = [...dA.values()].map((p2) => p2.x.toFixed(6) + ',' + p2.z.toFixed(6)).join(';');
+    const kb = [...dB.values()].map((p2) => p2.x.toFixed(6) + ',' + p2.z.toFixed(6)).join(';');
+    expect(ka).toBe(kb);
   });
 
   it('flowStyle 显式覆盖:任意形态都能选自转/8字流,且 8 字流半径不爆', async () => {
@@ -150,7 +150,7 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     }
     // 环显式 spin:半径守恒(spin 只绕 y 转)
     const Ll = buildClusterShapeLayout(nodes, 'hall', 'lemniscate');
-    const s1 = flowShape(Ll, 8000, 'lemniscate', 1, 1, 'spin');
+    const s1 = flowShape(Ll, 8000, 'lemniscate', 1, 0, 'spin'); // amp=0 才谈半径守恒
     for (const [id, q] of s1) {
       const b = Ll.get(id)!;
       expect(Math.hypot(q.x, q.z)).toBeCloseTo(Math.hypot(b.x, b.z), 6);
@@ -211,7 +211,7 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     // 覆盖低速到高速、短时到长时(低速缠绕正是因为剪切随时长累积)
     for (const speed of [0.1, 1, 3]) {
       for (const time of [1000, 60000, 600000, 3600000]) {
-        const S = flowShape(L, time, 'disk', speed, 1, 'spin');
+        const S = flowShape(L, time * speed, 'disk', 1, 0, 'spin'); // t 已含 speed 累加;amp=0 才谈刚体
         for (const [key, d] of d0) {
           const [ia, ib] = key.split('|');
           const a = S.get(ia!)!, b = S.get(ib!)!;
@@ -250,5 +250,43 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     let hx = 0, hz = 0;
     for (const n of nodes2) { const q = Lh.get(n.id)!; hx += q.x; hz += q.z; }
     expect(Number.isFinite(Math.hypot(hx, hz))).toBe(true);
+  });
+
+  it('幅度参数真实生效:amp 越大,同一时刻的形变越大(spin 与 eight 都吃)', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const L = buildClusterShapeLayout(nodes, 'hall', 'disk');
+    // 同一 t、同一 style,只改 amp → 两次输出的平均点间距离 = 幅度的实际视觉强度
+    const delta = (style: 'spin' | 'eight') => {
+      const A = flowShape(L, 30000, 'disk', 1, 0, style);
+      const B = flowShape(L, 30000, 'disk', 1, 2, style);
+      let s = 0;
+      for (const [id, q] of A) { const b = B.get(id)!; s += Math.hypot(q.x - b.x, q.y - b.y, q.z - b.z); }
+      return s / A.size;
+    };
+    // spin:amp 0 无脉动、amp 2 有 ±14% 半径脉动 + 垂直波 → 平均位移应达数十单位量级
+    expect(delta('spin')).toBeGreaterThan(15);
+    // eight:amp 2 的游走幅度(57)远大于 amp 0(5)
+    expect(delta('eight')).toBeGreaterThan(15);
+  });
+
+  it('相位连续:同一条累计时间轴下改速度不跳(累加语义)', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const L = buildClusterShapeLayout(nodes, 'hall', 'disk');
+    // 模拟:slider 从 1 改到 3,累加相位 acc 连续 → 帧位置只随 acc 平滑变化
+    let acc = 0;
+    const posAt = () => {
+      const S = flowShape(L, acc, 'disk', 1, 1, 'spin');
+      const q = S.get([...L.keys()][0]!)!;
+      return Math.atan2(q.z, q.x);
+    };
+    const a1 = posAt();
+    acc += 16 * 1; // 一帧 @16ms speed=1
+    const a2 = posAt();
+    acc += 16 * 3; // 下一帧 speed 改成 3 —— 相位继续累加,不重置
+    const a3 = posAt();
+    // 三步单调推进(角度持续增长),没有回跳
+    const d12 = a2 - a1, d23 = a3 - a2;
+    expect(d12).toBeGreaterThan(0);
+    expect(d23).toBeGreaterThan(d12 * 1.5); // 速度提到 3 倍 → 增量明显更大
   });
 });
