@@ -445,8 +445,8 @@ export function flowShape(
       // 幅度:整体**径向呼吸**(角向相位差 → 星臂像在轻微伸展,±7% 半径脉动),
       // 加垂直波。有界、不累积 → 不会破坏"臂不缠绕"的前提。
       const ang = Math.atan2(p.z, p.x);
-      const pulse = amp > 0 ? 1 + Math.sin(ts * 0.0006 + ang * 2) * 0.07 * amp : 1;
-      const breathe = amp > 0 ? Math.sin(ts * 0.0009 + ang * 3) * 9 * amp : 0;
+      const pulse = amp > 0 ? 1 + Math.sin(ts * 0.0006 + ang * 2) * 0.22 * amp : 1;
+      const breathe = amp > 0 ? Math.sin(ts * 0.0009 + ang * 3) * 26 * amp : 0;
       out.set(id, {
         x: (p.x * cy - p.z * sy) * pulse,
         y: p.y + breathe,
@@ -462,12 +462,12 @@ export function flowShape(
       if (Math.sin(t8) * Math.cos(t8) * (p.z / r0) < 0) t8 = Math.PI * 2 - t8;
       const ph = t8 + om + off;
       // 幅度:放大 A 的个体差(整条星尘带的径向厚度),并放大点级游走
-      const jit = (rand01('j:' + id) - 0.5) * (0.06 + 0.5 * amp);
+      const jit = (rand01('j:' + id) - 0.5) * (0.06 + 0.9 * amp);
       // 反解 A 时夹到 2.2×r0 上限——否则贴 z 轴的点(|cos|≈0)会算出巨大 A 飞出画面
       const A = Math.min(r0 * 2.2, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
       const x = Math.cos(ph) * A;
       const z = Math.sin(ph) * Math.cos(ph) * A;
-      const wob = 5 + 26 * amp; // 幅度 0→5(几乎不动),2→57(明显荡漾)
+      const wob = 6 + 70 * amp; // 幅度 0→6(几乎不动),2→146(明显荡漾)
       out.set(id, {
         x: x + Math.sin(ph * 3.1) * wob,
         y: p.y + Math.cos(ph * 2.3) * wob * 0.8,

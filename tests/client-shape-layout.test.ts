@@ -309,4 +309,18 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     }, 0) / nodes.length;
     expect(diff).toBeGreaterThan(50);
   });
+
+  it('幅度加强:amp=2 的平均形变足以肉眼可见(> 60 单位)', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const L = buildClusterShapeLayout(nodes, 'hall', 'disk');
+    const delta = (style: 'spin' | 'eight') => {
+      const A = flowShape(L, 30000, 'disk', 1, 0, style);
+      const B = flowShape(L, 30000, 'disk', 1, 2, style);
+      let s = 0;
+      for (const [id, q] of A) { const b = B.get(id)!; s += Math.hypot(q.x - b.x, q.y - b.y, q.z - b.z); }
+      return s / A.size;
+    };
+    expect(delta('spin')).toBeGreaterThan(60);
+    expect(delta('eight')).toBeGreaterThan(60);
+  });
 });

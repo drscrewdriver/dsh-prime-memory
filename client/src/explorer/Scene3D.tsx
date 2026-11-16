@@ -139,6 +139,8 @@ export function Scene3D(props: {
    * 相位因此连续——这是「调速度相位会跳」的病根。 */
   const flowAccRef = useRef(0);
   const flowLastRef = useRef(0);
+  /** 上一帧的流转世界坐标(尾迹用):本帧与上帧之差 = 运动速度,尾巴沿反方向拉长。 */
+  const flowPrevRef = useRef<Map<string, Vec3> | null>(null);
   /** 主题：星空（暗底+星点，默认）/ 白底（浅色）。 */
   const [starry, setStarry] = useState(true);
   /** 呼吸：只有激活元素（hover 命中/焦点）错相脉冲，背景星恒静。
@@ -541,6 +543,7 @@ export function Scene3D(props: {
     // 上一帧投影结果缓存（拾取用，屏幕坐标是现成的）
     let lastProjected: Projected[] = [];
 
+    let tailLayout: Map<string, Vec3> | null = null;
     const frame = (now: number) => {
       // 进来就把句柄清零：这个函数也可能被 presentNow() 同步调用，
       // 留着旧句柄会让随后的 wake() 以为还有链在跑，从而漏排帧。
@@ -556,8 +559,25 @@ export function Scene3D(props: {
         flowLastRef.current = now;
         flowAccRef.current += dt * flowSpeedRef.current;
         layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === 'auto' ? undefined : flowStyleRef.current);
+        // 尾迹长射:本帧与上帧世界位置之差 = 速度 → 尾巴 = 当前点 - 速度×K(往回拉)。
+        // 纯几何,不做历史多帧;方向恒等于真实运动方向,故读作"拖尾"而不是随机飘点。
+        const prev = flowPrevRef.current;
+        if (prev && prev.size === layout.size) {
+          const tail = new Map<string, Vec3>();
+          const K = 11;
+          for (const [id, q] of layout) {
+            const q0 = prev.get(id);
+            if (!q0) continue;
+            tail.set(id, { x: q.x - (q.x - q0.x) * K, y: q.y - (q.y - q0.y) * K, z: q.z - (q.z - q0.z) * K });
+          }
+          if (tail.size > 0) tailLayout = tail;
+        }
+        flowPrevRef.current = layout;
         edgeDirty = true;
         nodeDirty = true;
+      } else {
+        flowPrevRef.current = null;
+        tailLayout = null;
       }
       const ego = modeRef.current === 'ego';
       const metas = metasRef.current;
@@ -573,6 +593,10 @@ export function Scene3D(props: {
 
       const projected = projectAll(layout, cam, { w: vw, h: vh }, undefined, now, driftOn && !ego);
       lastProjected = projected;
+      // 尾迹点投影(仅流转时):与主投影同一相机,故尾巴严格沿屏幕运动方向。
+      const tailProjected = tailLayout ? projectAll(tailLayout, cam, { w: vw, h: vh }, undefined, now, false) : null;
+      const tailById = new Map<string, { x: number; y: number }>();
+      if (tailProjected) for (const q of tailProjected) tailById.set(q.id, q);
 
       // 激活集（hover/focus/emphasis）变了 → 只重建点层（旧激活点要回点层；
       // 边层不受影响——遮罩已撤，边的画法与 hover 无关）。
@@ -631,6 +655,28 @@ export function Scene3D(props: {
         // hallFocus:未选中 hall 的点整体压暗退后(alpha×0.22 不低于地板、半径×0.7)——
         // 不重排,只改配色与亮度(T3)。dimmed 在 metas 重建后按轴派生,逐帧只查表。
         const dimmed = (m: NodeMeta): boolean => viewRef.current === 'hallFocus' && !focusHallsRef.current.includes(m.hall);
+        // 尾迹长射:先画所有尾巴(半透层,压在点下面),再画点本体——亮核 + 暗尾 = 流星观感。
+        if (tailById.size > 0) {
+          c.globalCompositeOperation = 'lighter';
+          c.lineCap = 'round';
+          for (const p of projected) {
+            if (activeIds.has(p.id)) continue;
+            const tq = tailById.get(p.id);
+            const m = metas.get(p.id);
+            if (!tq || !m) continue;
+            const dim = dimmed(m);
+            const rr0 = Math.max(0.8, m.base * p.f * 1.75 * (dim ? 0.7 : 1));
+            c.globalAlpha = brightnessFor(p.f, agingOn ? m.aging : null, true) * (dim ? 0.22 : 1) * 0.34;
+            c.strokeStyle = m.color;
+            c.lineWidth = Math.max(1, rr0 * 1.15);
+            c.beginPath();
+            c.moveTo(p.x, p.y);
+            c.lineTo(tq.x, tq.y);
+            c.stroke();
+          }
+          c.globalCompositeOperation = 'source-over';
+          c.globalAlpha = 1;
+        }
         for (const p of projected) {
           if (activeIds.has(p.id)) continue;
           const m = metas.get(p.id);

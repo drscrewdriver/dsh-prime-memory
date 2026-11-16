@@ -45852,8 +45852,8 @@ var __create = Object.create;
 		      const cy = Math.cos(a);
 		      const sy = Math.sin(a);
 		      const ang = Math.atan2(p.z, p.x);
-		      const pulse = amp > 0 ? 1 + Math.sin(ts * 6e-4 + ang * 2) * 0.07 * amp : 1;
-		      const breathe = amp > 0 ? Math.sin(ts * 9e-4 + ang * 3) * 9 * amp : 0;
+		      const pulse = amp > 0 ? 1 + Math.sin(ts * 6e-4 + ang * 2) * 0.22 * amp : 1;
+		      const breathe = amp > 0 ? Math.sin(ts * 9e-4 + ang * 3) * 26 * amp : 0;
 		      out.set(id, {
 		        x: (p.x * cy - p.z * sy) * pulse,
 		        y: p.y + breathe,
@@ -45867,11 +45867,11 @@ var __create = Object.create;
 		      let t8 = Math.acos(ct);
 		      if (Math.sin(t8) * Math.cos(t8) * (p.z / r0) < 0) t8 = Math.PI * 2 - t8;
 		      const ph = t8 + om + off;
-		      const jit = (rand01("j:" + id) - 0.5) * (0.06 + 0.5 * amp);
+		      const jit = (rand01("j:" + id) - 0.5) * (0.06 + 0.9 * amp);
 		      const A = Math.min(r0 * 2.2, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
 		      const x = Math.cos(ph) * A;
 		      const z = Math.sin(ph) * Math.cos(ph) * A;
-		      const wob = 5 + 26 * amp;
+		      const wob = 6 + 70 * amp;
 		      out.set(id, {
 		        x: x + Math.sin(ph * 3.1) * wob,
 		        y: p.y + Math.cos(ph * 2.3) * wob * 0.8,
@@ -46051,6 +46051,7 @@ var __create = Object.create;
 		  flowStyleRef.current = flowStyle;
 		  const flowAccRef = (0, import_react33.useRef)(0);
 		  const flowLastRef = (0, import_react33.useRef)(0);
+		  const flowPrevRef = (0, import_react33.useRef)(null);
 		  const [starry, setStarry] = (0, import_react33.useState)(true);
 		  const [twinkleOn, setTwinkleOn] = (0, import_react33.useState)(true);
 		  const [axis, setAxis] = (0, import_react33.useState)("type");
@@ -46371,6 +46372,7 @@ var __create = Object.create;
 		      return lerpLayout(tr.from, tr.to, k);
 		    };
 		    let lastProjected = [];
+		    let tailLayout = null;
 		    const frame = (now) => {
 		      raf = 0;
 		      if (disposed) return;
@@ -46382,8 +46384,23 @@ var __create = Object.create;
 		        flowLastRef.current = now;
 		        flowAccRef.current += dt * flowSpeedRef.current;
 		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmpRef.current, flowStyleRef.current === "auto" ? void 0 : flowStyleRef.current);
+		        const prev = flowPrevRef.current;
+		        if (prev && prev.size === layout.size) {
+		          const tail = /* @__PURE__ */ new Map();
+		          const K = 11;
+		          for (const [id, q] of layout) {
+		            const q0 = prev.get(id);
+		            if (!q0) continue;
+		            tail.set(id, { x: q.x - (q.x - q0.x) * K, y: q.y - (q.y - q0.y) * K, z: q.z - (q.z - q0.z) * K });
+		          }
+		          if (tail.size > 0) tailLayout = tail;
+		        }
+		        flowPrevRef.current = layout;
 		        edgeDirty = true;
 		        nodeDirty = true;
+		      } else {
+		        flowPrevRef.current = null;
+		        tailLayout = null;
 		      }
 		      const ego = modeRef.current === "ego";
 		      const metas = metasRef.current;
@@ -46396,6 +46413,9 @@ var __create = Object.create;
 		      }
 		      const projected = projectAll(layout, cam, { w: vw, h: vh }, void 0, now, driftOn && !ego);
 		      lastProjected = projected;
+		      const tailProjected = tailLayout ? projectAll(tailLayout, cam, { w: vw, h: vh }, void 0, now, false) : null;
+		      const tailById = /* @__PURE__ */ new Map();
+		      if (tailProjected) for (const q of tailProjected) tailById.set(q.id, q);
 		      const activeKey = `${hover ?? ""}|${focus ?? ""}|${emph ?? ""}`;
 		      if (activeKey !== lastActiveKey) {
 		        lastActiveKey = activeKey;
@@ -46442,6 +46462,27 @@ var __create = Object.create;
 		        const c = nctx;
 		        c.clearRect(0, 0, vw, vh);
 		        const dimmed = (m) => viewRef.current === "hallFocus" && !focusHallsRef.current.includes(m.hall);
+		        if (tailById.size > 0) {
+		          c.globalCompositeOperation = "lighter";
+		          c.lineCap = "round";
+		          for (const p of projected) {
+		            if (activeIds.has(p.id)) continue;
+		            const tq = tailById.get(p.id);
+		            const m = metas.get(p.id);
+		            if (!tq || !m) continue;
+		            const dim = dimmed(m);
+		            const rr0 = Math.max(0.8, m.base * p.f * 1.75 * (dim ? 0.7 : 1));
+		            c.globalAlpha = brightnessFor(p.f, agingOn ? m.aging : null, true) * (dim ? 0.22 : 1) * 0.34;
+		            c.strokeStyle = m.color;
+		            c.lineWidth = Math.max(1, rr0 * 1.15);
+		            c.beginPath();
+		            c.moveTo(p.x, p.y);
+		            c.lineTo(tq.x, tq.y);
+		            c.stroke();
+		          }
+		          c.globalCompositeOperation = "source-over";
+		          c.globalAlpha = 1;
+		        }
 		        for (const p of projected) {
 		          if (activeIds.has(p.id)) continue;
 		          const m = metas.get(p.id);
