@@ -48,7 +48,7 @@ interface RegisteredTool {
 const EMPTY_REPORT: GraphSweepReport = {
   scanned: 12, bareRoleArchived: 3, placeRenamed: 2, placeUnrenamed: 1, aliasesPruned: 5,
   factsRenamed: 7, nodesUncanon: 4, statesRebuilt: 6, conceptDups: 0,
-  bareRoleQualified: 2, bareRoleBlocked: 0,
+  bareRoleQualified: 2, bareRoleBlocked: 0, vecRowsPruned: 222,
   archivedFacts: 224, archivedMaxFacts: 158,
   archivedIds: ['n1', 'n2', 'n3'], touchedIds: ['n4'], touchedConceptIds: [],
   archivedSamples: ['助手', '用户', '团队'],
@@ -217,6 +217,7 @@ describe('memory_graph_admin 执行门与回报', () => {
     // 一起归档。notice 必须把退场物质报出来并警告,否则就是拿好数字糊弄人。
     expect(String(preview.notice)).toContain('224');
     expect(String(preview.notice)).toContain('裸角色改限定名(枢纽保留)2'); // 枢纽保留那一路也要在 notice 里可见
+    expect(String(preview.notice)).toContain('归档向量残留 222 行'); // 全表残留清理要在回报里可见
     expect(String(preview.notice)).toContain('枢纽');
     const applied = await b.tool.execute({ action: 'sweep', dry_run: false });
     expect(applied.dry_run).toBe(false);

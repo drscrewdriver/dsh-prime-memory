@@ -480,6 +480,23 @@ export class GraphStore {
   }
 
   /**
+   * 向量表里现存的节点 id(供清扫做「全表归档残留」清理)。
+   * vec0 是虚表、没有 rowid,但 node_id 列可直接 SELECT;未就绪或查询失败一律回空数组
+   * ——这条路径只在运维清扫里走,失败不该影响主流程。
+   */
+  listNodeVectorIds(): string[] {
+    if (!this.db || !this.stmtDeleteNodeVec) return [];
+    try {
+      return (this.db.prepare('SELECT node_id FROM graph_node_vec').all() as Array<{ node_id?: unknown }>)
+        .map((r) => String(r.node_id ?? ''))
+        .filter((s) => s !== '');
+    } catch (err) {
+      this.logger?.warn(`${TAG} 节点向量 id 列举失败(按无残留处理): ${err instanceof Error ? err.message : String(err)}`);
+      return [];
+    }
+  }
+
+  /**
    * §F 概念向量列(task_13):与 `graph_node_vec` 同模式(vec0 + cosine)、同维度探测、
    * 同一内层 try/catch 纪律——概念向量列失败绝不能把图谱域整体拖停。
    * 表名 graph_concept_vec,主键 concept_id。
@@ -1742,13 +1759,24 @@ export class GraphStore {
           [],
           concepts.filter((c) => touchedConcepts.has(c.id)),
         );
-        // 归档节点退出向量表(读侧状态闸已补,这里是双保险:向量也不留)
-        if (archived.size > 0) this.deleteNodeVectors([...archived]);
+        // 归档节点退出向量表。**必须按全表 archived 清,而不是只删本轮新归档的**:
+        // 线上实测 430 个归档节点里 222 个仍躺着向量行——它们是历史 delete/merge/旧版
+        // 归档留下的,只删本轮那 16 个等于漏掉 93%。语义要闭合:看不见的人不该留在索引里。
+        const archivedAll = nodes.filter((n) => n.status === 'archived').map((n) => n.id);
+        if (archivedAll.length > 0) {
+          const inVec = new Set(this.listNodeVectorIds());
+          const stale = archivedAll.filter((id) => inVec.has(id));
+          if (stale.length > 0) {
+            this.deleteNodeVectors(stale);
+            result.vecRowsPruned = stale.length;
+          }
+        }
       });
       this.logger?.info(
         `${TAG} 存量清扫落库:归档 ${result.bareRoleArchived} / place 改名 ${result.placeRenamed}` +
         `(改不动 ${result.placeUnrenamed}) / 别名剔除 ${result.aliasesPruned} / key 归一 ${result.factsRenamed}` +
-        ` / 状态重建 ${result.statesRebuilt}(扫 ${result.scanned} 节点,概念重复组 ${result.conceptDups})`,
+        ` / 状态重建 ${result.statesRebuilt}(扫 ${result.scanned} 节点,概念重复组 ${result.conceptDups})` +
+        (result.vecRowsPruned ? ` / 顺带清掉归档向量残留 ${result.vecRowsPruned} 行` : ''),
       );
     } catch (err) {
       this.logger?.warn(`${TAG} 存量清扫失败(整体回滚): ${err instanceof Error ? err.message : String(err)}`);

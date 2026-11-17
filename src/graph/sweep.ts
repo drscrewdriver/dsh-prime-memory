@@ -68,6 +68,12 @@ export interface GraphSweepReport {
   bareRoleQualified: number;
   /** ① 想限定但目标名已被占,退回归档的枢纽数(冲突不静默丢)。 */
   bareRoleBlocked: number;
+  /**
+   * 向量表里被清掉的「归档节点残留」行数。**由 store 层落库时填写**,纯函数不碰 I/O
+   * 故恒为 0。放在同一份报告里是因为它记的是一类真实泄漏:历史 delete/merge/旧版归档
+   * 把向量行留在了索引里,而这些节点在文本检索/画布/反查里早就不可见了。
+   */
+  vecRowsPruned: number;
   /** ① 被归档节点里的最大 fact 数(>20 即提示「这是枢纽,不是杂散泛称」)。 */
   archivedMaxFacts: number;
   /** ②③④⑤ 有变更的节点 id(供 store 层写回)。 */
@@ -84,6 +90,7 @@ function emptyReport(): GraphSweepReport {
     scanned: 0, bareRoleArchived: 0, placeRenamed: 0, placeUnrenamed: 0, aliasesPruned: 0,
     factsRenamed: 0, nodesUncanon: 0, statesRebuilt: 0, conceptDups: 0,
     archivedFacts: 0, archivedMaxFacts: 0, bareRoleQualified: 0, bareRoleBlocked: 0,
+    vecRowsPruned: 0,
     archivedIds: [], touchedIds: [], touchedConceptIds: [], archivedSamples: [],
   };
 }

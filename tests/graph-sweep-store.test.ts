@@ -272,6 +272,24 @@ describe('GraphStore.sweepStock:B 刀落库语义', () => {
     raw.close();
     gs.close();
   });
+
+  it.runIf(VEC0_OK)('落库清扫顺带清掉历史遗留的归档向量残留(线上实测 222 行那类泄漏)', () => {
+    const { gs, raw } = seededWithDirty();
+    // 造泄漏:n_oldarch 在本轮 sweep 之前就已 archived(模拟旧版 delete/merge 留下的向量残留)。
+    // upsertNodeVectors 不看节点状态——残留正是这么来的。n_legacy 是 tool 类型,sweep 不归档它。
+    rawInsertNode(raw, 'n_oldarch', '旧归档项目', 'project', { status: 'archived' });
+    const v = new Float32Array([1, 0, 0, 0]);
+    gs.upsertNodeVectors([{ nodeId: 'n_oldarch', embedding: v }, { nodeId: 'n_legacy', embedding: v }]);
+    expect(gs.listNodeVectorIds().sort()).toEqual(['n_legacy', 'n_oldarch']);
+    const rp = gs.sweepStock({ dryRun: false });
+    // 只清「已归档且仍在向量表里」那一行;在世节点的向量行一个都不能少。
+    expect(rp.vecRowsPruned).toBe(1);
+    expect(gs.listNodeVectorIds()).toEqual(['n_legacy']);
+    // 再跑一次已无残留 → 计数归零(幂等)
+    expect(gs.sweepStock({ dryRun: false }).vecRowsPruned).toBe(0);
+    raw.close();
+    gs.close();
+  });
 });
 
 describe('GraphStore.resetGraphOnly:A 刀派生投影作废', () => {

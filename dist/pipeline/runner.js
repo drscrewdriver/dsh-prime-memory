@@ -210,7 +210,7 @@ const IDLE_TICK_MS = 30_000;
 const EMPTY_SWEEP = {
     scanned: 0, bareRoleArchived: 0, placeRenamed: 0, placeUnrenamed: 0, aliasesPruned: 0,
     factsRenamed: 0, nodesUncanon: 0, statesRebuilt: 0, conceptDups: 0,
-    archivedFacts: 0, archivedMaxFacts: 0, bareRoleQualified: 0, bareRoleBlocked: 0,
+    archivedFacts: 0, archivedMaxFacts: 0, bareRoleQualified: 0, bareRoleBlocked: 0, vecRowsPruned: 0,
     archivedIds: [], touchedIds: [], touchedConceptIds: [], archivedSamples: [],
 };
 export class MemoryRunner {

@@ -95,6 +95,12 @@ export declare class GraphStore {
     /** 删除节点向量(节点删/合并时用)。未就绪 no-op。 */
     deleteNodeVectors(nodeIds: readonly string[]): void;
     /**
+     * 向量表里现存的节点 id(供清扫做「全表归档残留」清理)。
+     * vec0 是虚表、没有 rowid,但 node_id 列可直接 SELECT;未就绪或查询失败一律回空数组
+     * ——这条路径只在运维清扫里走,失败不该影响主流程。
+     */
+    listNodeVectorIds(): string[];
+    /**
      * §F 概念向量列(task_13):与 `graph_node_vec` 同模式(vec0 + cosine)、同维度探测、
      * 同一内层 try/catch 纪律——概念向量列失败绝不能把图谱域整体拖停。
      * 表名 graph_concept_vec,主键 concept_id。

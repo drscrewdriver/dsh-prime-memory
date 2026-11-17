@@ -1634,6 +1634,7 @@ export function registerMemoryTools(
                 conceptDups: { type: 'number' }, archivedFacts: { type: 'number' },
                 archivedMaxFacts: { type: 'number' },
                 bareRoleQualified: { type: 'number' }, bareRoleBlocked: { type: 'number' },
+                vecRowsPruned: { type: 'number' },
               },
               additionalProperties: false,
             },
@@ -1680,7 +1681,9 @@ export function registerMemoryTools(
               (rp.archivedMaxFacts > 20
                 ? ` ⚠ 单个被归档节点最多带 ${rp.archivedMaxFacts} 条 fact——这像是偏好汇聚枢纽而非杂散泛称,先核对样例再落库`
                 : '') +
-              ` / 带「未规范」tag ${rp.nodesUncanon}${rp.conceptDups ? ` / 概念同名重复 ${rp.conceptDups}(不自动合并)` : ''}` +
+              ` / 带「未规范」tag ${rp.nodesUncanon}` +
+              (rp.conceptDups ? ` / 概念同名重复 ${rp.conceptDups}(不自动合并)` : '') +
+              (rp.vecRowsPruned ? ` / 顺带清掉归档向量残留 ${rp.vecRowsPruned} 行` : '') +
               (dryRun ? '。确认后用 dry_run=false 落库。' : '。'),
             dry_run: dryRun,
             report: {
@@ -1689,6 +1692,7 @@ export function registerMemoryTools(
               statesRebuilt: rp.statesRebuilt, nodesUncanon: rp.nodesUncanon, conceptDups: rp.conceptDups,
               archivedFacts: rp.archivedFacts, archivedMaxFacts: rp.archivedMaxFacts,
               bareRoleQualified: rp.bareRoleQualified, bareRoleBlocked: rp.bareRoleBlocked,
+              vecRowsPruned: rp.vecRowsPruned,
             },
           };
         }
