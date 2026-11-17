@@ -139,12 +139,12 @@ function sameQualified(node, name, aliases) {
     return false;
 }
 /** fact key 规范化:trim/小写无关的中文 key 原样,命中同义映射替换;规范表外不动。 */
-function normalizeFactKey(key) {
+export function normalizeFactKey(key) {
     const k = key.trim();
     return GRAPH_FACT_KEY_SYNONYMS[k] ?? k;
 }
 /** key 是否在规范词表内(表外保留但供统计收敛率)。 */
-function isCanonicalFactKey(key) {
+export function isCanonicalFactKey(key) {
     return GRAPH_FACT_KEYS.includes(key) || key === '未规范';
 }
 /** 应用一次投影提案(硬校验 + 消歧 + supersede + 状态重建)。 */

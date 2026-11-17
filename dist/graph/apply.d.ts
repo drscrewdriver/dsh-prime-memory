@@ -46,5 +46,9 @@ export declare function anchorTimeFromRecordsDetailed(records: readonly MemoryRe
 };
 /** {@link anchorTimeFromRecordsDetailed} 的旧签名封装(调用方只要时刻时的零改动通道)。 */
 export declare function anchorTimeFromRecords(records: readonly MemoryRecord[], fallbackIso: string): string;
+/** fact key 规范化:trim/小写无关的中文 key 原样,命中同义映射替换;规范表外不动。 */
+export declare function normalizeFactKey(key: string): string;
+/** key 是否在规范词表内(表外保留但供统计收敛率)。 */
+export declare function isCanonicalFactKey(key: string): boolean;
 /** 应用一次投影提案(硬校验 + 消歧 + supersede + 状态重建)。 */
 export declare function applyGraphProjection(options: ApplyGraphProjectionOptions): ApplyGraphProjectionOutcome;

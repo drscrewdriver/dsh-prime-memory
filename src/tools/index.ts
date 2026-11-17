@@ -19,6 +19,7 @@ import { DOWNGRADE_TARGET, familyOf, isKnownType, typeEnumSep } from '../memory-
 import type { LiveSettingsHandle } from '../settings.js';
 import type { RuminateController } from '../pipeline/ruminate.js';
 import type { GraphStore } from '../store/graph-store.js';
+import type { GraphSweepReport } from '../graph/sweep.js';
 import { graphFeatureOn } from '../graph/gate.js';
 import type { DrscClient } from '../clients/drsc.js';
 import { drscRoleOf } from '../clients/drsc.js';
@@ -106,6 +107,14 @@ export interface ToolSealRegistry {
 export interface GraphWriteHooks {
   enqueueGraph: (recordIds: readonly string[]) => void;
   reprojectGraph: (recordIds: readonly string[]) => { queued: number; jobIds: string[] };
+  /** 图谱级重建(v0.26.58 A 刀):作废派生投影 + 全量重投;仅运维通道使用。 */
+  rebuildGraph: () => {
+    cleared: { nodes: number; edges: number; concepts: number; jobs: number; projected: number };
+    queued: number;
+    notice?: string;
+  };
+  /** 存量清扫(v0.26.58 B 刀):dryRun=true 只报告不改。 */
+  sweepGraph: (dryRun: boolean) => GraphSweepReport;
 }
 
 export function registerMemoryTools(
@@ -1568,6 +1577,122 @@ export function registerMemoryTools(
           `[memory] 关系迁移(源导):${fromId} -[${relation}]-> ${toId}(闭旧边 ${proposal.closedEdgeIds.length} 条,源 ${carrier.id})`,
         );
         return { carrier_id: carrier.id, edge_ids: proposal.edgeIds, closed_edge_ids: proposal.closedEdgeIds, queued: r.queued };
+      },
+    }),
+  ));
+
+  // memory_graph_admin:图谱重建 / 存量清扫(v0.26.58,本体论落地计划两把刀的工具面)。
+  //
+  // 为什么合成一个工具:模型侧的决策点是同一件事——「存量图谱不合规格,该重造还是该
+  // 清扫」。拆两个工具会把一个判断题切成两次猜测;action 词表把两条通道与各自的
+  // dry-run 语义摆在同一份描述里,才是给模型的正确形状。
+  //
+  // 为什么都不违反 R5(不手写图数据):
+  //  - rebuild 只删派生行与投影凭证(GraphStore.resetGraphOnly),入队复用既有
+  //    queueMissing 的 NOT EXISTS 口径,落库仍逐 job 走 applyGraphProjection 硬校验
+  //    ——spec §G「图谱可 drop 重造」的操作化,graph-rebuildability 测试③ 锁的就是它;
+  //  - sweep 用投影侧同一批纯判据反扫存量(isPathLike/isRoleName/splitQualified/
+  //    isAliasShaped/normalizeFactKey),归档沿用既有生命周期词表(archived),不新增
+  //    状态、不编造内容;place 改名取路径末段,信息不删。
+  // 破坏性面:rebuild 与 sweep 落库都吃 live.memoryMutate 高权限门(与 memory_delete
+  // 同规);rebuild_preview 与 sweep 的 dry_run 缺省都是只读。
+  reg('graphAdmin', () => ctx.tools.register(
+    defineTool({
+      name: 'memory_graph_admin',
+      description:
+        '图谱投影的运维通道(绝不直写图表)。action="rebuild_preview" 只报告重建会清理的行数;' +
+        'action="rebuild" 作废全部派生投影(节点/边/概念/凭证/向量)并从 L1 全量重投,用于投影器换代后存量不收敛,耗时随记录数线性增长,需高权限模式开启;' +
+        'action="sweep" 用投影侧同一把尺反扫存量(归档泛称裸角色、路径名 place 改末段、剔脏别名、fact key 归一),不花一次 LLM、不动 L1,默认 dry_run=true 只回计数,需高权限模式开启。',
+      parameters: {
+        action: { type: 'string', required: true, description: 'rebuild_preview | rebuild | sweep' },
+        dry_run: { type: 'boolean', description: '仅 sweep 有效:true(缺省)=只报告不改;false=实际写回' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            notice: { type: 'string' },
+            queued: { type: 'number', description: 'rebuild 新入队的投影作业数(按 GRAPH_JOB_BATCH 分片,非记录数)' },
+            dry_run: { type: 'boolean', description: 'sweep 本次是否为预演' },
+            cleared: {
+              type: 'object',
+              description: 'rebuild 清理前的各表行数(同 rebuild_preview)',
+              properties: {
+                nodes: { type: 'number' }, edges: { type: 'number' }, concepts: { type: 'number' },
+                jobs: { type: 'number' }, projected: { type: 'number' },
+              },
+              additionalProperties: false,
+            },
+            report: {
+              type: 'object',
+              description: 'sweep 明细计数(命中条数;归档节点样例已并入 notice)',
+              properties: {
+                scanned: { type: 'number' }, bareRoleArchived: { type: 'number' },
+                placeRenamed: { type: 'number' }, placeUnrenamed: { type: 'number' },
+                aliasesPruned: { type: 'number' }, factsRenamed: { type: 'number' },
+                statesRebuilt: { type: 'number' }, nodesUncanon: { type: 'number' },
+                conceptDups: { type: 'number' }, archivedFacts: { type: 'number' },
+                archivedMaxFacts: { type: 'number' },
+                bareRoleQualified: { type: 'number' }, bareRoleBlocked: { type: 'number' },
+              },
+              additionalProperties: false,
+            },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [{ type: 'text', text: value.notice ?? '(已执行)' }],
+      },
+      execute: async (args) => {
+        const graph = stores.graph;
+        if (!graph || !graphFeatureOn(cfg, live)) return { notice: GRAPH_OFF_NOTICE };
+        if (!graphWrite) return { notice: '图谱写面未接线(runner 未装配),无法重建/清扫。' };
+        const action = String(args.action ?? '').trim();
+        if (action === 'rebuild_preview') {
+          const c = graph.countsForRebuild();
+          return {
+            notice:
+              `重建将清空:节点 ${c.nodes} / 边 ${c.edges} / 概念 ${c.concepts} / 作业 ${c.jobs} / 已投影凭证 ${c.projected},随后从 L1 全量重投(不碰 L1 事实源)。确认后以 action="rebuild" 执行。`,
+            cleared: c,
+          };
+        }
+        if (action === 'rebuild') {
+          if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
+          const r = graphWrite.rebuildGraph();
+          if (r.notice) return { notice: r.notice };
+          return {
+            notice: `图谱重建已启动:清理 ${r.cleared.nodes} 节点/${r.cleared.concepts} 概念/${r.cleared.projected} 凭证 → 入队 ${r.queued} 个作业,由投影泵逐批从 L1 重投(用 rebuild_preview 可看剩余)。`,
+            cleared: r.cleared,
+            queued: r.queued,
+          };
+        }
+        if (action === 'sweep') {
+          if (!live.get().memoryMutate) return { notice: MUTATE_OFF_NOTICE };
+          const dryRun = args.dry_run !== false;
+          const rp = graphWrite.sweepGraph(dryRun);
+          const head = dryRun ? '清扫预演(未改动任何数据)' : '清扫已落库';
+          return {
+            notice:
+              `${head}:扫 ${rp.scanned} 节点 → 归档裸角色 ${rp.bareRoleArchived}${rp.archivedSamples.length ? `(样例 ${rp.archivedSamples.join('、')})` : ''}` +
+              ` / place 改名 ${rp.placeRenamed}${rp.placeUnrenamed ? `(末段仍非法、未改 ${rp.placeUnrenamed})` : ''}` +
+              ` / 裸角色改限定名(枢纽保留)${rp.bareRoleQualified}${rp.bareRoleBlocked ? `(名冲突退回归档 ${rp.bareRoleBlocked})` : ''}` +
+              ` / 别名剔除 ${rp.aliasesPruned} / key 归一 ${rp.factsRenamed} / 状态重建 ${rp.statesRebuilt}` +
+              ` / 随归档退场的活跃 fact ${rp.archivedFacts} 条` +
+              (rp.archivedMaxFacts > 20
+                ? ` ⚠ 单个被归档节点最多带 ${rp.archivedMaxFacts} 条 fact——这像是偏好汇聚枢纽而非杂散泛称,先核对样例再落库`
+                : '') +
+              ` / 带「未规范」tag ${rp.nodesUncanon}${rp.conceptDups ? ` / 概念同名重复 ${rp.conceptDups}(不自动合并)` : ''}` +
+              (dryRun ? '。确认后用 dry_run=false 落库。' : '。'),
+            dry_run: dryRun,
+            report: {
+              scanned: rp.scanned, bareRoleArchived: rp.bareRoleArchived, placeRenamed: rp.placeRenamed,
+              placeUnrenamed: rp.placeUnrenamed, aliasesPruned: rp.aliasesPruned, factsRenamed: rp.factsRenamed,
+              statesRebuilt: rp.statesRebuilt, nodesUncanon: rp.nodesUncanon, conceptDups: rp.conceptDups,
+              archivedFacts: rp.archivedFacts, archivedMaxFacts: rp.archivedMaxFacts,
+              bareRoleQualified: rp.bareRoleQualified, bareRoleBlocked: rp.bareRoleBlocked,
+            },
+          };
+        }
+        return { notice: `未知 action ${JSON.stringify(action)}(应为 rebuild_preview / rebuild / sweep)` };
       },
     }),
   ));

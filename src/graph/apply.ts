@@ -192,12 +192,12 @@ function sameQualified(node: { name: string; aliases: readonly string[] }, name:
 }
 
 /** fact key 规范化:trim/小写无关的中文 key 原样,命中同义映射替换;规范表外不动。 */
-function normalizeFactKey(key: string): string {
+export function normalizeFactKey(key: string): string {
   const k = key.trim();
   return GRAPH_FACT_KEY_SYNONYMS[k] ?? k;
 }
 /** key 是否在规范词表内(表外保留但供统计收敛率)。 */
-function isCanonicalFactKey(key: string): boolean {
+export function isCanonicalFactKey(key: string): boolean {
   return (GRAPH_FACT_KEYS as readonly string[]).includes(key) || key === '未规范';
 }
 

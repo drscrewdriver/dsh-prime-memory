@@ -206,6 +206,13 @@ const SESSION_PRODUCED_CAP = 400;
 const STARTUP_RETRY_DELAY_MS = 20_000;
 /** 闲置扫描 tick 粒度(实际落袋延迟 = idleSeconds + 至多一个 tick)。 */
 const IDLE_TICK_MS = 30_000;
+/** 清扫报告的空形(前置条件不满足时返回,调用方无需判空)。 */
+const EMPTY_SWEEP = {
+    scanned: 0, bareRoleArchived: 0, placeRenamed: 0, placeUnrenamed: 0, aliasesPruned: 0,
+    factsRenamed: 0, nodesUncanon: 0, statesRebuilt: 0, conceptDups: 0,
+    archivedFacts: 0, archivedMaxFacts: 0, bareRoleQualified: 0, bareRoleBlocked: 0,
+    archivedIds: [], touchedIds: [], touchedConceptIds: [], archivedSamples: [],
+};
 export class MemoryRunner {
     ctx;
     cfg;
@@ -590,6 +597,51 @@ export class MemoryRunner {
         if (r.queued > 0)
             this.maybeQueueGraphTask();
         return r;
+    }
+    /**
+     * 图谱级重建(v0.26.58 A 刀,spec §G「图谱可 drop 重造」的操作化):
+     * 作废全部派生投影(六张图谱域表 + 两张向量表)→ 全量重新入队 → 拉泵。
+     *
+     * 为什么这条链路不含任何一次手写图数据:
+     * - 清理只删派生行与凭证,L1 事实源一字不动;
+     * - 入队复用既有 {@link GraphStore.queueMissing}——凭证清零后它的 NOT EXISTS
+     *   判据天然命中全部存活记录,不需要另取 id 清单(口径与启动补投影完全同源);
+     * - 落库仍逐 job 走 claim → LLM 提案 → applyGraphProjection 硬校验 → 写回,
+     *   于是 v2 的入口闸门(path place / 裸角色 / 概念独立表 / key 归一)第一次真正
+     *   作用在**全量**存量上。这是增量重投做不到的事(闸门只拦新提案,不回写旧行)。
+     *
+     * 幂等与代价:在途 job 随凭证一起作废;重投期间图谱逐条长回来(读侧可用,
+     * 只是暂时不全)。全程零 LLM 在本方法内(泵内异步),不违反「LLM 不进事务」。
+     *
+     * @returns 清理前各表行数 + 新入队作业数;图谱未启用时全零并给出原因。
+     */
+    rebuildGraph() {
+        const graphs = this.stores.graph;
+        if (!graphs)
+            return { cleared: { nodes: 0, edges: 0, concepts: 0, jobs: 0, projected: 0 }, queued: 0, notice: '图谱存储未装配。' };
+        if (!graphFeatureOn(this.cfg, this.live)) {
+            return { cleared: { nodes: 0, edges: 0, concepts: 0, jobs: 0, projected: 0 }, queued: 0, notice: '图谱未启用(部署 cfg.graph.enabled 或面板 graphEnabled 需为真)。' };
+        }
+        const cleared = graphs.resetGraphOnly();
+        // 凭证清零后 queueMissing = 全量:与启动补投影同一段 WHERE,不另造口径。
+        const queued = graphs.queueMissing(9000);
+        if (queued > 0)
+            this.maybeQueueGraphTask();
+        this.logger?.info('[memory] 图谱级重建:清空 ${JSON.stringify(cleared)} → 重新入队 ${queued} 个作业(从 L1 全量重投)');
+        return { cleared, queued };
+    }
+    /**
+     * 存量清扫(v0.26.58 B 刀):不花一次 LLM,用投影侧同一批纯判据反扫存量图,
+     * 收敛裸角色/path place/脏别名/fact key。dryRun 默认开(先看规模再落库),
+     * 落库走 GraphStore.sweepStock 的单事务缝 + 归档节点的向量清理。
+     *
+     * @param dryRun - true(缺省)= 只报告不改;false = 实际写回。
+     */
+    sweepGraph(dryRun = true) {
+        const graphs = this.stores.graph;
+        if (!graphs)
+            return { ...EMPTY_SWEEP };
+        return graphs.sweepStock({ dryRun });
     }
     /**
      * 图谱投影泵入队判定:

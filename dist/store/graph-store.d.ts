@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { type GraphSweepReport } from '../graph/sweep.js';
 import type { GraphConceptSearchResult } from '../graph/search.js';
 import { buildFullView } from '../graph/preview.js';
 import type { GraphPreviewResult } from '../graph/preview.js';
@@ -386,6 +387,53 @@ export declare class GraphStore {
     syncDisputed(disputedRecordIds: readonly string[]): {
         marked: number;
         cleared: number;
+    };
+    /**
+     * 重建前的规模读数(v0.26.58 A 刀的 `rebuild_preview`:只读,供人确认要清掉多少)。
+     * 六表行数一次取齐;表缺失/异常各自回零,不影响其余。
+     */
+    countsForRebuild(): {
+        nodes: number;
+        edges: number;
+        concepts: number;
+        jobs: number;
+        projected: number;
+    };
+    /**
+     * 存量清扫的存储缝(v0.26.58 B 刀):单事务内 load 全图 → 纯函数
+     * {@link sweepStockGraph} → 写回 touched/archived 行,并删掉归档节点的向量行。
+     *
+     * 为什么必须删向量:`searchNodesByVector` 走 vec0 KNN 命中后**只查节点存在、不看
+     * 状态**(概念路 `searchConceptsByVector` 有状态闸,节点路缺——两路口径分叉的真缺陷,
+     * 见 v0.26.58 修复),留着向量行,归档节点仍会被召回注入捞回来,清扫就白做。
+     *
+     * 与 complete() 同规:LLM 与嵌入永不进事务缝;本方法纯 SQL,幂等(再跑一次无命中)。
+     *
+     * @param dryRun - 只算不改(默认 true):返回同一份报告供人先看规模,确认后再落库。
+     * @param now - ISO 时间戳,缺省取当前时间。
+     * @returns 清扫报告(节点/概念计数与 id 清单)。
+     */
+    sweepStock(opts?: {
+        dryRun?: boolean;
+        now?: string;
+    }): GraphSweepReport;
+    /**
+     * 图谱级重置(v0.26.58 A 刀):六张图谱域表 + 两张向量表清空,再由调用方
+     * 走 `queueMissing` 从 L1 全量重投。**只作废派生投影,不碰 l1_records**。
+     *
+     * 为什么需要单独一个方法:`resetAll()` 的既有语义是「L1 全库重建时顺带作废」,
+     * 调用点只有 `clearL1()`;图谱侧需要一条不动事实源的重建通道(spec §G「图谱可
+     * drop 重造」的操作化)。向量表也在这里清:rebuild 后逐批投影会经
+     * `writeNodeVectorsAfterComplete` 补回,留着旧行反而会让归档/消失的 id 被召回。
+     *
+     * @returns 清理前各表的行数(诊断留痕;失败返回全零并已 warn)。
+     */
+    resetGraphOnly(): {
+        nodes: number;
+        edges: number;
+        concepts: number;
+        jobs: number;
+        projected: number;
     };
     /** 清空全部图谱数据(L1 重建时调用——图谱是 L1 的投影,记录清空即图谱作废)。 */
     resetAll(): void;

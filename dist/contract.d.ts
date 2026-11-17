@@ -53,7 +53,7 @@ export interface MemoryLiveSettings {
     toolRuminate: boolean;
     toolConflict: boolean;
     toolMutate: boolean;
-    /** v0.26.57 图谱管理组:false(默认)= memory_reproject / memory_migrate_relation 不注册 */
+    /** v0.26.57 图谱管理组:false(默认)= memory_reproject / memory_migrate_relation / memory_graph_admin 不注册 */
     toolGraphAdmin: boolean;
     /** v0.26.57 旧名兼容组:false(默认)= memory_add/update/delete/import 等旧入口不注册(已被 memory_write 等吸收) */
     toolLegacy: boolean;

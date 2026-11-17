@@ -3,6 +3,7 @@ import type { MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
 import type { RuminateController } from '../pipeline/ruminate.js';
 import type { GraphStore } from '../store/graph-store.js';
+import type { GraphSweepReport } from '../graph/sweep.js';
 import type { DrscClient } from '../clients/drsc.js';
 import type { L1Store } from '../store/l1.js';
 import type { PersonaStore } from '../store/persona.js';
@@ -30,6 +31,20 @@ export interface GraphWriteHooks {
         queued: number;
         jobIds: string[];
     };
+    /** 图谱级重建(v0.26.58 A 刀):作废派生投影 + 全量重投;仅运维通道使用。 */
+    rebuildGraph: () => {
+        cleared: {
+            nodes: number;
+            edges: number;
+            concepts: number;
+            jobs: number;
+            projected: number;
+        };
+        queued: number;
+        notice?: string;
+    };
+    /** 存量清扫(v0.26.58 B 刀):dryRun=true 只报告不改。 */
+    sweepGraph: (dryRun: boolean) => GraphSweepReport;
 }
 export declare function registerMemoryTools(ctx: Context, cfg: MemoryConfig, stores: {
     /** DRSC 客户端(T8.4 读切):conversation_search 的历史供给面;缺席=显式报错。 */

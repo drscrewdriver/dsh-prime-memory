@@ -182,7 +182,7 @@ const ALWAYS_ON: MemoryLiveSettings = {
   toolMutate: true,
   toolSkills: true,
   // v0.26.57 工具面精简:管理组(graphAdmin)与旧名兼容组(legacy)默认**封印**——
-  // memory_reproject/migrate_relation 是人工纠偏通道、memory_add 等四件已被
+  // memory_reproject/migrate_relation/graph_admin 是人工纠偏通道、memory_add 等四件已被
   // memory_write 吸收,常态不该占模型工具位;要开回在设置页显式打开。
   toolGraphAdmin: false,
   toolLegacy: false,

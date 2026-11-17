@@ -21,6 +21,7 @@ import { randomBytes } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import { applyGraphProjection } from '../graph/apply.js';
 import { expandHitRecordIds, searchGraphConcepts, searchGraphNodes } from '../graph/search.js';
+import { sweepStockGraph, type GraphSweepReport } from '../graph/sweep.js';
 import type { GraphConceptSearchResult } from '../graph/search.js';
 import { buildFullView, buildGraphPreview } from '../graph/preview.js';
 import { isWingId } from '../metadata-validators.js';
@@ -236,6 +237,12 @@ function chunkOf(ids: readonly string[], size = 900): string[][] {
   const out: string[][] = [];
   for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
   return out;
+}
+
+/** COUNT(*) 取数容错:行缺失或非数值一律回零(诊断口径,不参与控制流)。 */
+function numberOr(row: unknown): number {
+  const n = (row as { n?: unknown } | undefined)?.n;
+  return typeof n === 'number' && Number.isFinite(n) ? n : 0;
 }
 
 export class GraphStore {
@@ -582,6 +589,9 @@ export class GraphStore {
         if (distance == null || Number.isNaN(distance)) continue;
         const node = this.getNode(node_id);
         if (!node) continue;
+        // 状态闸(与 searchConceptsByVector 同口径,v0.26.58 补):vec0 KNN 命中不校验
+        // 节点生命周期,归档/退场节点会被召回注入捞回来——清扫与墓碑的退场在此断掉。
+        if (node.status !== 'active' && node.status !== 'disputed') continue;
         out.push({ node, score: 1 - distance });
       }
       return out;
@@ -1670,6 +1680,125 @@ export class GraphStore {
     } catch (err) {
       this.logger?.warn(`${TAG} 冻结状态同步失败(忽略): ${err instanceof Error ? err.message : String(err)}`);
       return { marked: 0, cleared: 0 };
+    }
+  }
+
+  /**
+   * 重建前的规模读数(v0.26.58 A 刀的 `rebuild_preview`:只读,供人确认要清掉多少)。
+   * 六表行数一次取齐;表缺失/异常各自回零,不影响其余。
+   */
+  countsForRebuild(): { nodes: number; edges: number; concepts: number; jobs: number; projected: number } {
+    const zero = { nodes: 0, edges: 0, concepts: 0, jobs: 0, projected: 0 };
+    if (!this.db) return zero;
+    const db = this.db;
+    const one = (sql: string): number => {
+      try {
+        return numberOr(db.prepare(sql).get());
+      } catch {
+        return 0;
+      }
+    };
+    return {
+      nodes: one('SELECT COUNT(*) n FROM graph_nodes'),
+      edges: one('SELECT COUNT(*) n FROM graph_edges'),
+      concepts: one('SELECT COUNT(*) n FROM graph_concepts'),
+      jobs: one('SELECT COUNT(*) n FROM graph_projection_jobs'),
+      projected: one('SELECT COUNT(*) n FROM graph_projected_records'),
+    };
+  }
+  /**
+   * 存量清扫的存储缝(v0.26.58 B 刀):单事务内 load 全图 → 纯函数
+   * {@link sweepStockGraph} → 写回 touched/archived 行,并删掉归档节点的向量行。
+   *
+   * 为什么必须删向量:`searchNodesByVector` 走 vec0 KNN 命中后**只查节点存在、不看
+   * 状态**(概念路 `searchConceptsByVector` 有状态闸,节点路缺——两路口径分叉的真缺陷,
+   * 见 v0.26.58 修复),留着向量行,归档节点仍会被召回注入捞回来,清扫就白做。
+   *
+   * 与 complete() 同规:LLM 与嵌入永不进事务缝;本方法纯 SQL,幂等(再跑一次无命中)。
+   *
+   * @param dryRun - 只算不改(默认 true):返回同一份报告供人先看规模,确认后再落库。
+   * @param now - ISO 时间戳,缺省取当前时间。
+   * @returns 清扫报告(节点/概念计数与 id 清单)。
+   */
+  sweepStock(opts: { dryRun?: boolean; now?: string } = {}): GraphSweepReport {
+    const reportOf = (nodes: GraphNode[], concepts: GraphConcept[]) =>
+      sweepStockGraph({ nodes, concepts, now: opts.now ?? new Date().toISOString() });
+    if (!this.db) return reportOf([], []);
+    if (opts.dryRun !== false) {
+      // 只读预演:loadGraph 的副本被纯函数就地变异,但不写回——副本随作用域丢弃。
+      const { nodes, concepts } = this.loadGraph();
+      return reportOf(nodes, concepts);
+    }
+    let result: GraphSweepReport = reportOf([], []);
+    try {
+      this.tx(() => {
+        const { nodes, concepts } = this.loadGraphInTx();
+        result = reportOf(nodes, concepts);
+        const touched = new Set(result.touchedIds);
+        const archived = new Set(result.archivedIds);
+        const touchedConcepts = new Set(result.touchedConceptIds);
+        this.upsertTouchedInTx(
+          nodes.filter((n) => touched.has(n.id) || archived.has(n.id)),
+          [],
+          concepts.filter((c) => touchedConcepts.has(c.id)),
+        );
+        // 归档节点退出向量表(读侧状态闸已补,这里是双保险:向量也不留)
+        if (archived.size > 0) this.deleteNodeVectors([...archived]);
+      });
+      this.logger?.info(
+        `${TAG} 存量清扫落库:归档 ${result.bareRoleArchived} / place 改名 ${result.placeRenamed}` +
+        `(改不动 ${result.placeUnrenamed}) / 别名剔除 ${result.aliasesPruned} / key 归一 ${result.factsRenamed}` +
+        ` / 状态重建 ${result.statesRebuilt}(扫 ${result.scanned} 节点,概念重复组 ${result.conceptDups})`,
+      );
+    } catch (err) {
+      this.logger?.warn(`${TAG} 存量清扫失败(整体回滚): ${err instanceof Error ? err.message : String(err)}`);
+      return reportOf([], []);
+    }
+    return result;
+  }
+
+  /**
+   * 图谱级重置(v0.26.58 A 刀):六张图谱域表 + 两张向量表清空,再由调用方
+   * 走 `queueMissing` 从 L1 全量重投。**只作废派生投影,不碰 l1_records**。
+   *
+   * 为什么需要单独一个方法:`resetAll()` 的既有语义是「L1 全库重建时顺带作废」,
+   * 调用点只有 `clearL1()`;图谱侧需要一条不动事实源的重建通道(spec §G「图谱可
+   * drop 重造」的操作化)。向量表也在这里清:rebuild 后逐批投影会经
+   * `writeNodeVectorsAfterComplete` 补回,留着旧行反而会让归档/消失的 id 被召回。
+   *
+   * @returns 清理前各表的行数(诊断留痕;失败返回全零并已 warn)。
+   */
+  resetGraphOnly(): { nodes: number; edges: number; concepts: number; jobs: number; projected: number } {
+    const zero = { nodes: 0, edges: 0, concepts: 0, jobs: 0, projected: 0 };
+    if (!this.db) return zero;
+    const db = this.db;
+    try {
+      const counts = () => ({
+        nodes: numberOr(db.prepare('SELECT COUNT(*) n FROM graph_nodes').get()),
+        edges: numberOr(db.prepare('SELECT COUNT(*) n FROM graph_edges').get()),
+        concepts: numberOr(db.prepare('SELECT COUNT(*) n FROM graph_concepts').get()),
+        jobs: numberOr(db.prepare('SELECT COUNT(*) n FROM graph_projection_jobs').get()),
+        projected: numberOr(db.prepare('SELECT COUNT(*) n FROM graph_projected_records').get()),
+      });
+      const before = counts();
+      this.tx(() => {
+        for (const table of ['graph_nodes', 'graph_edges', 'graph_concepts', 'graph_projection_jobs', 'graph_job_records', 'graph_projected_records']) {
+          db.exec(`DELETE FROM ${table}`);
+        }
+        // 向量表可选:未就绪(vec0 缺失)时不存在,吞掉不影响主清理
+        for (const table of ['graph_node_vec', 'graph_concept_vec']) {
+          try {
+            db.exec(`DELETE FROM ${table}`);
+          } catch {
+            /* 向量表缺席 = 向量路本就停用 */
+          }
+        }
+      });
+      this.logger?.info(`${TAG} 图谱级重置完成(凭证与派生行全清,等待从 L1 重投):${JSON.stringify(before)}`);
+      return before;
+    } catch (err) {
+      this.logger?.warn(`${TAG} 图谱级重置失败(未清理): ${err instanceof Error ? err.message : String(err)}`);
+      return zero;
     }
   }
 

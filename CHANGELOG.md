@@ -1,3 +1,40 @@
+## 0.26.58
+
+**图谱运维双入口（`memory_graph_admin`）：一把重建、一把清扫，外加一个检索状态闸修补。**
+
+上一版把投影侧的门禁立起来了（路径名/裸泛称进不了新投影），但存量数据是门禁管不到的——
+它们早在词表生效前就落库了。这一版补两把刀，都只碰图谱这一侧，**L1 事实源一律不动**。
+
+### A 刀：图谱级重建 `action="rebuild"` / `"rebuild_preview"`
+- `resetGraphOnly()`：只清 6 张图表 + 2 张向量表（向量表不存在时容错跳过），**保留投影凭证之外的全部数据**。
+- 清完凭证即空，`queueMissing` 的 `NOT EXISTS` 条件天然命中全部在世 L1 行 → 自动重新排队投影。
+  没有一行图谱内容是手写的：这就是「图谱可 drop 重造」第一次真的能 drop 重造。
+- `rebuild_preview` 只读，给人看清规模再决定；`rebuild` 吃 `memoryMutate` 高权限门。
+- 新增 `tests/graph-rebuildability.test.ts` 锁住：重建后逐字段与原投影一致（id/时间戳归一后比对）。
+
+### B 刀：存量清扫 `action="sweep"`（默认 `dry_run=true`）
+不花一次 LLM，直接拿**投影侧同一批纯判据**（`isPathLike`/`isRoleName`/`splitQualified`/
+`isAliasShaped`/`normalizeFactKey`）反扫存量，判据不分叉是这版最重要的一条纪律。
+- ① 泛称裸角色分两路：承载少的是杂散泛称 → 归档退场；活跃 fact ≥ 20 的是**偏好汇聚枢纽**
+  （线上是 `用户` 158 条、`AI` 66 条）→ 按 R4 的正面解法改限定名 `用户@work` 留在图上。
+  把枢纽归档也能让指标变 0，但那是拿图谱最有内容的部分换一个绿数字——不做。
+  报告因此带 `archivedFacts`/`archivedMaxFacts`/`bareRoleQualified`/`bareRoleBlocked` 四笔代价账，
+  notice 在单个归档节点 fact 数超阈值时直接警告。
+- ② 路径名 place → 取末段做名字（`E:/x/y.md` → `y.md` 之类，不另起名字），打 `路径` tag；
+  末段仍像路径的（盘符/UNC）如实报 `placeUnrenamed`，不硬改。
+- ③ 别名剔脏（路径样/描述性短语），只留写法变体；④ fact key 同义归一 + `未规范` tag；
+  ⑤ `currentState` 按 active facts 重建——式子与 apply 逐字一致。
+- 概念行只清别名与 key；同名同分类**只报告不自动合并**（改名牵动边指向，实测零重名，不值得冒险）。
+- 边一律不动：边可见性由两端状态决定，读侧已有闸。清扫**幂等**，第二跑全零命中。
+- `dryRun` 与落库共用同一份纯函数报告，先看再动；落库在单事务里写回并删归档节点的向量行。
+
+### 修补：`searchNodesByVector` 缺状态闸
+向量召回这条路径漏了 `active`/`disputed` 判定，归档节点仍能被语义检索捞出来——
+补上与 `searchConceptsByVector` 同口径的闸。清扫删向量行由此变成双保险，各有测试锁。
+
+### 开关与工具面
+- 新工具归 `graphAdmin` 组（`toolGraphAdmin` 缺省 **false**），默认常驻面 8、注册面 12 均未动。
+- 测试：+3 文件 +27 用例（纯判据 10 / store 与重建 10 / 工具门与回报 7），全量 234 文件 2415 通过。
 ## 0.26.57
 
 **实体本体论：图谱从「五类节点一个筐」走到「七类实体 + 概念独立表 + 属性规范词表」，工具入口三处小改。**

@@ -190,7 +190,7 @@ describe('memory tools', () => {
     const hl = harness({ liveLegacy: true, liveGraphAdmin: true });
     registerMemoryTools(hl.ctx, hl.cfg, stores, noopLogger, hl.modes, hl.liveHandle);
     const names = hl.registered.map((t) => t.name);
-    for (const legacyName of ['memory_add', 'memory_import', 'memory_delete', 'memory_update', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_reproject', 'memory_migrate_relation']) {
+    for (const legacyName of ['memory_add', 'memory_import', 'memory_delete', 'memory_update', 'memory_ruminate_cancel', 'memory_ruminate_status', 'memory_reproject', 'memory_migrate_relation', 'memory_graph_admin']) {
       expect(names, legacyName).toContain(legacyName);
     }
     stores.db.close();

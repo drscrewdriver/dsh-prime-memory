@@ -784,6 +784,8 @@ export async function apply(ctx, config) {
         // distill 分支共用同一个入队实现,不存在第二套优先级/去重逻辑。
         enqueueGraph: (ids) => runner.enqueueGraphFor(ids),
         reprojectGraph: (ids) => runner.reprojectGraph(ids),
+        rebuildGraph: () => runner.rebuildGraph(),
+        sweepGraph: (dryRun) => runner.sweepGraph(dryRun),
     });
     // 激活槽位(active slot):工具面 + 常驻注入 + 服务端投影(均走 ctx.effect,可撤销)
     registerSlotTools(ctx, config, stores.slots, logger, modes, live, stores.l1);

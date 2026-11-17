@@ -16,6 +16,7 @@ import { type MemoryConfig } from '../config.js';
 import type { LiveSettingsHandle } from '../settings.js';
 import type { DrscClient } from '../clients/drsc.js';
 import type { GraphStore } from '../store/graph-store.js';
+import type { GraphSweepReport } from '../graph/sweep.js';
 import { graphFeatureOn } from '../graph/gate.js';
 import type { L1Store } from '../store/l1.js';
 import type { PersonaStore } from '../store/persona.js';
@@ -207,6 +208,42 @@ export declare class MemoryRunner {
         queued: number;
         jobIds: string[];
     };
+    /**
+     * 图谱级重建(v0.26.58 A 刀,spec §G「图谱可 drop 重造」的操作化):
+     * 作废全部派生投影(六张图谱域表 + 两张向量表)→ 全量重新入队 → 拉泵。
+     *
+     * 为什么这条链路不含任何一次手写图数据:
+     * - 清理只删派生行与凭证,L1 事实源一字不动;
+     * - 入队复用既有 {@link GraphStore.queueMissing}——凭证清零后它的 NOT EXISTS
+     *   判据天然命中全部存活记录,不需要另取 id 清单(口径与启动补投影完全同源);
+     * - 落库仍逐 job 走 claim → LLM 提案 → applyGraphProjection 硬校验 → 写回,
+     *   于是 v2 的入口闸门(path place / 裸角色 / 概念独立表 / key 归一)第一次真正
+     *   作用在**全量**存量上。这是增量重投做不到的事(闸门只拦新提案,不回写旧行)。
+     *
+     * 幂等与代价:在途 job 随凭证一起作废;重投期间图谱逐条长回来(读侧可用,
+     * 只是暂时不全)。全程零 LLM 在本方法内(泵内异步),不违反「LLM 不进事务」。
+     *
+     * @returns 清理前各表行数 + 新入队作业数;图谱未启用时全零并给出原因。
+     */
+    rebuildGraph(): {
+        cleared: {
+            nodes: number;
+            edges: number;
+            concepts: number;
+            jobs: number;
+            projected: number;
+        };
+        queued: number;
+        notice?: string;
+    };
+    /**
+     * 存量清扫(v0.26.58 B 刀):不花一次 LLM,用投影侧同一批纯判据反扫存量图,
+     * 收敛裸角色/path place/脏别名/fact key。dryRun 默认开(先看规模再落库),
+     * 落库走 GraphStore.sweepStock 的单事务缝 + 归档节点的向量清理。
+     *
+     * @param dryRun - true(缺省)= 只报告不改;false = 实际写回。
+     */
+    sweepGraph(dryRun?: boolean): GraphSweepReport;
     /**
      * 图谱投影泵入队判定:
      * - 双门:`graphFeatureOn`（部署 cfg.graph.enabled **或** 面板 live.graphEnabled）
