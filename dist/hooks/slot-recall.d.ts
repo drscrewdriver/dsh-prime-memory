@@ -7,6 +7,10 @@
  *
  * 门控:仅尊重 cfg.slots.enabled / cfg.slots.inject 两个静态开关(读/注入总开关),
  * 不引入会话档位门控——槽位是跨会话持久的系统级约定,与"本会话记忆隐身"正交。
+ *
+ * **频率(issue #35)**:`agent/pre-step` 是**按 step** 触发的,一个回合 n 步就会
+ * 触发 n 次。常驻注入的语义是"本轮上下文里有一份就够",故经 {@link TurnInjectGate}
+ * 做 per-turn 去重;压缩/清空把注入逐出上下文后作废记账,允许同回合重注。
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';

@@ -11,6 +11,10 @@
  * 本轮语义：常驻注入全部 active 技能（按插入序 + 字节预算截断），**不做按触发词选择**
  * （selective trigger 匹配属后续增强；常驻语义与 slots 一致，先保证默认关时零表面积）。
  * 三档渲染（full/excerpt/hint）是显示策略，同一 body/steps 现场组词，无缓存副本漂移。
+ *
+ * **频率(issue #35)**:`agent/pre-step` 按 step 触发,预算项虽名为 `maxPerTurnBytes`,
+ * 实现却是每步重建 —— 一个回合 n 步注入 n 份。与 slot-recall 同款 {@link TurnInjectGate}
+ * 做 per-turn 去重;两段注入**各持独立实例**,否则一段会把另一段在同回合挡掉。
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from '../config.js';

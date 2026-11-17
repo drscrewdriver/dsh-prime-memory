@@ -61,12 +61,15 @@ async function setup(cfg = makeCfg()) {
   const controller = registerSlotRecall(ctx, cfg, store, noopLogger, live);
   const baseMessage = { content: [{ type: 'text', text: '用户问题' }] };
   const base: Decision = { kind: 'enter', messages: [baseMessage] };
-  const run = async (signal?: AbortSignal): Promise<Decision> => {
+  const run = async (
+    signal?: AbortSignal,
+    at: { turn?: number; step?: number; agentId?: string } = {},
+  ): Promise<Decision> => {
     const payload = {
-      agent: { id: 'sess-1' },
+      agent: { id: at.agentId ?? 'sess-1' },
       messages: [baseMessage],
-      turn: 1,
-      step: 1,
+      turn: at.turn ?? 1,
+      step: at.step ?? 1,
       signal: signal ?? new AbortController().signal,
     };
     const events = ctx as unknown as {
@@ -248,13 +251,105 @@ describe('waterfall 可组合性(I5)', () => {
     await store.upsert({ title: '网络规则', pinned: true, body: 'x' });
     registerRecallLike(ctx);
 
-    const first = await run();
-    const second = await run();
+    // 两个回合各跑一次:常驻注入是 per-turn 的(issue #35),同回合第二次会被去重,
+    // 故这里用 turn 1 / turn 2 验证"顺序稳定",而非同回合重复注入。
+    const first = await run(undefined, { turn: 1, step: 1 });
+    const second = await run(undefined, { turn: 2, step: 1 });
     const order = (d: Decision) => d.messages.map((m) => (m.content?.[0]?.text ?? '').slice(0, 12));
     expect(order(first)).toEqual(order(second)); // 顺序稳定
     expect(texts(first)).toContain('召回段');
     expect(texts(first)).toContain('[rule] 网络规则');
     expect(texts(first)).toContain('用户问题');
     expect(first.messages).toHaveLength(3);
+  });
+});
+
+/**
+ * issue #35:槽位注入挂在 agent/pre-step(按 step 触发),一个回合 n 步就注入 n 份
+ * 同样的规则文本。以下钉住 per-turn 语义与两条"允许重注"的作废路径。
+ */
+describe('per-turn 去重(issue #35)', () => {
+  const countSlotInjections = (d: Decision): number =>
+    d.messages.filter((m) => m.content?.some((c) => c.text.includes('常驻记忆槽位'))).length;
+
+  it('同回合 10 步只注入 1 次(修复前是 10 次)', async () => {
+    const { store, run } = await setup();
+    await store.upsert({ title: '网络规则', kind: 'rule', pinned: true, body: '上行官方,下行镜像' });
+    let injected = 0;
+    for (let step = 1; step <= 10; step++) {
+      injected += countSlotInjections(await run(undefined, { turn: 1, step }));
+    }
+    expect(injected).toBe(1);
+  });
+
+  it('后续 step 返回的是 decision 本体(不改写、不复制)', async () => {
+    const { store, ctx, base } = await setup();
+    await store.upsert({ title: 'A', pinned: true, body: 'x' });
+    const events = ctx as unknown as {
+      waterfall(name: string, payload: unknown, inner: () => Promise<Decision>): Promise<Decision>;
+    };
+    const payload = (step: number) => ({
+      agent: { id: 'sess-1' },
+      messages: [],
+      turn: 1,
+      step,
+      signal: new AbortController().signal,
+    });
+    await events.waterfall('agent/pre-step', payload(1), async () => base);
+    const second = await events.waterfall('agent/pre-step', payload(2), async () => base);
+    expect(second).toBe(base); // 引用相等:完全没动
+  });
+
+  it('跨回合:turn 1 与 turn 2 各注入 1 次', async () => {
+    const { store, run } = await setup();
+    await store.upsert({ title: 'A', pinned: true, body: 'x' });
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 1 }))).toBe(1);
+    expect(countSlotInjections(await run(undefined, { turn: 2, step: 1 }))).toBe(1);
+    expect(countSlotInjections(await run(undefined, { turn: 2, step: 2 }))).toBe(0);
+  });
+
+  it('空槽位回合不烧额度:同回合写入槽位后仍能注入', async () => {
+    const { store, run } = await setup();
+    // 第 1 步:还没有任何 pinned 槽位 → 不注入,且不应扣掉本回合的额度
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 1 }))).toBe(0);
+    await store.upsert({ title: '迟到规则', kind: 'rule', pinned: true, body: 'y' });
+    // 第 2 步:同回合,应当注入(额度没被空跑浪费)
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 2 }))).toBe(1);
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 3 }))).toBe(0);
+  });
+
+  it('压缩完成(无 error)后同回合可重注', async () => {
+    const { store, ctx, run } = await setup();
+    await store.upsert({ title: 'A', pinned: true, body: 'x' });
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 1 }))).toBe(1);
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 2 }))).toBe(0);
+    // 宿主 compaction/end:上下文被摘要替换,模型手里没有那份槽位文本了
+    ctx.emit('session/event', { id: 'sess-1' }, { type: 'compaction/end', data: {} });
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 3 }))).toBe(1);
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 4 }))).toBe(0);
+  });
+
+  it('压缩失败(带 error)不作废:同回合仍去重', async () => {
+    const { store, ctx, run } = await setup();
+    await store.upsert({ title: 'A', pinned: true, body: 'x' });
+    await run(undefined, { turn: 1, step: 1 });
+    ctx.emit('session/event', { id: 'sess-1' }, { type: 'compaction/end', data: { error: 'boom' } });
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 2 }))).toBe(0);
+  });
+
+  it('agent/created(source=clear)后同回合可重注', async () => {
+    const { store, ctx, run } = await setup();
+    await store.upsert({ title: 'A', pinned: true, body: 'x' });
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 1 }))).toBe(1);
+    ctx.emit('agent/created', { agent: { id: 'sess-1' }, source: 'clear' });
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 2 }))).toBe(1);
+  });
+
+  it('agent/created(source=resume)不作废:历史仍在,模型还持有', async () => {
+    const { store, ctx, run } = await setup();
+    await store.upsert({ title: 'A', pinned: true, body: 'x' });
+    await run(undefined, { turn: 1, step: 1 });
+    ctx.emit('agent/created', { agent: { id: 'sess-1' }, source: 'resume' });
+    expect(countSlotInjections(await run(undefined, { turn: 1, step: 2 }))).toBe(0);
   });
 });

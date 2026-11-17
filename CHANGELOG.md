@@ -1,3 +1,31 @@
+## [Unreleased]
+
+**常驻注入改为每回合一次（[issue #35](https://github.com/drscrewdriver/dsh-prime-memory/issues/35)）。**
+
+`hooks/slot-recall.ts` 与 `hooks/skill-recall.ts` 都挂在 `agent/pre-step`，而宿主这个事件是
+**按 step** 触发的（`agent-loop/src/agent.ts` 的 `preStep()` 在 `turn()` 的 step 循环体内），
+且 `decision.messages` 每步都会 `session.append('user/message')` 落盘。于是**一个回合 n 步就
+注入 n 份完全相同的 `<system-reminder>` 规则文本**——实测一个 66 步回合里同一段约 1KB 的槽位
+出现 66 次 / 67,254 字符。这不是长度问题而是位置问题：规则被切成碎片夹在工具结果与推理之间，
+既稀释权重（prompt dilution），又可能反向被过度加权，还污染"上下文里出现过几次"这类推理。
+
+- **新增 `hooks/turn-inject-gate.ts`**：`TurnInjectGate` 以 **agentId + turn** 为键做 per-turn
+  去重，`cap` 默认 512 并置尾刷新（淘汰的是最久未活跃的 agent）。`turn` 非有限数（旧宿主/
+  异常 payload）时**放行**——拿不到回合边界就不去重，退化到修复前行为，静默不注入才是真回归。
+- **两段注入各持独立实例**：共享会让 slot 注入把 skill 注入在同回合挡掉（反向确认：改成共享
+  实例后 4 个用例立刻转红）。
+- **压缩/清空后允许同回合重注**：复用 `recall.ts` 既有信号——`session/event` 的
+  `compaction/end`（无 `error`）→ `invalidateSession`；`agent/created` 的 `source` 为
+  `compact`/`clear` → `reset`。压缩把旧上下文逐出后模型手里已没有那份文本，去重不能连氧气一起断掉。
+- **空回合不烧额度**：额度在 `pick()` 返回非空**之后**才扣，空槽位/无技能回合不会白白消耗本回合
+  的注入机会。`expireDue()` / `archiveDue()` 仍留在**每步**路径上，同回合内到期的条目不因去重继续生效。
+- 配置面零变更：不加 `slots.injectPer` 之类的开关，默认行为即与 PR #3 的验收口径（「下一轮注入
+  文本可见」）一致。`slots.maxAlwaysOnBytes` 是**单次**注入预算，与注入次数是两条独立开销。
+
+顺带纠正 issue 建议代码的一处形状错误：`payload.turn` 是 **number**（宿主
+`runtime-types.ts:320`），`payload.turn?.id ?? payload.step?.turnId` 恒为 `undefined`，
+会静默掉进"时间窗降级"看着修了其实没修；正确键就是 `agentId + turn`。
+
 ## 0.26.60
 
 **归档不再被投影复活（存量收敛的持久性缺陷）。**

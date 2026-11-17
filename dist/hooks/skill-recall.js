@@ -1,4 +1,5 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
+import { TurnInjectGate } from './turn-inject-gate.js';
 const SYSTEM_REMINDER_OPEN = '<system-reminder>';
 const SYSTEM_REMINDER_CLOSE = '</system-reminder>';
 const SKILLS_INTRO = '以下是本环境沉淀的技能(程序性记忆):过去重复工作流固化出的清单,仅在与之相关时作为指引遵循。' +
@@ -17,10 +18,17 @@ export function renderSkill(s, excerptChars) {
     const body = s.body.length > excerptChars ? s.body.slice(0, excerptChars) + '…' : s.body;
     return `[技能·${s.title}] ${body}`;
 }
+/** 会话键:与 recall.ts / slot-recall.ts 同源(agent.session?.id ?? agent.id)。 */
+function sessionOf(agent) {
+    return String(agent.session?.id ?? agent.id);
+}
 export function registerSkillRecall(ctx, cfg, skills, logger, live) {
     // 生效开关：部署 cfg.skills.enabled 或看板 live.skillsEnabled 任一开。
     const on = () => cfg.skills.enabled === true || live.get().skillsEnabled === true;
-    const buildInjection = () => {
+    /** per-turn 去重闸(本 hook 独享;与 slot-recall 共享会让一段挡掉另一段)。 */
+    const gate = new TurnInjectGate();
+    /** 组装注入文本;返回条数供调用方判断"无技能回合不烧额度"。 */
+    const pick = () => {
         if (!on() || !cfg.skills.inject)
             return null;
         const active = skills.listActive();
@@ -44,8 +52,26 @@ export function registerSkillRecall(ctx, cfg, skills, logger, live) {
             return null;
         if (hidden > 0)
             out.push(`… 另有 ${hidden} 个技能因预算未显示,可用 memory_skill_list 查看`);
-        return [SYSTEM_REMINDER_OPEN, SKILLS_INTRO, escapeFrameBody(out.join('\n')), SYSTEM_REMINDER_CLOSE].join('\n');
+        return {
+            text: [SYSTEM_REMINDER_OPEN, SKILLS_INTRO, escapeFrameBody(out.join('\n')), SYSTEM_REMINDER_CLOSE].join('\n'),
+            count: out.length,
+        };
     };
+    const buildInjection = () => pick()?.text ?? null;
+    // 压缩完成(无 error)/清空 → 注入内容已不在模型上下文里:作废记账,允许同回合重注。
+    ctx.on('session/event', (session, event) => {
+        if (event.type !== 'compaction/end' || event.data?.error)
+            return;
+        const sid = String(session.id ?? session);
+        if (gate.invalidateSession(sid) > 0) {
+            logger.debug?.(`[memory] 压缩完成:作废技能注入记账,同回合可重注(session=${sid})`);
+        }
+    });
+    ctx.on('agent/created', (payload) => {
+        if (payload.source === 'compact' || payload.source === 'clear')
+            gate.reset(payload.agent.id);
+        return undefined;
+    });
     ctx.on('agent/pre-step', async (payload, next) => {
         const decision = await next();
         if (decision.kind === 'reject' || (payload.signal && payload.signal.aborted))
@@ -53,12 +79,16 @@ export function registerSkillRecall(ctx, cfg, skills, logger, live) {
         if (!on() || !cfg.skills.inject)
             return decision;
         try {
+            // 闲置归档留在**每步**路径(廉价、幂等):同回合内到期的技能不该因去重继续常驻。
             await skills.archiveDue(Date.now(), cfg.skills.idleArchiveDays);
-            const text = buildInjection();
-            if (!text)
+            // 先判"有没有可注入内容",再扣额度:无技能回合不烧本回合的注入机会。
+            const hit = pick();
+            if (!hit)
+                return decision;
+            if (!gate.claim(payload.agent.id, payload.turn, sessionOf(payload.agent)))
                 return decision;
             const injection = createUserMessage({
-                content: [{ type: 'text', text }],
+                content: [{ type: 'text', text: hit.text }],
                 source: { kind: 'plugin:memory', form: 'recall' },
             });
             return { kind: 'enter', messages: [injection, ...decision.messages] };
