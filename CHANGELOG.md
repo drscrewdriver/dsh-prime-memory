@@ -1,4 +1,4 @@
-## [Unreleased]
+## 0.26.61
 
 **常驻注入改为每回合一次（[issue #35](https://github.com/drscrewdriver/dsh-prime-memory/issues/35)）。**
 
