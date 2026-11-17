@@ -340,3 +340,52 @@ describe('GraphStore.resetGraphOnly:A 刀派生投影作废', () => {
     expect(rp.touchedIds).toEqual([]);
   });
 });
+
+describe('归档不复活(B 刀的持久性)', () => {
+  // 为什么单独一组:B 刀把泛称/place 判成 archived,而 apply 的合并路径原本无条件写
+  // `node.status = status`(投影缺省即 active)。于是**下一批投影命中同名实体就把归档行
+  // 翻回 active**,task_28 的 bareRole=0 会随时间自己回退。0.26.59 之前没有任何测试锁这条,
+  // 探针也是带正对照才确认的(对照组不写,反例的「不写」不算证据)。
+  it('同名提案不再把 archived 写回 active;内容照样更新', () => {
+    const { gs, raw } = seededWithDirty();
+    rawInsertNode(raw, 'n_archtool', 'FooTool', 'tool', { status: 'archived' });
+    insertRawRecord(raw, 'r9');
+    gs.queueGraphProjection(['r9'], 10000);
+    const claim = gs.claimNext();
+    if (!claim) throw new Error('夹具:应能 claim 到新 job');
+    gs.complete(claim.job.id, {
+      reason: '归档后再次被提到',
+      edges: [],
+      nodes: [{ ref: 'a', name: 'FooTool', type: 'tool', facts: [{ key: '用途', value: '仍在用', sourceRecordIds: ['r9'] }], sourceRecordIds: ['r9'] }],
+    }, { now: '2026-11-17T00:00:00.000Z' });
+    const row = raw.prepare("SELECT status, facts_json f FROM graph_nodes WHERE node_id = 'n_archtool'").get() as { status: string; f: string };
+    expect(row.status).toBe('archived'); // 否决权高于投影的默认值
+    expect((JSON.parse(row.f) as unknown[]).length).toBe(1); // 内容更新不受影响——只拦状态
+    raw.close();
+    gs.close();
+  });
+
+  it('投影**显式**表态仍生效(只拦缺省 active);active 节点不受影响', () => {
+    const { gs, raw } = seededWithDirty();
+    rawInsertNode(raw, 'n_arch2', 'BarTool', 'tool', { status: 'archived' });
+    insertRawRecord(raw, 'r9');
+    gs.queueGraphProjection(['r9'], 10000);
+    const claim = gs.claimNext();
+    if (!claim) throw new Error('夹具:应能 claim 到新 job');
+    gs.complete(claim.job.id, {
+      reason: '显式 disputed',
+      edges: [],
+      nodes: [
+        { ref: 'a', name: 'BarTool', type: 'tool', status: 'disputed', sourceRecordIds: ['r9'] },
+        { ref: 'b', name: 'DSH', type: 'project', sourceRecordIds: ['r9'] }, // 夹具里是 active,应仍 active
+      ],
+    }, { now: '2026-11-17T00:00:00.000Z' });
+    // 按 name 查:complete() 生成的行 id 来自 idFactory,不是字面量(踩过)
+    const g = (name: string) => (raw.prepare('SELECT status FROM graph_nodes WHERE name = ?').get(name) as { status: string }).status;
+    expect(g('BarTool')).toBe('disputed'); // 显式表态 = 人有理由重新讨论它,不该被拦
+    expect(g('BarTool')).not.toBe('archived');
+    expect(g('DSH')).toBe('active');
+    raw.close();
+    gs.close();
+  });
+});

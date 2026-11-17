@@ -227,7 +227,11 @@ export function applyGraphProjection(options) {
         node.aliases = [...new Set([...node.aliases, ...aliases])];
         if (tags.length > 0)
             node.tags = [...new Set([...(node.tags ?? []), ...tags])].slice(0, GRAPH_CAP.tags);
-        node.status = status;
+        // v0.26.60 **归档不复活**:清扫/删除判成 archived 的行,后续投影再命中同名只更新内容,
+        // 不把状态翻回 active。实测(带正对照)投影原本会无条件写 active——那意味着 task_28 的
+        // bareRole=0 会被下一批投影悄悄冲掉,指标随时间回退。语义上归档是**否决权**,高于投影
+        // 的默认值;投影若显式表态(disputed/superseded 等)仍跟随它,重建(A 刀)也不受影响。
+        node.status = node.status === 'archived' && status === 'active' ? 'archived' : status;
         node.confidence = confidence;
         node.sourceRecordIds = unionSourcesCapped(node.sourceRecordIds, sources);
         node.families = [...new Set([...node.families, ...familiesOf(sources)])];
@@ -330,7 +334,8 @@ export function applyGraphProjection(options) {
         }
         concept.aliases = [...new Set([...concept.aliases, ...aliases])];
         concept.definition = definition;
-        concept.status = status;
+        // 同 node:归档是**否决权**,投影缺省的 active 不得把它复活(概念表与节点表一条规则,不分叉)。
+        concept.status = concept.status === 'archived' && status === 'active' ? 'archived' : status;
         concept.confidence = confidence;
         concept.sourceRecordIds = unionSourcesCapped(concept.sourceRecordIds, sources);
         concept.families = [...new Set([...concept.families, ...familiesOf(sources)])];
