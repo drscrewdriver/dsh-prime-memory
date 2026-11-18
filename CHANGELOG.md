@@ -1,3 +1,7 @@
+## 0.26.65
+
+> 0.26.64 因 npm staged-publish 残留(`409 Cannot publish over previously staged version`,同 npm/cli#9889)无法落地,0.26.65 是它的重发——代码与 0.26.64 完全一致。
+
 ## 0.26.64
 
 **吸收 PR #34（bccy）：每回合召回的图谱重复开销消灭 —— 4764 节点/12026 边实测 3.0s → 毫秒级（同库连续提问）。**
