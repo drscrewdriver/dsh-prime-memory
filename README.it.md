@@ -7,7 +7,7 @@ alt="Banner hero di DeepSeek Harness: le conversazioni vengono distillate automa
 
 **Plugin di memoria a distillazione stratificata per DeepSeek Harness: la conversazione viene elaborata in background — cattura L0 → memorie atomiche L1 → consolidamento delle scene L2 → distillazione del profilo L3 — e prima di ogni passo del modello le memorie rilevanti vengono iniettate automaticamente nel contesto.**
 
-[English](README.en.md) · [中文](README.md) · [Ultima release](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Segnala un problema](https://github.com/drscrewdriver/dsh-prime-memory/issues)
+[English](README.en.md) · [中文](README.md) · [Ultima release](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Segnala un problema](https://github.com/drscrewdriver/dsh-prime-memory/issues) · [Português](README.pt.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -27,6 +27,7 @@ alt="Banner hero di DeepSeek Harness: le conversazioni vengono distillate automa
 - [README auf Deutsch](./README.de.md)
 - [README на русском](./README.ru.md)
 - [README en español](./README.es.md)
+- [README em português](./README.pt.md)
 - [安装指南（中文）](./INSTALL.md)
 - [Installation guide (English)](./INSTALL.en.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
@@ -36,6 +37,7 @@ alt="Banner hero di DeepSeek Harness: le conversazioni vengono distillate automa
 - [Installationsanleitung (Deutsch)](./INSTALL.de.md)
 - [Руководство по установке (Русский)](./INSTALL.ru.md)
 - [Guía de instalación (Español)](./INSTALL.es.md)
+- [Guia de instalação (português do Brasil)](./INSTALL.pt.md)
 - [更新日志（中文）](./CHANGELOG.md)
 - [Changelog (English)](./CHANGELOG.en.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
@@ -45,6 +47,7 @@ alt="Banner hero di DeepSeek Harness: le conversazioni vengono distillate automa
 - [Changelog auf Deutsch](./CHANGELOG.de.md)
 - [Changelog на русском](./CHANGELOG.ru.md)
 - [Changelog en español](./CHANGELOG.es.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 </details>
 

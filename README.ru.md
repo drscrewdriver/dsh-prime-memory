@@ -7,7 +7,7 @@ alt="Баннер hero DeepSeek Harness: диалоги автоматическ
 
 **Плагин многослойной дистиллятивной памяти для DeepSeek Harness: диалог в фоне проходит путь L0-захват → L1-атомарные воспоминания → L2-консолидация сцен → L3-дистилляция профиля, и перед каждым шагом модели релевантные воспоминания автоматически внедряются в контекст.**
 
-[English](README.en.md) · [中文](README.md) · [Последний релиз](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Сообщить о проблеме](https://github.com/drscrewdriver/dsh-prime-memory/issues)
+[English](README.en.md) · [中文](README.md) · [Последний релиз](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Сообщить о проблеме](https://github.com/drscrewdriver/dsh-prime-memory/issues) · [Português](README.pt.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -27,6 +27,7 @@ alt="Баннер hero DeepSeek Harness: диалоги автоматическ
 - [README auf Deutsch](./README.de.md)
 - [README in italiano](./README.it.md)
 - [README en español](./README.es.md)
+- [README em português](./README.pt.md)
 - [安装指南（中文）](./INSTALL.md)
 - [Installation guide (English)](./INSTALL.en.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
@@ -36,6 +37,7 @@ alt="Баннер hero DeepSeek Harness: диалоги автоматическ
 - [Installationsanleitung (Deutsch)](./INSTALL.de.md)
 - [Guida all'installazione (Italiano)](./INSTALL.it.md)
 - [Guía de instalación (Español)](./INSTALL.es.md)
+- [Guia de instalação (português do Brasil)](./INSTALL.pt.md)
 - [更新日志（中文）](./CHANGELOG.md)
 - [Changelog (English)](./CHANGELOG.en.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
@@ -45,6 +47,7 @@ alt="Баннер hero DeepSeek Harness: диалоги автоматическ
 - [Changelog auf Deutsch](./CHANGELOG.de.md)
 - [Changelog in italiano](./CHANGELOG.it.md)
 - [Changelog en español](./CHANGELOG.es.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 </details>
 

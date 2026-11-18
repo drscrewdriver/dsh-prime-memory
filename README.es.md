@@ -7,7 +7,7 @@ alt="Banner hero de DeepSeek Harness: las conversaciones se destilan automática
 
 **Plugin de memoria por destilación estratificada para DeepSeek Harness: la conversación se procesa en segundo plano — captura L0 → memorias atómicas L1 → consolidación de escenas L2 → destilación de perfil L3 — y antes de cada paso del modelo las memorias relevantes se inyectan automáticamente en el contexto.**
 
-[English](README.en.md) · [中文](README.md) · [Última versión](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Informar de un problema](https://github.com/drscrewdriver/dsh-prime-memory/issues)
+[English](README.en.md) · [中文](README.md) · [Última versión](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Informar de un problema](https://github.com/drscrewdriver/dsh-prime-memory/issues) · [Português](README.pt.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -27,6 +27,7 @@ alt="Banner hero de DeepSeek Harness: las conversaciones se destilan automática
 - [README auf Deutsch](./README.de.md)
 - [README in italiano](./README.it.md)
 - [README на русском](./README.ru.md)
+- [README em português](./README.pt.md)
 - [安装指南（中文）](./INSTALL.md)
 - [Installation guide (English)](./INSTALL.en.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
@@ -36,6 +37,7 @@ alt="Banner hero de DeepSeek Harness: las conversaciones se destilan automática
 - [Installationsanleitung (Deutsch)](./INSTALL.de.md)
 - [Guida all'installazione (Italiano)](./INSTALL.it.md)
 - [Руководство по установке (Русский)](./INSTALL.ru.md)
+- [Guia de instalação (português do Brasil)](./INSTALL.pt.md)
 - [更新日志（中文）](./CHANGELOG.md)
 - [Changelog (English)](./CHANGELOG.en.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
@@ -45,6 +47,7 @@ alt="Banner hero de DeepSeek Harness: las conversaciones se destilan automática
 - [Changelog auf Deutsch](./CHANGELOG.de.md)
 - [Changelog in italiano](./CHANGELOG.it.md)
 - [Changelog на русском](./CHANGELOG.ru.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 </details>
 

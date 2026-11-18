@@ -7,7 +7,7 @@
 
 **A layered distillation memory plugin for DeepSeek Harness: conversations are processed in the background through L0 capture → L1 atomic memories → L2 scene consolidation → L3 persona distillation, and relevant memories are automatically injected into context before every model step — neither the user nor the model needs to do anything.**
 
-[简体中文](README.md) · [Latest release](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Report issues](https://github.com/drscrewdriver/dsh-prime-memory/issues)
+[简体中文](README.md) · [Latest release](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Report issues](https://github.com/drscrewdriver/dsh-prime-memory/issues) · [Português](README.pt.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -27,6 +27,7 @@
 - [README in italiano](./README.it.md)
 - [README на русском](./README.ru.md)
 - [README en español](./README.es.md)
+- [README em português](./README.pt.md)
 - [安装指南（中文）](./INSTALL.md)
 - [Installation guide (English)](./INSTALL.en.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
@@ -36,6 +37,7 @@
 - [Guida all'installazione (Italiano)](./INSTALL.it.md)
 - [Руководство по установке (Русский)](./INSTALL.ru.md)
 - [Guía de instalación (Español)](./INSTALL.es.md)
+- [Guia de instalação (português do Brasil)](./INSTALL.pt.md)
 - [更新日志（中文）](./CHANGELOG.md)
 - [Changelog (English)](./CHANGELOG.en.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
@@ -45,6 +47,7 @@
 - [Changelog in italiano](./CHANGELOG.it.md)
 - [Changelog на русском](./CHANGELOG.ru.md)
 - [Changelog en español](./CHANGELOG.es.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 </details>
 

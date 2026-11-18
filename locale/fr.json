@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Mémoire à distillation stratifiée",
+    "description": "Plugin de mémoire à distillation stratifiée pour DeepSeek Harness : la conversation est traitée en arrière-plan — capture L0 → mémoires atomiques L1 → consolidation de scènes L2 → distillation de profil L3 — et les mémoires pertinentes sont injectées automatiquement dans le contexte avant chaque étape du modèle."
+  }
+}

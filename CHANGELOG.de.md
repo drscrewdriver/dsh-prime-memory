@@ -9,6 +9,7 @@
 - [Changelog in italiano](./CHANGELOG.it.md)
 - [Changelog auf Russisch](./CHANGELOG.ru.md)
 - [Changelog en español](./CHANGELOG.es.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 Diese Datei dokumentiert die wesentlichen Änderungen von dsh-prime-memory (vor 0.5.0 als dsh-memory-plugin bekannt). Das Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 die Versionsnummern folgen der [semantischen Versionierung](https://semver.org/).

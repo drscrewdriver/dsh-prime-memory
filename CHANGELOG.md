@@ -1,5 +1,7 @@
 ## 0.26.65
 
+- i18n: add Portuguese (pt-BR) locale — package metadata and README/INSTALL/CHANGELOG mirrors.
+
 > 0.26.64 因 npm staged-publish 残留(`409 Cannot publish over previously staged version`,同 npm/cli#9889)无法落地,0.26.65 是它的重发——代码与 0.26.64 完全一致。
 
 ## 0.26.64

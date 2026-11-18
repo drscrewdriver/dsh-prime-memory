@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Layered Distillation Memory",
+    "description": "A layered distillation memory plugin for DeepSeek Harness: conversations are processed in the background through L0 capture → L1 atomic memories → L2 scene consolidation → L3 persona distillation, and relevant memories are automatically injected into context before every model step."
+  }
+}

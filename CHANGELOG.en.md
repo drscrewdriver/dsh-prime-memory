@@ -4,6 +4,7 @@
 - [English Changelog](./CHANGELOG.en.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 This file covers the **0.12.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 

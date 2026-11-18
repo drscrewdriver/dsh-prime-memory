@@ -4,6 +4,7 @@
 - [Changelog (English)](./CHANGELOG.en.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 > **互換性の注意**：本プラグインは日本語ドキュメントを提供しますが、公式 DSH の `LocaleRuntime` が登録する言語は `zh` / `en` のみです。`ja` を選択すると `locale "ja" is not registered` となります。DSH を fork して `LOCALE_IDS` と `LOCALES` ラベルを更新し再ビルドすることで利用可能になります。
 

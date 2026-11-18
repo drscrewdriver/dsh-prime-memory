@@ -1,6 +1,6 @@
 {
   "name": "dsh-prime-memory",
-  "version": "0.26.65",
+  "version": "0.26.66",
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
     "access": "public",
@@ -16,6 +16,7 @@
       "default": "./dist/index.js"
     },
     "./client": "./dist/client.js",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "dsh": {
@@ -35,6 +36,7 @@
   "files": [
     "dist",
     "assets",
+    "locale",
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md",
@@ -46,6 +48,7 @@
     "README.fr.md",
     "README.it.md",
     "README.ru.md",
+    "README.pt.md",
     "INSTALL.md",
     "INSTALL.en.md",
     "INSTALL.ja.md",
@@ -55,6 +58,7 @@
     "INSTALL.fr.md",
     "INSTALL.it.md",
     "INSTALL.ru.md",
+    "INSTALL.pt.md",
     "CHANGELOG.md",
     "CHANGELOG.en.md",
     "CHANGELOG.ja.md",
@@ -64,6 +68,7 @@
     "CHANGELOG.fr.md",
     "CHANGELOG.it.md",
     "CHANGELOG.ru.md",
+    "CHANGELOG.pt.md",
     "LICENSE",
     "ENGINEERING-NOTES.md"
   ],

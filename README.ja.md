@@ -7,7 +7,7 @@ alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで�
 
 **DeepSeek Harness 向けの階層的蒸留記憶プラグイン：会話はバックグラウンドで L0 捕捉 → L1 原子記憶 → L2 シナリオ統合 → L3 ペルソナ蒸留を経て処理され、関連記憶はモデルの各ステップ前に自動でコンテキストへ注入されます。**
 
-[中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [最新リリース](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [問題を報告](https://github.com/drscrewdriver/dsh-prime-memory/issues)
+[中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [最新リリース](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [問題を報告](https://github.com/drscrewdriver/dsh-prime-memory/issues) · [Português](README.pt.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -27,6 +27,7 @@ alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで�
 - [README in italiano](./README.it.md)
 - [README на русском](./README.ru.md)
 - [README en español](./README.es.md)
+- [README em português](./README.pt.md)
 - [インストールガイド（日本語）](./INSTALL.ja.md)
 - [Installation guide (English)](./INSTALL.en.md)
 - [中文安装指南](./INSTALL.md)
@@ -36,6 +37,7 @@ alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで�
 - [Guida all'installazione (Italiano)](./INSTALL.it.md)
 - [Руководство по установке (Русский)](./INSTALL.ru.md)
 - [Guía de instalación (Español)](./INSTALL.es.md)
+- [Guia de instalação (português do Brasil)](./INSTALL.pt.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [Changelog (English)](./CHANGELOG.en.md)
 - [更新日志（中文）](./CHANGELOG.md)
@@ -45,6 +47,7 @@ alt="DeepSeek Harness ヒーロー画像：会話がバックグラウンドで�
 - [Changelog in italiano](./CHANGELOG.it.md)
 - [Changelog на русском](./CHANGELOG.ru.md)
 - [Changelog en español](./CHANGELOG.es.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 </details>
 

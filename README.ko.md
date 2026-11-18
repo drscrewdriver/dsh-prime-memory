@@ -7,7 +7,7 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 
 **DeepSeek Harness용 계층적 증류 기억 플러그인: 대화는 백그라운드에서 L0 포착 → L1 원자 기억 → L2 장면 통합 → L3 페르소나 증류를 거쳐 처리되며, 관련 기억은 모델의 매 스텝 전에 자동으로 컨텍스트에 주입됩니다.**
 
-[中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [최신 릴리스](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [문제 제보](https://github.com/drscrewdriver/dsh-prime-memory/issues)
+[中文 README](./README.md) · [English README](./README.en.md) · [日本語 README](./README.ja.md) · [한국어 README](./README.ko.md) · [최신 릴리스](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [문제 제보](https://github.com/drscrewdriver/dsh-prime-memory/issues) · [Português](README.pt.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff&style=flat-square&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -27,6 +27,7 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 - [README in italiano](./README.it.md)
 - [README на русском](./README.ru.md)
 - [README en español](./README.es.md)
+- [README em português](./README.pt.md)
 - [설치 안내（한국어）](./INSTALL.ko.md)
 - [Guide d'installation (français)](./INSTALL.fr.md)
 - [Installationsanleitung (Deutsch)](./INSTALL.de.md)
@@ -36,6 +37,7 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 - [Installation guide (English)](./INSTALL.en.md)
 - [中文安装指南](./INSTALL.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
+- [Guia de instalação (português do Brasil)](./INSTALL.pt.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
 - [Changelog en français](./CHANGELOG.fr.md)
 - [Changelog auf Deutsch](./CHANGELOG.de.md)
@@ -45,6 +47,7 @@ alt="DeepSeek Harness 히어로 이미지: 대화가 백그라운드에서 계�
 - [Changelog (English)](./CHANGELOG.en.md)
 - [更新日志（中文）](./CHANGELOG.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 </details>
 

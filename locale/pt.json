@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Memória por destilação estratificada",
+    "description": "Plugin de memória por destilação estratificada para o DeepSeek Harness: a conversa é processada em segundo plano — captura L0 → memórias atômicas L1 → consolidação de cenas L2 → destilação de perfil L3 — e, antes de cada passo do modelo, as memórias relevantes são injetadas automaticamente no contexto."
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Layered-Distillation-Gedächtnis",
+    "description": "Layered-Distillation-Gedächtnis-Plugin für DeepSeek Harness: Konversationen werden im Hintergrund verarbeitet — L0-Erfassung → L1-atomare Erinnerungen → L2-Szenenkonsolidierung → L3-Profildestillation — und vor jedem Modellschritt werden die relevanten Erinnerungen automatisch in den Kontext injiziert."
+  }
+}

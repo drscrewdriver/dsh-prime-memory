@@ -7,7 +7,7 @@ alt="DeepSeek Harness Hero-Banner: Unterhaltungen werden automatisch zu mehrschi
 
 **Layered-Distillation-Gedächtnis-Plugin für DeepSeek Harness: Konversationen werden im Hintergrund verarbeitet — L0-Erfassung → L1-atomare Erinnerungen → L2-Szenenkonsolidierung → L3-Profildestillation — und vor jedem Modellschritt werden die relevanten Erinnerungen automatisch in den Kontext injiziert.**
 
-[English](README.en.md) · [中文](README.md) · [Neueste Version](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Problem melden](https://github.com/drscrewdriver/dsh-prime-memory/issues)
+[English](README.en.md) · [中文](README.md) · [Neueste Version](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [Problem melden](https://github.com/drscrewdriver/dsh-prime-memory/issues) · [Português](README.pt.md)
 
 [![npm version](https://img.shields.io/npm/v/dsh-prime-memory?color=6f83ff\&style=flat-square\&label=npm)](https://www.npmjs.com/package/dsh-prime-memory)
 [![DSH 0.2.0-rc.1](https://img.shields.io/badge/DSH-0.2.0--rc.1-8b5cf6?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
@@ -27,6 +27,7 @@ alt="DeepSeek Harness Hero-Banner: Unterhaltungen werden automatisch zu mehrschi
 - [README in italiano](./README.it.md)
 - [README auf Russisch](./README.ru.md)
 - [README auf Spanisch](./README.es.md)
+- [README em português](./README.pt.md)
 - [安装指南（中文）](./INSTALL.md)
 - [Installation guide (English)](./INSTALL.en.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
@@ -36,6 +37,7 @@ alt="DeepSeek Harness Hero-Banner: Unterhaltungen werden automatisch zu mehrschi
 - [Guida all'installazione (Italiano)](./INSTALL.it.md)
 - [Руководство по установке (Русский)](./INSTALL.ru.md)
 - [Guía de instalación (Español)](./INSTALL.es.md)
+- [Guia de instalação (português do Brasil)](./INSTALL.pt.md)
 - [更新日志（中文）](./CHANGELOG.md)
 - [Changelog (English)](./CHANGELOG.en.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
@@ -45,6 +47,7 @@ alt="DeepSeek Harness Hero-Banner: Unterhaltungen werden automatisch zu mehrschi
 - [Changelog in italiano](./CHANGELOG.it.md)
 - [Changelog auf Russisch](./CHANGELOG.ru.md)
 - [Changelog auf Spanisch](./CHANGELOG.es.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 </details>
 

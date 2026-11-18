@@ -6,7 +6,7 @@
 
 **DeepSeek Harness 的分层蒸馏记忆插件：对话在后台自动完成 L0 捕获 → L1 原子记忆 → L2 场景整合 → L3 画像蒸馏，模型每一步前自动把相关记忆注入上下文。**
 
-[English](README.en.md) · [最新发行版](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [反馈问题](https://github.com/drscrewdriver/dsh-prime-memory/issues)
+[English](README.en.md) · [最新发行版](https://github.com/drscrewdriver/dsh-prime-memory/releases/latest) · [反馈问题](https://github.com/drscrewdriver/dsh-prime-memory/issues) · [Português](README.pt.md)
 <p align="center" dir="auto">
   <a href="https://dshfind.com/zh/plugins/drscrewdriver/dsh-prime-memory?ref=badge" rel="nofollow"><img src="https://raw.githubusercontent.com/drscrewdriver/dsh-prime-memory/f3e4aa83231be912c72adb15271bfe6b3330dc8e/assets/dshfind-card.svg" alt="dshfind - dsh-browser-cdp" data-canonical-src="https://dshfind.com/api/badge/drscrewdriver/dsh-prime-memory" style="max-width: 100%;"></a>
 </p>
@@ -33,6 +33,7 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 - [README in italiano](./README.it.md)
 - [README на русском](./README.ru.md)
 - [README en español](./README.es.md)
+- [README em português](./README.pt.md)
 - [安装指南（中文）](./INSTALL.md)
 - [Installation guide (English)](./INSTALL.en.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
@@ -42,6 +43,7 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 - [Guida all'installazione (Italiano)](./INSTALL.it.md)
 - [Руководство по установке (Русский)](./INSTALL.ru.md)
 - [Guía de instalación (Español)](./INSTALL.es.md)
+- [Guia de instalação (português do Brasil)](./INSTALL.pt.md)
 - [更新日志（中文）](./CHANGELOG.md)
 - [Changelog (English)](./CHANGELOG.en.md)
 - [日本語 changelog](./CHANGELOG.ja.md)
@@ -51,6 +53,7 @@ alt="DeepSeek Harness hero 横幅：对话自动分层蒸馏成记忆，模型�
 - [Changelog in italiano](./CHANGELOG.it.md)
 - [Changelog на русском](./CHANGELOG.ru.md)
 - [Changelog en español](./CHANGELOG.es.md)
+- [Changelog em português](./CHANGELOG.pt.md)
 
 </details>
 
