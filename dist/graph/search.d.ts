@@ -10,6 +10,17 @@ export declare const GRAPH_FIELD_WEIGHTS: {
     readonly type: 2;
 };
 /**
+ * 建"nodeId → 可用关系词 token 集"邻接表（searchGraphNodes 的入参形态；纯函数无 I/O）。
+ * 导出给图存储层复用（命中图缓存时不必每次检索重建 12k 边的 Map）与预热共用。
+ * 状态闸与 task_5.1 口径不变：active 边；asOf 回放时纳入当时成立的 superseded 边。
+ */
+export declare function buildRelationTokenAdjacency(edges: readonly GraphEdge[], asOf?: string): Map<string, Set<string>>;
+/**
+ * 分片预热节点分词缓存（只填缓存，不参与任何检索判定）。供 GraphStore.warmSearchCache
+ * 在插件就绪后后台调用；中断安全——缓存随时可重建，warm 只是省掉首次召回的现场开销。
+ */
+export declare function warmNodeTokens(nodes: readonly GraphNode[], start?: number, end?: number): number;
+/**
  * as-of 回放可选参数(expiry-tiering Phase 5:图谱读时派生,不加冻结列)。
  * 默认(缺席)= 当前态检索,行为与改前逐字一致。
  */
@@ -17,6 +28,9 @@ export interface GraphAsOfOptions {
     /** ISO 8601 时刻:把"当时成立"的 superseded fact/边也纳入检索与回链;
      *  archived 仍排除(那是删除传播的墓碑，来源已不在，回放也不该复活)。 */
     asOf?: string;
+    /** 预建的关系词邻接表(图存储层命中图读缓存时复用;缺省在函数内重建)。
+     *  结构 = nodeId → 可用关系词 token 集,构建口径见 buildRelationTokenAdjacency。 */
+    adjacency?: Map<string, Set<string>>;
 }
 /**
  * 图谱命中 → L1 记录 id 序列(§D 第 3 路 RRF 的输入;纯函数,无 I/O)。

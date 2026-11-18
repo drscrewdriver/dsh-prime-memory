@@ -56,6 +56,138 @@ const FIELD_LABELS = {
     type: '类型',
 };
 const FIELD_ORDER = ['name', 'aliases', 'tags', 'currentState', 'facts', 'relations', 'type'];
+/**
+ * ── 分词缓存（2026-11-09 召回延迟修复）─────────────────────────────
+ * 背景：单次 recall 的 searchGraphNodes 实测 ~2.9s，其中 ~1.9s 纯分词——4764 个节点
+ * 每个要切 name/aliases/tags/currentState/facts/type 六类字段、12026 条边每条要切
+ * relation，jieba 调用次数 ~4 万次/轮，而这些文本在两次召回之间基本不变。
+ *
+ * 失效条件（内容寻址，不依赖 updatedAt）：
+ *  - 节点键 = node.id，值里带 nodeTokenSig()（只拼参与分词的字段内容）；
+ *  - 每次命中前比对签名，内容变了签名就变 → 自动重建，**不存在 stale 可能**；
+ *  - 关系词键 = 关系原文（live 实测 12026 条边对应 3002 种关系、91% 唯一，远少于 4 万次切词）；
+ *  - 两个 Map 都有上限，超限整体清空重建：只影响速度，不影响结果。
+ * 缓存里都是只读的 Set/数组，searchGraphNodes 只做 has() 查询，不改写。
+ */
+const NODE_TOKEN_CACHE_MAX = 20_000;
+// live 实测 3002 种关系、91% 唯一：上限必须大于关系种类数，否则每查清空重建。
+// 取 32768（≈9 倍余量）而不是几万级 LRU——关系词表增长慢，清空重建代价只有几十毫秒，
+// 但越线后每轮回调一次，不值当。
+const RELATION_TOKEN_CACHE_MAX = 32_768;
+/** node.id → { sig, fields, facts, activeFacts } */
+const nodeTokenCache = new Map();
+/** 关系原文 → token 数组 */
+const relationTokenCache = new Map();
+/**
+ * 节点分词签名：只拼**参与分词**的字段内容（name/aliases/tags/currentState/facts/type）。
+ * 为什么不用 node.updatedAt 做键：投影层会批量触碰 updatedAt，用时间键会白白失效；
+ * 反过来，内容变了而时间没变的情况（外部写/同毫秒写）用时间键会 stale，内容键不会。
+ * 分隔符取控制字符，避免字段边界拼接出伪 token。
+ */
+function nodeTokenSig(node) {
+    return [
+        node.name,
+        node.aliases.join('\u0001'),
+        (node.tags ?? []).join('\u0001'),
+        node.currentState,
+        node.facts.map((f) => `${f.status}\u0002${f.key}\u0002${factValueText(f.value)}`).join('\u0003'),
+        node.type,
+    ].join('\u0004');
+}
+/** 建一条节点分词缓存（每字段一个 Set；facts 另存逐条 token 供 asOf 回放时按状态重算）。 */
+function buildNodeTokenEntry(node, sig) {
+    const asSet = (text) => new Set(tokenize(text));
+    const fields = {
+        name: asSet(node.name),
+        aliases: new Set(node.aliases.flatMap((a) => tokenize(a))),
+        tags: new Set((node.tags ?? []).flatMap((t) => tokenize(t))),
+        currentState: asSet(node.currentState),
+        type: asSet(node.type),
+    };
+    const facts = node.facts.map((f) => ({
+        status: f.status,
+        validFrom: f.validFrom,
+        validTo: f.validTo,
+        tokens: tokenize(`${f.key} ${factValueText(f.value)}`),
+    }));
+    const activeFacts = new Set();
+    for (const f of facts) {
+        if (f.status !== 'active')
+            continue;
+        for (const t of f.tokens)
+            activeFacts.add(t);
+    }
+    return { sig, fields, facts, activeFacts };
+}
+/** 取节点分词缓存（签名不符即重建）。 */
+function nodeTokenEntry(node) {
+    const sig = nodeTokenSig(node);
+    const hit = nodeTokenCache.get(node.id);
+    if (hit !== undefined && hit.sig === sig)
+        return hit;
+    const entry = buildNodeTokenEntry(node, sig);
+    if (nodeTokenCache.size >= NODE_TOKEN_CACHE_MAX)
+        nodeTokenCache.clear();
+    nodeTokenCache.set(node.id, entry);
+    return entry;
+}
+/** 取关系词分词（按关系原文字符串缓存）。 */
+function relationTokens(relation) {
+    let hit = relationTokenCache.get(relation);
+    if (hit !== undefined)
+        return hit;
+    hit = tokenize(relation);
+    if (relationTokenCache.size >= RELATION_TOKEN_CACHE_MAX)
+        relationTokenCache.clear();
+    relationTokenCache.set(relation, hit);
+    return hit;
+}
+/**
+ * 建"nodeId → 可用关系词 token 集"邻接表（searchGraphNodes 的入参形态；纯函数无 I/O）。
+ * 导出给图存储层复用（命中图缓存时不必每次检索重建 12k 边的 Map）与预热共用。
+ * 状态闸与 task_5.1 口径不变：active 边；asOf 回放时纳入当时成立的 superseded 边。
+ */
+export function buildRelationTokenAdjacency(edges, asOf) {
+    const map = new Map();
+    for (const edge of edges) {
+        if (edge.status !== 'active'
+            && !(asOf !== undefined && edge.status === 'superseded' && coversInterval(edge.validFrom, edge.validTo, asOf)))
+            continue;
+        const relTokens = relationTokens(edge.relation);
+        let set = map.get(edge.fromNodeId);
+        if (!set) {
+            set = new Set();
+            map.set(edge.fromNodeId, set);
+        }
+        for (const t of relTokens)
+            set.add(t);
+        let set2 = map.get(edge.toNodeId);
+        if (!set2) {
+            set2 = new Set();
+            map.set(edge.toNodeId, set2);
+        }
+        for (const t of relTokens)
+            set2.add(t);
+    }
+    return map;
+}
+/**
+ * 分片预热节点分词缓存（只填缓存，不参与任何检索判定）。供 GraphStore.warmSearchCache
+ * 在插件就绪后后台调用；中断安全——缓存随时可重建，warm 只是省掉首次召回的现场开销。
+ */
+export function warmNodeTokens(nodes, start = 0, end = nodes.length) {
+    let warmed = 0;
+    for (let i = start; i < end; i++) {
+        const n = nodes[i];
+        // 与检索同一状态闸：archived/superseded 不进候选、不参与打分，
+        // 预热也不为它们建分词（live 1205/4764 个归档节点，省约 50MB heap 与 ~1s 预热）。
+        if (n.status !== 'active' && n.status !== 'disputed')
+            continue;
+        nodeTokenEntry(n);
+        warmed++;
+    }
+    return warmed;
+}
 /** fact 值渲染进检索文本(数组值空格连接)。 */
 function factValueText(value) {
     return Array.isArray(value) ? value.join(' ') : value;
@@ -190,27 +322,10 @@ export function searchGraphNodes(nodes, edges, query, limit, opts) {
     if (tokens.length === 0)
         return [];
     // nodeId → 可用关系词 token 集(先建邻接表,防逐节点全量扫边;
-    // task_5.1:asOf 下纳入"当时成立"的 superseded 边)
-    const relationTokensByNode = new Map();
-    for (const edge of edges) {
-        if (edge.status !== 'active'
-            && !(asOf !== undefined && edge.status === 'superseded' && coversInterval(edge.validFrom, edge.validTo, asOf)))
-            continue;
-        let set = relationTokensByNode.get(edge.fromNodeId);
-        if (!set) {
-            set = new Set();
-            relationTokensByNode.set(edge.fromNodeId, set);
-        }
-        for (const t of tokenize(edge.relation))
-            set.add(t);
-        let set2 = relationTokensByNode.get(edge.toNodeId);
-        if (!set2) {
-            set2 = new Set();
-            relationTokensByNode.set(edge.toNodeId, set2);
-        }
-        for (const t of tokenize(edge.relation))
-            set2.add(t);
-    }
+    // task_5.1:asOf 下纳入"当时成立"的 superseded 边)。
+    // 默认在函数内重建；图存储层可传 opts.adjacency 复用（缓存命中时省下每次 ~12k 边的 Map 重建，
+    // 关系词本身另有按原文的分词缓存，所以重建只剩 Map/Set 操作）。
+    const relationTokensByNode = opts?.adjacency ?? buildRelationTokenAdjacency(edges, asOf);
     const results = [];
     for (const node of nodes) {
         // 候选状态闸保持 active|disputed:task_5.1 的放宽面在 **fact/边**("纳入 superseded 且
@@ -218,16 +333,27 @@ export function searchGraphNodes(nodes, edges, query, limit, opts) {
         // 历史实体经"当时成立边"的邻居回链(task_5.2)重新可达,不需要翻状态。
         if (node.status !== 'active' && node.status !== 'disputed')
             continue;
+        // 字段分词走内容寻址缓存：默认路径（asOf 缺省）直接用缓存的 active facts 并集；
+        // asOf 回放路径按"当时成立"重算 facts 子集，其余字段与缓存共用（只读 Set）。
+        const entry = nodeTokenEntry(node);
+        let factsField = entry.activeFacts;
+        if (asOf !== undefined) {
+            factsField = new Set();
+            for (const f of entry.facts) {
+                if (!factValidAtAsOf(f, asOf))
+                    continue;
+                for (const t of f.tokens)
+                    factsField.add(t);
+            }
+        }
         const fieldTokens = {
-            name: new Set(tokenize(node.name)),
-            aliases: new Set(node.aliases.flatMap((a) => tokenize(a))),
-            tags: new Set((node.tags ?? []).flatMap((t) => tokenize(t))),
-            currentState: new Set(tokenize(node.currentState)),
-            facts: new Set(node.facts
-                .filter((f) => (asOf === undefined ? f.status === 'active' : factValidAtAsOf(f, asOf)))
-                .flatMap((f) => tokenize(`${f.key} ${factValueText(f.value)}`))),
+            name: entry.fields.name,
+            aliases: entry.fields.aliases,
+            tags: entry.fields.tags,
+            currentState: entry.fields.currentState,
+            facts: factsField,
             relations: relationTokensByNode.get(node.id) ?? new Set(),
-            type: new Set(tokenize(node.type)),
+            type: entry.fields.type,
         };
         let score = 0;
         const matchedFields = [];

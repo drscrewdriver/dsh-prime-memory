@@ -1,3 +1,25 @@
+## 0.26.64
+
+**吸收 PR #34（bccy）：每回合召回的图谱重复开销消灭 —— 4764 节点/12026 边实测 3.0s → 毫秒级（同库连续提问）。**
+
+召回路径每轮 `l1.search(hybrid)` 的 94% 耗时在图谱词法检索，且是**每轮重复付出**（非冷启动）：每轮全图重新分词（≈4 万次 jieba）、每轮全量读行 + 每节点 5 个 `JSON.parse`、图谱路的向量种子每轮重算 query embedding。
+
+四项改动（检索语义不变）：
+
+- `search.ts`：内容寻址分词缓存 —— 节点键 = id + 参与分词字段的内容签名（不依赖 `updatedAt`，结构上避免 stale）；关系词按原文缓存（12026 边 → 3002 种）；Map 超限整体清空，只影响速度不影响结果。导出 `buildRelationTokenAdjacency` / `warmNodeTokens`。
+- `graph-store.ts`：全图读缓存 + 两条失效路径 —— ① 所有写事务 `tx()` COMMIT 后**无条件清空**（不依赖脏标记）② 读侧兜底指纹 `COUNT(*) + MAX(updated_time) + PRAGMA data_version`。新增后台分片预热 `warmSearchCache()`（128 节点/片，跳过 archived/superseded）。
+- `l1.ts` + `index.ts`：hybrid 路复用查询 embedding 与关系词邻接表（省下每轮重建）。
+- 新增 `tests/recall-cache.test.ts` 6 条不变量用例（真实 `node:sqlite`，不 mock）。
+
+吸收时的两处适配（PR base 落后 main 42 个提交）：
+
+1. **指纹扩到三表**：0.26.57 本体论让 `loadGraph()` 开始返回 `concepts`，但 PR 的缓存类型与指纹只覆盖 nodes/edges —— 按原样合入会把概念写入挡在失效判据外。已补 `graph_concepts` 的 `COUNT(*)+MAX(updated_time)` 进指纹、缓存值类型加 `concepts`。
+2. **测试 afterAll 关连接**：Windows 下测试建的 SQLite 连接未关闭，`rm` 临时目录 EBUSY。加了 `opened[]` 登记表统一 close。
+
+> dist/ 产物未采用 PR 内的提交（作者 base 过旧），由 `npm run build` 从合入后源码重建。
+
+门禁：`npm run typecheck` 干净；`npm test` **238 文件全绿，2456 passed / 1 skipped**。感谢 bccy —— 实测数据（每轮 4 万次分词、325–395ms JSON 解析、data_version 兜底的外部写场景）把这条链的问题钉得很准。
+
 ## 0.26.63
 
 > 0.26.62 因 npm staged-publish 残留(`409 Cannot publish over previously staged version`,同 npm/cli#9889)无法落地,0.26.63 是它的重发——代码与 0.26.62 完全一致。
