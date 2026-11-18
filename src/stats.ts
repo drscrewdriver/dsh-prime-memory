@@ -2195,6 +2195,32 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
           effective: s && s.distillTimeoutMs > 0 ? s.distillTimeoutMs : cfg.llm.timeoutMs,
         },
       };
+      // #37 诊断:运行时 live 值 vs 持久化 patch 值并列对照。重启后开关回落的最短
+      // 分诊路径是回答「磁盘上到底存了什么」——readConfig 能读回就并列给出;读不回
+      // (宿主不供 forms.get)显式说明,不给猜测留位置。不一致本身不判对错:两层各有
+      // 各的真源,面板据此展示而不是静默采信其一。
+      const persisted = live?.readConfig?.('live') as Record<string, unknown> | undefined;
+      if (persisted !== undefined) {
+        const drift: string[] = [];
+        for (const key of ['memoryMutate', 'skillsEnabled', 'graphEnabled', 'conflictFreeze', 'enabled'] as const) {
+          const runtimeValue = (s as unknown as Record<string, unknown>)?.[key];
+          const persistedValue = persisted[key];
+          if (persistedValue !== undefined && persistedValue !== runtimeValue) {
+            drift.push(`${key}: 运行时=${String(runtimeValue)} / 持久化=${String(persistedValue)}`);
+          }
+        }
+        if (drift.length > 0) {
+          resp.persistence = {
+            state: 'drift',
+            detail: `运行时开关与 profile patch 不一致(重启后可能出现):${drift.join('; ')}`,
+          };
+          deps.logger?.warn(`[memory] #37 诊断:live 与持久化 patch 不一致 → ${drift.join('; ')}`);
+        } else {
+          resp.persistence = { state: 'match' };
+        }
+      } else {
+        resp.persistence = { state: 'unavailable', detail: '宿主不提供配置读回(forms.get 缺席),无法对照磁盘 patch 值' };
+      }
       return resp;
     }
 

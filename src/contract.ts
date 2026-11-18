@@ -871,6 +871,12 @@ export interface SettingsGetResponse {
   inputBudget: { current: number; fallback: number; effective: number };
   /** R10 蒸馏超时(ms)：current 运行时覆盖(0=跟随) / fallback 静态 llm.timeoutMs / effective 生效值。 */
   timeoutBudget: { current: number; fallback: number; effective: number };
+  /**
+   * #37 持久化对照诊断:运行时 live 值 vs profile patch 值的关系。
+   * `match` 两层一致;`drift` 不一致(detail 列出漂移键);`unavailable` 宿主不供
+   * forms.get 无法对照。读回失败不判对错——面板据此展示而不是静默采信其一。
+   */
+  persistence?: { state: 'match' | 'drift' | 'unavailable'; detail?: string };
 }
 
 /** dsh-memory/settings-set(patch 语义:只带要改的键)。 */

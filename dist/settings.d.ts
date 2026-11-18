@@ -85,3 +85,5 @@ export declare function suppressAutoSettingsForm(ctx: Context): void;
  */
 export declare function readLiveRef(ref: unknown): MemoryLiveSettings;
 export declare function registerLiveSettings(ctx: Context, config: MemoryConfig, logger: MemoryLogger): LiveSettingsHandle;
+/** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
+export declare function resolveSettings(value: unknown): MemoryLiveSettings;

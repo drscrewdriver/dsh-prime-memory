@@ -308,11 +308,22 @@ export function registerLiveSettings(ctx, config, logger) {
     };
 }
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
-function resolveSettings(value) {
+export function resolveSettings(value) {
     if (!value || typeof value !== 'object')
         return { ...ALWAYS_ON, distillChain: [] };
     const v = value;
     const num = (x) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.floor(x) : 0);
+    // #37:布尔键收到非 boolean(常见于手编 YAML 写成字符串 "true" 或数字 0)时,
+    // 严格 === true 会静默判关——用户设置无声丢失。这里不改变判值方向(写删门宁紧勿松),
+    // 但发一次诊断让「读回形状异常」可见而不是靠重启后开关回落来发现。
+    const warnBadBoolean = (key, raw) => {
+        if (raw === undefined || typeof raw === 'boolean')
+            return;
+        if (typeof console !== 'undefined')
+            console.warn(`[memory] live.${key} 持久化值形状异常(期望 boolean,得到 ${typeof raw}),已按关闭处理:`, raw);
+    };
+    for (const key of ['memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'validityTiering'])
+        warnBadBoolean(key, v[key]);
     const rawBudgets = (v.distillBudgets ?? {});
     // 路由链逐条防御:非对象条目剔除、超长截断、非法档位归空、超限截断到上限
     const defuseChain = (raw) => {

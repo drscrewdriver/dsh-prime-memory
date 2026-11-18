@@ -1,3 +1,23 @@
+## 0.26.63
+
+> 0.26.62 因 npm staged-publish 残留(`409 Cannot publish over previously staged version`,同 npm/cli#9889)无法落地,0.26.63 是它的重发——代码与 0.26.62 完全一致。
+
+## 0.26.62
+
+**#37 诊断落地:开关重启后回落 → 面板与日志给出「运行时 vs 持久化」对照,不再静默采信其一。**
+
+上游 issue [#37](https://github.com/drscrewdriver/dsh-prime-memory/issues/37)(li873582595):高权限模式/技能结晶/知识图谱三个 live 开关在 dsh 重启后自动关回。
+
+**排查结论(静态全链验证,宿主 0.2.2-rc.3 bundle)**:schemastery resolve 对 volatile 节 + true patch 保真(`Schema.resolve(patch, live)` 复现:true 原样进 volatile 引用,default 不覆盖已有键)→ cordis `internal/config` hook → fiber `_effectiveConfig` → settings 服务 `readConfig` 读回链——整条链对持久化的 true **没有任何覆盖点**。同时本机 patch 文件 23 份 bak 时间线三键恒 true,宿主重写不丢值。**回落无法在当前版本静态复现**,根因待用户侧现场数据。
+
+**插件侧能做的确定性部分(本次落地)**:
+
+- `settings-get` 响应新增 `persistence` 字段:宿主供 `forms.get` 时逐键比对运行时 live 值与持久化 patch 值,不一致返回 `drift` + 漂移键明细(运行时=?/持久化=?),一致返回 `match`;宿主不供读回时显式 `unavailable`——不给猜测留位置(信息零丢失纪律:两层各有真源,面板展示对照而不是静默采信其一)。
+- `resolveSettings` 对布尔键收到非 boolean 形状(手编 YAML 常见的字符串 `"true"`、数字)发 `console.warn` 诊断——判值方向**不变**(写删门宁紧勿松,异常值仍按关),只是让「读回形状异常」可见而不是靠重启后开关回落来发现。
+- 回归 6 用例:drift 明细/一致 match/unavailable 显式说明/形状异常告警/正常值不告警/键缺席不告警。
+
+门禁:`tsc --noEmit` 干净;**2450 passed / 1 skipped** 全绿。
+
 ## 0.26.61
 
 **常驻注入改为每回合一次（[issue #35](https://github.com/drscrewdriver/dsh-prime-memory/issues/35)）。**
