@@ -690,24 +690,45 @@ export class GraphStore {
      * 读路缓存预热（可选加速；中断/异常都不影响正确性——冷路径照常现场分词）。
      *
      * 为什么需要：fresh 进程第一次召回要现场分词全图（4764 节点 × 6 字段 + 12026 边，
-     * 实测 ~2.9s）。这里在插件就绪后**后台分片**预填分词缓存与关系词邻接表：
-     * 每片 chunk=128 个节点 ≈104ms 同步切片，片间 setImmediate 让出事件循环。
+     * 实测 ~2.9s）。这里**后台分片**预填分词缓存与关系词邻接表。
+     *
+     * 时序契约（issue #39，0.26.67 起）：
+     * - 入口无条件先让出一个宏任务——本方法即使被调用方在 `apply()` 同步段直接起跑，
+     *   也不会抢跑（loadGraph/邻接表/分词全部位于首个宏任务让出之后），这是 store 层不变量。
+     * - 节点分词按**时间预算切片**（budgetMs，默认 16ms），逐节点动态截止——节点 facts 体积
+     *   不均，固定节点数切片实测长尾单片 1,050ms（0.26.66，128 节点/片）。
+     * - 片间用 `setTimeout(gapMs)`（宏任务，定时器/I/O/宿主事件可穿插）而**非 setImmediate**——
+     *   检查相位紧贴贴跑会饿死定时器，正是 issue #39 的阻塞机制之一。
      * 注意：切片之间能处理宿主事件，但**不能消除抢占**——首条消息若落在预热期间，
-     * turn→step 会排队等片（实测 2.5–3.1s，其中召回本身仍 0.27s）。
+     * turn→step 最多排队一个预算片（≤~16ms 级，改前 2.5–3.1s）。
      * 与检索语义零关系：查询侧仍逐节点按内容签名校验，预热只填缓存。
+     * 已知残留上界：单节点 nodeTokenEntry（jieba 同步分词）超预算不可切片，极端大节点
+     * 单片仍可能超 16ms——较 0.26.66 已收敛一个量级。
      */
-    async warmSearchCache(aborted = () => false, chunk = 128) {
+    async warmSearchCache(aborted = () => false, opts = {}) {
         if (!this.db)
             return { nodes: 0, edges: 0 };
+        // 入口无条件让出一个宏任务：保证调用方 apply() 同步段零预热工作（store 层不变量）。
+        await new Promise((resolve) => setTimeout(resolve, 0));
         const { nodes, edges } = this.loadGraph();
+        // loadGraph（三表全读 + JSON.parse）与邻接表建表之间再让出一次，宿主事件可穿插。
+        await new Promise((resolve) => setTimeout(resolve, 0));
         this.relationAdjacency(edges);
+        const budgetMs = Math.max(1, opts.budgetMs ?? 16); // 钳 ≥1ms:0 预算会让切片 while 零迭代死循环
+        const gapMs = opts.gapMs ?? 0;
         let warmed = 0;
-        for (let i = 0; i < nodes.length; i += chunk) {
+        for (let i = 0; i < nodes.length;) {
             if (aborted())
                 break;
-            // 只累计**实际建了分词**的节点数（archived/superseded 被状态闸跳过，不计入）
-            warmed += warmNodeTokens(nodes, i, Math.min(i + chunk, nodes.length));
-            await new Promise((resolve) => setImmediate(resolve));
+            const sliceStart = Date.now();
+            // 逐节点建分词，单片按时间预算动态截止（节点 facts 体积不均，固定片长长尾 1s+）。
+            while (i < nodes.length && Date.now() - sliceStart < budgetMs) {
+                // 只累计**实际建了分词**的节点数（archived/superseded 被状态闸跳过，不计入）
+                warmed += warmNodeTokens(nodes, i, i + 1);
+                i++;
+            }
+            // setTimeout 让定时器/I/O/宿主事件穿插；setImmediate 检查相位贴跑会饿死定时器（issue #39）。
+            await new Promise((resolve) => setTimeout(resolve, gapMs));
         }
         return { nodes: warmed, edges: edges.length };
     }

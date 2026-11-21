@@ -426,6 +426,8 @@ export interface MemoryConfig {
     maxTotalRecallChars: number;
     /** 召回总预算(ms):超时跳过本轮注入、不阻塞对话;0 = 不限时。 */
     timeoutMs: number;
+    /** 图谱读路缓存预热延迟(ms):apply 完成后等这么多毫秒再后台起跑,避开冷启动关键路径(issue #39);0 = 入口让出后立即开跑。 */
+    graphWarmupDelayMs: number;
     includePersona: boolean;
     includeSceneNav: boolean;
     /** 检索策略:keyword(FTS5 BM25)| embedding(向量)| hybrid(双路 + RRF 融合)。 */
@@ -1003,6 +1005,7 @@ export const memorySchema: ConfigSchema = Schema.object({
     maxCharsPerMemory: Schema.number().min(0).max(100_000).default(500),
     maxTotalRecallChars: Schema.number().min(0).max(100_000).default(2000),
     timeoutMs: Schema.number().min(0).max(60_000).default(5000),
+    graphWarmupDelayMs: Schema.number().min(0).max(600_000).default(3000),
     includePersona: Schema.boolean().default(true),
     includeSceneNav: Schema.boolean().default(true),
     strategy: Schema.union(['keyword', 'embedding', 'hybrid']).default('hybrid'),

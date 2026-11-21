@@ -910,21 +910,28 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       storageOk && config.capture.enabled
     } | 蒸馏=${storageOk && config.extract.enabled} | 召回=${config.recall.enabled})`,
   );
-  // 读路缓存预热（2026-11-09 召回延迟修复）：fresh 进程的首次召回若要现场分词全图，
-  // 会一次吃掉 ~2.9s（4764 节点 × 6 字段 + 12026 边）。这里在后台分片预热，每片 128 节点
-  //（≈104ms 同步切片）、片间让出事件循环。首条消息若在预热完成前到达，turn→step 会排队等片
-  //（实测 2.5–3.1s，召回本身仍 ~0.27s）；warm 只填缓存，不改检索语义。
+  // 读路缓存预热（2026-11-09 召回延迟修复；issue #39 重构）：不再在 apply() 同步段起跑——
+  // 默认延迟 graphWarmupDelayMs(3000ms) 等宿主 loader.await 与首会话恢复走完后才后台预热，
+  // timer unref 防拖停机，dispose 时 clearTimeout + disposed 旗标双保险。warmSearchCache 入口
+  // 自带宏任务让出（store 层不变量），delayMs=0 也不抢跑；分片按 16ms 时间预算动态截止
+  //（改前固定 128 节点/片长尾单片 1,050ms）、片间 setTimeout 让宿主事件穿插。
+  // 首条消息若在预热完成前到达，turn→step 最多排队一个预算片（≤~16ms 级，改前 2.5–3.1s）；
+  // warm 只填缓存，不改检索语义。
+  let graphWarmupTimer: ReturnType<typeof setTimeout> | null = null;
   if (storageOk && config.recall.enabled && db.graphStore.ready) {
-    void (async () => {
-      const t0 = Date.now();
-      try {
-        const warmed = await db.graphStore.warmSearchCache(() => disposed || !db.graphStore.ready);
-        if (!disposed)
-          logger.info(`[memory] 图谱读路缓存预热完成(${warmed.nodes} 节点 / ${warmed.edges} 边, ${Date.now() - t0}ms)`);
-      } catch (err) {
-        logger.warn(`[memory] 图谱读路缓存预热失败(不影响检索,冷路径照常分词): ${err instanceof Error ? err.message : String(err)}`);
-      }
-    })();
+    graphWarmupTimer = setTimeout(() => {
+      void (async () => {
+        const t0 = Date.now();
+        try {
+          const warmed = await db.graphStore.warmSearchCache(() => disposed || !db.graphStore.ready);
+          if (!disposed)
+            logger.info(`[memory] 图谱读路缓存预热完成(${warmed.nodes} 节点 / ${warmed.edges} 边, ${Date.now() - t0}ms)`);
+        } catch (err) {
+          logger.warn(`[memory] 图谱读路缓存预热失败(不影响检索,冷路径照常分词): ${err instanceof Error ? err.message : String(err)}`);
+        }
+      })();
+    }, config.recall.graphWarmupDelayMs);
+    graphWarmupTimer.unref?.();
   }
 
   // 停机顺序:置停机标志(后台 embeddings 不再发起)→ 停蒸馏取新任务 →
@@ -932,6 +939,8 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   // 本 effect 晚注册故先执行;apply 中途失败时由上方早注册的 db.close 兜底(双关安全)。
   ctx.effect(() => () => {
     disposed = true;
+    // 图谱预热延迟 timer:不留孤儿回调(到期后会去碰已关的 db/no-op,脏)——与 extWakeTimer 同范式。
+    if (graphWarmupTimer !== null) clearTimeout(graphWarmupTimer);
     runner.stop();
     embedManager?.dispose();
     downloader.dispose();

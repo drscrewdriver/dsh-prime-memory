@@ -162,10 +162,22 @@ describe('warmup', () => {
     const gs = db.graphStore;
     const arena = internals(gs);
     arena.tx(() => arena.upsertTouchedInTx(nodes, []));
-    const warmed = await gs.warmSearchCache(() => false, 2);
+    const warmed = await gs.warmSearchCache(() => false, { budgetMs: 1 });
     expect(warmed.nodes).toBe(2); // 实际建分词数 = active + disputed
     expect(warmed.edges).toBe(0);
     // 预热后检索仍只用 active|disputed（archived 不可见）
     expect(gs.searchNodes('预热', 10).every((h) => h.node.status !== 'archived' && h.node.status !== 'superseded')).toBe(true);
+  });
+
+  it('aborts at the first slice when aborted() is immediately true', async () => {
+    const db = openDb('warm-abort.db');
+    const gs = db.graphStore;
+    const arena = internals(gs);
+    const nodes = Array.from({ length: 8 }, (_, i) => node({ id: `n-${i}`, name: `中止预热 ${i}` }));
+    arena.tx(() => arena.upsertTouchedInTx(nodes, []));
+    // 首片前即中止：零分词（issue #39 dispose 双保险的 aborted 支路）
+    const warmed = await gs.warmSearchCache(() => true);
+    expect(warmed.nodes).toBe(0);
+    expect(warmed.edges).toBe(0);
   });
 });

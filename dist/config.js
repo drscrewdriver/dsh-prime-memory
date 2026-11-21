@@ -424,6 +424,7 @@ export const memorySchema = Schema.object({
         maxCharsPerMemory: Schema.number().min(0).max(100_000).default(500),
         maxTotalRecallChars: Schema.number().min(0).max(100_000).default(2000),
         timeoutMs: Schema.number().min(0).max(60_000).default(5000),
+        graphWarmupDelayMs: Schema.number().min(0).max(600_000).default(3000),
         includePersona: Schema.boolean().default(true),
         includeSceneNav: Schema.boolean().default(true),
         strategy: Schema.union(['keyword', 'embedding', 'hybrid']).default('hybrid'),
