@@ -18,6 +18,7 @@
  * - 来源全缺失的 job 判 dead-不可重试,不向调用方抛错。
  */
 import { randomBytes } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { applyGraphProjection } from '../graph/apply.js';
 import { buildRelationTokenAdjacency, expandHitRecordIds, searchGraphConcepts, searchGraphNodes, warmNodeTokens } from '../graph/search.js';
 import { sweepStockGraph } from '../graph/sweep.js';
@@ -31,6 +32,12 @@ import { classifyValidity, isExitedState, validToSourceOf } from './validity.js'
 import { readSupersedeMarker } from './supersede.js';
 import { isZeroVector, vecToBuffer } from './vec-utils.js';
 const TAG = '[memory][graph]';
+/** 宏任务让出：给宿主事件循环、I/O 与定时器留出调度窗口（不紧贴 setImmediate 抢占）。 */
+function yieldMacrotask(ms) {
+    return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+    });
+}
 /** 坏 JSON 容忍解析:图谱表列损坏只损失该行派生信息,不抛。 */
 function parseJsonSafe(raw, fallback) {
     if (!raw)
@@ -689,25 +696,56 @@ export class GraphStore {
     /**
      * 读路缓存预热（可选加速；中断/异常都不影响正确性——冷路径照常现场分词）。
      *
-     * 为什么需要：fresh 进程第一次召回要现场分词全图（4764 节点 × 6 字段 + 12026 边，
-     * 实测 ~2.9s）。这里在插件就绪后**后台分片**预填分词缓存与关系词邻接表：
-     * 每片 chunk=128 个节点 ≈104ms 同步切片，片间 setImmediate 让出事件循环。
-     * 注意：切片之间能处理宿主事件，但**不能消除抢占**——首条消息若落在预热期间，
-     * turn→step 会排队等片（实测 2.5–3.1s，其中召回本身仍 0.27s）。
+     * 为什么需要：fresh 进程第一次召回要现场分词全图（4764+ 节点 × 6 字段 + 万级边，
+     * 实测数秒）。这里在后台按**时间预算切片 + 宏任务间隔**预填分词缓存与关系词邻接表：
+     * - 入口先让出一个宏任务，避免调用方在插件 apply() 内同步抢跑 loadGraph() 与首片分词；
+     * - loadGraph()、relationAdjacency(edges) 与节点分词之间各让出一次宏任务；
+     * - 节点循环同时受 chunk（默认 128）与 sliceBudgetMs（默认 16ms）双上限约束，
+     *   遇到大 facts 节点或首次加载 jieba 词典时提前截断并让出，避免单片阻塞 1s+；
+     * - 片间用 setTimeout(yieldMs)（默认 10ms）而非紧贴 setImmediate，给宿主与 I/O 留穿插窗口。
      * 与检索语义零关系：查询侧仍逐节点按内容签名校验，预热只填缓存。
      */
-    async warmSearchCache(aborted = () => false, chunk = 128) {
-        if (!this.db)
+    async warmSearchCache(aborted = () => false, chunkOrOptions = 128) {
+        if (!this.db || aborted())
+            return { nodes: 0, edges: 0 };
+        const opts = typeof chunkOrOptions === 'number' ? { chunk: chunkOrOptions } : chunkOrOptions;
+        const maxChunk = Math.max(1, Math.floor(opts.chunk ?? 128));
+        const sliceBudgetMs = Math.max(0, opts.sliceBudgetMs ?? 16);
+        const yieldMs = Math.max(0, opts.yieldMs ?? 10);
+        // 入口先让出一个宏任务：即使调用方直接 `void warmSearchCache()`，也不在同步段抢跑 loadGraph()
+        await yieldMacrotask(0);
+        if (!this.db || aborted())
             return { nodes: 0, edges: 0 };
         const { nodes, edges } = this.loadGraph();
-        this.relationAdjacency(edges);
+        if (!this.db || aborted())
+            return { nodes: 0, edges: edges.length };
+        if (edges.length > 0) {
+            await yieldMacrotask(yieldMs);
+            if (!this.db || aborted())
+                return { nodes: 0, edges: edges.length };
+            this.relationAdjacency(edges);
+        }
+        if (nodes.length === 0 || !this.db || aborted())
+            return { nodes: 0, edges: edges.length };
+        await yieldMacrotask(yieldMs);
         let warmed = 0;
-        for (let i = 0; i < nodes.length; i += chunk) {
-            if (aborted())
+        let i = 0;
+        while (i < nodes.length) {
+            if (!this.db || aborted())
                 break;
-            // 只累计**实际建了分词**的节点数（archived/superseded 被状态闸跳过，不计入）
-            warmed += warmNodeTokens(nodes, i, Math.min(i + chunk, nodes.length));
-            await new Promise((resolve) => setImmediate(resolve));
+            const sliceStart = performance.now();
+            const sliceLimit = Math.min(i + maxChunk, nodes.length);
+            while (i < sliceLimit) {
+                // 逐节点累加后即核对时间预算，只累计**实际建了分词**的节点数
+                // （archived/superseded 被状态闸跳过，不计入）
+                warmed += warmNodeTokens(nodes, i, i + 1);
+                i++;
+                if (sliceBudgetMs > 0 && performance.now() - sliceStart >= sliceBudgetMs)
+                    break;
+            }
+            if (i < nodes.length && !aborted()) {
+                await yieldMacrotask(yieldMs);
+            }
         }
         return { nodes: warmed, edges: edges.length };
     }

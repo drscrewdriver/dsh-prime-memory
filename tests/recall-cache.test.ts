@@ -168,4 +168,107 @@ describe('warmup', () => {
     // 预热后检索仍只用 active|disputed（archived 不可见）
     expect(gs.searchNodes('预热', 10).every((h) => h.node.status !== 'archived' && h.node.status !== 'superseded')).toBe(true);
   });
+
+  it('yields before loadGraph() so invoking warmSearchCache never blocks synchronously', async () => {
+    const db = openDb('warm-async-entry.db');
+    const gs = db.graphStore;
+    const arena = internals(gs);
+    arena.tx(() =>
+      arena.upsertTouchedInTx(
+        [node({ id: 'n-sync-1', name: '异步入口测试甲' }), node({ id: 'n-sync-2', name: '异步入口测试乙' })],
+        [edge({ id: 'e-sync-1', fromNodeId: 'n-sync-1', toNodeId: 'n-sync-2', relation: '关联' })],
+      ),
+    );
+
+    let loadCalls = 0;
+    const origLoad = gs.loadGraph.bind(gs);
+    gs.loadGraph = () => {
+      loadCalls++;
+      return origLoad();
+    };
+
+    try {
+      const pending = gs.warmSearchCache(() => false, { chunk: 128, yieldMs: 0 });
+      // 同步段内不得触发 loadGraph（避免在 plugin apply() 返回前锁死主线程）
+      expect(loadCalls).toBe(0);
+      const warmed = await pending;
+      expect(loadCalls).toBe(1);
+      expect(warmed).toEqual({ nodes: 2, edges: 1 });
+    } finally {
+      gs.loadGraph = origLoad;
+    }
+  });
+
+  it('skips loadGraph completely if aborted before the first macrotask runs', async () => {
+    const db = openDb('warm-pre-abort.db');
+    const gs = db.graphStore;
+    const arena = internals(gs);
+    arena.tx(() => arena.upsertTouchedInTx([node({ id: 'n-abort-1', name: '取消预热测试' })], []));
+
+    let loadCalls = 0;
+    const origLoad = gs.loadGraph.bind(gs);
+    gs.loadGraph = () => {
+      loadCalls++;
+      return origLoad();
+    };
+
+    try {
+      let aborted = false;
+      const pending = gs.warmSearchCache(() => aborted, { yieldMs: 0 });
+      aborted = true;
+      const warmed = await pending;
+      expect(loadCalls).toBe(0);
+      expect(warmed).toEqual({ nodes: 0, edges: 0 });
+    } finally {
+      gs.loadGraph = origLoad;
+    }
+  });
+
+  it('slices by time budget even when chunk is large and still warms every active node', async () => {
+    const db = openDb('warm-budget.db');
+    const gs = db.graphStore;
+    const arena = internals(gs);
+    const nodes = Array.from({ length: 12 }, (_, idx) =>
+      node({
+        id: `n-budget-${idx}`,
+        name: `时间预算切片测试节点${idx} 项目图谱分词检索性能验证`,
+        currentState: `当前正在验证第 ${idx} 个节点的时间片截断逻辑与长尾保护能力`,
+        facts: [
+          {
+            id: `f-budget-${idx}`,
+            key: `特征说明${idx}`,
+            value: '用于确保每个未缓存节点的分词耗时可被微秒级单调时钟观测到从而触发时间预算让出',
+            status: 'active',
+            confidence: 0.9,
+            sourceRecordIds: ['r1'],
+            updatedAt: T,
+          },
+        ],
+      }),
+    );
+    arena.tx(() => arena.upsertTouchedInTx(nodes, []));
+
+    let loaded = false;
+    let postLoadAbortChecks = 0;
+    const origLoad = gs.loadGraph.bind(gs);
+    gs.loadGraph = () => {
+      loaded = true;
+      return origLoad();
+    };
+
+    try {
+      const warmed = await gs.warmSearchCache(
+        () => {
+          if (loaded) postLoadAbortChecks++;
+          return false;
+        },
+        { chunk: 128, sliceBudgetMs: 0.001, yieldMs: 0 },
+      );
+      expect(warmed).toEqual({ nodes: 12, edges: 0 });
+      // chunk=128 远大于 12，若无时间预算截断循环仅走 1 片；启用时间预算后应多次切分让出
+      expect(postLoadAbortChecks).toBeGreaterThan(4);
+    } finally {
+      gs.loadGraph = origLoad;
+    }
+  });
 });

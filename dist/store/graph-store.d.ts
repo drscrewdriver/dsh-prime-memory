@@ -42,6 +42,15 @@ export interface CompleteOptions {
     now?: string;
     idFactory?: (prefix: 'node' | 'edge' | 'gfact' | 'gconcept') => string;
 }
+/** 读路缓存预热分片参数（issue #39：时间预算 + 宏任务让出，防冷启动与长尾阻塞主线程）。 */
+export interface WarmSearchCacheOptions {
+    /** 单片最大节点数上限（与时间预算共同截断，默认 128）。 */
+    chunk?: number;
+    /** 单片同步分词的时间预算（ms，默认 16；0 表示不按时间截断，仅按 chunk 切片）。 */
+    sliceBudgetMs?: number;
+    /** 阶段间 / 片间宏任务让出间隔（ms，默认 10；用 setTimeout 给宿主 I/O 与请求留穿插窗口）。 */
+    yieldMs?: number;
+}
 export declare class GraphStore {
     private db;
     private logger;
@@ -175,14 +184,16 @@ export declare class GraphStore {
     /**
      * 读路缓存预热（可选加速；中断/异常都不影响正确性——冷路径照常现场分词）。
      *
-     * 为什么需要：fresh 进程第一次召回要现场分词全图（4764 节点 × 6 字段 + 12026 边，
-     * 实测 ~2.9s）。这里在插件就绪后**后台分片**预填分词缓存与关系词邻接表：
-     * 每片 chunk=128 个节点 ≈104ms 同步切片，片间 setImmediate 让出事件循环。
-     * 注意：切片之间能处理宿主事件，但**不能消除抢占**——首条消息若落在预热期间，
-     * turn→step 会排队等片（实测 2.5–3.1s，其中召回本身仍 0.27s）。
+     * 为什么需要：fresh 进程第一次召回要现场分词全图（4764+ 节点 × 6 字段 + 万级边，
+     * 实测数秒）。这里在后台按**时间预算切片 + 宏任务间隔**预填分词缓存与关系词邻接表：
+     * - 入口先让出一个宏任务，避免调用方在插件 apply() 内同步抢跑 loadGraph() 与首片分词；
+     * - loadGraph()、relationAdjacency(edges) 与节点分词之间各让出一次宏任务；
+     * - 节点循环同时受 chunk（默认 128）与 sliceBudgetMs（默认 16ms）双上限约束，
+     *   遇到大 facts 节点或首次加载 jieba 词典时提前截断并让出，避免单片阻塞 1s+；
+     * - 片间用 setTimeout(yieldMs)（默认 10ms）而非紧贴 setImmediate，给宿主与 I/O 留穿插窗口。
      * 与检索语义零关系：查询侧仍逐节点按内容签名校验，预热只填缓存。
      */
-    warmSearchCache(aborted?: () => boolean, chunk?: number): Promise<{
+    warmSearchCache(aborted?: () => boolean, chunkOrOptions?: number | WarmSearchCacheOptions): Promise<{
         nodes: number;
         edges: number;
     }>;
