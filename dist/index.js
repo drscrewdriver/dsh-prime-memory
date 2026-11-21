@@ -835,22 +835,31 @@ export async function apply(ctx, config) {
         ctx.effect(() => () => disposeBench());
     }
     logger.info(`[memory] L0~L3 分层蒸馏记忆插件就绪(L1 记忆 ${storageOk ? stores.l1.size : 0} 条 | 捕获=${storageOk && config.capture.enabled} | 蒸馏=${storageOk && config.extract.enabled} | 召回=${config.recall.enabled})`);
-    // 读路缓存预热（2026-11-09 召回延迟修复）：fresh 进程的首次召回若要现场分词全图，
-    // 会一次吃掉 ~2.9s（4764 节点 × 6 字段 + 12026 边）。这里在后台分片预热，每片 128 节点
-    //（≈104ms 同步切片）、片间让出事件循环。首条消息若在预热完成前到达，turn→step 会排队等片
-    //（实测 2.5–3.1s，召回本身仍 ~0.27s）；warm 只填缓存，不改检索语义。
+    // 读路缓存预热（2026-11-09 召回延迟修复；issue #39 延后冷启动）：
+    // fresh 进程的首次召回若要现场分词全图会一次吃掉数秒，因此保留后台预热；
+    // 但不能在 apply() 内同步抢跑（loadGraph + 邻接表 + 首片分词会堵死宿主插件装载
+    // 与首个会话恢复）。改为延迟 5s 后再以小时间片（≤16ms）+ 宏任务间隔后台预热；
+    // 若首条消息在延迟窗内到达，冷路径照常按需分词并填缓存，不改检索语义。
+    const GRAPH_WARMUP_DELAY_MS = 5_000;
+    let warmTimer = null;
     if (storageOk && config.recall.enabled && db.graphStore.ready) {
-        void (async () => {
-            const t0 = Date.now();
-            try {
-                const warmed = await db.graphStore.warmSearchCache(() => disposed || !db.graphStore.ready);
-                if (!disposed)
-                    logger.info(`[memory] 图谱读路缓存预热完成(${warmed.nodes} 节点 / ${warmed.edges} 边, ${Date.now() - t0}ms)`);
-            }
-            catch (err) {
-                logger.warn(`[memory] 图谱读路缓存预热失败(不影响检索,冷路径照常分词): ${err instanceof Error ? err.message : String(err)}`);
-            }
-        })();
+        warmTimer = setTimeout(() => {
+            warmTimer = null;
+            if (disposed || !db.graphStore.ready)
+                return;
+            void (async () => {
+                const t0 = Date.now();
+                try {
+                    const warmed = await db.graphStore.warmSearchCache(() => disposed || !db.graphStore.ready);
+                    if (!disposed)
+                        logger.info(`[memory] 图谱读路缓存预热完成(${warmed.nodes} 节点 / ${warmed.edges} 边, ${Date.now() - t0}ms)`);
+                }
+                catch (err) {
+                    logger.warn(`[memory] 图谱读路缓存预热失败(不影响检索,冷路径照常分词): ${err instanceof Error ? err.message : String(err)}`);
+                }
+            })();
+        }, GRAPH_WARMUP_DELAY_MS);
+        warmTimer.unref?.();
     }
     // 停机顺序:置停机标志(后台 embeddings 不再发起)→ 停蒸馏取新任务 →
     // 冲刷 L0 串行链(排队消息先落盘)→ 关库。cordis disposer 为 LIFO 逐个 await,
@@ -865,9 +874,13 @@ export async function apply(ctx, config) {
         void stores.backend?.dispose();
         // 外部驱动:关 fetch/终止子进程(registry.disposeAll);不关 db,与主链拆除互不依赖。
         void extAssembly.dispose();
-        // 推送泵重臂定时器:不留孤儿回调(到期后会去碰已关的 ext 账本,no-op 但脏)。
+        // 推送泵重臂定时器与图谱预热延迟定时器:不留孤儿回调。
         if (extWakeTimer !== null)
             clearTimeout(extWakeTimer);
+        if (warmTimer !== null) {
+            clearTimeout(warmTimer);
+            warmTimer = null;
+        }
         return (async () => {
             await flushL0?.();
             db.close();
