@@ -25,15 +25,31 @@ import { fmtTime } from '../format.js';
 
 const POLL_MS = 60_000;
 
-/** 桌面侧唯一可行链路（宿主独占管理 desktop profile，CLI 必被拒）。只在 `missing` 态展示。 */
-const GUIDE = `桌面版（DSH Desktop）不能用 \`dsh plugin --profile desktop add\`（宿主独占管理，会被拒绝），只能手工：
-1. 编辑 ~/.dsh/profiles/desktop/package.json
-   - dependencies 追加 "dsh-reference-session-collector": "^0.2.12"（以 npm latest 为准）
-   - dsh.profile.bundles 追加 "dsh-reference-session-collector"
-2. 在该目录执行 pnpm install
-3. 重启 DSH Desktop
+/**
+ * 桌面侧唯一可行链路（宿主独占管理 desktop profile，CLI 必被拒）。只在 `missing` 态展示。
+ *
+ * 为什么逐行 `tr()` 而不是整段一个 key：抽取器把 key 一律空白折叠成单行
+ * （JSX 跨行文本的归一化契约），而 `makeTr` 运行时查表**不做归一化**——多行
+ * 模板串与单行 key 永远对不上，整段 key 的译文是死信（历史事故：字典里明明
+ * 有全文翻译，GUIDE 却恒为中文）。逐行 key 四语结构对齐、zh 基线不丢分行。
+ *
+ * 版本钉版走 `{p1}` + COLLECTOR_PIN：key 里含字面版本号已引发过一次迁移+重翻
+ * （0.2.5 → 0.2.12 历史事故），参数化后 collector 升版只改常量、零字典 churn。
+ */
+const COLLECTOR_PIN = '^0.2.12';
 
-注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。`;
+function guideLines(): string[] {
+  return [
+    tr("桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工："),
+    `1. ${tr('编辑 ~/.dsh/profiles/desktop/package.json')}`,
+    `   - ${tr('dependencies 追加 "dsh-reference-session-collector": "{p1}"（以 npm latest 为准）', { p1: COLLECTOR_PIN })}`,
+    `   - ${tr('dsh.profile.bundles 追加 "dsh-reference-session-collector"')}`,
+    `2. ${tr('在该目录执行 pnpm install')}`,
+    `3. ${tr('重启 DSH Desktop')}`,
+    '',
+    tr("注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。"),
+  ];
+}
 
 interface Tone {
   title: string;
@@ -82,7 +98,7 @@ export function DrscHealthBanner({ rpc }: { rpc: RpcFn }) {
 
   const copy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(GUIDE);
+      await navigator.clipboard.writeText(guideLines().join('\n'));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -145,7 +161,7 @@ export function DrscHealthBanner({ rpc }: { rpc: RpcFn }) {
             </button>
           </div>
           <pre ref={codeRef} style={S.bannerCode}>
-            {tr(GUIDE)}
+            {guideLines().join('\n')}
           </pre>
         </>
       ) : null}

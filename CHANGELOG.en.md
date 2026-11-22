@@ -8,6 +8,12 @@
 
 This file covers the **0.12.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 
+## 0.26.71
+
+- **Line-by-line localization of the DRSC install guide — fixing the "translation sits in the dict but the UI stays Chinese" dead-link chain, plus a tr() call-site reachability guard.** Root cause (BUG-1): the extractor normalizes every key by collapsing whitespace to a single line, while `makeTr` looks up the raw runtime argument without normalizing — a multi-line template constant can never match its own single-line dict key, so the merged full-text translations were dead letters. Fix: the banner's `guideLines()` renders the guide as seven individually-translated lines (numbering/indent are structural literals; the pinned version goes through `{p1}` + `COLLECTOR_PIN` so future collector bumps cause zero dict churn); `<pre>` and clipboard copy share the same localized join. Dicts: +7 keys (1,406 → 1,412), translations split mechanically from the reviewed merged text; the dead merged key retired from keys.json and all three dicts. New guard suite in `tests/i18n-dict.test.ts`: ① every `tr(<literal>)` argument, normalized, must be in keys.json (1,469 sites); ② multi-line backtick template literals (inline or const-bound) must never reach `tr()` — the GUIDE failure shape, pinned both ways; ③ zero `tr(<template with ${…}>)` args. The reachable set is extractor-homologous (esbuild metafile from entry.tsx), so dead files stay out of scope. Gates: typecheck clean; vitest 239 files green (2471 passed / 1 skipped); build + dist smoke pass.
+
+> Erratum (recorded with this release): the previous section's "0.26.69 could not land" was wrong — 0.26.69 **did publish**. The registry's 409 staged error and the initial 404 view were a propagation-window illusion; 0.26.69 appeared on the source minutes later (shasum `c3797bbf…`, byte-identical to the locally packed tgz — the owner's parallel publish succeeded). 0.26.70 is the same-code parallel re-publish with only the manifests/CHANGELOG renumbered; latest settles at 0.26.70.
+
 ## 0.26.70
 
 > 0.26.69 could not land due to npm staged-publish residue (`409 Cannot publish over previously staged version`, cf. npm/cli#9889, same as the 0.26.64→0.26.65 precedent); 0.26.70 is its re-publish — code identical to 0.26.69, only the two manifests and CHANGELOG renumbered.

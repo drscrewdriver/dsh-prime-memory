@@ -52,6 +52,10 @@ async function main(): Promise<void> {
   check('client.js: DRSC banner 已接端点', client.includes('dsh-memory/drsc-health'));
   const drscInproc = await readFile(path.join(dist, 'clients', 'drsc-inproc.js'), 'utf-8');
   check('drsc-inproc: 导出 probeDrscHealth', drscInproc.includes('probeDrscHealth'));
+  // GUIDE 逐行本地化（拆分后）：en 译文必须随字典进 bundle；合并版单行 key 是死信
+  // （多行实参查不中归一化 key），其签名不得再出现在包里——两条一正一反可分辨。
+  check('client.js: DRSC 指引英译在场', client.includes('cannot use `dsh plugin --profile desktop add`'));
+  check('client.js: 合并版指引 key 已退役', !client.includes('只能手工： 1. 编辑'));
   check('client.js: 无裸 import(纯 CJS 体)', !/^import[\s{"' ]/m.test(client));
 
   // ── worker/child 协议头(workerData/env 消费 + transformers 本地加载) ──

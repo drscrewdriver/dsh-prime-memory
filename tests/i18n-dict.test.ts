@@ -10,10 +10,11 @@
  *
  * 生成物过期时这里会红——重跑 `node scripts/i18n-extract.mjs && node scripts/i18n-merge.mjs <dir>`。
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { build } from 'esbuild';
+import { describe, expect, it, beforeAll } from 'vitest';
 import { makeTr, registerDictionaries, type LocaleServiceLike } from '../client/src/i18n-core.js';
 import { en } from '../client/src/locales/en.js';
 import { ru } from '../client/src/locales/ru.js';
@@ -76,6 +77,134 @@ describe('i18n 字典', () => {
       if (!(pt[key] ?? '').trim()) empty.push(`pt: ${key}`);
     }
     expect(empty).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// tr() 调用点可达性（BUG-1 回归闸）
+//
+// 为什么需要：抽取器把 key 一律空白折叠成单行（归一化契约），而 makeTr 运行时
+// 查表**不做归一化**——多行模板串实参与单行 key 永远查不中，字典里译文再全也是
+// 死信（DrscHealthBanner 的 GUIDE 事故）。这条盲区不在「字典质量」侧，在
+// 「运行时实参 → 归一化 key 可达」侧，故单列一节钉住。
+//
+// 可达集与抽取器**同源**（esbuild metafile 从 entry.tsx 打包的 inputs）：
+// 死文件（如 pill/SessionRecalledArea.tsx）的文案刻意不进字典，守卫同样不扫。
+// ─────────────────────────────────────────────────────────────────────────────
+const srcRoot = path.join(root, 'client/src');
+
+function walkSrc(dir: string): string[] {
+  const out: string[] = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...walkSrc(p));
+    else if (/\.(tsx?)$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+
+/** 与抽取器同口径的归一化：解常见转义 → 空白折叠 → trim。 */
+function normalizeLiteral(raw: string): string {
+  return raw
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h: string) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\n|\\t/g, ' ')
+    .replace(/\\(['"`\\])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** tr( 实参分类扫描：literal（引号串）/ template-expr（含 ${…} 的模板串，禁）/ identifier（标识符，另行裁决）。 */
+interface TrSite {
+  file: string;
+  kind: 'literal' | 'template-expr' | 'identifier';
+  text: string;
+}
+
+function scanTrSites(files: string[]): TrSite[] {
+  const sites: TrSite[] = [];
+  const re = /(?<![A-Za-z_$])tr\(\s*(?:(['"`])((?:\\.|(?!\1)[\s\S])*?)\1|([A-Za-z_$][\w$]*))/g;
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8')
+      // 启发式剥注释（块注释整段、行注释整行；:// 保护 URL 字面量）
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    for (const m of source.matchAll(re)) {
+      if (m[2] !== undefined) {
+        const isExpr = m[1] === '`' && m[2].includes('${');
+        sites.push({ file, kind: isExpr ? 'template-expr' : 'literal', text: m[2] });
+      } else if (m[3] !== undefined) {
+        sites.push({ file, kind: 'identifier', text: m[3] });
+      }
+    }
+  }
+  return sites;
+}
+
+/** 收集「内容跨行的反引号模板串常量」名 → 声明文件（GUIDE 失败模式的绑定面）。 */
+function multilineBacktickConsts(files: string[]): Map<string, string> {
+  const found = new Map<string, string>();
+  const decl = /(?<![A-Za-z_$])(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*`/g;
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8');
+    for (const m of source.matchAll(decl)) {
+      const open = (m.index ?? 0) + m[0].length;
+      const close = source.slice(open).search(/(?<!\\)`/);
+      if (close < 0) continue;
+      if (source.slice(open, open + close).includes('\n')) found.set(m[1]!, file);
+    }
+  }
+  return found;
+}
+
+describe('tr() 调用点可达性', () => {
+  let reachable: Set<string>;
+
+  beforeAll(async () => {
+    const g6Min = path.join(root, 'node_modules', '@antv', 'g6', 'dist', 'g6.min.js');
+    const result = await build({
+      entryPoints: [path.join(root, 'client/src/entry.tsx')],
+      bundle: true,
+      write: false,
+      metafile: true,
+      format: 'cjs',
+      platform: 'browser',
+      jsx: 'automatic',
+      external: ['react', 'react/jsx-runtime', '@deepseek-ai/*'],
+      ...(existsSync(g6Min) ? { alias: { '@antv/g6': g6Min } } : {}),
+      logLevel: 'silent',
+    });
+    reachable = new Set(Object.keys(result.metafile!.inputs).map((p) => path.resolve(root, p)));
+  });
+
+  function reachableFiles(): string[] {
+    return walkSrc(srcRoot).filter((f) => reachable.has(path.resolve(f)));
+  }
+
+  it('tr(<字面量>) 归一化后全部 ∈ keys.json', () => {
+    const known = new Set(keys);
+    const missing: string[] = [];
+    let literals = 0;
+    for (const site of scanTrSites(reachableFiles())) {
+      if (site.kind !== 'literal') continue;
+      literals += 1;
+      const key = normalizeLiteral(site.text);
+      if (!known.has(key)) missing.push(`${path.relative(root, site.file)} :: ${key.slice(0, 60)}`);
+    }
+    expect(literals).toBeGreaterThan(1000);
+    expect(missing).toEqual([]);
+  });
+
+  it('tr() 实参不得是多行反引号模板串（内联或常量绑定皆禁——GUIDE 事故形态）', () => {
+    const files = reachableFiles();
+    const multiline = multilineBacktickConsts(files);
+    const offenders: string[] = [];
+    for (const site of scanTrSites(files)) {
+      if (site.kind === 'template-expr') offenders.push(`${path.relative(root, site.file)} :: 含 ${'{…}'} 的模板串`);
+      if (site.kind === 'identifier' && multiline.has(site.text)) {
+        offenders.push(`${path.relative(root, site.file)} :: tr(${site.text}) 绑定跨行模板串常量`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
 /** 最小可用的 locale 服务替身：按 active → en → key 回退，与官方查找链同序。 */

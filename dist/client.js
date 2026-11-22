@@ -36150,6 +36150,7 @@ var __create = Object.create;
 		  "本周": "This week",
 		  "边": "Edge",
 		  "编辑": "Edit",
+		  "编辑 ~/.dsh/profiles/desktop/package.json": "Edit ~/.dsh/profiles/desktop/package.json",
 		  "编辑驱动：": "Edit driver: ",
 		  "编辑为运行时链": "Edit as runtime chain",
 		  "编辑显示名/归类说明": "Edit display name/category note",
@@ -36183,6 +36184,7 @@ var __create = Object.create;
 		  "裁决退场": "Retired by verdict",
 		  "裁决这一对？ 将要退场的记忆： 「{p1}」": 'Resolve this pair? Memory to be retired: "{p1}"',
 		  "裁决中…": "Resolving…",
+		  "参考会话库暂无数据": "Reference session store has no data yet",
 		  "参与": "participates in",
 		  "操作失败": "Operation failed",
 		  "侧栏「记忆库」入口": 'Sidebar "Memory store" entry',
@@ -36510,6 +36512,7 @@ var __create = Object.create;
 		  "加载中…": "Loading…",
 		  "架构设计": "Architecture",
 		  "间接相连": "Indirectly connected",
+		  "检查插件列表里 dsh-reference-session-collector 是否 enabled，然后完全重启 DSH Desktop（浏览器刷新不重载宿主半）。": "Check whether dsh-reference-session-collector is enabled in the plugin list, then fully restart DSH Desktop (refreshing the browser does not reload the host half).",
 		  "检索不可用（FTS 与向量均失效）": "Search unavailable (both FTS and vector down)",
 		  "检索降级：纯关键词（向量不可用）": "Search degraded: keywords only (vector unavailable)",
 		  "健康": "Health",
@@ -36875,6 +36878,7 @@ var __create = Object.create;
 		  "同步开关（运行时）": "sync switches (runtime)",
 		  "统计未到": "Stats not in yet",
 		  "投射根：": "Projection root:",
+		  "投影库 schema {p1} / 期望 {p2} —— collector 未完成首轮建库，重启宿主后自动迁移。": "Projection store schema {p1} / expected {p2} — the collector has not finished building the store; restarting the host migrates it automatically.",
 		  "投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。": 'Projection runs serially in the background and never blocks the conversation (newly distilled records always outrank backfilling existing ones); progress is visible on the "Graph" page, and you can flip the switch off at any time to stop it.',
 		  "图": "Graph",
 		  "图加载中…": "Loading graph…",
@@ -37138,6 +37142,7 @@ var __create = Object.create;
 		  "再点一下确认停用": "click once more to confirm deactivation",
 		  "再改改": "Edit again",
 		  "在第 0 层，第 k 跳在第 k 层": "At level 0; the k-th hop is at level k",
+		  "在该目录执行 pnpm install": "Run pnpm install in that directory",
 		  "在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。": 'After turning on the switch in Settings "Overview → {p1}", existing memories are projected into entities and relations in batches.',
 		  "在图上强调该节点": "Highlight this node on the graph",
 		  "在图中定位本条目的实体：": "Locate this entry's entity on the graph:",
@@ -37224,6 +37229,8 @@ var __create = Object.create;
 		  "重建索引": "Rebuild index",
 		  "重建已在进行中": "Rebuild already in progress",
 		  "重拉注册表与计数": "Refetch registry and counts",
+		  "重启 DSH Desktop": "Restart DSH Desktop",
+		  "重启 DSH Desktop 让 collector 完成首轮同步；重启后仍为空再检查 collector 是否 enabled。": "Restart DSH Desktop so the collector can run its first sync; if the store is still empty afterwards, check whether the collector is enabled.",
 		  "重嵌入中 L1": "Re-embedding L1",
 		  "重试": "Retry",
 		  "重试耗尽": "retries exhausted",
@@ -37254,16 +37261,13 @@ var __create = Object.create;
 		  "注入设置失败：": "Failed to set injection:",
 		  "注释规范": "Comment conventions",
 		  "注意：部署配置已停用": "Note: deployment config is disabled",
+		  "注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。": "Note: enabling only Memory will not enable the reference session store — the memory plugin is only its consumer and has no right to mount it.",
 		  "专家经验": "Expert experience",
 		  "转速": "spin speed",
 		  "状态": "status",
 		  "状态:": "Status:",
 		  "准备中（归档旧数据 · 清空检索库）": "Preparing (archiving old data · clearing the retrieval store)",
-		  "参考会话库暂无数据": "Reference session store has no data yet",
-		  "投影库 schema {p1} / 期望 {p2} —— collector 未完成首轮建库，重启宿主后自动迁移。": "Projection store schema {p1} / expected {p2} — the collector has not finished building the store; restarting the host migrates it automatically.",
-		  "重启 DSH Desktop 让 collector 完成首轮同步；重启后仍为空再检查 collector 是否 enabled。": "Restart DSH Desktop so the collector can run its first sync; if the store is still empty afterwards, check whether the collector is enabled.",
-		  "检查插件列表里 dsh-reference-session-collector 是否 enabled，然后完全重启 DSH Desktop（浏览器刷新不重载宿主半）。": "Check whether dsh-reference-session-collector is enabled in the plugin list, then fully restart DSH Desktop (refreshing the browser does not reload the host half).",
-		  '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.12"（以 npm latest 为准） - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。': 'The desktop build (DSH Desktop) cannot use `dsh plugin --profile desktop add` (the host manages it exclusively and will reject it), so do it manually: 1. Edit ~/.dsh/profiles/desktop/package.json - add "dsh-reference-session-collector": "^0.2.12" (use the npm latest version) to dependencies - add "dsh-reference-session-collector" to dsh.profile.bundles 2. Run pnpm install in that directory 3. Restart DSH Desktop Note: enabling only Memory will not enable the reference session store — the memory plugin is only its consumer and has no right to mount it.',
+		  "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工：": "The desktop build (DSH Desktop) cannot use `dsh plugin --profile desktop add` (the host manages it exclusively and will reject it), so do it manually:",
 		  "字符": " characters",
 		  "自定义 ·": "Custom ·",
 		  "自定义本层链": "Customize this layer's chain",
@@ -37293,10 +37297,12 @@ var __create = Object.create;
 		  "BGE small 中文": "BGE small (Chinese)",
 		  "BGE-M3 大杯": "BGE-M3 Large",
 		  "Canvas 三维投影记忆海": "Canvas 3D projected memory sea",
+		  'dependencies 追加 "dsh-reference-session-collector": "{p1}"（以 npm latest 为准）': 'add "dsh-reference-session-collector": "{p1}" (use the npm latest version) to dependencies',
 		  "direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。": "direct = plugin-native direct connection to OpenAI-compatible endpoints, decoupled from paid API; on failure it automatically falls back to the host route chain.",
 		  "direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。": "The direct channel uses plugin-native HTTP and does not depend on the host provider registry; if direct fails, it automatically falls back to the host route chain as a safety net.",
 		  "DRSC 投影库已过期": "DRSC projection store is outdated",
 		  "DRSC 已安装但未启用": "DRSC is installed but not enabled",
+		  'dsh.profile.bundles 追加 "dsh-reference-session-collector"': 'add "dsh-reference-session-collector" to dsh.profile.bundles',
 		  "ego 壳层 ·": "ego shell ·",
 		  "endpoint（http(s):// 或绝对路径，必填）": "endpoint (http(s):// or absolute path, required)",
 		  "extra（JSON 对象）": "extra (JSON object)",
@@ -37560,6 +37566,7 @@ var __create = Object.create;
 		  "本周": "Эта неделя",
 		  "边": "Ребро",
 		  "编辑": "Изменить",
+		  "编辑 ~/.dsh/profiles/desktop/package.json": "Откройте ~/.dsh/profiles/desktop/package.json",
 		  "编辑驱动：": "Редактировать драйвер: ",
 		  "编辑为运行时链": "Изменить как цепочку выполнения",
 		  "编辑显示名/归类说明": "Изменить отображаемое имя/описание категории",
@@ -37593,6 +37600,7 @@ var __create = Object.create;
 		  "裁决退场": "Отозвано по решению",
 		  "裁决这一对？ 将要退场的记忆： 「{p1}」": "Вынести решение по этой паре? Отзываемая запись: «{p1}»",
 		  "裁决中…": "Вынесение решения…",
+		  "参考会话库暂无数据": "В хранилище референсных сессий пока нет данных",
 		  "参与": "участвует в",
 		  "操作失败": "Операция не удалась",
 		  "侧栏「记忆库」入口": "Вход в «Хранилище памяти» на боковой панели",
@@ -37920,6 +37928,7 @@ var __create = Object.create;
 		  "加载中…": "Загрузка…",
 		  "架构设计": "Архитектура",
 		  "间接相连": "Связано косвенно",
+		  "检查插件列表里 dsh-reference-session-collector 是否 enabled，然后完全重启 DSH Desktop（浏览器刷新不重载宿主半）。": "Проверьте, включён ли dsh-reference-session-collector в списке плагинов, затем полностью перезапустите DSH Desktop (обновление страницы в браузере не перезагружает хостовую половину).",
 		  "检索不可用（FTS 与向量均失效）": "Поиск недоступен (FTS и векторы не работают)",
 		  "检索降级：纯关键词（向量不可用）": "Поиск в режиме деградации: только ключевые слова (вектор недоступен)",
 		  "健康": "Состояние",
@@ -38285,6 +38294,7 @@ var __create = Object.create;
 		  "同步开关（运行时）": "switches синхронизации (время выполнения)",
 		  "统计未到": "Статистика ещё не поступила",
 		  "投射根：": "Корень проекции:",
+		  "投影库 schema {p1} / 期望 {p2} —— collector 未完成首轮建库，重启宿主后自动迁移。": "Схема хранилища проекций {p1} / ожидается {p2} — collector не завершил первичное построение хранилища; после перезапуска хоста миграция выполнится автоматически.",
 		  "投影在后台串行跑，不会阻断对话（新蒸馏的记录优先级恒高于存量补投影）；进度可在「图谱」页看，随时可关开关停下来。": "Проекция идёт последовательно в фоне и не блокирует диалог (записи новой дистилляции всегда приоритетнее дозаполнения существующих); прогресс виден на странице «Граф», переключатель можно выключить в любой момент, чтобы остановить.",
 		  "图": "Граф",
 		  "图加载中…": "Загрузка графа…",
@@ -38548,6 +38558,7 @@ var __create = Object.create;
 		  "再点一下确认停用": "нажмите ещё раз для подтверждения отключения",
 		  "再改改": "Изменить ещё",
 		  "在第 0 层，第 k 跳在第 k 层": "На уровне 0, k-й переход на уровне k",
+		  "在该目录执行 pnpm install": "Выполните pnpm install в этом каталоге",
 		  "在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。": "После включения переключателя в настройках «Обзор → {p1}» существующая память партиями проецируется в сущности и связи.",
 		  "在图上强调该节点": "Выделить этот узел на графе",
 		  "在图中定位本条目的实体：": "Найти сущность этой записи на графе:",
@@ -38634,6 +38645,8 @@ var __create = Object.create;
 		  "重建索引": "Перестроить индекс",
 		  "重建已在进行中": "Перестроение уже выполняется",
 		  "重拉注册表与计数": "Перечитать реестр и счётчики",
+		  "重启 DSH Desktop": "Перезапустите DSH Desktop",
+		  "重启 DSH Desktop 让 collector 完成首轮同步；重启后仍为空再检查 collector 是否 enabled。": "Перезапустите DSH Desktop, чтобы collector выполнил первичную синхронизацию; если хранилище после этого всё ещё пусто, проверьте, включён ли collector.",
 		  "重嵌入中 L1": "Повторное встраивание L1",
 		  "重试": "Повторить",
 		  "重试耗尽": "повторные попытки исчерпаны",
@@ -38664,16 +38677,13 @@ var __create = Object.create;
 		  "注入设置失败：": "Не удалось настроить инъекцию:",
 		  "注释规范": "Соглашения по комментариям",
 		  "注意：部署配置已停用": "Внимание: конфигурация развёртывания отключена",
+		  "注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。": "Внимание: включение только «Памяти» не включит хранилище референсных сессий — плагин памяти лишь его потребитель и не вправе его подключать.",
 		  "专家经验": "Экспертный опыт",
 		  "转速": "скорость вращения",
 		  "状态": "статус",
 		  "状态:": "Состояние:",
 		  "准备中（归档旧数据 · 清空检索库）": "Подготовка (архивация старых данных · очистка хранилища поиска)",
-		  "参考会话库暂无数据": "В хранилище референсных сессий пока нет данных",
-		  "投影库 schema {p1} / 期望 {p2} —— collector 未完成首轮建库，重启宿主后自动迁移。": "Схема хранилища проекций {p1} / ожидается {p2} — collector не завершил первичное построение хранилища; после перезапуска хоста миграция выполнится автоматически.",
-		  "重启 DSH Desktop 让 collector 完成首轮同步；重启后仍为空再检查 collector 是否 enabled。": "Перезапустите DSH Desktop, чтобы collector выполнил первичную синхронизацию; если хранилище после этого всё ещё пусто, проверьте, включён ли collector.",
-		  "检查插件列表里 dsh-reference-session-collector 是否 enabled，然后完全重启 DSH Desktop（浏览器刷新不重载宿主半）。": "Проверьте, включён ли dsh-reference-session-collector в списке плагинов, затем полностью перезапустите DSH Desktop (обновление страницы в браузере не перезагружает хостовую половину).",
-		  '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.12"（以 npm latest 为准） - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。': 'Настольная версия (DSH Desktop) не может использовать `dsh plugin --profile desktop add` (хост управляет этим единолично и отклонит запрос), поэтому только вручную: 1. Откройте ~/.dsh/profiles/desktop/package.json - добавьте в dependencies "dsh-reference-session-collector": "^0.2.12" (используйте актуальную версию npm latest) - добавьте "dsh-reference-session-collector" в dsh.profile.bundles 2. Выполните pnpm install в этом каталоге 3. Перезапустите DSH Desktop Внимание: включение только «Памяти» не включит хранилище референсных сессий — плагин памяти лишь его потребитель и не вправе его подключать.',
+		  "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工：": "Настольная версия (DSH Desktop) не может использовать `dsh plugin --profile desktop add` (хост управляет этим единолично и отклонит запрос), поэтому только вручную:",
 		  "字符": " символов",
 		  "自定义 ·": "Своё ·",
 		  "自定义本层链": "Настроить цепочку этого уровня",
@@ -38703,10 +38713,12 @@ var __create = Object.create;
 		  "BGE small 中文": "BGE small (кит.)",
 		  "BGE-M3 大杯": "BGE-M3 Large",
 		  "Canvas 三维投影记忆海": "Трёхмерное море памяти в Canvas",
+		  'dependencies 追加 "dsh-reference-session-collector": "{p1}"（以 npm latest 为准）': 'добавьте в dependencies "dsh-reference-session-collector": "{p1}" (используйте актуальную версию npm latest)',
 		  "direct = 插件原生直连 OpenAI 兼容端点，与付费 API 解耦；失败自动回退宿主路由链。": "direct = нативное прямое подключение плагина к OpenAI-совместимым эндпоинтам, не связано с платным API; при сбое автоматически переходит на цепочку маршрутов хоста.",
 		  "direct 通道走插件原生 HTTP，不依赖宿主 provider 注册表；direct 失败自动回退宿主路由链作兜底安全网。": "Канал direct работает по нативному HTTP плагина и не зависит от реестра провайдеров хоста; при сбое direct автоматически переходит на цепочку маршрутов хоста как страховка.",
 		  "DRSC 投影库已过期": "Библиотека проекций DRSC устарела",
 		  "DRSC 已安装但未启用": "DRSC установлен, но не включён",
+		  'dsh.profile.bundles 追加 "dsh-reference-session-collector"': 'добавьте "dsh-reference-session-collector" в dsh.profile.bundles',
 		  "ego 壳层 ·": "оболочка ego ·",
 		  "endpoint（http(s):// 或绝对路径，必填）": "endpoint (http(s):// или абсолютный путь, обязательно)",
 		  "extra（JSON 对象）": "extra (JSON-объект)",
@@ -39144,14 +39156,19 @@ var __create = Object.create;
 		// client/src/components/DrscHealthBanner.tsx
 		var import_jsx_runtime = require("react/jsx-runtime");
 		var POLL_MS = 6e4;
-		var GUIDE = `桌面版（DSH Desktop）不能用 \`dsh plugin --profile desktop add\`（宿主独占管理，会被拒绝），只能手工：
-		1. 编辑 ~/.dsh/profiles/desktop/package.json
-		   - dependencies 追加 "dsh-reference-session-collector": "^0.2.12"（以 npm latest 为准）
-		   - dsh.profile.bundles 追加 "dsh-reference-session-collector"
-		2. 在该目录执行 pnpm install
-		3. 重启 DSH Desktop
-		
-		注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。`;
+		var COLLECTOR_PIN = "^0.2.12";
+		function guideLines() {
+		  return [
+		    tr("桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工："),
+		    `1. ${tr("编辑 ~/.dsh/profiles/desktop/package.json")}`,
+		    `   - ${tr('dependencies 追加 "dsh-reference-session-collector": "{p1}"（以 npm latest 为准）', { p1: COLLECTOR_PIN })}`,
+		    `   - ${tr('dsh.profile.bundles 追加 "dsh-reference-session-collector"')}`,
+		    `2. ${tr("在该目录执行 pnpm install")}`,
+		    `3. ${tr("重启 DSH Desktop")}`,
+		    "",
+		    tr("注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。")
+		  ];
+		}
 		function toneOf(h) {
 		  switch (h.state) {
 		    case "missing":
@@ -39190,7 +39207,7 @@ var __create = Object.create;
 		  }, [rpc]);
 		  const copy = (0, import_react2.useCallback)(async () => {
 		    try {
-		      await navigator.clipboard.writeText(GUIDE);
+		      await navigator.clipboard.writeText(guideLines().join("\n"));
 		      setCopied(true);
 		      setTimeout(() => setCopied(false), 1500);
 		    } catch {
@@ -39234,7 +39251,7 @@ var __create = Object.create;
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("修复指引（可复制）") }),
 		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { className: "dsh-mem-tab", onClick: () => void copy(), title: tr("复制修复指引"), children: copied ? tr("已复制") : tr("复制") })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", { ref: codeRef, style: S.bannerCode, children: tr(GUIDE) })
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", { ref: codeRef, style: S.bannerCode, children: guideLines().join("\n") })
 		    ] }) : null
 		  ] });
 		}
