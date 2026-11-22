@@ -17,6 +17,10 @@ e i numeri di versione rispettano il [versionamento semantico](https://semver.or
 > **Convenzione degli screenshot dell'interfaccia**: le voci che apportano cambiamenti alla UI conservano una registrazione reale
 > in `assets/changelog/<numero di versione>/<numero a due cifre>-<breve descrizione>.png` e la richiamano nel testo con un percorso relativo: nel changelog si vede direttamente come appare la UI della nuova versione.
 
+## 0.26.68
+
+- **PR #30 (flikos) assorbito: la UI del pannello si collega al servizio locale dell'host — dizionari en / ru / pt con copertura totale (1.402 chiavi ciascuno).** Pipeline portata (extract/codemod/merge/audit + test di guardia), codemod rieseguito su 0.26.67, cablaggio rifatto per il codice attuale, semantica di fallback zh verificata sul runtime locale effettivo dell'host (zh non degrada mai; una chiave mancante in ru/pt cade sull'inglese — documentazione corretta). I log e la faccia terminale /memory restano in cinese — confine documentato. Gate: typecheck pulito; vitest 239 file verdi (2466 passed); audit i18n 0 errori.
+
 ## [0.26.11] — 2026-10-27
 
 > Chiude quattro issue esterne: #12 (gli slug Room a due livelli venivano scartati in silenzio), #13 (la tabella di routing predefinita conteneva i percorsi locali dell'autore), #14 (la ricostruzione usava la tabella L0 dismessa come fonte dei fatti), #16 (proiezione del grafo attivabile solo via YAML). I dettagli di 0.26.2–0.26.10 sono nel CHANGELOG cinese: questo file è volutamente in ritardo.

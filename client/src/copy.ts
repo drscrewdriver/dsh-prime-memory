@@ -1,3 +1,4 @@
+import { tr } from './i18n.js';
 /**
  * 图谱相关文案的**单一来源**（issue #16）。
  *
@@ -20,12 +21,12 @@ export const GRAPH_BUDGET_LABEL = '图谱投影预算';
 
 /** 空态/提示里指路用：告诉用户开关到底在哪，且说清它管的是写面。 */
 export function graphEnableHint(): string {
-  return `在设置页「概览 → ${GRAPH_FEATURE_LABEL}」打开开关后，存量记忆会逐批投影成实体与关系。`;
+  return tr("在设置页「概览 → {p1}」打开开关后，存量记忆会逐批投影成实体与关系。", { p1: tr(GRAPH_FEATURE_LABEL) });
 }
 
 /** 开关下方的说明文案（未开/已开两态）。 */
 export function graphSwitchDesc(on: boolean): string {
   return on
-    ? '已开启：L1 记忆会投影成实体与关系，存量在启动/开启后逐批补齐（可与「图谱读工具」独立开关）'
-    : '默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时';
+    ? tr("已开启：L1 记忆会投影成实体与关系，存量在启动/开启后逐批补齐（可与「图谱读工具」独立开关）")
+    : tr("默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时");
 }

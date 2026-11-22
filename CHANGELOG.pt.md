@@ -158,6 +158,10 @@ e os números de versão obedecem ao [versionamento semântico](https://semver.o
   - Dependência do effect de assentamento rígido estreitada a [full] (findings F4: deixar clusterLayout fazia o effect engolir silenciosamente a transição de eixo).
 - Face de terminal (dsh-tui / paleta de comandos do Desktop de mesma fonte): versão oficializada (as duas listas divergiam — package.json 0.26.40-local.4 vs dsh.plugin.json 0.26.39-local.3, unificadas aqui); `/memory` na face de terminal.
 
+## 0.26.68
+
+- **PR #30 (flikos) absorvido: a UI do painel conecta-se ao serviço de locale do host — dicionários en / ru / pt com cobertura total (1.402 chaves cada).** Pipeline portado (extract/codemod/merge/audit + testes-guarda), codemod reexecutado sobre 0.26.67, cabeamento refeito para o código atual, semântica de fallback zh verificada contra o runtime de locale real do host (zh nunca degrada; chave ausente em ru/pt cai para o inglês — documentação corrigida). Logs e a face terminal /memory seguem em chinês — fronteira documentada. Portões: typecheck limpo; vitest 239 arquivos verdes (2466 passed); auditoria i18n 0 erros.
+
 ## [0.26.40-local.4] — 2026-11-13
 
 - Fallback do decoder GBK (alinhação literal ao spec D): `new TextDecoder('gbk')` no spawnImpl padrão ganha try/catch; decoder ausente cai para leitura em latin-1 com aviso, sem derrubar a janela.

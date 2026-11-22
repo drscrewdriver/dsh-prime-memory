@@ -19,6 +19,7 @@
  *   单击 = 进入 ego（BFS 跳数 = 球壳层数，520ms 插值过渡，相机自动框住壳层）；
  *   ego 中再点焦点 = 回 cluster；双击/Enter = 打开该实体来源记录（onPick）；Esc 退出。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { GraphFull } from '../tabs/graph-canvas-data.js';
 import { clipByWidth, degreeMapOf, hash32 } from '../tabs/graph-canvas-data.js';
@@ -552,15 +553,16 @@ export function Scene3D(props: {
 
     /** 当前帧的有效布局（过渡中为插值结果）。 */
     const activeLayout = (now: number): Map<string, Vec3> => {
-      const tr = transRef.current;
-      if (!tr) return layoutRef.current;
-      const k = (now - tr.start) / TRANSITION_MS;
+      // 局部名不能用 tr：遮蔽翻译函数（i18n-audit error），改 trans。
+      const trans = transRef.current;
+      if (!trans) return layoutRef.current;
+      const k = (now - trans.start) / TRANSITION_MS;
       if (k >= 1) {
-        layoutRef.current = tr.to;
+        layoutRef.current = trans.to;
         transRef.current = null;
-        return tr.to;
+        return trans.to;
       }
-      return lerpLayout(tr.from, tr.to, k);
+      return lerpLayout(trans.from, trans.to, k);
     };
 
     // 上一帧投影结果缓存（拾取用，屏幕坐标是现成的）
@@ -778,7 +780,7 @@ export function Scene3D(props: {
             used.add(cell);
             c.fillStyle = e.causal ? causalC : edgeBase;
             c.globalAlpha = 0.92;
-            c.fillText(e.relation, mx, my);
+            c.fillText(tr(e.relation), mx, my);
           }
           c.globalAlpha = 1;
         }
@@ -1002,12 +1004,10 @@ export function Scene3D(props: {
       >
         {mode === 'ego' ? (
           <span>
-            ego 壳层 · <b style={{ color: ui.accent }}>{(focusRef.current ? nodeById.get(focusRef.current)?.name : null) ?? '焦点'}</b> 在第 0 层，第 k 跳在第 k 层
-            <br />
-            点焦点/Esc 回全图 · 双击/Enter 打开记录
-          </span>
+            {tr("ego 壳层 ·")} <b style={{ color: ui.accent }}>{(focusRef.current ? nodeById.get(focusRef.current)?.name : null) ?? tr("焦点")}</b> {tr("在第 0 层，第 k 跳在第 k 层")} <br />
+            {tr("点焦点/Esc 回全图 · 双击/Enter 打开记录")} </span>
         ) : (
-          <span>左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录</span>
+          <span>{tr("左拖旋转 · shift 拖平移 · 滚轮缩放 · 单击聚焦成 ego · 双击开记录")}</span>
         )}
       </div>
 
@@ -1024,7 +1024,7 @@ export function Scene3D(props: {
               <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0', cursor: 'pointer', opacity: focusHalls.length === 0 || selected ? 1 : 0.55 }}
                 onClick={() => setFocusHalls((prev) => (prev.includes(h) ? prev.filter((x) => x !== h) : [...prev, h]))}
                 onDoubleClick={() => { colorTargetRef.current = h; colorInputRef.current?.click(); }}
-                title="单击选中/取消 · 双击改色"
+                title={tr("单击选中/取消 · 双击改色")}
               >
                 <span
                   onClick={(e) => { e.stopPropagation(); colorTargetRef.current = h; colorInputRef.current?.click(); }}
@@ -1035,7 +1035,7 @@ export function Scene3D(props: {
                     flex: 'none',
                   }}
                 />
-                <span style={{ color: ui.text }}>{hallLabel(h)}</span>
+                <span style={{ color: ui.text }}>{tr(hallLabel(h))}</span>
                 <span>{hallCounts.get(h) ?? 0}</span>
               </div>
             );
@@ -1084,10 +1084,10 @@ export function Scene3D(props: {
         >
           <div style={{ fontWeight: 600, color: 'var(--dsh-mem-text-1)' }}>{hoverMeta.name}</div>
           <div>
-            {hoverMeta.type} · 关系 {hoverMeta.degree} 条{hoverMeta.aging != null ? ` · 老化 ${hoverMeta.aging.toFixed(2)}` : ''}
+            {hoverMeta.type} {tr("· 关系")} {hoverMeta.degree} {tr("条")}{hoverMeta.aging != null ? tr("· 老化 {p1}", { p1: hoverMeta.aging.toFixed(2) }) : ''}
           </div>
-          <div style={{ color: 'var(--dsh-mem-text-3)' }}>Wing · {hallLabel(hoverMeta.hall)}</div>
-          {hoverMeta.source ? <div style={{ color: 'var(--dsh-mem-text-3)' }}>出处：{hoverMeta.source}</div> : null}
+          <div style={{ color: 'var(--dsh-mem-text-3)' }}>Wing · {tr(hallLabel(hoverMeta.hall))}</div>
+          {hoverMeta.source ? <div style={{ color: 'var(--dsh-mem-text-3)' }}>{tr("出处：")}{hoverMeta.source}</div> : null}
         </div>
       ) : null}
 
@@ -1111,14 +1111,13 @@ export function Scene3D(props: {
                 background: (k === 'hallFocus' ? axis === 'hall' && focusHalls.length > 0 : axis === k) ? 'rgba(127,177,255,0.14)' : 'transparent',
               }}
             >
-              {k === 'type' ? '类型' : k === 'hall' ? '八维' : '自选'}
+              {k === 'type' ? tr("类型") : k === 'hall' ? tr("八维") : tr("自选")}
             </button>
           ))}
         </span>
         {axis === 'hall' ? (
           <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            变异
-            <input type="range" min={0} max={1} step={0.05} value={variant} onChange={(e) => setVariant(Number(e.target.value))} />
+            {tr("变异")} <input type="range" min={0} max={1} step={0.05} value={variant} onChange={(e) => setVariant(Number(e.target.value))} />
           </label>
         ) : null}
         {/* 形态段控（单一容器）：球 | 圆盘 | 8字；选圆盘时右侧紧接其子风格 双臂|平铺|悬臂 */}
@@ -1136,7 +1135,7 @@ export function Scene3D(props: {
                 background: shape === s ? 'rgba(127,177,255,0.14)' : 'transparent',
               }}
             >
-              {s === 'sphere' ? '球' : s === 'disk' ? '盘状' : '8字'}
+              {s === 'sphere' ? tr("球") : s === 'disk' ? tr("盘状") : tr("8字")}
             </button>
           ))}
           {shape === 'disk' ? (
@@ -1154,7 +1153,7 @@ export function Scene3D(props: {
                     background: diskStyle === d ? 'rgba(127,177,255,0.14)' : 'transparent',
                   }}
                 >
-                  {d === 'disc' ? '圆盘' : d === 'legacy' ? '双臂' : d === 'spiral' ? '悬臂' : '平铺'}
+                  {d === 'disc' ? tr("圆盘") : d === 'legacy' ? tr("双臂") : d === 'spiral' ? tr("悬臂") : tr("平铺")}
                 </button>
               ))}
             </span>
@@ -1174,7 +1173,7 @@ export function Scene3D(props: {
                     background: eightStyle === e ? 'rgba(127,177,255,0.14)' : 'transparent',
                   }}
                 >
-                  {e === 'cluster' ? '成簇' : '连续'}
+                  {e === 'cluster' ? tr("成簇") : tr("连续")}
                 </button>
               ))}
             </span>
@@ -1182,11 +1181,10 @@ export function Scene3D(props: {
         </span>
         {shape === 'disk' && diskStyle === 'spiral' ? (
           <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 6 }}>
-            散度
-            <input type="range" min={0} max={1} step={0.05} value={armSpread} onChange={(e) => setArmSpread(Number(e.target.value))} />
+            {tr("散度")} <input type="range" min={0} max={1} step={0.05} value={armSpread} onChange={(e) => setArmSpread(Number(e.target.value))} />
           </label>
         ) : null}
-        {toggle('流转', flowOn, setFlowOn)}
+        {toggle(tr("流转"), flowOn, setFlowOn)}
         {flowOn && shape !== 'sphere' ? (
           <>
             <span style={{ display: 'inline-flex', gap: 0, border: ui.border, borderRadius: 8, overflow: 'hidden', marginLeft: 6 }}>
@@ -1205,36 +1203,32 @@ export function Scene3D(props: {
                       background: active ? 'rgba(127,177,255,0.14)' : 'transparent',
                     }}
                   >
-                    {f === 'auto' ? '自动' : f === 'spin' ? '自转' : '8字流'}
+                    {f === 'auto' ? tr("自动") : f === 'spin' ? tr("自转") : tr("8字流")}
                   </button>
                 );
               })}
             </span>
             <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              转速
-              <input type="range" min={0} max={1} step={0.01} value={Math.sqrt((flowSpeed - 0.2) / 2.8)} onChange={(e) => setFlowSpeed(0.2 + 2.8 * Math.pow(Number(e.target.value), 2))} />
+              {tr("转速")} <input type="range" min={0} max={1} step={0.01} value={Math.sqrt((flowSpeed - 0.2) / 2.8)} onChange={(e) => setFlowSpeed(0.2 + 2.8 * Math.pow(Number(e.target.value), 2))} />
             </label>
             <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              幅度
-              <input type="range" min={0} max={2} step={0.1} value={flowAmp} onChange={(e) => setFlowAmp(Number(e.target.value))} />
+              {tr("幅度")} <input type="range" min={0} max={2} step={0.1} value={flowAmp} onChange={(e) => setFlowAmp(Number(e.target.value))} />
             </label>
           </>
         ) : null}
-        {toggle('辉光', glowOn, setGlowOn)}
-        {toggle('边', edgesOn, setEdgesOn)}
-        {toggle('标签', labelsOn, setLabelsOn)}
-        {toggle('老化亮度', agingOn, setAgingOn)}
-        {toggle('呼吸', twinkleOn, setTwinkleOn)}
-        {toggle('漂移', driftOn, setDriftOn)}
-        {toggle(starry ? '星空底' : '白底', starry, setStarry)}
+        {toggle(tr("辉光"), glowOn, setGlowOn)}
+        {toggle(tr("边"), edgesOn, setEdgesOn)}
+        {toggle(tr("标签"), labelsOn, setLabelsOn)}
+        {toggle(tr("老化亮度"), agingOn, setAgingOn)}
+        {toggle(tr("呼吸"), twinkleOn, setTwinkleOn)}
+        {toggle(tr("漂移"), driftOn, setDriftOn)}
+        {toggle(starry ? tr("星空底") : tr("白底"), starry, setStarry)}
         <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          点
-          <input type="range" min={1.2} max={4} step={0.2} value={pointSize} onChange={(e) => setPointSize(Number(e.target.value))} />
+          {tr("点")} <input type="range" min={1.2} max={4} step={0.2} value={pointSize} onChange={(e) => setPointSize(Number(e.target.value))} />
         </label>
         {mode === 'ego' ? (
-          <NButton onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))} title="回到全图" style={{ color: ui.text, borderColor: ui.border }}>
-            回全图
-          </NButton>
+          <NButton onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))} title={tr("回到全图")} style={{ color: ui.text, borderColor: ui.border }}>
+            {tr("回全图")} </NButton>
         ) : null}
       </div>
     </div>

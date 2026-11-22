@@ -17,6 +17,10 @@ die Versionsnummern folgen der [semantischen Versionierung](https://semver.org/)
 > **Konvention für UI-Screenshots**: Einträge mit Oberflächenänderungen archivieren echte Screenshots unter
 > `assets/changelog/<Versionsnummer>/<zweistellige Nummer>-<Kurzbeschreibung>.png` und verweisen im Eintrag per relativer Pfadangabe darauf — im Changelog sieht man direkt, wie die neue Version aussieht.
 
+## 0.26.68
+
+- **PR #30 (flikos) absorbiert: Panel-UI an den Locale-Dienst des Hosts angebunden — Wörterbücher en / ru / pt mit voller Abdeckung (je 1.402 Schlüssel).** Pipeline übernommen (extract/codemod/merge/audit + Wachtests), Codemod auf 0.26.67 neu ausgeführt, Verkabelung für den aktuellen Code neu gemacht, zh-Fallback-Semantik gegen das ausgelieferte Locale-Runtime des Hosts verifiziert (zh degradiert nie; fehlende Schlüssel bei ru/pt fallen auf Englisch zurück — Doku korrigiert). Logs und das Terminal-Interface /memory bleiben Chinesisch — dokumentierte Grenze. Gates: typecheck sauber; vitest 239 Dateien grün (2466 passed); i18n-Audit 0 Fehler.
+
 ## [0.26.11] — 2026-10-27
 
 > Schließt vier externe Issues: #12 (zweistufige Room-Slugs wurden still verworfen), #13 (die Standard-Routentabelle enthielt die lokalen Pfade des Autors fest verdrahtet), #14 (Rebuild nutzte die stillgelegte L0-Tabelle als Faktenquelle), #16 (Graph-Projektion nur per YAML schaltbar). Details zu 0.26.2–0.26.10 stehen im chinesischen CHANGELOG — diese Datei hinkt bewusst hinterher.

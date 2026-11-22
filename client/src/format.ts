@@ -1,3 +1,4 @@
+import { tr } from './i18n.js';
 /** 跨 Tab 共用的格式化函数与类型词表目录。 */
 
 /**
@@ -53,10 +54,10 @@ export function fmtAgo(iso: string | null | undefined): string | null {
     if (!t) return null;
     let s = Math.floor((Date.now() - t) / 1000);
     if (s < 0) s = 0;
-    if (s < 45) return '刚刚';
-    if (s < 3600) return Math.floor(s / 60) + ' 分钟前';
-    if (s < 86400) return Math.floor(s / 3600) + ' 小时前';
-    return Math.floor(s / 86400) + ' 天前';
+    if (s < 45) return tr("刚刚");
+    if (s < 3600) return Math.floor(s / 60) + tr("分钟前");
+    if (s < 86400) return Math.floor(s / 3600) + tr("小时前");
+    return Math.floor(s / 86400) + tr("天前");
   } catch {
     return null;
   }

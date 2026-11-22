@@ -1,4 +1,6 @@
 /** 记忆设置分节的主面板：Tab 框架（概览 / 记忆 / 冲突 / 场景 / Hall / Room / 图谱 / 画像 / 成本 / 日志）。 */
+import { tr } from './i18n.js';
+import { useLocaleRevision } from './i18n-react.js';
 import { useEffect, useState } from 'react';
 import type { RpcFn } from './rpc.js';
 import { watchSidebarIcon } from './sidebar-icon.js';
@@ -51,6 +53,7 @@ const SKIN_OPTS: Array<[Skin, string]> = [
 ];
 
 export function MemoryPanel(props: { rpc: RpcFn }) {
+  useLocaleRevision(); // locale 变更 → 根重渲染 → 整棵子树的 tr() 文案随之刷新
   const rpc = props.rpc;
   const [tab, setTab] = useState('overview');
   const [skin, setSkinState] = useState<Skin>(() => getSkin());
@@ -86,8 +89,8 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
 
   return (
     <div className="dsh-mem-root" style={S.section}>
-      <h2 style={S.heading}>记忆 (Memory)</h2>
-      <p style={S.intro}>L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。</p>
+      <h2 style={S.heading}>{tr("记忆 (Memory)")}</h2>
+      <p style={S.intro}>{tr("L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。")}</p>
       {/* DRSC 依赖状态：顶部一条横幅，跨 12 个 tab 全局可见；ok 态自作 null 不占版面 */}
       <DrscHealthBanner rpc={rpc} />
       <div
@@ -100,13 +103,13 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
           marginBottom: 10,
         }}
       >
-        <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)', marginRight: 4 }}>皮肤</span>
+        <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)', marginRight: 4 }}>{tr("皮肤")}</span>
         {SKIN_OPTS.map((s) => (
           <button
             key={s[0]}
             className={skin === s[0] ? 'dsh-mem-tab dsh-mem-tab-on' : 'dsh-mem-tab'}
             onClick={() => switchSkin(s[0])}
-            title={`皮肤：${s[1]}`}
+            title={tr("皮肤：{p1}", { p1: s[1] })}
           >
             {s[1]}
           </button>
@@ -122,7 +125,7 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
                 setTab(t[0]!);
               }}
             >
-              {t[1]}
+              {tr(t[1])}
             </button>
           );
         })}

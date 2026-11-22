@@ -1,4 +1,5 @@
 /** Tab：L3 画像（只读文本 + 手动刷新）。 */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
@@ -29,18 +30,18 @@ export function PersonaTab(props: { rpc: RpcFn }) {
     <div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
         <span style={S.muted}>
-          {error ? '加载失败' : content === null ? '加载中…' : content ? content.length + ' 字符' : '未生成画像'}
+          {error ? tr("加载失败") : content === null ? tr("加载中…") : content ? content.length + tr("字符") : tr("未生成画像")}
         </span>
         <div style={S.grow} />
-        <NButton onClick={load}>刷新</NButton>
+        <NButton onClick={load}>{tr("刷新")}</NButton>
       </div>
       {error ? (
-        <div style={{ ...S.error, marginBottom: 10 }}>{'画像读取失败：' + error + '（点右上“刷新”重试）'}</div>
+        <div style={{ ...S.error, marginBottom: 10 }}>{tr("画像读取失败：") + error + tr("（点右上“刷新”重试）")}</div>
       ) : null}
       {content ? (
         <pre style={S.pre}>{content}</pre>
       ) : content === null ? null : (
-        <p style={S.intro}>画像尚未生成；蒸馏若干记忆后 L3 会自动产出。</p>
+        <p style={S.intro}>{tr("画像尚未生成；蒸馏若干记忆后 L3 会自动产出。")}</p>
       )}
     </div>
   );

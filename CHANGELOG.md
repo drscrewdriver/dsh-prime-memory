@@ -1,3 +1,17 @@
+## 0.26.68
+
+**吸收 PR #30（flikos）：面板界面接入宿主 locale 服务 —— en / ru / pt 三语字典全量落地（各 1,402 键）。**
+
+PR #30 交付了完整的 i18n 管线（key = 中文原文 gettext 式、zh 运行期恒等派生、AST codemod 幂等改写、audit 静态审计、seed 式 merge 更新器）与 en/ru 全量字典。吸收遵循 #34 先例：**只取源码、丢 dist 产物**；管线资产 13 文件落地后，在 0.26.67 基线上重跑 codemod 再生 44 文件 1,458 处改写（base 0.26.35 → 0.26.67 差 42+ 提交，面板 diff 不能直接落——管线的幂等重跑正是为此设计）。
+
+- **管线**：`client/src/i18n.ts / i18n-core.ts / i18n-react.ts`（可选服务懒解析 + 200/1000/3000ms 有界重试；注册/bind 分开 try 防 bundle 双实例锁死；subscribeLocale 未就绪先登记）+ `scripts/i18n-{extract,codemod,merge,audit}.mjs` + `i18n-overrides.json` + `tests/i18n-dict.test.ts` + `docs/i18n.md`。
+- **字典**：en / ru 沿用 flikos 的 1,169 键基座（merge 自动清 4 个消亡键）；0.26.36–0.26.67 的 UI 增量（外部记忆 9 家驱动面、3D 星系词表、角色词表等）**237 键由维护者补译**；**pt 为全量第四语 1,402 键**（merge / audit / 守卫测试同步扩四语）。
+- **接线**（PR ride-along 中与旧面板耦合的部分按 0.26.67 现状重做）：`entry.tsx` installLocale + 两处 onLocaleChange 重注册（设置分节 label 与侧栏「记忆库」行都是注册时求值）；`panel.tsx` / `ExplorerPage.tsx` / `MemoryModePill.tsx` 根组件挂 `useLocaleRevision`；33 处模块级标签表改**消费点** `tr()` 包装（codemod 刻意不包 bundle 期求值的表——不采用 flikos 在 CostTab 的表内包装法，那会在 bundle 期冻结）；Scene3D 局部 `tr` 遮蔽改名。
+- **语义闸（落地前定谳）**：宿主 `@deepseek-ai/dsh-client-locale@0.2.2-rc.3` 的 `LocaleRuntime` 查找链为 `lookup(ns, chain) ?? lookup('common') ?? key`，zh 链 `['zh','en']`；插件 zh 字典由 `identityOf(dicts.en)` 派生——与 en 同键集、运行期不可脱节 → **zh 用户永不降级**，评审时 flag 的 zh→en 劫持证伪。同时确认 PR 一处文档偏差：ru/pt 缺键实际先降到**英文**（链终点 en）而非中文，docs 已修正。
+- **刻意不做**（写入 docs/i18n.md 已知边界）：host 侧诊断日志保持中文（要与上游 issue 逐字对照）；/memory 终端面（TUI）暂保持中文（host 侧无 locale 事实源，另行立项）；notice 成品字符串需「错误码+参数」契约改造，另行立项；模型生成内容不翻。
+
+门禁：`npm run typecheck` 三工程干净；`vitest` 239 文件全绿（2466 passed / 1 skipped，含扩到四语的 i18n-dict 守卫 9 例；memory-md-sync 并行脆弱用例单独复跑 13/13 定责非本改动）；`i18n-audit` **0 error**；smoke / verify-catalog 通过。感谢 flikos —— 管线成熟度极高（自查修掉 7 个真 bug：订阅早于就绪、注册失败即锁死中文、模块级标签冻结、模板参数漏翻、拼接空格、同形异义「关闭」、host 下发徽标），吸收全程未发现新的设计缺陷。
+
 ## 0.26.65
 
 - i18n: add Portuguese (pt-BR) locale — package metadata and README/INSTALL/CHANGELOG mirrors.

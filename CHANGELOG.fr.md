@@ -17,6 +17,10 @@ et les numéros de version respectent la [gestion sémantique de version](https:
 > **Convention des captures d'écran d'interface** : les entrées apportant des changements d'interface conservent une capture réelle
 > dans `assets/changelog/<numéro de version>/<numéro à deux chiffres>-<résumé>.png` et y font référence par un chemin relatif : on voit directement dans le journal à quoi ressemble l'interface de la nouvelle version.
 
+## 0.26.68
+
+- **PR #30 (flikos) absorbée : l'UI du panel branchée au service de locale de l'hôte — dictionnaires en / ru / pt à couverture totale (1 402 clés chacun).** Pipeline porté (extract/codemod/merge/audit + tests gardiens), codemod relancé sur 0.26.67, câblage refait pour le code actuel, sémantique du fallback zh vérifiée contre le runtime de locale livré par l'hôte (zh ne dégrade jamais ; une clé manquante en ru/pt retombe sur l'anglais — doc corrigée). Les logs et l'interface terminal /memory restent en chinois — limite documentée. Gates : typecheck propre ; vitest 239 fichiers verts (2466 passed) ; audit i18n 0 erreur.
+
 ## [0.26.11] — 2026-10-27
 
 > Ferme quatre issues externes : #12 (les slugs Room à deux niveaux étaient silencieusement ignorés), #13 (la table de routage par défaut codait en dur les chemins locaux de l'auteur), #14 (la reconstruction utilisait la table L0 retirée comme source de faits), #16 (projection du graphe uniquement réglable via YAML). Le détail de 0.26.2–0.26.10 se trouve dans le CHANGELOG chinois — ce fichier est en retard par choix.

@@ -11,6 +11,7 @@
  * - 四态文案各自给「影响说明」，并写明 desktop 只能手改 profile + pnpm install；
  * - 只展示不执行：改 profile 是高危动作（并发重写/BOM 有历史事故），复制文案由用户自己跑。
  */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { DrscHealthResponse } from '../../../src/contract.js';
@@ -38,13 +39,13 @@ interface Tone {
 function toneOf(h: DrscHealthResponse): Tone {
   switch (h.state) {
     case 'missing':
-      return { title: '未安装参考会话库（DRSC）', style: 'bannerError' };
+      return { title: tr("未安装参考会话库（DRSC）"), style: 'bannerError' };
     case 'not-running':
-      return { title: 'DRSC 已安装但未启用', style: 'bannerWarn' };
+      return { title: tr("DRSC 已安装但未启用"), style: 'bannerWarn' };
     case 'stale':
-      return { title: 'DRSC 投影库已过期', style: 'bannerWarn' };
+      return { title: tr("DRSC 投影库已过期"), style: 'bannerWarn' };
     default:
-      return { title: '无法读取 DRSC 投影库', style: 'bannerNeutral' };
+      return { title: tr("无法读取 DRSC 投影库"), style: 'bannerNeutral' };
   }
 }
 
@@ -102,25 +103,24 @@ export function DrscHealthBanner({ rpc }: { rpc: RpcFn }) {
     <div style={{ ...S.bannerBase, ...toneStyle }}>
       <div style={{ fontWeight: 600, marginBottom: 4 }}>{tone.title}</div>
       <div style={{ color: 'var(--dsh-mem-text-3)' }}>
-        影响：蒸馏背景参考与跨会话检索会为空（记忆本身仍可捕获与检索本库）。
-      </div>
+        {tr("影响：蒸馏背景参考与跨会话检索会为空（记忆本身仍可捕获与检索本库）。")} </div>
       {health.state === 'stale' && health.lastSyncAt !== null ? (
         <div style={{ color: 'var(--dsh-mem-text-3)', marginTop: 2 }}>
-          最后同步：{fmtTime(new Date(health.lastSyncAt).toISOString())}
-          {lagHours === null ? '' : `（滞后约 ${lagHours} 小时）`}
+          {tr("最后同步：")}{fmtTime(new Date(health.lastSyncAt).toISOString())}
+          {lagHours === null ? '' : tr("（滞后约 {p1} 小时）", { p1: lagHours })}
         </div>
       ) : null}
       {health.state === 'unknown' && health.error ? (
-        <div style={{ color: 'var(--dsh-mem-text-3)', marginTop: 2 }}>探针：{health.error}</div>
+        <div style={{ color: 'var(--dsh-mem-text-3)', marginTop: 2 }}>{tr("探针：")}{health.error}</div>
       ) : null}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-        <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>修复指引（可复制）</span>
-        <button className="dsh-mem-tab" onClick={() => void copy()} title="复制修复指引">
-          {copied ? '已复制' : '复制'}
+        <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{tr("修复指引（可复制）")}</span>
+        <button className="dsh-mem-tab" onClick={() => void copy()} title={tr("复制修复指引")}>
+          {copied ? tr("已复制") : tr("复制")}
         </button>
       </div>
       <pre ref={codeRef} style={S.bannerCode}>
-        {GUIDE}
+        {tr(GUIDE)}
       </pre>
     </div>
   );

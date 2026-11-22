@@ -8,6 +8,7 @@
  * 列注册态、显式回显「探活是镜像不是真探」、展示影子账/出站队列计数。
  * 总闸关（默认）时只出一条「已关闭」说明卡；服务端保证零外呼。
  */
+import { tr } from '../i18n.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { ExtDriversResponse, ExtSyncStatusResponse } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
@@ -57,7 +58,7 @@ interface DriverDraft {
 }
 
 function errMsg(r: { ok?: boolean; error?: { message?: string } } | undefined): string {
-  return r && r.error && r.error.message ? r.error.message : 'RPC 错误';
+  return r && r.error && r.error.message ? r.error.message : tr("RPC 错误");
 }
 
 const SHADOW_STATE_LABELS: Record<string, string> = {
@@ -179,13 +180,13 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
           setArmInfo({ armed: r.value.armed, reason: r.value.reason });
         }
       })
-      .catch(() => setArmInfo({ armed: false, reason: '写面探测失败' }));
+      .catch(() => setArmInfo({ armed: false, reason: tr("写面探测失败") }));
     // 导入面探票：scope:'import' 不要求 configWritable，所以“不能写 profile 的宿主”仍应能导入。
     rpc('dsh-memory/ext-config-arm', { issue: false, scope: 'import' })
       .then((r) => {
         if (r && r.ok) setImportArm({ armed: r.value.armed, reason: r.value.reason });
       })
-      .catch(() => setImportArm({ armed: false, reason: '导入面探测失败' }));
+      .catch(() => setImportArm({ armed: false, reason: tr("导入面探测失败") }));
     // 导入进度：只在有任务时轮询会简单些，但“上一轮结果”必须刷新就能看到（事后凭证）。
     rpc('dsh-memory/ext-import-status', {})
       .then((r) => {
@@ -206,7 +207,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
       .then((r) => {
         if (r && r.ok) {
           const v = r.value as { healthy?: boolean; notice?: string };
-          setProbeMsg(`${driverId}: ${v.notice ?? (v.healthy ? '健康' : '不健康')}`);
+          setProbeMsg(`${driverId}: ${v.notice ?? (v.healthy ? tr("健康") : tr("不健康"))}`);
         } else setProbeMsg(`${driverId}: ${errMsg(r)}`);
       })
       .catch((e: unknown) => setProbeMsg(`${driverId}: ${String((e as Error)?.message || e)}`));
@@ -228,7 +229,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
         }
         const a = r.value;
         if (a.armed !== true || a.nonce === undefined) {
-          setWriteMsg(a.reason ?? '写面未就绪');
+          setWriteMsg(a.reason ?? tr("写面未就绪"));
           return;
         }
         const body = {
@@ -266,7 +267,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
         }
         const a = r.value;
         if (a.armed !== true || a.nonce === undefined) {
-          setWriteMsg(a.reason ?? '写面未就绪');
+          setWriteMsg(a.reason ?? tr("写面未就绪"));
           return;
         }
         const w = await rpc('dsh-memory/ext-driver-remove', { nonce: a.nonce, id });
@@ -279,8 +280,8 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
         setWriteMsg(
           (v.notice ? '⚠ ' + v.notice + ' ' : '') +
             (v.removed
-              ? '已从 profile 移除 ' + id + '，重载后不再装配' + (v.shadows > 0 ? '（' + v.shadows + ' 条影子账保留，远端数据不会因此删除）' : '')
-              : '配置里没有这个驱动：' + id),
+              ? tr("已从 profile 移除") + id + tr("，重载后不再装配") + (v.shadows > 0 ? '（' + v.shadows + tr("条影子账保留，远端数据不会因此删除）") : '')
+              : tr("配置里没有这个驱动：") + id),
         );
         load();
       })
@@ -309,7 +310,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
         }
         const a = r.value;
         if (a.armed !== true || a.nonce === undefined) {
-          setWriteMsg(a.reason ?? '写面未就绪');
+          setWriteMsg(a.reason ?? tr("写面未就绪"));
           return;
         }
         const w = await rpc('dsh-memory/ext-config-enable', { nonce: a.nonce, enabled: want });
@@ -345,7 +346,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
         }
         const a = r.value;
         if (a.armed !== true || a.nonce === undefined) {
-          setWriteMsg(a.reason ?? '导入面未就绪');
+          setWriteMsg(a.reason ?? tr("导入面未就绪"));
           return;
         }
         const w = await rpc('dsh-memory/ext-import-start', { nonce: a.nonce, driverId, ...(restartImport ? { restart: true } : {}) });
@@ -354,7 +355,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
           setWriteMsg(errMsg(w));
           return;
         }
-        setWriteMsg('导入任务已受理，进度在本页下方刷新（可中断，断点保留）。');
+        setWriteMsg(tr("导入任务已受理，进度在本页下方刷新（可中断，断点保留）。"));
         load();
       })
       .catch((e: unknown) => setWriteMsg(String((e as Error)?.message || e)));
@@ -398,31 +399,24 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
   return (
     <div>
       <p style={S.intro}>
-        外部记忆服务驱动（Mem0 / Hindsight / OpenViking / Honcho / RetainDB / Supermemory / Holographic / ByteRover / Mnemon Native）。
-        总闸与驱动接入均在本面（写入 profile，<strong>重载后装配生效</strong>）；<strong>驱动配置仅面板可改，会话/模型无此能力</strong>；
-        总闸开着时，同步档位与推/拉热闸不需重载即生效。
-        与「来源」页的外部记忆文件导入（Connect / memport）是两个子系统，互不相干。
-      </p>
+        {tr("外部记忆服务驱动（Mem0 / Hindsight / OpenViking / Honcho / RetainDB / Supermemory / Holographic / ByteRover / Mnemon Native）。 总闸与驱动接入均在本面（写入 profile，")}<strong>{tr("重载后装配生效")}</strong>）；<strong>{tr("驱动配置仅面板可改，会话/模型无此能力")}</strong>{tr("； 总闸开着时，同步档位与推/拉热闸不需重载即生效。 与「来源」页的外部记忆文件导入（Connect / memport）是两个子系统，互不相干。")} </p>
       {/* 遍历面的限制必须写在入口处：不然“导入到本地库”对没有遍历端点的家就是个灰按钮，
           用户以为插件坏了。而导入本身不是重载级动作，也不该让人白等重启。 */}
       <p style={S.detail}>
-        「导入到本地库」是<strong>运行期动作，不需重载</strong>：把远端已有条目搬进本地 L1 检索库（逐条向量化，可中断、断点保留）。
-        它只能走各家的<strong>遍历端点</strong>，所以并非家家能导——ByteRover 只提供按查询词检索，无遍历面，导入对它不可用；
-        Mnemon Native 遍历无 offset 语义，只有单页上限。HTTP 家的远端分页各不相同，导入的“取完了/达上限”按实际收尾如实报告。
-      </p>
+        {tr("「导入到本地库」是")}<strong>{tr("运行期动作，不需重载")}</strong>{tr("：把远端已有条目搬进本地 L1 检索库（逐条向量化，可中断、断点保留）。 它只能走各家的")}<strong>{tr("遍历端点")}</strong>{tr("，所以并非家家能导——ByteRover 只提供按查询词检索，无遍历面，导入对它不可用； Mnemon Native 遍历无 offset 语义，只有单页上限。HTTP 家的远端分页各不相同，导入的“取完了/达上限”按实际收尾如实报告。")} </p>
 
       {error ? <div style={S.hint}>{'⚠ ' + error}</div> : null}
 
       {liveSet !== null ? (
         <div className="dsh-mem-card" style={S.card}>
           <div style={S.cardHead}>
-            <strong>同步开关（运行时）</strong>
+            <strong>{tr("同步开关（运行时）")}</strong>
             <span style={S.muted}>
               {gate.blocked
-                ? '总闸未开：本区暂不可用'
+                ? tr("总闸未开：本区暂不可用")
                 : liveSet.supported
-                  ? '热生效 · 部署配置作安装面默认'
-                  : '当前宿主不支持运行时写入（仅部署配置生效）'}
+                  ? tr("热生效 · 部署配置作安装面默认")
+                  : tr("当前宿主不支持运行时写入（仅部署配置生效）")}
             </span>
             <div style={S.grow} />
             <NButton
@@ -436,7 +430,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
                 toggleGate(false);
               }}
             >
-              {pendingGateOff ? '再点一下确认停用' : '停用外部记忆'}
+              {pendingGateOff ? tr("再点一下确认停用") : tr("停用外部记忆")}
             </NButton>
           </div>
           {pendingGateOff ? (
@@ -449,7 +443,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
             </div>
           ) : null}
           <div style={{ ...S.flexRow, marginTop: 6, flexWrap: 'wrap' }}>
-            {([['', '跟随部署'], ['shadow-read', '只读融合'], ['push-only', '只推送'], ['two-way', '双向']] as const).map(([v, label]) => (
+            {([['', tr("跟随部署")], ['shadow-read', tr("只读融合")], ['push-only', tr("只推送")], ['two-way', tr("双向")]] as const).map(([v, label]) => (
               <NButton
                 key={v || 'inherit'}
                 onClick={() =>
@@ -465,13 +459,13 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
               </NButton>
             ))}
             <NButton disabled={!liveSet.supported || gate.blocked} onClick={() => setExt({ extPushEnabled: !liveSet.push })}>
-              {(liveSet.push ? '☑ ' : '☐ ') + '推送出站'}
+              {(liveSet.push ? '☑ ' : '☐ ') + tr("推送出站")}
             </NButton>
             <NButton disabled={!liveSet.supported || gate.blocked} onClick={() => setExt({ extPullEnabled: !liveSet.pull })}>
-              {(liveSet.pull ? '☑ ' : '☐ ') + '拉取入站'}
+              {(liveSet.pull ? '☑ ' : '☐ ') + tr("拉取入站")}
             </NButton>
             <NButton disabled={!liveSet.supported || gate.blocked} onClick={() => setExt({ extAllowHardDelete: !liveSet.hard })}>
-              {(liveSet.hard ? '⚠ ' : '☐ ') + '允许硬删远端'}
+              {(liveSet.hard ? '⚠ ' : '☐ ') + tr("允许硬删远端")}
             </NButton>
             {/* 污染隔离闸：本面第一个默认开的开关（默认值在服务端，不是这里）。
                 关掉是静默降质，所以必须两段式：先看后果，再确认。 */}
@@ -479,13 +473,13 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
               disabled={!liveSet.supported}
               onClick={() => (liveSet.isolate ? setPendingIsolateOff(true) : setExt({ extImportIsolate: true }))}
             >
-              {(liveSet.isolate ? '☑ ' : '☐ ') + '外源条目不参与本地蒸馏'}
+              {(liveSet.isolate ? '☑ ' : '☐ ') + tr("外源条目不参与本地蒸馏")}
             </NButton>
           </div>
           <div style={{ ...S.detail, marginTop: 4 }}>
             {gate.blocked
               ? gate.why
-              : '双向 = 推送 + 拉取；与 md 投射同开时门控会把双向降为只读融合。硬删会传导到不支持的远端且不可回滚。'}
+              : tr("双向 = 推送 + 拉取；与 md 投射同开时门控会把双向降为只读融合。硬删会传导到不支持的远端且不可回滚。")}
           </div>
           {/* 关闭隔离闸的第二段：把“不报错的降质”说明白再让点。 */}
           {pendingIsolateOff && liveSet.isolate ? (
@@ -497,9 +491,8 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
                   setExt({ extImportIsolate: false });
                 }}
               >
-                确认关闭隔离
-              </NButton>
-              <NButton onClick={() => setPendingIsolateOff(false)}>取消</NButton>
+                {tr("确认关闭隔离")} </NButton>
+              <NButton onClick={() => setPendingIsolateOff(false)}>{tr("取消")}</NButton>
             </div>
           ) : null}
         </div>
@@ -508,21 +501,20 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
       {drivers && !drivers.enabled ? (
         <div className="dsh-mem-card" style={S.card}>
           {/* 标题按“配置意图”分流：已写开却还没装配 = 待重载，不能一律说“已关闭”。 */}
-          <strong>{drivers.configuredEnabled === true ? '外部记忆待重载装配' : '外部记忆已关闭'}</strong>
+          <strong>{drivers.configuredEnabled === true ? tr("外部记忆待重载装配") : tr("外部记忆已关闭")}</strong>
           <div style={{ ...S.muted, marginTop: 4 }}>
             {drivers.notice ?? gateStateText(false, drivers.configuredEnabled)}
           </div>
           <div style={{ ...S.flexRow, marginTop: 8 }}>
             <NButton
               disabled={!affordance.enabled}
-              title={affordance.enabled ? '将 ext_memory.enabled=true 写入 profile（重载后装配生效）' : affordance.why}
+              title={affordance.enabled ? tr("将 ext_memory.enabled=true 写入 profile（重载后装配生效）") : affordance.why}
               onClick={() => toggleGate(true)}
             >
-              开启外部记忆
-            </NButton>
+              {tr("开启外部记忆")} </NButton>
             <span style={S.muted}>
               {affordance.enabled
-                ? '开启 = 写 profile + 重载；本插件无热重载通道，重载前上面那排同步开关不会生效。'
+                ? tr("开启 = 写 profile + 重载；本插件无热重载通道，重载前上面那排同步开关不会生效。")
                 : affordance.why}
             </span>
           </div>
@@ -532,18 +524,17 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
           <div style={{ ...S.flexRow, margin: '8px 0 12px' }}>
             <span style={S.muted}>
               {drivers
-                ? drivers.drivers.length + ' 个驱动 · 同步档 ' + drivers.syncMode
-                : '加载中…'}
-              {sync ? ' · 出站待同步 ' + sync.outbox.pending + (sync.outbox.dead > 0 ? ' · 死信 ' + sync.outbox.dead : '') : ''}
+                ? drivers.drivers.length + tr("个驱动 · 同步档") + drivers.syncMode
+                : tr("加载中…")}
+              {sync ? tr("· 出站待同步") + sync.outbox.pending + (sync.outbox.dead > 0 ? tr("· 死信") + sync.outbox.dead : '') : ''}
             </span>
             <div style={S.grow} />
             <NButton
               disabled={!affordance.enabled}
               onClick={() => setDraft({ mode: 'create', id: '', type: 'mem0', enabled: true, endpoint: '', apiKey: '', space: '', extra: '' })}
             >
-              新增驱动
-            </NButton>
-            <NButton onClick={load}>刷新</NButton>
+              {tr("新增驱动")} </NButton>
+            <NButton onClick={load}>{tr("刷新")}</NButton>
           </div>
 
           {/* 开着态也要能说话：配置与装配不一致（刚改完总闸未重载）与待生效行都挂在这里。
@@ -560,11 +551,11 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
               <div style={S.cardHead}>
                 <strong>{d.driverId}</strong>
                 <span style={S.muted}>
-                  {'· ' + d.typeId + (d.enabled ? (d.healthy ? ' · 健康' : ' · 未探活/异常') : ' · 已停用')}
-                  {d.outboxPending > 0 ? ' · 待推 ' + d.outboxPending : ''}
+                  {'· ' + d.typeId + (d.enabled ? (d.healthy ? tr("· 健康") : tr("· 未探活/异常")) : tr("· 已停用"))}
+                  {d.outboxPending > 0 ? tr("· 待推") + d.outboxPending : ''}
                 </span>
                 <div style={S.grow} />
-                <NButton onClick={() => probe(d.driverId)}>探活</NButton>
+                <NButton onClick={() => probe(d.driverId)}>{tr("探活")}</NButton>
                 {/* 编辑预填 endpoint/space(非机密);apiKey/extra 留空 = 保留原值。 */}
                 <NButton
                   disabled={!affordance.enabled}
@@ -572,55 +563,54 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
                     setDraft({ mode: 'edit', id: d.driverId, type: d.typeId, enabled: d.enabled, endpoint: d.endpoint, apiKey: '', space: d.space, extra: '' })
                   }
                 >
-                  编辑
-                </NButton>
+                  {tr("编辑")} </NButton>
                 <NButton
                   disabled={!affordance.enabled}
                   onClick={() => (removeStep(pendingRemove, d.driverId) === 'commit' ? removeDriver(d.driverId) : setPendingRemove(d.driverId))}
                 >
-                  {pendingRemove === d.driverId ? '确认删除' : '删除'}
+                  {pendingRemove === d.driverId ? tr("确认删除") : tr("删除")}
                 </NButton>
                 {/* 导入到本地库：走 scope:'import' 票，不依赖配置写能力；不可用时必须说原因。 */}
                 <NButton
                   disabled={!importable.enabled || !d.enabled}
-                  title={!importable.enabled ? importable.why : d.enabled ? '' : '该驱动已停用，先启用再导入'}
+                  title={!importable.enabled ? importable.why : d.enabled ? '' : tr("该驱动已停用，先启用再导入")}
                   onClick={() => setPendingImport(pendingImport === d.driverId ? null : d.driverId)}
                 >
-                  {pendingImport === d.driverId ? '确认开始导入' : '导入到本地库'}
+                  {pendingImport === d.driverId ? tr("确认开始导入") : tr("导入到本地库")}
                 </NButton>
               </div>
               {/* 导入前把量级与成本说清：逐条向量化 + md 投射会生成等量文件，不说不就是预览按钮。 */}
               {pendingImport === d.driverId ? (
                 <div style={{ ...S.hint, marginTop: 4 }}>
                   {importWarningText({ driverId: d.driverId, maxItems: IMPORT_DEFAULT_MAX, resumedFrom: resumePoint(importProg, d.driverId), memExportOn: drivers?.mdExportOn === true })}
-                  <NButton onClick={() => startImport(d.driverId)}>开始导入</NButton>
+                  <NButton onClick={() => startImport(d.driverId)}>{tr("开始导入")}</NButton>
                   <NButton onClick={() => setRestartImport(!restartImport)}>
-                    {(restartImport ? '☑ ' : '☐ ') + '从头上重新开始（清断点）'}
+                    {(restartImport ? '☑ ' : '☐ ') + tr("从头上重新开始（清断点）")}
                   </NButton>
-                  <NButton onClick={() => setPendingImport(null)}>取消</NButton>
+                  <NButton onClick={() => setPendingImport(null)}>{tr("取消")}</NButton>
                 </div>
               ) : null}
               {/* 删除前就把账本数目说清:没有这个数,"删除远端接入"看起来就像个无成本按钮。 */}
               {pendingRemove === d.driverId ? (
                 <div style={{ ...S.hint, marginTop: 4 }}>
                   {removeWarningText(d.driverId, d.shadows, d.outboxPending)}
-                  <NButton onClick={() => setPendingRemove(null)}>取消</NButton>
+                  <NButton onClick={() => setPendingRemove(null)}>{tr("取消")}</NButton>
                 </div>
               ) : null}
               {d.configuredSecrets.length > 0 ? (
-                <div style={{ ...S.detail }}>{'已配置密钥: ' + d.configuredSecrets.join(', ') + '（值不回显）'}</div>
+                <div style={{ ...S.detail }}>{tr("已配置密钥:") + d.configuredSecrets.join(', ') + tr("（值不回显）")}</div>
               ) : null}
-              {d.lastError ? <div style={{ ...S.hint, marginTop: 4 }}>{'最近错误: ' + d.lastError}</div> : null}
+              {d.lastError ? <div style={{ ...S.hint, marginTop: 4 }}>{tr("最近错误:") + d.lastError}</div> : null}
             </div>
           ))}
 
           {drivers && drivers.drivers.length === 0 ? (
-            <div style={{ ...S.muted, marginTop: 8 }}>尚无驱动登记：点右上「新增驱动」接入一家外部记忆服务（写入 profile，重载后装配）。</div>
+            <div style={{ ...S.muted, marginTop: 8 }}>{tr("尚无驱动登记：点右上「新增驱动」接入一家外部记忆服务（写入 profile，重载后装配）。")}</div>
           ) : null}
 
           {shadowRows.length > 0 ? (
             <div style={{ marginTop: 12 }}>
-              <div style={S.muted}>影子账本：</div>
+              <div style={S.muted}>{tr("影子账本：")}</div>
               <div style={{ ...S.detail, marginTop: 4 }}>
                 {shadowRows.map(([st, n]) => (SHADOW_STATE_LABELS[st] ?? st) + ' ' + n).join(' / ')}
               </div>
@@ -632,10 +622,10 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
           {importProg !== null && (importProg.running || importProg.last !== undefined) ? (
             <div className="dsh-mem-card" style={{ ...S.card, marginTop: 12 }}>
               <div style={S.cardHead}>
-                <strong>{importProg.running ? '导入进行中' : '上次导入结果'}</strong>
+                <strong>{importProg.running ? tr("导入进行中") : tr("上次导入结果")}</strong>
                 <span style={S.muted}>
                   {importProg.running
-                    ? `驱动 ${importProg.driverId} · 已到第 ${importProg.offset} 条 · 新增 ${importProg.imported} · 跳过 ${importProg.skipped}`
+                    ? tr("驱动 {p1} · 已到第 {p2} 条 · 新增 {p3} · 跳过 {p4}", { p1: importProg.driverId, p2: importProg.offset, p3: importProg.imported, p4: importProg.skipped })
                     : (() => {
                         const l = importProg.last!;
                         return importResultText({
@@ -645,30 +635,30 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
                       })()}
                 </span>
                 <div style={S.grow} />
-                {importProg.running ? <NButton onClick={cancelImport}>中断导入</NButton> : null}
-                {importProg.running ? <NButton onClick={load}>刷新进度</NButton> : null}
+                {importProg.running ? <NButton onClick={cancelImport}>{tr("中断导入")}</NButton> : null}
+                {importProg.running ? <NButton onClick={load}>{tr("刷新进度")}</NButton> : null}
               </div>
-              {importProg.error ? <div style={{ ...S.hint, marginTop: 4 }}>{'⚠ 导入失败：' + importProg.error}</div> : null}
+              {importProg.error ? <div style={{ ...S.hint, marginTop: 4 }}>{tr("⚠ 导入失败：") + importProg.error}</div> : null}
             </div>
           ) : null}
 
           {conflicts && conflicts.enabled && conflicts.items.length > 0 ? (
             <div style={{ marginTop: 12 }}>
               <div style={S.muted}>
-                {'同步冲突 ' + conflicts.open + ' 条' +
+                {tr("同步冲突") + conflicts.open + tr("条") +
                   Object.entries(conflicts.byKind).map(([k, n]) => ' · ' + (CONFLICT_KIND_LABELS[k] ?? k) + ' ' + n).join('')}
               </div>
               {conflicts.items.map((c) => (
                 <div key={c.conflictId} className="dsh-mem-card" style={{ ...S.card, marginTop: 6 }}>
                   <div style={S.cardHead}>
                     <strong>{CONFLICT_KIND_LABELS[c.kind] ?? c.kind}</strong>
-                    <span style={S.muted}>{'· ' + c.driverId + (c.externalId ? ' · 远端 ' + c.externalId : '')}</span>
+                    <span style={S.muted}>{'· ' + c.driverId + (c.externalId ? tr("· 远端") + c.externalId : '')}</span>
                     <div style={S.grow} />
-                    <NButton onClick={() => resolveConflict(c.conflictId, 'resolve')}>裁决</NButton>
-                    <NButton onClick={() => resolveConflict(c.conflictId, 'dismiss')}>忽略</NButton>
+                    <NButton onClick={() => resolveConflict(c.conflictId, 'resolve')}>{tr("裁决")}</NButton>
+                    <NButton onClick={() => resolveConflict(c.conflictId, 'dismiss')}>{tr("忽略")}</NButton>
                   </div>
-                  {c.localPreview ? <div style={S.detail}>{'本地: ' + c.localPreview}</div> : null}
-                  {c.remotePreview ? <div style={{ ...S.detail, marginTop: 2 }}>{'远端: ' + c.remotePreview}</div> : null}
+                  {c.localPreview ? <div style={S.detail}>{tr("本地:") + c.localPreview}</div> : null}
+                  {c.remotePreview ? <div style={{ ...S.detail, marginTop: 2 }}>{tr("远端:") + c.remotePreview}</div> : null}
                 </div>
               ))}
             </div>
@@ -679,14 +669,14 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
       )}
 
       {armInfo !== null && !armInfo.armed ? (
-        <div style={{ ...S.hint, marginTop: 8 }}>{'驱动配置不可写：' + affordance.why}</div>
+        <div style={{ ...S.hint, marginTop: 8 }}>{tr("驱动配置不可写：") + affordance.why}</div>
       ) : null}
       {writeMsg !== '' ? <div style={{ ...S.hint, marginTop: 8 }}>{writeMsg}</div> : null}
 
       {draft !== null ? (
         <NModal
           open={true}
-          title={draft.mode === 'create' ? '新增外部记忆驱动' : '编辑驱动：' + draft.id}
+          title={draft.mode === 'create' ? tr("新增外部记忆驱动") : tr("编辑驱动：") + draft.id}
           onClose={() => setDraft(null)}
         >
           <div style={{ display: 'grid', gap: 8 }}>
@@ -702,7 +692,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
               </label>
             ))}
             <label style={{ display: 'grid', gap: 2 }}>
-              <span style={S.muted}>type（9 家之一）</span>
+              <span style={S.muted}>{tr("type（9 家之一）")}</span>
               <select
                 className="dsh-mem-input"
                 value={draft.type}
@@ -717,13 +707,12 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
             </label>
             <label style={{ ...S.muted, display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />
-              启用
-            </label>
+              {tr("启用")} </label>
             <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <NButton onClick={saveDraft}>保存</NButton>
-              <NButton onClick={() => setDraft(null)}>取消</NButton>
+              <NButton onClick={saveDraft}>{tr("保存")}</NButton>
+              <NButton onClick={() => setDraft(null)}>{tr("取消")}</NButton>
             </div>
-            <div style={S.detail}>{'保存即写入 profile；本插件无热重载通道，需重载后装配生效。仅面板可改，会话/模型无此能力。'}</div>
+            <div style={S.detail}>{tr("保存即写入 profile；本插件无热重载通道，需重载后装配生效。仅面板可改，会话/模型无此能力。")}</div>
           </div>
         </NModal>
       ) : null}

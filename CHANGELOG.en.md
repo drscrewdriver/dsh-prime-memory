@@ -8,6 +8,10 @@
 
 This file covers the **0.12.0** release notes and the current **unreleased** changes in English. For the full history, see [CHANGELOG.md](./CHANGELOG.md) (Chinese).
 
+## 0.26.68
+
+- **Absorb PR #30 (flikos): panel UI wired to the host locale service — en / ru / pt dictionaries at full coverage (1,402 keys each).** Pipeline ported (extract/codemod/merge/audit + guard tests), codemod re-run onto 0.26.67, wiring redone for the current code, zh-fallback semantics verified against the shipped host locale runtime (zh never degrades; a missing ru/pt key falls back to English — docs corrected). Logs and the /memory terminal face stay Chinese — documented boundary. Gates: typecheck clean; vitest 239 files green (2466 passed); i18n audit 0 error.
+
 ## [0.26.11] — 2026-10-27
 
 > Closes four external issues: #12 (two-level Room slugs silently dropped), #13 (the default route table hard-coded the author's local paths), #14 (rebuild used the retired L0 table as its fact source), #16 (graph projection only switchable via YAML). Detailed notes for 0.26.2–0.26.10 live in the Chinese CHANGELOG — this file lags behind by design.

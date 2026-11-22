@@ -9,6 +9,7 @@
  * - 定位需满足"焦点仍在锚点按钮上 + 容器可见且无自家标记"，失配静默放弃
  *   （下一次开合或快照更新时自动重试，见 update 订阅）。
  */
+import { tr } from '../i18n.js';
 import {
   currentAnchor,
   onMeterPanelOpen,
@@ -115,20 +116,20 @@ function renderSection(view: MeterSnapshotView): HTMLElement {
   ].join(';');
 
   const title = document.createElement('div');
-  title.textContent = '记忆占用';
+  title.textContent = tr("记忆占用");
   title.style.cssText = 'color:var(--dsh-mem-text-2);font-weight:600;margin-bottom:4px;';
   section.append(title);
 
   if (view.recallTokens !== null && view.recallTokens > 0) {
-    section.append(row('var(--dsh-mem-accent)', '召回片段', view.recallTokens));
+    section.append(row('var(--dsh-mem-accent)', tr("召回片段"), view.recallTokens));
   }
   if (view.profileTokens !== null && view.profileTokens > 0) {
-    section.append(row('var(--dsh-mem-accent)', '记忆稳定区', view.profileTokens));
+    section.append(row('var(--dsh-mem-accent)', tr("记忆稳定区"), view.profileTokens));
   }
 
   if (view.mode === 'off') {
     const offNote = document.createElement('div');
-    offNote.textContent = '已停用 · 显示现存残留';
+    offNote.textContent = tr("已停用 · 显示现存残留");
     offNote.style.cssText = 'color:var(--dsh-mem-text-3);padding-top:2px;';
     section.append(offNote);
   }

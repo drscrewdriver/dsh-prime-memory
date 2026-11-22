@@ -1,3 +1,4 @@
+import { tr } from '../i18n.js';
 /**
  * 驱动配置面板的行为判据(计划 ext-driver-config-ui Phase 3)。
  *
@@ -12,9 +13,9 @@ export interface ArmView {
 
 /** 编辑/删除/新增按钮的可点性与原因(不可点必须说清为什么,否则像坏了)。 */
 export function editAffordance(arm: ArmView | null): { enabled: boolean; why: string } {
-  if (arm === null) return { enabled: false, why: '写面状态未知（等待 ext-config-arm 回读）' };
+  if (arm === null) return { enabled: false, why: tr("写面状态未知（等待 ext-config-arm 回读）") };
   if (arm.armed) return { enabled: true, why: '' };
-  return { enabled: false, why: arm.reason ?? '驱动配置当前不可写' };
+  return { enabled: false, why: arm.reason ?? tr("驱动配置当前不可写") };
 }
 
 /** 删除的两段式状态机第一问:返回下一步与该步该说什么。 */
@@ -25,10 +26,10 @@ export function removeStep(pendingId: string | null, id: string): 'arm-confirm' 
 /** 删除前警告文案:把账本数目说清,否则"删除远端接入"看起来是个无成本按钮。 */
 export function removeWarningText(id: string, shadows: number, outboxPending: number): string {
   const parts: string[] = [];
-  if (shadows > 0) parts.push(`${shadows} 条影子账`);
-  if (outboxPending > 0) parts.push(`${outboxPending} 个待推任务`);
-  const tail = parts.length > 0 ? `该驱动已有 ${parts.join('、')}，远端数据不会因此消失；` : '该驱动尚无本地账本；';
-  return `移除只改 profile 里的接入项：${tail}重载后不再装配。id=${id}`;
+  if (shadows > 0) parts.push(tr("{p1} 条影子账", { p1: shadows }));
+  if (outboxPending > 0) parts.push(tr("{p1} 个待推任务", { p1: outboxPending }));
+  const tail = parts.length > 0 ? tr("该驱动已有 {p1}，远端数据不会因此消失；", { p1: parts.join('、') }) : tr("该驱动尚无本地账本；");
+  return tr("移除只改 profile 里的接入项：{p1}重载后不再装配。id={p2}", { p1: tail, p2: id });
 }
 
 /** 保存成功后的提示:needsReload 决定要不要提"重载"（本插件无热重载通道）。 */
@@ -39,11 +40,11 @@ export function savedText(
   counts: { shadows: number; outboxPending: number },
   notice?: string,
 ): string {
-  const head = '已写入 profile' + (needsReload ? '，重载插件后生效' : '');
-  const tail = counts.shadows > 0 ? `（${counts.shadows} 条影子账保留）` : '';
+  const head = tr("已写入 profile") + (needsReload ? tr("，重载插件后生效") : '');
+  const tail = counts.shadows > 0 ? tr("（{p1} 条影子账保留）", { p1: counts.shadows }) : '';
   // 服务端读回结果比“成功”二字值钱：不一致时必须抢在成功文案前面说话。
   const note = notice !== undefined && notice !== '' ? `⚠ ${notice}` : '';
-  return `${note}${note ? ' ' : ''}${head}（${created ? '新增' : '更新'} ${id}）${tail}`;
+  return `${note}${note ? ' ' : ''}${head}（${created ? tr("新增") : tr("更新")} ${id}）${tail}`;
 }
 
 /**
@@ -57,7 +58,7 @@ export function syncGateNotice(inEffect: boolean): { blocked: boolean; why: stri
   if (inEffect) return { blocked: false, why: '' };
   return {
     blocked: true,
-    why: '总闸未开（ext_memory.enabled=false）：以下开关不会改变行为——装配在启动期决定，第 5 路与推/拉闸门此时不存在。',
+    why: tr("总闸未开（ext_memory.enabled=false）：以下开关不会改变行为——装配在启动期决定，第 5 路与推/拉闸门此时不存在。"),
   };
 }
 
@@ -68,19 +69,19 @@ export function syncGateNotice(inEffect: boolean): { blocked: boolean; why: stri
  */
 export function gateResultText(want: boolean, notice?: string): string {
   const head = want
-    ? '总闸已写入 profile（enabled=true），重载后才会装配驱动并开启检索第 5 路。'
-    : '总闸已写入 profile（enabled=false），重载后外部记忆整体停用。';
+    ? tr("总闸已写入 profile（enabled=true），重载后才会装配驱动并开启检索第 5 路。")
+    : tr("总闸已写入 profile（enabled=false），重载后外部记忆整体停用。");
   return notice !== undefined && notice !== '' ? `⚠ ${notice} ${head}` : head;
 }
 
 /** 关闭总闸前的警告：说清会停掉什么，否则这是个看起来无成本的按钮。 */
 export function gateOffWarning(driverCount: number, shadows: number, outboxPending: number): string {
   const parts: string[] = [];
-  if (driverCount > 0) parts.push(`${driverCount} 个驱动接入项`);
-  if (shadows > 0) parts.push(`${shadows} 条影子账`);
-  if (outboxPending > 0) parts.push(`${outboxPending} 个待推任务`);
-  const tail = parts.length > 0 ? `将随装配一并停下：${parts.join('、')}；profile 里的配置与本地账本不删。` : '当前无驱动接入项，停用后行为同未引入本段。';
-  return `关闭总闸只改 profile 里的 enabled：${tail}再开同样需重载。`;
+  if (driverCount > 0) parts.push(tr("{p1} 个驱动接入项", { p1: driverCount }));
+  if (shadows > 0) parts.push(tr("{p1} 条影子账", { p1: shadows }));
+  if (outboxPending > 0) parts.push(tr("{p1} 个待推任务", { p1: outboxPending }));
+  const tail = parts.length > 0 ? tr("将随装配一并停下：{p1}；profile 里的配置与本地账本不删。", { p1: parts.join('、') }) : tr("当前无驱动接入项，停用后行为同未引入本段。");
+  return tr("关闭总闸只改 profile 里的 enabled：{p1}再开同样需重载。", { p1: tail });
 }
 
 /**
@@ -92,13 +93,13 @@ export function gateOffWarning(driverCount: number, shadows: number, outboxPendi
  */
 export function gateStateText(assembled: boolean, configured: boolean | undefined): string {
   if (assembled && configured === false) {
-    return '外部记忆仍在运行（驱动已装配），但 profile 里的总闸已改为关：重载后停用。';
+    return tr("外部记忆仍在运行（驱动已装配），但 profile 里的总闸已改为关：重载后停用。");
   }
   if (!assembled && configured === true) {
-    return '总闸已在 profile 开启（enabled=true），但驱动尚未装配：重载后才会装配驱动并开启检索第 5 路。';
+    return tr("总闸已在 profile 开启（enabled=true），但驱动尚未装配：重载后才会装配驱动并开启检索第 5 路。");
   }
   if (!assembled) {
-    return '总闸 ext_memory.enabled=false：无驱动装配、零外部网络请求、检索第 5 路不存在。';
+    return tr("总闸 ext_memory.enabled=false：无驱动装配、零外部网络请求、检索第 5 路不存在。");
   }
   return '';
 }
@@ -108,10 +109,10 @@ export function importAffordance(
   arm: ArmView | null,
   driver: { typeId: string; browse?: boolean; shadows?: number } | null,
 ): { enabled: boolean; why: string } {
-  if (arm === null) return { enabled: false, why: '导入面状态未知（等待 ext-config-arm 回读）' };
-  if (!arm.armed) return { enabled: false, why: arm.reason ?? '导入面当前不可用' };
+  if (arm === null) return { enabled: false, why: tr("导入面状态未知（等待 ext-config-arm 回读）") };
+  if (!arm.armed) return { enabled: false, why: arm.reason ?? tr("导入面当前不可用") };
   if (driver !== null && driver.browse === false) {
-    return { enabled: false, why: `${driver.typeId} 不提供遍历端点，无法全量导入（只能按查询词检索）` };
+    return { enabled: false, why: tr("{p1} 不提供遍历端点，无法全量导入（只能按查询词检索）", { p1: driver.typeId }) };
   }
   return { enabled: true, why: '' };
 }
@@ -141,11 +142,11 @@ export function resumePoint(
  */
 export function isolateOffWarning(shadowTotal: number): string {
   const scale = shadowTotal > 0
-    ? `当前已导入/关联 ${shadowTotal} 条外源条目，关闭后会一起进入取数窗口`
-    : '当前无外源条目，关闭当下无影响；但一旦导入过外源条目，它们将进入取数窗口';
+    ? tr("当前已导入/关联 {p1} 条外源条目，关闭后会一起进入取数窗口", { p1: shadowTotal })
+    : tr("当前无外源条目，关闭当下无影响；但一旦导入过外源条目，它们将进入取数窗口");
   return (
-    `关闭后，外源条目会与本地记忆争夺同一批取数名额，可能把本地记忆挤出窗口——`
-    + `这不会报错，只会让反刍“越来越不记得自己的事”。${scale}。确定关闭？`
+    tr("关闭后，外源条目会与本地记忆争夺同一批取数名额，可能把本地记忆挤出窗口——")
+    + tr("这不会报错，只会让反刍“越来越不记得自己的事”。{p1}。确定关闭？", { p1: scale })
   );
 }
 
@@ -162,11 +163,11 @@ export function importWarningText(input: {
   resumedFrom?: number;
   memExportOn?: boolean;
 }): string {
-  const from = input.resumedFrom !== undefined && input.resumedFrom > 0 ? `从断点第 ${input.resumedFrom} 条续跑，` : '';
-  const md = input.memExportOn === true ? '且 md 投射当前开着：导入 N 条会生成 N 个 .memory.md 文件，后续人工改动会与远端形成 both_dirty。' : '';
+  const from = input.resumedFrom !== undefined && input.resumedFrom > 0 ? tr("从断点第 {p1} 条续跑，", { p1: input.resumedFrom }) : '';
+  const md = input.memExportOn === true ? tr("且 md 投射当前开着：导入 N 条会生成 N 个 .memory.md 文件，后续人工改动会与远端形成 both_dirty。") : '';
   return (
-    `导入将把 ${input.driverId} 的远端条目写入本地 L1 检索库（逐条向量化，上限 ${input.maxItems} 条）；` +
-    `${from}可中断，断点会保留。${md}再点一下确认开始。`
+    tr("导入将把 {p1} 的远端条目写入本地 L1 检索库（逐条向量化，上限 {p2} 条）；", { p1: input.driverId, p2: input.maxItems }) +
+    tr("{p1}可中断，断点会保留。{p2}再点一下确认开始。", { p1: from, p2: md })
   );
 }
 
@@ -177,17 +178,17 @@ export function importWarningText(input: {
 export function importResultText(
   s: { imported: number; skipped: number; conflicts?: number; failed?: number; truncation: string; l1TotalBefore?: number; l1TotalAfter?: number },
 ): string {
-  const head = `导入完成：新增 ${s.imported} 条，跳过 ${s.skipped} 条`;
-  const proof = s.l1TotalBefore !== undefined && s.l1TotalAfter !== undefined ? `（本地库 ${s.l1TotalBefore} → ${s.l1TotalAfter} 条）` : '';
-  const extra = (s.conflicts ?? 0) > 0 || (s.failed ?? 0) > 0 ? ` 冲突 ${s.conflicts ?? 0}，失败 ${s.failed ?? 0}。` : '';
-  if (s.truncation === 'complete') return `${head}${proof}，已翻到末页。${extra}`;
+  const head = tr("导入完成：新增 {p1} 条，跳过 {p2} 条", { p1: s.imported, p2: s.skipped });
+  const proof = s.l1TotalBefore !== undefined && s.l1TotalAfter !== undefined ? tr("（本地库 {p1} → {p2} 条）", { p1: s.l1TotalBefore, p2: s.l1TotalAfter }) : '';
+  const extra = (s.conflicts ?? 0) > 0 || (s.failed ?? 0) > 0 ? tr("冲突 {p1}，失败 {p2}。", { p1: s.conflicts ?? 0, p2: s.failed ?? 0 }) : '';
+  if (s.truncation === 'complete') return tr("{p1}{p2}，已翻到末页。{p3}", { p1: head, p2: proof, p3: extra });
   const why: Record<string, string> = {
-    capped: '未取完：达本次上限，可提高上限或再跑一轮（会从断点续）',
-    budget: '未取完：时间预算耗尽，再跑一轮会从断点续',
-    cancelled: '已中断：断点已保留，再点会从当前位置续跑',
-    unsupported: '该服务不提供遍历端点，本次未导入任何条目',
+    capped: tr("未取完：达本次上限，可提高上限或再跑一轮（会从断点续）"),
+    budget: tr("未取完：时间预算耗尽，再跑一轮会从断点续"),
+    cancelled: tr("已中断：断点已保留，再点会从当前位置续跑"),
+    unsupported: tr("该服务不提供遍历端点，本次未导入任何条目"),
   };
-  return `⚠ ${why[s.truncation] ?? `未正常收尾（${s.truncation}）`}；${head}${proof}。${extra}`;
+  return `⚠ ${why[s.truncation] ?? tr("未正常收尾（{p1}）", { p1: s.truncation })}；${head}${proof}。${extra}`;
 }
 
 /**
@@ -198,15 +199,15 @@ export function importResultText(
 export function fieldPlaceholder(key: 'id' | 'type' | 'endpoint' | 'apiKey' | 'space' | 'extra', hasExisting: boolean): string {
   switch (key) {
     case 'id':
-      return '如 hs-prod（小写字母/数字起头，可含 . _ -）';
+      return tr("如 hs-prod（小写字母/数字起头，可含 . _ -）");
     case 'endpoint':
-      return 'https://api.example.com 或本地绝对路径';
+      return tr("https://api.example.com 或本地绝对路径");
     case 'apiKey':
-      return hasExisting ? '已配置不回显；留空 = 保留原值；推荐 secret://ref' : '可留空；或填 secret://ref（推荐，存于 DPAPI 凭据库）';
+      return hasExisting ? tr("已配置不回显；留空 = 保留原值；推荐 secret://ref") : tr("可留空；或填 secret://ref（推荐，存于 DPAPI 凭据库）");
     case 'space':
-      return hasExisting ? '留空 = 保留原值（bankId / userId:agentId / containerTag / uri / 目录）' : 'namespace：bankId / userId:agentId / containerTag / uri / 目录';
+      return hasExisting ? tr("留空 = 保留原值（bankId / userId:agentId / containerTag / uri / 目录）") : tr("namespace：bankId / userId:agentId / containerTag / uri / 目录");
     case 'extra':
-      return hasExisting ? 'JSON 对象；留空 = 保留原值' : 'JSON 对象（可选），如 {"mode":"self-hosted"}';
+      return hasExisting ? tr("JSON 对象；留空 = 保留原值") : tr("JSON 对象（可选），如 {\"mode\":\"self-hosted\"}");
     default:
       return '';
   }

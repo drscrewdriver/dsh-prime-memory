@@ -31,6 +31,7 @@
  *   window.__ModuleLoader__.load({ id, factory })，
  *   factory(require) 返回 { apply, inject }（wrapper 由构建脚本生成）。
  */
+import { installLocale, onLocaleChange, tr } from './i18n.js';
 import type { MemoryClientCtx } from './env.js';
 import { MemoryPanel } from './panel.js';
 import { MemoryModePill } from './pill/MemoryModePill.js';
@@ -121,6 +122,8 @@ export function handleOpenExplorerEvent(event: OpenExplorerEventLike): void {
 }
 
 export function apply(ctx: MemoryClientCtx) {
+  // 界面文案的 locale 接入（可选服务：拿不到就保持中文，见 i18n.ts；有界重试不阻塞挂载）。
+  installLocale(ctx);
   const rpc = makeRpc(ctx);
   // 布局服务：可选注入先抓一份（晚到不阻塞 apply），拿不到再在调用点懒解析。
   // 0.2.x 的严格代理下 `ctx.get('layout')` 可能返 undefined / 抛，所以三路兜底。
@@ -167,17 +170,35 @@ export function apply(ctx: MemoryClientCtx) {
   // 轻量单卡片（search-index 留在那里）。各留一个座位 = 结构上不可能再出现两份。
   const SETTINGS_SEAT = 'settings.section';
   let cardSeatLive = false;
+  let sectionDispose: (() => void) | null = null;
+  const registerSection = (): (() => void) =>
+    ctx.slots.register(
+      { name: SETTINGS_SEAT, id: 'dsh-memory', order: 200, label: tr("记忆"), inject: () => ({ rpc }) },
+      MemoryPanel,
+    );
   try {
     ctx.slots.inject(SETTINGS_SEAT, () => {
       cardSeatLive = true;
       try {
-        return ctx.slots.register(
-          { name: SETTINGS_SEAT, id: 'dsh-memory', order: 200, label: '记忆', inject: () => ({ rpc }) },
-          MemoryPanel,
-        );
+        sectionDispose = registerSection();
+        return () => {
+          sectionDispose?.();
+          sectionDispose = null;
+        };
       } catch (err) {
         console.warn(`[dsh-prime-memory] ${SETTINGS_SEAT} 注册失败:`, err);
         return () => {};
+      }
+    });
+    // locale 服务实测晚于本插件 apply（bundle 加载期 tr 仍是中文），而座位 label 是
+    // **注册时求值**的字符串：不重注册，设置里的「记忆」分节会永远停在初始化语言。
+    onLocaleChange(() => {
+      if (!cardSeatLive || !sectionDispose) return;
+      try {
+        sectionDispose();
+        sectionDispose = registerSection();
+      } catch (err) {
+        console.warn('[dsh-prime-memory] 语言变更后重注册设置分节失败:', err);
       }
     });
   } catch (err) {
@@ -220,7 +241,7 @@ export function apply(ctx: MemoryClientCtx) {
 
   const mountPage = (): (() => void) => {
     const row = ctx.slots.inject(PANEL_SEAT, () =>
-      ctx.slots.register({ name: PANEL_SEAT, id: EXPLORER_ID, order: EXPLORER_ORDER, label: '记忆库' }, ExplorerIcon),
+      ctx.slots.register({ name: PANEL_SEAT, id: EXPLORER_ID, order: EXPLORER_ORDER, label: tr("记忆库") }, ExplorerIcon),
     );
     const page = ctx.slots.inject(MAIN_SEAT, () =>
       ctx.slots.register(
@@ -332,6 +353,20 @@ export function apply(ctx: MemoryClientCtx) {
     .catch(() => {
       explorerEntryState.confirm(true);
     });
+
+  // 左栏「记忆库」行同样是**注册时求值**的 label（与设置分节同理）：语言一变就重挂一次，
+  // 否则它会永远停在初始化那一刻的语言。代价是整页重挂，只在切语言时发生。
+  onLocaleChange(() => {
+    if (!explorerMounted || detach === null) return;
+    try {
+      detach();
+      detach = null;
+      mountedPage = false;
+      sync();
+    } catch (err) {
+      console.warn('[dsh-prime-memory] 语言变更后重挂记忆库入口失败:', err);
+    }
+  });
 
   // 输入栏（模式选择器右侧）：会话档位 pill + 滑动选择器。
   // inject owner 实测为裸 sessionId 字符串——rc.8 的命名座位不随快照 props；

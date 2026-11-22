@@ -17,6 +17,7 @@
  * 轮询同 SessionInfoArea：浮层挂载（展开）期间才转；RPC 失败保留上一帧，
  * 首帧未送达前整块隐藏（不拿空态骗人）。
  */
+import { tr } from '../i18n.js';
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { UiRecord } from '../../../src/contract.js';
 import { registerTypeCatalog, tagClass, typeLabel } from '../format.js';
@@ -89,19 +90,18 @@ export function SessionRecalledArea(props: { rpc: RpcFn; sessionId: string }) {
     <div className="dsh-mem-sinfo">
       <div
         style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)', marginBottom: 6 }}
-        title="本会话召回、且正文仍在上下文里的记忆（正文被摘要顶掉的已折叠不显示；清空会话才清除；不是常驻注入）"
+        title={tr("本会话召回、且正文仍在上下文里的记忆（正文被摘要顶掉的已折叠不显示；清空会话才清除；不是常驻注入）")}
       >
-        {'本会话召回 ' + rows.length + ' 条'}
+        {tr("本会话召回") + rows.length + tr("条")}
       </div>
       {allSuperseded ? (
         // 不是“还没召回到”——那批确实注入过，只是正文已被摘要顶掉。说谎的空态比不显示更糟。
         <div style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)', lineHeight: '16px' }}>
-          {'本会话注入过的 ' + records.length + ' 条记忆正文已被摘要取代'}
+          {tr("本会话注入过的") + records.length + tr("条记忆正文已被摘要取代")}
         </div>
       ) : records.length === 0 ? (
         <div style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)', lineHeight: '16px' }}>
-          还没召回到记忆（聊几轮后按相关性自动浮现）
-        </div>
+          {tr("还没召回到记忆（聊几轮后按相关性自动浮现）")} </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {shown.map((r) => (
@@ -118,8 +118,7 @@ export function SessionRecalledArea(props: { rpc: RpcFn; sessionId: string }) {
               {/* 判过时的条目不摘除，只划掉：那是人的裁决，与“正文还在不在”无关。 */}
               {r.retired === true ? (
                 <span style={{ fontSize: 10, color: 'var(--dsh-mem-text-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  已判过时
-                </span>
+                  {tr("已判过时")} </span>
               ) : null}
               {r.maturity ? (
                 <span style={{ fontSize: 10, color: 'var(--dsh-mem-text-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
@@ -130,7 +129,7 @@ export function SessionRecalledArea(props: { rpc: RpcFn; sessionId: string }) {
               {r.lanes && r.lanes.length > 0 ? (
                 <span
                   style={{ fontSize: 10, color: 'var(--dsh-mem-text-3)', whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: 1 }}
-                  title={'召回路：' + r.lanes.map((l) => LANE_FULL[l] ?? l).join('、')}
+                  title={tr("召回路：") + r.lanes.map((l) => LANE_FULL[l] ?? l).join('、')}
                 >
                   {r.lanes.map((l) => LANE_LABEL[l] ?? l).join('')}
                 </span>
@@ -138,7 +137,7 @@ export function SessionRecalledArea(props: { rpc: RpcFn; sessionId: string }) {
             </div>
           ))}
           {hidden > 0 ? (
-            <div style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>{'+ ' + hidden + ' 条更早召回（详见面板「记忆」页）'}</div>
+            <div style={{ fontSize: 11, color: 'var(--dsh-mem-text-3)' }}>{'+ ' + hidden + tr("条更早召回（详见面板「记忆」页）")}</div>
           ) : null}
         </div>
       )}
@@ -172,6 +171,6 @@ const STALE_TEXT_STYLE = { ...textStyle, textDecoration: 'line-through' } as CSS
 /** 悬停给全文与使用场景（正文行内被钳制，别让人只看到半句）。 */
 function rowTitle(r: UiRecord): string {
   const head = '[' + typeLabel(r.type) + '] ' + r.content;
-  const sc = r.usageScenario && r.usageScenario.length > 0 ? '\n使用场景：' + r.usageScenario.join('；') : '';
+  const sc = r.usageScenario && r.usageScenario.length > 0 ? tr("使用场景：") + r.usageScenario.join('；') : '';
   return head + sc;
 }
