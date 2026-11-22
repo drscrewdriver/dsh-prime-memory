@@ -10,7 +10,7 @@
  * （=中文原文），所以永远不会露出「裸 key」——但对 ru/pt 用户中间态是英文，不是中文
  * （宿主链 zh→en 终点为 en，见 docs/i18n.md；zh 用户因 zh 恒等字典与 en 同键集而永不降级）。
  *
- * 目录：`client/src/locales/{en,ru}.ts`（zh 由 en 的 key 集运行期派生为恒等映射，
+ * 目录：`client/src/locales/{en,ru,pt}.ts`（zh 由 en 的 key 集运行期派生为恒等映射，
  * 这样中文用户在 locale 链上永远不会被英文回退劫持）。
  *
  * 支持多语言的前置条件是宿主装了语言包（例如 `@goodandready/dsh-russian-lang` 通过
@@ -21,6 +21,7 @@
  */
 import { type LocaleServiceLike, fill, makeTr, registerDictionaries } from './i18n-core.js';
 import { en } from './locales/en.js';
+import { pt } from './locales/pt.js';
 import { ru } from './locales/ru.js';
 
 export * from './i18n-core.js';
@@ -103,7 +104,9 @@ function adopt(svc: LocaleServiceLike): void {
   // （实测：设置面板与记忆库主页面的实例状态不同），第二个实例的 register 必被拒，
   // 但 bind 仍能读到第一个实例登记好的字典 —— 不能因为注册报错就把自己锁死在中文。
   try {
-    registerDictionaries(svc, { en, ru });
+    // ⚠️ 三语必须齐全：字典文件在场 ≠ 已注册（BUG-2 事故——pt.ts 维护了 1,412 条
+    // 译文却从未 import，pt 用户静默回退英文）。行为守卫钉住「四语注册到位」。
+    registerDictionaries(svc, { en, ru, pt });
   } catch (err) {
     console.warn('[dsh-prime-memory] 字典注册被拒（可能本 bundle 的第二个实例），改走绑定:', err);
   }

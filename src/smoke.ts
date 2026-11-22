@@ -56,6 +56,9 @@ async function main(): Promise<void> {
   // （多行实参查不中归一化 key），其签名不得再出现在包里——两条一正一反可分辨。
   check('client.js: DRSC 指引英译在场', client.includes('cannot use `dsh plugin --profile desktop add`'));
   check('client.js: 合并版指引 key 已退役', !client.includes('只能手工： 1. 编辑'));
+  // pt 字典注册（BUG-2 修复）：修复前 pt.ts 无人 import、被摇树，bundle 里没有 pt 数据；
+  // 修复后 pt 独有译文片段必然在场——前后可分辨。
+  check('client.js: pt 字典在场', client.includes('repositório de sessões de referência'));
   check('client.js: 无裸 import(纯 CJS 体)', !/^import[\s{"' ]/m.test(client));
 
   // ── worker/child 协议头(workerData/env 消费 + transformers 本地加载) ──

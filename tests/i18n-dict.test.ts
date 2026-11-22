@@ -14,7 +14,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { describe, expect, it, beforeAll } from 'vitest';
+import { describe, expect, it, beforeAll, vi } from 'vitest';
 import { makeTr, registerDictionaries, type LocaleServiceLike } from '../client/src/i18n-core.js';
 import { en } from '../client/src/locales/en.js';
 import { ru } from '../client/src/locales/ru.js';
@@ -205,6 +205,34 @@ describe('tr() 调用点可达性', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('installLocale 注册面（BUG-2 回归闸：字典在场 ≠ 已注册）', () => {
+  it('zh/en/ru/pt 四语全部注册，pt 带自己的译文（修复前 pt.ts 从未被 import，pt 用户静默回退英文）', async () => {
+    vi.resetModules();
+    const registered: Array<{ ns: string; locale: string; dict: Record<string, string> }> = [];
+    const svc: LocaleServiceLike = {
+      register(ns, locale, dict) {
+        registered.push({ ns, locale, dict });
+        return {};
+      },
+      bind() {
+        return (key: string) => key;
+      },
+      getSnapshot() {
+        return { active: 'en', revision: 1 };
+      },
+      subscribe() {
+        return () => {};
+      },
+    };
+    const mod = await import('../client/src/i18n.js');
+    mod.installLocale({ get: () => svc });
+    const locales = registered.filter((r) => r.ns === 'dsh-prime-memory').map((r) => r.locale).sort();
+    expect(locales).toEqual(['en', 'pt', 'ru', 'zh']);
+    const ptDict = registered.find((r) => r.locale === 'pt')?.dict ?? {};
+    expect(ptDict['重启 DSH Desktop']).toContain('Reinicie');
   });
 });
 /** 最小可用的 locale 服务替身：按 active → en → key 回退，与官方查找链同序。 */

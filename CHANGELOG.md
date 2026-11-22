@@ -1,3 +1,15 @@
+## 0.26.72
+
+**pt 字典注册 —— 修「1,412 条译文维护齐全、pt 用户却永远看到英文」的静默回退（BUG-2）。**
+
+`client/src/locales/pt.ts` 自 0.26.65 起由 merge 管线与守卫测试同步维护（覆盖全集/无键外条目/占位一致/无汉字四件套全过），但 `i18n.ts` 的 `adopt()` 只注册 `{en, ru}`——**字典文件在场 ≠ 已注册**，esbuild 把不可达的 pt.ts 摇树出 bundle，pt 用户经宿主回退链静默落到英文。守卫测试断言的是字典模块本体，运行时注册面无人钉——「质量有人管、装载没人管」的结构性盲区。
+
+- `i18n.ts`：import pt + `registerDictionaries(svc, { en, ru, pt })`；头注释目录行同步 `{en,ru,pt}.ts`。
+- **行为守卫**（`tests/i18n-dict.test.ts`）：`vi.resetModules()` + 动态 import 驱动 `installLocale`，断言 register 收到 zh/en/ru/pt 四语、且 pt 字典带自己的译文——防「字典文件在场但从未注册」复发。
+- smoke：`client.js: pt 字典在场`（pt 独有译文片段 `repositório de sessões de referência`）——修复前片段被摇树、不在 bundle，前后可分辨。
+
+门禁：typecheck 三工程干净；vitest 239 文件全绿（2472 passed / 1 skipped，注册面守卫 +1）；build + dist 冒烟通过（pt 片段在场）。
+
 ## 0.26.71
 
 **DRSC 指引（GUIDE）逐行本地化 —— 修「字典有译文、界面恒中文」的死信链；tr() 调用点可达性守卫落地。**
