@@ -8,8 +8,12 @@
  *
  * 设计取舍：
  * - `ok` 态完全不占版面（`return null`），首帧未拿到也不渲染（避免正常用户看到闪烁）；
- * - 四态文案各自给「影响说明」，并写明 desktop 只能手改 profile + pnpm install；
- * - 只展示不执行：改 profile 是高危动作（并发重写/BOM 有历史事故），复制文案由用户自己跑。
+ * - `empty`（空库）是中性态：库能打开但没有数据，如实说「尚无数据 + 怎么让它有」，
+ *   不冒充故障（判定语义四值档位：无据不当异常）；
+ * - 安装指引（GUIDE）**只在 `missing` 态渲染**——装了包的部署里看它只会误导
+ *   （历史事故：包已是 0.2.12，指引还教人装 ^0.2.5，照做等于没做）；
+ * - 其余态各给一句可执行的下一步；只展示不执行：改 profile 是高危动作
+ *   （并发重写/BOM 有历史事故），复制文案由用户自己跑。
  */
 import { tr } from '../i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -21,10 +25,10 @@ import { fmtTime } from '../format.js';
 
 const POLL_MS = 60_000;
 
-/** 桌面侧唯一可行链路（宿主独占管理 desktop profile，CLI 必被拒）。 */
+/** 桌面侧唯一可行链路（宿主独占管理 desktop profile，CLI 必被拒）。只在 `missing` 态展示。 */
 const GUIDE = `桌面版（DSH Desktop）不能用 \`dsh plugin --profile desktop add\`（宿主独占管理，会被拒绝），只能手工：
 1. 编辑 ~/.dsh/profiles/desktop/package.json
-   - dependencies 追加 "dsh-reference-session-collector": "^0.2.5"
+   - dependencies 追加 "dsh-reference-session-collector": "^0.2.12"（以 npm latest 为准）
    - dsh.profile.bundles 追加 "dsh-reference-session-collector"
 2. 在该目录执行 pnpm install
 3. 重启 DSH Desktop
@@ -44,6 +48,8 @@ function toneOf(h: DrscHealthResponse): Tone {
       return { title: tr("DRSC 已安装但未启用"), style: 'bannerWarn' };
     case 'stale':
       return { title: tr("DRSC 投影库已过期"), style: 'bannerWarn' };
+    case 'empty':
+      return { title: tr("参考会话库暂无数据"), style: 'bannerNeutral' };
     default:
       return { title: tr("无法读取 DRSC 投影库"), style: 'bannerNeutral' };
   }
@@ -98,6 +104,10 @@ export function DrscHealthBanner({ rpc }: { rpc: RpcFn }) {
   const tone = toneOf(health);
   const toneStyle = (S[tone.style] ?? {}) as CSSProperties;
   const lagHours = health.lagMs === null ? null : Math.round((health.lagMs / 3_600_000) * 10) / 10;
+  // schema 断裂：库内版本与 collector 期望不一致（旧库 × 新包），首轮建库会停在这里
+  const schemaDrift =
+    health.schemaVersion !== null && health.expectedSchemaVersion !== null
+    && health.schemaVersion !== health.expectedSchemaVersion;
 
   return (
     <div style={{ ...S.bannerBase, ...toneStyle }}>
@@ -113,15 +123,32 @@ export function DrscHealthBanner({ rpc }: { rpc: RpcFn }) {
       {health.state === 'unknown' && health.error ? (
         <div style={{ color: 'var(--dsh-mem-text-3)', marginTop: 2 }}>{tr("探针：")}{health.error}</div>
       ) : null}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-        <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{tr("修复指引（可复制）")}</span>
-        <button className="dsh-mem-tab" onClick={() => void copy()} title={tr("复制修复指引")}>
-          {copied ? tr("已复制") : tr("复制")}
-        </button>
-      </div>
-      <pre ref={codeRef} style={S.bannerCode}>
-        {tr(GUIDE)}
-      </pre>
+      {health.state === 'empty' ? (
+        <div style={{ color: 'var(--dsh-mem-text-3)', marginTop: 2 }}>
+          {schemaDrift
+            ? tr("投影库 schema {p1} / 期望 {p2} —— collector 未完成首轮建库，重启宿主后自动迁移。",
+                 { p1: health.schemaVersion, p2: health.expectedSchemaVersion })
+            : tr("重启 DSH Desktop 让 collector 完成首轮同步；重启后仍为空再检查 collector 是否 enabled。")}
+        </div>
+      ) : null}
+      {health.state === 'not-running' || health.state === 'stale' ? (
+        <div style={{ color: 'var(--dsh-mem-text-3)', marginTop: 2 }}>
+          {tr("检查插件列表里 dsh-reference-session-collector 是否 enabled，然后完全重启 DSH Desktop（浏览器刷新不重载宿主半）。")}
+        </div>
+      ) : null}
+      {health.state === 'missing' ? (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--dsh-mem-text-3)' }}>{tr("修复指引（可复制）")}</span>
+            <button className="dsh-mem-tab" onClick={() => void copy()} title={tr("复制修复指引")}>
+              {copied ? tr("已复制") : tr("复制")}
+            </button>
+          </div>
+          <pre ref={codeRef} style={S.bannerCode}>
+            {tr(GUIDE)}
+          </pre>
+        </>
+      ) : null}
     </div>
   );
 }

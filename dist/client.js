@@ -37259,7 +37259,11 @@ var __create = Object.create;
 		  "状态": "status",
 		  "状态:": "Status:",
 		  "准备中（归档旧数据 · 清空检索库）": "Preparing (archiving old data · clearing the retrieval store)",
-		  '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.5" - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。': 'The desktop build (DSH Desktop) cannot use `dsh plugin --profile desktop add` (the host manages it exclusively and will reject it), so do it manually: 1. Edit ~/.dsh/profiles/desktop/package.json - add "dsh-reference-session-collector": "^0.2.5" to dependencies - add "dsh-reference-session-collector" to dsh.profile.bundles 2. Run pnpm install in that directory 3. Restart DSH Desktop Note: enabling only Memory will not enable the reference session store — the memory plugin is only its consumer and has no right to mount it.',
+		  "参考会话库暂无数据": "Reference session store has no data yet",
+		  "投影库 schema {p1} / 期望 {p2} —— collector 未完成首轮建库，重启宿主后自动迁移。": "Projection store schema {p1} / expected {p2} — the collector has not finished building the store; restarting the host migrates it automatically.",
+		  "重启 DSH Desktop 让 collector 完成首轮同步；重启后仍为空再检查 collector 是否 enabled。": "Restart DSH Desktop so the collector can run its first sync; if the store is still empty afterwards, check whether the collector is enabled.",
+		  "检查插件列表里 dsh-reference-session-collector 是否 enabled，然后完全重启 DSH Desktop（浏览器刷新不重载宿主半）。": "Check whether dsh-reference-session-collector is enabled in the plugin list, then fully restart DSH Desktop (refreshing the browser does not reload the host half).",
+		  '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.12"（以 npm latest 为准） - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。': 'The desktop build (DSH Desktop) cannot use `dsh plugin --profile desktop add` (the host manages it exclusively and will reject it), so do it manually: 1. Edit ~/.dsh/profiles/desktop/package.json - add "dsh-reference-session-collector": "^0.2.12" (use the npm latest version) to dependencies - add "dsh-reference-session-collector" to dsh.profile.bundles 2. Run pnpm install in that directory 3. Restart DSH Desktop Note: enabling only Memory will not enable the reference session store — the memory plugin is only its consumer and has no right to mount it.',
 		  "字符": " characters",
 		  "自定义 ·": "Custom ·",
 		  "自定义本层链": "Customize this layer's chain",
@@ -38665,7 +38669,11 @@ var __create = Object.create;
 		  "状态": "статус",
 		  "状态:": "Состояние:",
 		  "准备中（归档旧数据 · 清空检索库）": "Подготовка (архивация старых данных · очистка хранилища поиска)",
-		  '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.5" - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。': 'Настольная версия (DSH Desktop) не может использовать `dsh plugin --profile desktop add` (хост управляет этим единолично и отклонит запрос), поэтому только вручную: 1. Откройте ~/.dsh/profiles/desktop/package.json - добавьте в dependencies "dsh-reference-session-collector": "^0.2.5" - добавьте "dsh-reference-session-collector" в dsh.profile.bundles 2. Выполните pnpm install в этом каталоге 3. Перезапустите DSH Desktop Внимание: включение только «Памяти» не включит хранилище референсных сессий — плагин памяти лишь его потребитель и не вправе его подключать.',
+		  "参考会话库暂无数据": "В хранилище референсных сессий пока нет данных",
+		  "投影库 schema {p1} / 期望 {p2} —— collector 未完成首轮建库，重启宿主后自动迁移。": "Схема хранилища проекций {p1} / ожидается {p2} — collector не завершил первичное построение хранилища; после перезапуска хоста миграция выполнится автоматически.",
+		  "重启 DSH Desktop 让 collector 完成首轮同步；重启后仍为空再检查 collector 是否 enabled。": "Перезапустите DSH Desktop, чтобы collector выполнил первичную синхронизацию; если хранилище после этого всё ещё пусто, проверьте, включён ли collector.",
+		  "检查插件列表里 dsh-reference-session-collector 是否 enabled，然后完全重启 DSH Desktop（浏览器刷新不重载宿主半）。": "Проверьте, включён ли dsh-reference-session-collector в списке плагинов, затем полностью перезапустите DSH Desktop (обновление страницы в браузере не перезагружает хостовую половину).",
+		  '桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工： 1. 编辑 ~/.dsh/profiles/desktop/package.json - dependencies 追加 "dsh-reference-session-collector": "^0.2.12"（以 npm latest 为准） - dsh.profile.bundles 追加 "dsh-reference-session-collector" 2. 在该目录执行 pnpm install 3. 重启 DSH Desktop 注意：只开启「记忆」不会自动启用参考会话库 —— 记忆插件只是它的消费者，无权挂载它。': 'Настольная версия (DSH Desktop) не может использовать `dsh plugin --profile desktop add` (хост управляет этим единолично и отклонит запрос), поэтому только вручную: 1. Откройте ~/.dsh/profiles/desktop/package.json - добавьте в dependencies "dsh-reference-session-collector": "^0.2.12" (используйте актуальную версию npm latest) - добавьте "dsh-reference-session-collector" в dsh.profile.bundles 2. Выполните pnpm install в этом каталоге 3. Перезапустите DSH Desktop Внимание: включение только «Памяти» не включит хранилище референсных сессий — плагин памяти лишь его потребитель и не вправе его подключать.',
 		  "字符": " символов",
 		  "自定义 ·": "Своё ·",
 		  "自定义本层链": "Настроить цепочку этого уровня",
@@ -39138,7 +39146,7 @@ var __create = Object.create;
 		var POLL_MS = 6e4;
 		var GUIDE = `桌面版（DSH Desktop）不能用 \`dsh plugin --profile desktop add\`（宿主独占管理，会被拒绝），只能手工：
 		1. 编辑 ~/.dsh/profiles/desktop/package.json
-		   - dependencies 追加 "dsh-reference-session-collector": "^0.2.5"
+		   - dependencies 追加 "dsh-reference-session-collector": "^0.2.12"（以 npm latest 为准）
 		   - dsh.profile.bundles 追加 "dsh-reference-session-collector"
 		2. 在该目录执行 pnpm install
 		3. 重启 DSH Desktop
@@ -39152,6 +39160,8 @@ var __create = Object.create;
 		      return { title: tr("DRSC 已安装但未启用"), style: "bannerWarn" };
 		    case "stale":
 		      return { title: tr("DRSC 投影库已过期"), style: "bannerWarn" };
+		    case "empty":
+		      return { title: tr("参考会话库暂无数据"), style: "bannerNeutral" };
 		    default:
 		      return { title: tr("无法读取 DRSC 投影库"), style: "bannerNeutral" };
 		  }
@@ -39198,6 +39208,7 @@ var __create = Object.create;
 		  const tone = toneOf(health);
 		  const toneStyle = S[tone.style] ?? {};
 		  const lagHours = health.lagMs === null ? null : Math.round(health.lagMs / 36e5 * 10) / 10;
+		  const schemaDrift = health.schemaVersion !== null && health.expectedSchemaVersion !== null && health.schemaVersion !== health.expectedSchemaVersion;
 		  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { ...S.bannerBase, ...toneStyle }, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { fontWeight: 600, marginBottom: 4 }, children: tone.title }),
 		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { color: "var(--dsh-mem-text-3)" }, children: [
@@ -39213,11 +39224,18 @@ var __create = Object.create;
 		      tr("探针："),
 		      health.error
 		    ] }) : null,
-		    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("修复指引（可复制）") }),
-		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { className: "dsh-mem-tab", onClick: () => void copy(), title: tr("复制修复指引"), children: copied ? tr("已复制") : tr("复制") })
-		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", { ref: codeRef, style: S.bannerCode, children: tr(GUIDE) })
+		    health.state === "empty" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { color: "var(--dsh-mem-text-3)", marginTop: 2 }, children: schemaDrift ? tr(
+		      "投影库 schema {p1} / 期望 {p2} —— collector 未完成首轮建库，重启宿主后自动迁移。",
+		      { p1: health.schemaVersion, p2: health.expectedSchemaVersion }
+		    ) : tr("重启 DSH Desktop 让 collector 完成首轮同步；重启后仍为空再检查 collector 是否 enabled。") }) : null,
+		    health.state === "not-running" || health.state === "stale" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { style: { color: "var(--dsh-mem-text-3)", marginTop: 2 }, children: tr("检查插件列表里 dsh-reference-session-collector 是否 enabled，然后完全重启 DSH Desktop（浏览器刷新不重载宿主半）。") }) : null,
+		    health.state === "missing" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { style: { fontSize: 12, color: "var(--dsh-mem-text-3)" }, children: tr("修复指引（可复制）") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { className: "dsh-mem-tab", onClick: () => void copy(), title: tr("复制修复指引"), children: copied ? tr("已复制") : tr("复制") })
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", { ref: codeRef, style: S.bannerCode, children: tr(GUIDE) })
+		    ] }) : null
 		  ] });
 		}
 		

@@ -1,3 +1,18 @@
+## 0.26.70
+
+**DRSC 健康 banner 三重误报修正 —— 空库不再谎报「synced_at 无法解析」，安装指引只在真没装时出现。**
+
+> 0.26.69 因 npm staged-publish 残留(`409 Cannot publish over previously staged version`,同 npm/cli#9889,同 0.26.64→0.26.65 先例)无法落地,0.26.70 是它的重发——代码与 0.26.69 完全一致,仅双清单与 CHANGELOG 换号。
+
+用户实测（desktop profile：collector 0.2.12 已装、已进 bundles、npm latest）暴露的连锁误诊：面板报「无法读取 DRSC 投影库 + synced_at 无法解析」，但按 banner 指引装 ^0.2.5 等于没做——依赖早已存在。真实病因有二：① 探针把空表当格式错——聚合 `MAX(synced_at)` 在空表上恒返回 NULL，旧代码不分「没数据」与「解析不了」一律报错；② 投影库 schema 停在 v5（0.2.12 期望 v6，首轮建库未跑成），旧探针对此完全失明。
+
+- **探针**（`src/clients/drsc-inproc.ts`）：新增第六态 `empty`——空表 = 无据中性态，不带 error；读库内 `meta.schema_version`（与 collector 自身读法同口径）并与 collector 导出的 `PROJECTION_SCHEMA_VERSION` 对照，断裂时两版本号如实上报（如 v5 × v6 = collector 首轮建库未完成，重启宿主自动迁移）；「synced_at 无法解析」分支现在只在**确有值但解析不了**时触发。`DrscHealth`/`DrscHealthResponse` 新增 `schemaVersion` / `expectedSchemaVersion`。
+- **面板**（`client/src/components/DrscHealthBanner.tsx`）：安装指引（GUIDE）**只在 `missing` 态渲染**——装了包的部署里看它只会误导（本次事故的直接成分）；`empty` 态给中性文案「参考会话库暂无数据」，schema 断裂时明确「库 {v5} / 期望 {v6}」；not-running / stale 各给「检查 enabled + 完全重启宿主」的可执行下一步；GUIDE 内硬编码 `^0.2.5` 更新为 `^0.2.12` 并标注「以 npm latest 为准」。
+- **字典**：en/ru/pt 各 +5 键、清 1 消亡键（keys.json 1,402 → 1,406），旧 ^0.2.5 GUIDE 键三语同步清除。
+- **横向审计**（同类「空态当异常」排查，全仓仅本插件违例）：`dsh-search-index` doctor（drs-empty → fail 带 `dir` 命令、sessions=0 → warn，判定有据）、`dsh-spirit` DrscClient（session:null = 新会话首轮常态、0 段不是故障、lastSyncOk 读不到是 undefined 不是 false）、`dsh-context-compression-improved` selector DRS 对账面（库/会话缺席一律 undefined 绝不抛）——三处四值纪律贯彻到位，零改动。
+
+门禁：typecheck 三工程干净；vitest 239 文件全绿（2469 passed / 1 skipped，探针 +3 用例：空库中性态、v5×v6 断裂如实上报、旧包未导出常量不猜）；build + dist 冒烟通过；dist/client.js 复核 `0.2.5` 零残留。
+
 ## 0.26.68
 
 **吸收 PR #30（flikos）：面板界面接入宿主 locale 服务 —— en / ru / pt 三语字典全量落地（各 1,402 键）。**

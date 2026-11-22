@@ -34,6 +34,8 @@ interface DrsFacadeLike {
 
 interface CollectorModuleWithFacade extends CollectorReadModule {
   drsReadFacade?: () => DrsFacadeLike | undefined;
+  /** collector 期望的投影 schema 版本（顶层导出常量；旧版可能没有）。 */
+  PROJECTION_SCHEMA_VERSION?: unknown;
 }
 
 /** 只用到读面，形状按 collector 的 d.ts 手工声明，不引它的类型（避免跨包类型依赖）。 */
@@ -213,8 +215,8 @@ const READ_SURFACE: unknown = 'inproc-read-surface';
 // DRSC 健康探针（设置面板 banner 用）
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 五态：`ok` 不渲染 banner；`unknown` 是探针失败的兜底（不得当成故障去误报）。 */
-export type DrscHealthState = 'ok' | 'not-running' | 'stale' | 'missing' | 'unknown';
+/** 六态：`ok` 不渲染 banner；`empty` 是空库的中性态（无据，不是故障）；`unknown` 是探针失败的兜底（不得当成故障去误报）。 */
+export type DrscHealthState = 'ok' | 'not-running' | 'stale' | 'missing' | 'empty' | 'unknown';
 
 export interface DrscHealth {
   state: DrscHealthState;
@@ -222,6 +224,10 @@ export interface DrscHealth {
   installed: boolean;
   /** 门面可用（= collector 真跑起来了）→ true。装了没启用时为 false。 */
   mounted: boolean;
+  /** 库内 meta.schema_version（读不到为 null）。schema 断裂（旧库 × 新期望）时它与 expectedSchemaVersion 不同。 */
+  schemaVersion: string | null;
+  /** collector 模块期望的投影 schema 版本（模块未导出该常量时为 null）。 */
+  expectedSchemaVersion: string | null;
   /** 投影库 `MAX(synced_at)` 的 epoch ms；无从读取为 null。 */
   lastSyncAt: number | null;
   /** now - lastSyncAt；null = 无从计算。 */
@@ -250,6 +256,24 @@ function parseSyncStamp(v: unknown): number | null {
   return null;
 }
 
+/** 读库内 meta.schema_version（与 collector 自身的读法同口径：`meta(key,value)` 表）。读不到为 null。 */
+function readSchemaVersion(db: NonNullable<PreparedDbLike['db']>): string | null {
+  try {
+    const row = db.prepare("SELECT value FROM meta WHERE key='schema_version'").get() as
+      | { value?: unknown }
+      | undefined;
+    const v = row?.value;
+    return v === undefined || v === null ? null : String(v);
+  } catch {
+    return null;
+  }
+}
+
+/** collector 模块期望的投影 schema 版本；模块未导出该常量时为 null（不猜）。 */
+function expectedSchemaVersionOf(mod: CollectorModuleWithFacade): string | null {
+  return typeof mod.PROJECTION_SCHEMA_VERSION === 'string' ? mod.PROJECTION_SCHEMA_VERSION : null;
+}
+
 /**
  * 探针（只观测，不改变读路径）。
  *
@@ -270,6 +294,8 @@ export async function probeDrscHealth(
     state: 'unknown',
     installed: false,
     mounted: false,
+    schemaVersion: null,
+    expectedSchemaVersion: null,
     lastSyncAt: null,
     lagMs: null,
     staleAfterMs,
@@ -302,9 +328,26 @@ export async function probeDrscHealth(
     const db = (storeHandle as PreparedDbLike).db;
     if (!db) return { ...base, state: 'unknown', installed: true, indexPath, error: '投影库句柄无 .db' };
     const row = db.prepare('SELECT MAX(synced_at) AS s FROM sessions').get() as { s?: unknown } | undefined;
-    const lastSyncAt = parseSyncStamp(row?.s);
+    const raw = row?.s;
+    const schemaVersion = readSchemaVersion(db);
+    const expectedSchemaVersion = expectedSchemaVersionOf(mod);
+    if (raw === null || raw === undefined) {
+      // 空库（聚合 MAX 在空表上恒返回 NULL）是「无据中性」态：不是探针故障，
+      // 更不是 synced_at 格式错（旧代码把两者混为一谈，空库一律误报「无法解析」）。
+      // schema 断裂（旧库 × 新期望）会让 collector 首轮建库停停在这里，如实带出两个版本号。
+      return {
+        ...base,
+        state: 'empty',
+        installed: true,
+        indexPath,
+        schemaVersion,
+        expectedSchemaVersion,
+      };
+    }
+    const lastSyncAt = parseSyncStamp(raw);
     if (lastSyncAt === null) {
-      return { ...base, state: 'unknown', installed: true, indexPath, error: 'synced_at 无法解析（期望 ISO 字符串或 epoch ms）' };
+      // 走到这里说明表里有值但解析不了——这才是真正的「格式错」。
+      return { ...base, state: 'unknown', installed: true, indexPath, schemaVersion, expectedSchemaVersion, error: 'synced_at 无法解析（期望 ISO 字符串或 epoch ms）' };
     }
     const lagMs = Math.max(0, now - lastSyncAt);
     return {
@@ -314,6 +357,8 @@ export async function probeDrscHealth(
       lastSyncAt,
       lagMs,
       indexPath,
+      schemaVersion,
+      expectedSchemaVersion,
       error: undefined,
     };
   } catch (err) {

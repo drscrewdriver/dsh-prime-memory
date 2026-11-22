@@ -168,6 +168,21 @@ function parseSyncStamp(v) {
         return v;
     return null;
 }
+/** 读库内 meta.schema_version（与 collector 自身的读法同口径：`meta(key,value)` 表）。读不到为 null。 */
+function readSchemaVersion(db) {
+    try {
+        const row = db.prepare("SELECT value FROM meta WHERE key='schema_version'").get();
+        const v = row?.value;
+        return v === undefined || v === null ? null : String(v);
+    }
+    catch {
+        return null;
+    }
+}
+/** collector 模块期望的投影 schema 版本；模块未导出该常量时为 null（不猜）。 */
+function expectedSchemaVersionOf(mod) {
+    return typeof mod.PROJECTION_SCHEMA_VERSION === 'string' ? mod.PROJECTION_SCHEMA_VERSION : null;
+}
 /**
  * 探针（只观测，不改变读路径）。
  *
@@ -186,6 +201,8 @@ export async function probeDrscHealth(opts = {}) {
         state: 'unknown',
         installed: false,
         mounted: false,
+        schemaVersion: null,
+        expectedSchemaVersion: null,
         lastSyncAt: null,
         lagMs: null,
         staleAfterMs,
@@ -219,9 +236,26 @@ export async function probeDrscHealth(opts = {}) {
         if (!db)
             return { ...base, state: 'unknown', installed: true, indexPath, error: '投影库句柄无 .db' };
         const row = db.prepare('SELECT MAX(synced_at) AS s FROM sessions').get();
-        const lastSyncAt = parseSyncStamp(row?.s);
+        const raw = row?.s;
+        const schemaVersion = readSchemaVersion(db);
+        const expectedSchemaVersion = expectedSchemaVersionOf(mod);
+        if (raw === null || raw === undefined) {
+            // 空库（聚合 MAX 在空表上恒返回 NULL）是「无据中性」态：不是探针故障，
+            // 更不是 synced_at 格式错（旧代码把两者混为一谈，空库一律误报「无法解析」）。
+            // schema 断裂（旧库 × 新期望）会让 collector 首轮建库停停在这里，如实带出两个版本号。
+            return {
+                ...base,
+                state: 'empty',
+                installed: true,
+                indexPath,
+                schemaVersion,
+                expectedSchemaVersion,
+            };
+        }
+        const lastSyncAt = parseSyncStamp(raw);
         if (lastSyncAt === null) {
-            return { ...base, state: 'unknown', installed: true, indexPath, error: 'synced_at 无法解析（期望 ISO 字符串或 epoch ms）' };
+            // 走到这里说明表里有值但解析不了——这才是真正的「格式错」。
+            return { ...base, state: 'unknown', installed: true, indexPath, schemaVersion, expectedSchemaVersion, error: 'synced_at 无法解析（期望 ISO 字符串或 epoch ms）' };
         }
         const lagMs = Math.max(0, now - lastSyncAt);
         return {
@@ -231,6 +265,8 @@ export async function probeDrscHealth(opts = {}) {
             lastSyncAt,
             lagMs,
             indexPath,
+            schemaVersion,
+            expectedSchemaVersion,
             error: undefined,
         };
     }

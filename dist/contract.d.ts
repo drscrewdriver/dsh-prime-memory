@@ -2366,12 +2366,16 @@ export interface DshMemoryRequestMap {
     'dsh-memory/ext-driver-upsert': ExtDriverUpsertRequest;
     'dsh-memory/ext-driver-remove': ExtDriverRemoveRequest;
 }
-/** DRSC 健康五态（与 `drsc-inproc.probeDrscHealth` 返回同步；此处只保留形状，不引 node 侧代码）。 */
-export type DrscHealthStateName = 'ok' | 'not-running' | 'stale' | 'missing' | 'unknown';
+/** DRSC 健康六态（与 `drsc-inproc.probeDrscHealth` 返回同步；此处只保留形状，不引 node 侧代码）。`empty` 是空库的中性态，不是故障。 */
+export type DrscHealthStateName = 'ok' | 'not-running' | 'stale' | 'missing' | 'empty' | 'unknown';
 export interface DrscHealthResponse {
     state: DrscHealthStateName;
     installed: boolean;
     mounted: boolean;
+    /** 库内 meta.schema_version（读不到为 null）；与 expectedSchemaVersion 不同 = schema 断裂。 */
+    schemaVersion: string | null;
+    /** collector 模块期望的投影 schema 版本（模块未导出该常量时为 null）。 */
+    expectedSchemaVersion: string | null;
     lastSyncAt: number | null;
     lagMs: number | null;
     staleAfterMs: number;

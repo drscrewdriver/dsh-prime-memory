@@ -1,12 +1,13 @@
 /**
  * DRSC 健康探针（`probeDrscHealth`）单测。
  *
- * 五态 + 句柄复用，全部用注入 `load` 的假模块，**不真 import collector 包**
+ * 六态 + 句柄复用，全部用注入 `load` 的假模块，**不真 import collector 包**
  * （devDeps 没有它，真 import 会让本仓测试挂）。
  *
- * 另外钉住两条纪律：
+ * 另外钉住三条纪律：
  * - 门面只有“真对象”才算 ok（`undefined` 是“装了没启用”）；
- * - `openProjectionStore` 在多次探测间**只调一次**（它会把摘要全表载入，Issue #1 根因）。
+ * - `openProjectionStore` 在多次探测间**只调一次**（它会把摘要全表载入，Issue #1 根因）；
+ * - 空库（聚合 MAX=NULL）是 `empty` 中性态，不是探针故障——「没数据」与「解析不了」必须分开。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -24,6 +25,10 @@ afterEach(() => {
 interface FakeOpts {
   facade?: boolean;
   syncedAt?: unknown;
+  /** meta 表里 schema_version 的值；null = 行存在但值为 NULL。 */
+  schemaVersion?: string | null;
+  /** 假模块顶层导出的 PROJECTION_SCHEMA_VERSION；undefined = 不导出该常量。 */
+  expectedSchemaVersion?: string;
   noDb?: boolean;
   openThrows?: boolean;
   dir?: string;
@@ -32,7 +37,15 @@ interface FakeOpts {
 function fakeModule(opts: FakeOpts = {}) {
   const openProjectionStore = vi.fn((_dir: string) => {
     if (opts.openThrows) throw new Error('open failed');
-    return opts.noDb ? {} : { db: { prepare: () => ({ get: () => ({ s: opts.syncedAt }) }) } };
+    return opts.noDb
+      ? {}
+      : {
+          db: {
+            prepare: (sql: string) => ({
+              get: () => (sql.includes('meta') ? { value: opts.schemaVersion ?? null } : { s: opts.syncedAt }),
+            }),
+          },
+        };
   });
   const mod = {
     resolveIndexDir: () => opts.dir ?? '/tmp/projection',
@@ -41,6 +54,7 @@ function fakeModule(opts: FakeOpts = {}) {
     search: () => ({ ok: true }),
     sessionDetail: () => ({ ok: true }),
     listSessions: () => ({ ok: true }),
+    ...(opts.expectedSchemaVersion === undefined ? {} : { PROJECTION_SCHEMA_VERSION: opts.expectedSchemaVersion }),
     ...(opts.facade
       ? { drsReadFacade: () => ({ listSessions: () => ({}), sessionDetail: () => ({}), search: () => ({}) }) }
       : { drsReadFacade: () => undefined }),
@@ -101,6 +115,37 @@ describe('probeDrscHealth', () => {
     const h3 = await probeDrscHealth({ now: NOW, load: async () => boom.mod });
     expect(h3.state).toBe('unknown');
     expect(h3.installed).toBe(true);
+  });
+
+  it('空库（MAX=NULL）→ empty 中性态：不带 error，如实带出 schema 两版本', async () => {
+    const { mod } = fakeModule({ syncedAt: null, schemaVersion: '6', expectedSchemaVersion: '6' });
+    const h = await probeDrscHealth({ now: NOW, load: async () => mod });
+    expect(h.state).toBe('empty');
+    expect(h.installed).toBe(true);
+    expect(h.mounted).toBe(false);
+    expect(h.error).toBeUndefined();
+    expect(h.lastSyncAt).toBeNull();
+    expect(h.schemaVersion).toBe('6');
+    expect(h.expectedSchemaVersion).toBe('6');
+  });
+
+  it('空库 + schema 断裂（旧库 v5 × 新包期望 v6）→ 仍 empty，两版本号如实不同', async () => {
+    // 用户实测形态：0.2.12（期望 v6）对着 v5 空库，collector 首轮建库没跑成。
+    // 旧代码在这里误报「synced_at 无法解析」；新代码必须把断裂本身报出来。
+    const { mod } = fakeModule({ syncedAt: null, schemaVersion: '5', expectedSchemaVersion: '6' });
+    const h = await probeDrscHealth({ now: NOW, load: async () => mod });
+    expect(h.state).toBe('empty');
+    expect(h.error).toBeUndefined();
+    expect(h.schemaVersion).toBe('5');
+    expect(h.expectedSchemaVersion).toBe('6');
+  });
+
+  it('collector 未导出 PROJECTION_SCHEMA_VERSION（旧包）→ expectedSchemaVersion 为 null，不猜', async () => {
+    const { mod } = fakeModule({ syncedAt: null, schemaVersion: '5' });
+    const h = await probeDrscHealth({ now: NOW, load: async () => mod });
+    expect(h.state).toBe('empty');
+    expect(h.schemaVersion).toBe('5');
+    expect(h.expectedSchemaVersion).toBeNull();
   });
 
   it('多次探测只打开一次投影库（storeHandle 复用）', async () => {

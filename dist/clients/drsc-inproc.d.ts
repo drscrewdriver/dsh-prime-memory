@@ -48,14 +48,18 @@ export declare function resetCollectorReadState(): void;
  * 把传输从 fetch 换成函数调用，不顺手改任何语义。
  */
 export declare function callCollectorRead(query: string, load?: CollectorLoader): Promise<Record<string, unknown>>;
-/** 五态：`ok` 不渲染 banner；`unknown` 是探针失败的兜底（不得当成故障去误报）。 */
-export type DrscHealthState = 'ok' | 'not-running' | 'stale' | 'missing' | 'unknown';
+/** 六态：`ok` 不渲染 banner；`empty` 是空库的中性态（无据，不是故障）；`unknown` 是探针失败的兜底（不得当成故障去误报）。 */
+export type DrscHealthState = 'ok' | 'not-running' | 'stale' | 'missing' | 'empty' | 'unknown';
 export interface DrscHealth {
     state: DrscHealthState;
     /** 包能 import → true。`missing` 时为 false。 */
     installed: boolean;
     /** 门面可用（= collector 真跑起来了）→ true。装了没启用时为 false。 */
     mounted: boolean;
+    /** 库内 meta.schema_version（读不到为 null）。schema 断裂（旧库 × 新期望）时它与 expectedSchemaVersion 不同。 */
+    schemaVersion: string | null;
+    /** collector 模块期望的投影 schema 版本（模块未导出该常量时为 null）。 */
+    expectedSchemaVersion: string | null;
     /** 投影库 `MAX(synced_at)` 的 epoch ms；无从读取为 null。 */
     lastSyncAt: number | null;
     /** now - lastSyncAt；null = 无从计算。 */
