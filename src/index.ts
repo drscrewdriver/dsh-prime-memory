@@ -19,6 +19,7 @@ import { MemoryRunner } from './pipeline/runner.js';
 import { RebuildController } from './pipeline/rebuild.js';
 import { RuminateController } from './pipeline/ruminate.js';
 import { registerMemoryRpc, PLUGIN_VERSION } from './stats.js';
+import { readStartupTrustedHosts } from './trusted-hosts.js';
 import { buildExtAssembly } from './ext-memory/assembly.js';
 import { makeExtPusher } from './ext-memory/pusher.js';
 import { makeExtPuller } from './ext-memory/puller.js';
@@ -83,30 +84,6 @@ import { initTokenCost, resetTokenCost } from './token-cost.js';
 import { initTraceStore } from './store/trace.js';
 
 export const name = 'dsh-memory-plugin';
-
-/**
- * webStartup(0.2.1-a.2 起更名自 webRuntime)的 best-effort 读取:trustedHosts
- * 供 DrscClient 同源基址解析。宿主服务缺席/未声明 inject 时属性读会抛
- * (cordis Proxy 面),双名回退链 + 两层 try,安全返回 undefined(→ 缺省 8080 口)。
- */
-function readStartupTrustedHosts(ctx: Context): readonly string[] | undefined {
-  for (const name of ['webStartup', 'webRuntime'] as const) {
-    try {
-      const direct = (ctx as unknown as Record<string, unknown>)[name];
-      const svc = (direct !== undefined
-        ? direct
-        : typeof ctx.get === 'function'
-          ? ctx.get(name)
-          : undefined) as { trustedHosts?: unknown } | undefined;
-      if (svc !== null && typeof svc === 'object' && Array.isArray(svc.trustedHosts)) {
-        return svc.trustedHosts as readonly string[];
-      }
-    } catch {
-      /* 未声明服务的属性读抛:落下一名/缺省 */
-    }
-  }
-  return undefined;
-}
 
 // issue #20:DrscClient 的第三档兜底。取数逻辑已抽到 clients/web-server-origin.ts
 // (两条取数路径 + 三个抛错入口,需要被单测钉住而不是靠人肉真机核对),此处只接线。
