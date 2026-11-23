@@ -74,7 +74,7 @@ function liveHandle(over: Partial<MemoryLiveSettings> = {}): LiveSettingsHandle 
 
 interface Harness {
   // call 返回的是 HTTP envelope 解包后的 value(非 200/ok:false 已 throw),与运行时行为一致
-  call: (endpoint: string, payload?: unknown) => Promise<unknown>;
+  call: (endpoint: string, payload?: unknown, opts?: { host?: string; origin?: string; secFetchSite?: string }) => Promise<unknown>;
   stores: { l0: L0Store; l1: L1Store; scenes: Record<'chat' | 'work', SceneStore>; persona: Record<'chat' | 'work', PersonaStore>; state: StateStore };
   db: MemoryDb;
   modes: SessionModeStore;
@@ -107,6 +107,8 @@ async function harness(opts: {
   cfgOver?: Partial<MemoryConfig>;
   /** 装配 Room 注册表(回归:rpcHandler 曾漏带 roomRegistry,面板侧 room-* 恒"未装配")。 */
   roomRegistry?: boolean;
+  /** 模拟宿主 `--trusted-host` 白名单(挂在 webStartup 服务上,与生产同形)。 */
+  trustedHosts?: string[];
 } = {}): Promise<Harness> {
   const dataDir = join(await tmp(), `rpc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
   const db = new MemoryDb(join(dataDir, 'memory.db'), 0);
@@ -142,6 +144,11 @@ async function harness(opts: {
           },
         };
       }
+      // 围栏的受信白名单来源(宿主 0.2.1-a.2 起的服务名);未给即「服务不可见」,
+      // 生产侧此时会落到进程参数,测试侧不关心那条分支(见 trusted-hosts.test.ts)。
+      if (name === 'webStartup' && opts.trustedHosts !== undefined) {
+        return { trustedHosts: opts.trustedHosts };
+      }
       return undefined;
     },
     on: () => () => {},
@@ -155,10 +162,14 @@ async function harness(opts: {
   registerMemoryRpc(ctx, cfg({}, opts.cfgOver ?? {}), { l0, l1, scenes, persona, state, graph: db.graphStore }, noopLogger, opts.status, opts.live, modes, dataDir, undefined, undefined, opts.sessionInfo, undefined, registry);
   return {
     registry,
-    call: async (endpoint, payload) => {
-      // 模拟 HTTP 层:构造 loopback req(流式 body)+ 捕获型 res,过完整 handler
+    call: async (endpoint, payload, callOpts) => {
+      // 模拟 HTTP 层:构造 req(流式 body)+ 捕获型 res,过完整 handler
       const req = new PassThrough() as PassThrough & { headers: Record<string, string>; method: string; url: string };
-      req.headers = { host: 'localhost' };
+      req.headers = {
+        host: callOpts?.host ?? 'localhost',
+        ...callOpts?.origin !== undefined && { origin: callOpts.origin },
+        ...callOpts?.secFetchSite !== undefined && { 'sec-fetch-site': callOpts.secFetchSite },
+      };
       req.method = 'POST';
       req.url = `/dsh-memory/rpc/${endpoint.slice('dsh-memory/'.length)}`;
       req.end(JSON.stringify(payload ?? {}));
@@ -233,6 +244,70 @@ describe('rpc: stats / token-cost / unknown', () => {
   it('unknown endpoint errors via ok:false envelope (call wrapper turns into throw)', async () => {
     const h = await harness();
     await expect(h.call('dsh-memory/nope')).rejects.toThrow('unknown api method');
+    h.db.close();
+  });
+});
+
+describe('rpc: Host 围栏(loopback ∪ 宿主 --trusted-host)', () => {
+  it('非 loopback 且不在白名单的 Host 一律 403(DNS-rebinding 面不放松)', async () => {
+    const h = await harness({ trustedHosts: ['dsh.example.com'] });
+    await expect(h.call('dsh-memory/stats', {}, { host: 'evil.example.com' })).rejects.toThrow(/forbidden/i);
+    h.db.close();
+  });
+
+  it('宿主 --trusted-host 的 authority 放行:局域网 IP / 反代域名 / 任意端口', async () => {
+    const h = await harness({ trustedHosts: ['192.168.31.9:13080', 'dsh.example.com'] });
+    const byIp = await h.call('dsh-memory/stats', {}, { host: '192.168.31.9:13080' }) as { ok: boolean };
+    expect(byIp.ok).toBe(true);
+    // 不带端口的条目匹配同名主机的任意端口(反代换口场景)
+    const byDomain = await h.call('dsh-memory/stats', {}, { host: 'dsh.example.com:9443' }) as { ok: boolean };
+    expect(byDomain.ok).toBe(true);
+    h.db.close();
+  });
+
+  it('loopback 不受白名单影响(本机直连保持原行为)', async () => {
+    const h = await harness({ trustedHosts: ['dsh.example.com'] });
+    const local = await h.call('dsh-memory/stats', {}, { host: '127.0.0.1:3080' }) as { ok: boolean };
+    expect(local.ok).toBe(true);
+    h.db.close();
+  });
+});
+
+describe('rpc: Origin / cross-site 围栏(宿主三段式的后两段)', () => {
+  it('白名单 Host 但 Origin 异源 → 403(跨站写接口 CSRF 面)', async () => {
+    const h = await harness({ trustedHosts: ['dsh.example.com'] });
+    await expect(
+      h.call('dsh-memory/stats', {}, { host: 'dsh.example.com:9443', origin: 'http://evil.example.com' }),
+    ).rejects.toThrow(/forbidden/i);
+    h.db.close();
+  });
+
+  it('loopback Host + 异源 Origin → 403(放宽白名单前就存在的本机 CSRF 洞)', async () => {
+    const h = await harness();
+    await expect(
+      h.call('dsh-memory/stats', {}, { host: '127.0.0.1:3080', origin: 'http://evil.example.com' }),
+    ).rejects.toThrow(/forbidden/i);
+    // text/plain 简单请求不过预检,Origin 是唯一还能拦的头
+    await expect(
+      h.call('dsh-memory/settings-set', { k: 'x', v: 1 }, { host: '127.0.0.1:3080', origin: 'http://evil.example.com' }),
+    ).rejects.toThrow(/forbidden/i);
+    h.db.close();
+  });
+
+  it('白名单 Host + 同源 Origin → 200(合法反代访问不被误伤)', async () => {
+    const h = await harness({ trustedHosts: ['192.168.31.9:13080'] });
+    const byIp = await h.call('dsh-memory/stats', {}, { host: '192.168.31.9:13080', origin: 'http://192.168.31.9:13080' }) as { ok: boolean };
+    expect(byIp.ok).toBe(true);
+    const local = await h.call('dsh-memory/stats', {}, { host: '127.0.0.1:3080', origin: 'http://127.0.0.1:3080' }) as { ok: boolean };
+    expect(local.ok).toBe(true);
+    h.db.close();
+  });
+
+  it('sec-fetch-site: cross-site 即便同源 Origin 也拒绝', async () => {
+    const h = await harness({ trustedHosts: ['dsh.example.com'] });
+    await expect(
+      h.call('dsh-memory/stats', {}, { host: 'dsh.example.com:9443', origin: 'http://dsh.example.com:9443', secFetchSite: 'cross-site' }),
+    ).rejects.toThrow(/forbidden/i);
     h.db.close();
   });
 });

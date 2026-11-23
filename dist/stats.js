@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { closeSync, openSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { EFFORT_CHOICES, resolveDataDir } from './config.js';
+import { requestFenceAllows, resolveTrustedAuthorities } from './trusted-hosts.js';
 import { typeCatalogEntries } from './memory-types.js';
 import { effectiveCfg } from './pipeline/runner.js';
 import { emptyRecallStats } from './hooks/recall.js';
@@ -169,32 +170,19 @@ export const MEMORY_ENDPOINTS = [
 const RPC_ROUTE_PREFIX = '/dsh-memory/rpc';
 /** 短方法名视图(MEMORY_ENDPOINTS 去掉 'dsh-memory/' 前缀,URL 段用)。 */
 const SHORT_ENDPOINTS = MEMORY_ENDPOINTS.map((e) => e.slice('dsh-memory/'.length));
-/** Host 头是否为 loopback 主机名(localhost / [::1] / 127.x.x.x)。 */
-function isLoopbackHostname(hostname) {
-    if (hostname === 'localhost' || hostname === '[::1]')
-        return true;
-    const parts = hostname.split('.');
-    return parts.length === 4 && parts[0] === '127' && parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255);
-}
 /**
  * API 信任围栏:DNS-rebinding / 跨站防护(非用户鉴权),语义对齐 connection
- * /api 网关的 fence——Host 头必须指向 loopback。面板数据非机密(密钥字段
- * 宿主侧已脱敏),故 loopback 即放行;跨站浏览器标记随 Host 校验一并拒绝。
+ * /api 网关的 fence 三段式——① Host 指向 loopback、命中宿主 `--trusted-host`
+ * 白名单，或命中 `--host` 绑定的接口地址；② `sec-fetch-site` 不得是 cross-site；
+ * ③ 带 Origin 时必须是本监听 authority。面板数据非机密（密钥字段宿主侧已脱敏）；
+ * 只认 loopback 会把「宿主已经信任」的局域网 / 反代域名 / 非 loopback 绑定地址一并拒掉，
+ * 表现为界面正常、面板全 403。
+ *
+ * ②③ 不可省：本路由不校验 content-type，跨站页面能用 `text/plain` 发 JSON 绕过 CORS
+ * 预检，放宽 Host 接受档后若只判 ①，写接口即为无差别 CSRF。
  */
-function apiFence(req) {
-    const host = req.headers.host;
-    if (typeof host !== 'string' || host.length === 0)
-        return false;
-    // 不写初值:catch 分支直接 return,初值在任何路径下都不会被读取
-    // (原 `let hostname = host` 是死存储,eslint no-useless-assignment)。
-    let hostname;
-    try {
-        hostname = new URL(`http://${host}`).hostname;
-    }
-    catch {
-        return false;
-    }
-    return isLoopbackHostname(hostname);
+function apiFence(req, ctx, scheme) {
+    return requestFenceAllows(req.headers, ctx, scheme);
 }
 function writeJson(res, status, body) {
     res.writeHead(status, { 'content-type': 'application/json' });
@@ -309,12 +297,16 @@ importer) {
     let holding = false;
     /** 当前 handle 绑定的 connection 实例(internal/service 第二参;用于识别实例替换)。 */
     let registeredImpl;
+    /** 围栏拒绝只记一条现场,避免面板轮询把日志刷满。 */
+    let fenceRejected = false;
     const tryRegister = () => {
         if (holding)
             return;
         const webServer = ctx.get('webServer');
         if (!webServer || typeof webServer.register !== 'function')
             return;
+        /** 监听侧协议:只影响「默认端口是否被 URL 吃掉」,值取自宿主而非请求头。 */
+        const listenerScheme = webServer.protocol === 'https:' ? 'https:' : 'http:';
         let dispose = () => { };
         try {
             holding = true;
@@ -340,15 +332,23 @@ importer) {
             // (讨论区 #6337),/api 共享通道 interceptor 是单槽、会被其他 0.1.5 插件
             // (如 dsh-live-token-stats)抢占。直接在插件自己的 fiber 上向 webServer
             // 注册 prefix 路由(plain req/res + 自有 RpcResult 信封)。
-            // 鉴权面:同源浏览器的 DNS-rebinding 防护(Host 须 loopback),与
-            // connection /api 网关的 fence 语义一致;不做用户鉴权——面板数据非机密,
-            // 机密字段(directApiKey 等)在 settings-get 已由 sanitizeSettings 脱敏。
+            // 鉴权面:同源浏览器的 DNS-rebinding 防护(Host 须 loopback 或命中宿主
+            // --trusted-host 白名单),与 connection /api 网关的 fence 语义一致;不做
+            // 用户鉴权——面板数据非机密,机密字段(directApiKey 等)在 settings-get 已由
+            // sanitizeSettings 脱敏。
             const registered = webServer.register({
                 kind: 'prefix',
                 path: RPC_ROUTE_PREFIX,
                 handler: async (req, res) => {
-                    if (!apiFence(req))
+                    if (!apiFence(req, ctx, listenerScheme)) {
+                        // 拒绝必留现场:没有 Host/Origin/白名单就分不清「跨站」「Origin 不匹配」
+                        // 与「宿主信任但插件没读」这三种完全不同的原因。
+                        if (!fenceRejected) {
+                            fenceRejected = true;
+                            logger.warn(`[memory] 状态面板围栏拒绝: Host=${String(req.headers.host ?? '')}, Origin=${String(req.headers.origin ?? '-')}, Sec-Fetch-Site=${String(req.headers['sec-fetch-site'] ?? '-')}, 受信列表=${JSON.stringify(resolveTrustedAuthorities(ctx))}`);
+                        }
                         return writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } });
+                    }
                     if (req.method !== 'POST') {
                         return writeJson(res, 405, { ok: false, error: { code: 'method-error', message: 'method not allowed' } });
                     }
