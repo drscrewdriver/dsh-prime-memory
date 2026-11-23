@@ -18,10 +18,12 @@ import { describe, expect, it } from 'vitest';
 import {
   hostFenceAllows,
   isLoopbackHostname,
+  isSameAuthorityOrigin,
   matchesTrustedAuthority,
   readBindHostname,
   readStartupTrustedHosts,
   readTrustedHostsFromArgv,
+  requestFenceAllows,
   resolveTrustedAuthorities,
 } from '../src/trusted-hosts.js';
 
@@ -193,5 +195,71 @@ describe('hostFenceAllows', () => {
     expect(hostFenceAllows(undefined, undefined)).toBe(false);
     expect(hostFenceAllows('', undefined)).toBe(false);
     expect(hostFenceAllows('http://evil.example.com/path', undefined)).toBe(false);
+  });
+});
+
+describe('isSameAuthorityOrigin', () => {
+  it('同 authority 放行（默认端口归一化、Host 端口一致）', () => {
+    // Origin 省略端口 = 该 scheme 的默认端口；Host 必须写同一个 authority。
+    expect(isSameAuthorityOrigin('http://dsh.example.com', 'dsh.example.com')).toBe(true);
+    expect(isSameAuthorityOrigin('http://dsh.example.com:80', 'dsh.example.com')).toBe(true);
+    expect(isSameAuthorityOrigin('http://dsh.example.com:3080', 'dsh.example.com:3080')).toBe(true);
+    expect(isSameAuthorityOrigin('https://dsh.example.com', 'dsh.example.com')).toBe(true);
+  });
+
+  it('按 Origin 的 scheme 归一化默认端口：80 与 443 不互相冒充', () => {
+    // http://host 意味着 :80；Host 写 :443 不是同一个 authority。
+    expect(isSameAuthorityOrigin('http://dsh.example.com', 'dsh.example.com:443')).toBe(false);
+    expect(isSameAuthorityOrigin('https://dsh.example.com', 'dsh.example.com:80')).toBe(false);
+  });
+
+  it('异源一律拒绝', () => {
+    expect(isSameAuthorityOrigin('http://evil.example.com', 'dsh.example.com:3080')).toBe(false);
+    expect(isSameAuthorityOrigin('http://dsh.example.com.evil.com', 'dsh.example.com')).toBe(false);
+  });
+
+  it('不透明源 null / 非 http(s) scheme / 非法值一律拒绝', () => {
+    for (const origin of ['null', 'file:///tmp/x', 'ftp://dsh.example.com', '', 'not a url']) {
+      expect(isSameAuthorityOrigin(origin, 'dsh.example.com:3080'), origin).toBe(false);
+    }
+  });
+});
+
+describe('requestFenceAllows', () => {
+  const trusted = ctxWithStartup({ trustedHosts: ['dsh.example.com', '192.168.31.9:13080'] });
+
+  it('无 Origin 的合法客户端按 Host 档判定（curl / 非浏览器向后兼容）', () => {
+    expect(requestFenceAllows({ host: 'dsh.example.com:9443' }, trusted)).toBe(true);
+    expect(requestFenceAllows({ host: '127.0.0.1:3080' }, trusted)).toBe(true);
+    expect(requestFenceAllows({ host: 'evil.example.com' }, trusted)).toBe(false);
+  });
+
+  it('Host 命中白名单但 Origin 异源 → 拒绝（CSRF 面）', () => {
+    expect(requestFenceAllows({ host: 'dsh.example.com:9443', origin: 'http://evil.example.com' }, trusted)).toBe(false);
+  });
+
+  it('loopback Host + 异源 Origin → 拒绝（修复前就存在的本机 CSRF 洞）', () => {
+    expect(requestFenceAllows({ host: '127.0.0.1:3080', origin: 'http://evil.example.com' }, undefined)).toBe(false);
+    expect(requestFenceAllows({ host: 'localhost:3080', origin: 'null' }, undefined)).toBe(false);
+  });
+
+  it('白名单 Host + 同源 Origin → 放行', () => {
+    expect(requestFenceAllows({ host: 'dsh.example.com:9443', origin: 'http://dsh.example.com:9443' }, trusted)).toBe(true);
+    expect(requestFenceAllows({ host: '192.168.31.9:13080', origin: 'http://192.168.31.9:13080' }, trusted)).toBe(true);
+  });
+
+  it('sec-fetch-site: cross-site 即便 Host 在 loopback 也拒绝', () => {
+    expect(requestFenceAllows({ host: '127.0.0.1:3080', 'sec-fetch-site': 'cross-site' }, undefined)).toBe(false);
+    expect(requestFenceAllows({ host: 'dsh.example.com:9443', 'sec-fetch-site': 'cross-site', origin: 'http://dsh.example.com:9443' }, trusted)).toBe(false);
+  });
+
+  it('sec-fetch-site 同源 / none 不额外拦（Host+Origin 两档已判）', () => {
+    for (const site of ['same-origin', 'same-site', 'none']) {
+      expect(requestFenceAllows({ host: '127.0.0.1:3080', 'sec-fetch-site': site }, undefined), site).toBe(true);
+    }
+  });
+
+  it('重复 Origin 头（数组形态）按不可信拒，不误放', () => {
+    expect(requestFenceAllows({ host: 'dsh.example.com:9443', origin: ['http://dsh.example.com:9443', 'http://evil.example.com'] }, trusted)).toBe(false);
   });
 });

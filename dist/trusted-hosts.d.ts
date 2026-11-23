@@ -21,6 +21,12 @@
  * 且 DNS-rebinding 依旧拦得住（攻击者域名解析到本机后 Host 仍是攻击者域名，不在
  * 白名单内）。
  *
+ * **放宽 Host 接受档必须同步补 Origin 档**：宿主 `isTrustedApiRequest` 是「Host 准入
+ * ∪ sec-fetch-site 非 cross-site ∪ Origin 必等本 authority」三段式，本文件
+ * `hostFenceAllows` 只对齐了第一段。本路由不校验 content-type，跨站页面能用
+ * `text/plain` 发 JSON 绕过 CORS 预检，此时唯一还拦得住写接口的就是后两段
+ * （见 {@link requestFenceAllows}）。只放宽第一段 = 把本机 CSRF 面放大到整个受信网段。
+ *
  * 为何还要读进程参数：实测 0.2.2-rc.1 装机环境下，插件 ctx 读 webStartup / webRuntime
  * 取到 undefined（cordis Proxy 面与作用域可见性都可能挡），只读服务会退化成「只认
  * loopback」，重启後照旧 403。`--trusted-host` 的权威来源就是进程参数，故服务读取
@@ -71,3 +77,35 @@ export declare function readBindHostname(ctx: unknown): string | undefined;
  * @param scheme - 监听侧协议（决定默认端口归一化）。
  */
 export declare function hostFenceAllows(host: unknown, ctx: unknown, scheme?: string): boolean;
+/**
+ * Origin 是否就是本监听器自己的 authority。
+ *
+ * 移植宿主 `isSameAuthorityOrigin`（dsh-client-connection/src/api-request-trust.ts），
+ * 语义必须逐字对齐：按 Origin 的 scheme 重新解析 Host，让默认端口一致归一化
+ * （transport 可能是 HTTPS 反代后的 HTTP）。只接受 http(s)——`null`（沙箱 iframe /
+ * file: 页面）在 `new URL` 就抛，其他 scheme（file:、ftp:）在这里拒，而不是退化成
+ * 「主机名相同即放行」。
+ * @param origin - 请求头 Origin（verbatim）。
+ * @param host - 已通过 Host 档的 Host 头（verbatim）。
+ */
+export declare function isSameAuthorityOrigin(origin: string, host: string): boolean;
+/** 围栏要看的请求头子集（Node `IncomingMessage.headers` 的子集，便于单测注入）。 */
+export interface FenceHeaders {
+    host?: unknown;
+    origin?: unknown;
+    'sec-fetch-site'?: unknown;
+}
+/**
+ * 完整请求围栏：Host 准入 ∪ cross-site 拒绝 ∪ Origin 必等本 authority。
+ *
+ * 为什么不能只判 Host：本插件路由不校验 content-type（`readJsonBody` 直接裸
+ * JSON.parse），所以攻击者能用 `Content-Type: text/plain` 发 JSON —— 那是 CORS 的
+ * 「简单请求」，**不触发预检**。这条路上唯一还能拦住跨站写入的就是 Origin /
+ * Sec-Fetch-Site 两个头。放宽 Host 接受档（局域网 / 反代域名 / bind 地址）之后若不同步
+ * 补这两档，写接口（records-delete / settings-set）就是无差别 CSRF。
+ * 这是宿主 `isTrustedApiRequest` 三段式的后两段，`hostFenceAllows` 只对齐了第一段。
+ * @param headers - 请求头（至少含 host）。
+ * @param ctx - 插件上下文，用于读受信白名单 / 绑定地址。
+ * @param scheme - 监听侧协议（决定默认端口归一化）。
+ */
+export declare function requestFenceAllows(headers: FenceHeaders, ctx: unknown, scheme?: string): boolean;

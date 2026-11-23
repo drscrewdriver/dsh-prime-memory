@@ -20,7 +20,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/dsh-llm';
 import type {} from '@deepseek-ai/dsh-agent-default-model';
 import { EFFORT_CHOICES, resolveDataDir, type MemoryConfig } from './config.js';
-import { hostFenceAllows, resolveTrustedAuthorities } from './trusted-hosts.js';
+import { requestFenceAllows, resolveTrustedAuthorities } from './trusted-hosts.js';
 import { typeCatalogEntries } from './memory-types.js';
 import type { BackfillProgress } from './contract.js';
 import { effectiveCfg } from './pipeline/runner.js';
@@ -226,13 +226,17 @@ interface WebServerFace {
 
 /**
  * API 信任围栏:DNS-rebinding / 跨站防护(非用户鉴权),语义对齐 connection
- * /api 网关的 fence——Host 指向 loopback、命中宿主 `--trusted-host` 白名单，或命中
- * `--host` 绑定的接口地址即放行。面板数据非机密（密钥字段宿主侧已脱敏）；只认
- * loopback 会把「宿主已经信任」的局域网 / 反代域名 / 非 loopback 绑定地址一并拒掉，
+ * /api 网关的 fence 三段式——① Host 指向 loopback、命中宿主 `--trusted-host`
+ * 白名单，或命中 `--host` 绑定的接口地址；② `sec-fetch-site` 不得是 cross-site；
+ * ③ 带 Origin 时必须是本监听 authority。面板数据非机密（密钥字段宿主侧已脱敏）；
+ * 只认 loopback 会把「宿主已经信任」的局域网 / 反代域名 / 非 loopback 绑定地址一并拒掉，
  * 表现为界面正常、面板全 403。
+ *
+ * ②③ 不可省：本路由不校验 content-type，跨站页面能用 `text/plain` 发 JSON 绕过 CORS
+ * 预检，放宽 Host 接受档后若只判 ①，写接口即为无差别 CSRF。
  */
 function apiFence(req: IncomingMessage, ctx: Context, scheme: 'http:' | 'https:'): boolean {
-  return hostFenceAllows(req.headers.host, ctx, scheme);
+  return requestFenceAllows(req.headers, ctx, scheme);
 }
 
 function writeJson(res: ServerResponse, status: number, body: unknown): void {
@@ -545,10 +549,11 @@ export function registerMemoryRpc(
         path: RPC_ROUTE_PREFIX,
         handler: async (req: IncomingMessage, res: ServerResponse) => {
           if (!apiFence(req, ctx, listenerScheme)) {
-            // 拒绝必留现场:没有 Host 与白名单就分不清「跨站」与「宿主信任但插件没读」。
+            // 拒绝必留现场:没有 Host/Origin/白名单就分不清「跨站」「Origin 不匹配」
+            // 与「宿主信任但插件没读」这三种完全不同的原因。
             if (!fenceRejected) {
               fenceRejected = true;
-              logger.warn(`[memory] 状态面板围栏拒绝: Host=${String(req.headers.host ?? '')}, 受信列表=${JSON.stringify(resolveTrustedAuthorities(ctx))}`);
+              logger.warn(`[memory] 状态面板围栏拒绝: Host=${String(req.headers.host ?? '')}, Origin=${String(req.headers.origin ?? '-')}, Sec-Fetch-Site=${String(req.headers['sec-fetch-site'] ?? '-')}, 受信列表=${JSON.stringify(resolveTrustedAuthorities(ctx))}`);
             }
             return writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } });
           }
