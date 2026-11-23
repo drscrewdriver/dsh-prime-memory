@@ -1,3 +1,17 @@
+## 0.26.73
+
+**记忆面板 Ingress 围栏对齐宿主三段式 —— 吸收 #43 的 Host 放宽，并补上它缺的 Origin / cross-site 两档。**
+
+反向代理 / 局域网 IP / `--host` 绑非 loopback 网卡访问时，「设置 → 记忆」的每个端点都 403（`transport failure for dsh-memory/stats: HTTP 403`），界面与聊天却正常——因为面板不走宿主 `/api`，而是自己注册 `POST /dsh-memory/rpc/<method>`，于是自己承担围栏，而围栏原先只认 loopback。@wuzhican 在 #42 给出复现与根因、在 #43 给出对照宿主 `admit()` 的准入修复（loopback ∪ `--trusted-host` 白名单 ∪ `--host` 绑定地址），本版吸收。
+
+但宿主 `isTrustedApiRequest` 是**三段式**：① Host 准入 ② `sec-fetch-site` 非 cross-site ③ 带 Origin 时必等本 authority。**#43 只搬了 ①**。本路由不校验 content-type（`readJsonBody` 直接裸 `JSON.parse`），跨站页面能用 `Content-Type: text/plain` 发 JSON —— 那是 CORS 简单请求、**不触发预检**，此时唯一还拦得住写接口（`records-delete` / `settings-set`）的就是 ②③。只放宽 ① 等于把修复前就存在的本机 CSRF 面（本机 evil 页面 + loopback Host）放大到整个受信网段与反代公网域名，所以本版同批补齐。
+
+- `src/trusted-hosts.ts`：移植宿主 `isSameAuthorityOrigin`（按 Origin 的 scheme 重新解析 Host 归一化默认端口；`null` 不透明源、非 http(s) scheme、非法值一律拒）；新增 `requestFenceAllows(headers, ctx, scheme)` = ① Host 档 → ② cross-site 拒 → ③ Origin 必等。`hostFenceAllows` 签名不动，#43 原有 24 条 Host 单测零改动。
+- `src/stats.ts`：`apiFence` 转调 `requestFenceAllows`；围栏拒绝日志补 `Origin=` / `Sec-Fetch-Site=` 现场（原先三种拒绝原因在日志里分不开）。
+- 测试：`tests/trusted-hosts.test.ts` +11 条判定单测；`tests/rpc.test.ts` 路由级 +4 条 —— 白名单 Host + 异源 Origin 403、loopback Host + 异源 Origin 403（顺带关掉修复前就存在的本机 CSRF 洞）、同源 200 不误伤、cross-site 即便同源也拒。无 Origin 的合法客户端（curl 等）仍按 Host 档放行，向后兼容。
+
+门禁：typecheck 三工程干净；vitest 2514 passed / 1 skipped（240 文件）；eslint 0；build + smoke 全过；dist 已同步。合入 commit `a5145c2`（PR #44）。
+
 ## 0.26.72
 
 **pt 字典注册 —— 修「1,412 条译文维护齐全、pt 用户却永远看到英文」的静默回退（BUG-2）。**
