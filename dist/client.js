@@ -40815,6 +40815,10 @@ var __create = Object.create;
 		    {
 		      title: "成本与待裁决的冲突",
 		      body: "「成本」页按层级和模型看蒸馏花掉的 token；「冲突」页默认是空的 —— 要先去概览打开「人工冲突裁决」，之后每一对冲突都会停在那里等你判。"
+		    },
+		    {
+		      title: "蒸馏走独立端点，别蹭对话模型",
+		      body: "概览页的「蒸馏通道」选「直连端点」，填一个本地 OpenAI 兼容端点（如 http://127.0.0.1:8000/v1），再把全局链和 L1/L2/L3 层链的主路由钉到便宜的小模型。通道停在「跟随部署配置」或「复用宿主」时，蒸馏和对话共用同一个 provider/model，每轮抽取都在吃对话配额。"
 		    }
 		  ],
 		  en: [
@@ -40829,6 +40833,10 @@ var __create = Object.create;
 		    {
 		      title: "Cost, and the conflicts only you can settle",
 		      body: "The Cost tab shows distillation tokens by level and model. The Conflict tab starts empty: turn on Manual conflict resolution in Overview first, and every conflicting pair then parks there waiting for your verdict."
+		    },
+		    {
+		      title: "Give distillation its own endpoint",
+		      body: "Set the Distillation channel in Overview to Direct endpoint and point it at a local OpenAI-compatible service (e.g. http://127.0.0.1:8000/v1), then pin the global chain and the L1/L2/L3 layer chains to cheap small models. While the channel stays on Follow deployment config or Reuse host, distillation shares one provider/model with the conversation, so every extraction round spends conversation quota."
 		    }
 		  ]
 		};
@@ -48869,6 +48877,15 @@ var __create = Object.create;
 		  return /* @__PURE__ */ (0, import_jsx_runtime28.jsxs)("div", { className: "dsh-mem-root", style: S.section, children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("h2", { style: S.heading, children: tr("记忆 (Memory)") }),
 		    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("p", { style: S.intro, children: tr("L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。") }),
+		    /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { style: { marginBottom: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
+		      GuideRestartButton,
+		      {
+		        ns: "prime-memory",
+		        onOpen: () => {
+		          setGuideOpen(true);
+		        }
+		      }
+		    ) }),
 		    guideOpen && /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
 		      GuidePanel,
 		      {
@@ -48919,16 +48936,7 @@ var __create = Object.create;
 		        t[0]
 		      );
 		    }) }),
-		    body,
-		    !guideOpen && /* @__PURE__ */ (0, import_jsx_runtime28.jsx)("div", { style: { marginTop: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime28.jsx)(
-		      GuideRestartButton,
-		      {
-		        ns: "prime-memory",
-		        onOpen: () => {
-		          setGuideOpen(true);
-		        }
-		      }
-		    ) })
+		    body
 		  ] });
 		}
 		

@@ -95,6 +95,16 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
     <div className="dsh-mem-root" style={S.section}>
       <h2 style={S.heading}>{tr("记忆 (Memory)")}</h2>
       <p style={S.intro}>{tr("L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。")}</p>
+      {/* 设置面上方恒定重启入口：跳过引导后不必清浏览器存储就能重新显示贴士，
+          所以它必须在一进来就看到的地方——贴士本身也渲染在同一位置。*/}
+      <div style={{ marginBottom: 12 }}>
+        <GuideRestartButton
+          ns="prime-memory"
+          onOpen={() => {
+            setGuideOpen(true);
+          }}
+        />
+      </div>
       {/* 首次使用引导：放在标题与 intro 之后、DRSC 横幅之前，一进来先看到，不打断下方表单 */}
       {guideOpen && (
         <GuidePanel
@@ -145,17 +155,6 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
         })}
       </div>
       {body}
-      {/* 面板底部恒定重启入口：跳过引导后不必清浏览器存储就能再看一次 */}
-      {!guideOpen && (
-        <div style={{ marginTop: 12 }}>
-          <GuideRestartButton
-            ns="prime-memory"
-            onOpen={() => {
-              setGuideOpen(true);
-            }}
-          />
-        </div>
-      )}
     </div>
   );
 }
