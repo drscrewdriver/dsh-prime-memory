@@ -84,9 +84,9 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
       // 退场哪一条：winner → 败方；loser → 胜方；both → 都不退场。
       const doomed =
         outcome === 'winner'
-          ? pair.loser_content || GONE
+          ? pair.loser_content || tr(GONE)
           : outcome === 'loser'
-            ? pair.winner_content || GONE
+            ? pair.winner_content || tr(GONE)
             : null;
       if (doomed !== null) {
         const ok = window.confirm(
@@ -148,10 +148,10 @@ export function ConflictsTab(props: { rpc: RpcFn }) {
       {sections.map((sec) => (
         <div key={sec.type} style={{ marginBottom: 12 }}>
           <div style={S.cardHead}>
-            <span style={{ ...S.muted, fontWeight: 600 }}>{sec.label}</span>
+            <span style={{ ...S.muted, fontWeight: 600 }}>{tr(sec.label)}</span>
             <span style={S.muted}>{sec.items.length} {tr("条")}</span>
           </div>
-          <div style={{ ...S.muted, fontSize: 11, marginBottom: 6 }}>{sec.hint}</div>
+          <div style={{ ...S.muted, fontSize: 11, marginBottom: 6 }}>{tr(sec.hint)}</div>
           {sec.items.map((p) => (
             <ConflictCard key={p.pair_id} pair={p} busy={busy === p.pair_id} onResolve={resolve} />
           ))}

@@ -1,3 +1,21 @@
+## 0.27.1
+
+**语言类串台收口 —— 渲染点绕开 `tr()` 的中文常量 / 表值全部补齐（20 处 / 9 文件）。**
+
+现象（英文态设置页）：功能分组与行标签出现「知识图谱 projection」「图谱读工具」这类半中半英。字典侧其实完好（`知识图谱` / `图谱读工具` 在 en / pt / ru 均有译文），问题出在**引用姿势**：中文已进字典，渲染点却直接取常量而不走 `tr()`。
+
+三类形态与修法：
+
+- **标量常量裸引用**：`label={GRAPH_TOOL_LABEL}`、分组标题 `{GRAPH_FEATURE_LABEL}` → 包 `tr()`（OverviewTab）。
+- **`tr()` 插值实参未翻译**：`tr("{p1}投影", { p1: GRAPH_FEATURE_LABEL })` → 实参也包 `tr()`，否则 en 拼出「知识图谱 projection」（OverviewTab；同型还有 LogTab 的来源名、ConflictsTab 裁决确认框的 `|| GONE` 兜底）。
+- **表量在展示位取值**：`Segmented` 的层 / 粒度选项标签（CostTab）、外部记忆字段名与影子状态 / 冲突类型标签（ExtMemoryTab）、冲突分段 `sec.label` / `sec.hint`（ConflictsTab）、层链标题（DistillSettings）、退场原因（RecordsTab）、重建阶段（RebuildPanel）、关闭态档位名（MemoryModePill）→ 一律经 `tr()`。
+
+**字典零改动**：用 AST 核这 9 个文件的全部 406 条中文字面量，keys.json / en / ru / pt 覆盖缺口为 0 —— 确认属纯引用问题，不是缺翻译。
+
+**新增守卫** `tests/locale-bare-ref.test.ts`：既有 `locale-guard` 棘轮只数「源码新增硬编码字面量」，而这类写法不新增字面量（中文躺在 `copy.ts` 与表里，`copy.ts` 还因文件名被字典豁免），于是一切绿、用户却串台。新测试盯**引用姿势**：R1 值为中文的标量常量只允许出现在 `tr(...)` 参数子树内；R2 值含中文的表量在展示位（JSX 表达式 / 属性、`label|title|desc|hint|text|placeholder|caption`、`tr` 插值实参）取中文属性必须过 `tr()`，而 `MODES[i].key`、`TABS.map`、配色、座位名等逻辑读法放行。反向验证：把一处改回裸引用即变红并精确报出文件行列，还原即绿。
+
+门禁：typecheck 三工程干净；eslint 0 error（4 条既有 warning）；locale-guard 2/2、locale-bare-ref 2/2；全量 vitest 243 文件 2526 passed / 1 skipped（`memory-md-*` 的重 IO 并发级联假阳性为既有问题，HEAD 亦复现同签名失败，且这两个测试文件对 `client/src` 的引用数为 0）；build 出 dist/client.js 3,095,517 字节。
+
 ## 0.27.0
 
 **记忆启动挡位（三态）—— 会话即时开关与「下次启动默认值」解耦；出厂默认改为「关闭」。**

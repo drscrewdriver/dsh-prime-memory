@@ -540,7 +540,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {tr("已退场") + (m.retiredReason ? ' · ' + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : '')}
+                    {tr("已退场") + (m.retiredReason ? ' · ' + tr(RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : '')}
                   </span>
                 ) : null}
                 <span style={S.muted}>{tr("优先级") + m.priority}</span>
@@ -706,7 +706,7 @@ export function RecordsTab(props: { rpc: RpcFn }) {
               {retired.map((m) => (
                 <div key={m.id} className="dsh-mem-card" style={S.card}>
                   <div style={S.cardHead}>
-                    <span style={S.muted}>{RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason}</span>
+                    <span style={S.muted}>{tr(RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason)}</span>
                     {m.verdict ? <span style={S.muted}>{tr("结论") + m.verdict}</span> : null}
                     <div style={S.grow} />
                     <span style={S.muted}>{fmtTime(m.retiredAt)}</span>

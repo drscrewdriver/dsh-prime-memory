@@ -119,7 +119,7 @@ export function RebuildPanel(props: { rpc: RpcFn }) {
         <div style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{tr("重建记忆")}</div>
         <div className="dsh-mem-rb-muted" style={{ flex: 1, minWidth: 180 }}>
           {running
-            ? (RB_PHASE_LABEL[rb.phase] || rb.phase) + ' · ' + rb.done + '/' + rb.total + tr("会话（") + pct + '%）'
+            ? tr(RB_PHASE_LABEL[rb.phase] || rb.phase) + ' · ' + rb.done + '/' + rb.total + tr("会话（") + pct + '%）'
             : tr("从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）")}
         </div>
         {running ? (

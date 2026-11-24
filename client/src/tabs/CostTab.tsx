@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { CostSnapshot, TrendBucket } from '../../../src/contract.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
-import { Segmented, type SegOption } from '../ui/controls.js';
+import { Segmented } from '../ui/controls.js';
 import { NButton, NInput } from '../ui/primitives.js';
 
 /** SVG 折线图：桶序列 × 模型集合 → 多折线（Y 轴输出 token）。 */
@@ -66,13 +66,13 @@ function renderCostChart(
 }
 
 const RANGE_LABELS: Record<string, string> = { day: '今日', week: '本周', month: '本月', all: '累计' };
-const LAYER_OPTS: SegOption[] = [
+const LAYER_OPTS: Array<{ key: string; label: string }> = [
   { key: '', label: '全部' },
   { key: 'l1', label: 'L1' },
   { key: 'l2', label: 'L2' },
   { key: 'l3', label: 'L3' },
 ];
-const GRAN_OPTS: SegOption[] = [
+const GRAN_OPTS: Array<{ key: string; label: string }> = [
   { key: 'day', label: '日' },
   { key: 'week', label: '周' },
   { key: 'month', label: '月' },
@@ -212,8 +212,8 @@ export function CostTab(props: { rpc: RpcFn }) {
   return (
     <div>
       <div style={{ ...S.flexRow, marginBottom: 10 }}>
-        <Segmented value={layer} options={LAYER_OPTS} onChange={setLayer} />
-        <Segmented value={granularity} options={GRAN_OPTS} onChange={setGranularity} />
+        <Segmented value={layer} options={LAYER_OPTS.map((o) => ({ ...o, label: tr(o.label) }))} onChange={setLayer} />
+        <Segmented value={granularity} options={GRAN_OPTS.map((o) => ({ ...o, label: tr(o.label) }))} onChange={setGranularity} />
         <NButton
           onClick={() => {
             setRangeOpen(!rangeOpen);

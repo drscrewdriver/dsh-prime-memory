@@ -75,7 +75,7 @@ export function LogTab(props: { rpc: RpcFn }) {
         <NButton onClick={load}>{tr("刷新")}</NButton>
       </div>
       <div style={{ ...S.muted, marginBottom: 10 }}>
-        {error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: SOURCES.find((s) => s.id === source)?.label })}
+        {error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: tr(SOURCES.find((s) => s.id === source)?.label ?? '') })}
       </div>
       {error ? (
         <div style={{ ...S.error, marginBottom: 10 }}>{tr("读取失败：") + error + tr("（点右上“刷新”重试）")}</div>

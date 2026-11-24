@@ -83,7 +83,7 @@ export function DistillSettings(props: {
     { key: 'g', label: tr("全局默认"), title: tr("未单独配置的层走这条链（当前在用：") + (users.length ? users.map((k) => LAYER_META[k].seg).join('、') : tr("无")) + '）' },
     ...(['l1', 'l2', 'l3'] as LayerRouteKey[]).map((k) => ({
       key: k,
-      title: LAYER_META[k].title + ' · ' + (dotOf(k) === 'runtime' ? tr("运行时自定义") : dotOf(k) === 'static' ? tr("部署 YAML 层链（只读）") : tr("跟随全局")),
+      title: tr(LAYER_META[k].title) + ' · ' + (dotOf(k) === 'runtime' ? tr("运行时自定义") : dotOf(k) === 'static' ? tr("部署 YAML 层链（只读）") : tr("跟随全局")),
       label: (
         <span>
           <Dot kind={dotOf(k)} />
@@ -128,7 +128,7 @@ export function DistillSettings(props: {
       ) : (
         <div>
           <div style={STY.panelHead}>
-            <span style={STY.panelTitle}>{LAYER_META[tab].title}</span>
+            <span style={STY.panelTitle}>{tr(LAYER_META[tab].title)}</span>
             <span style={{ ...STY.chip, ...(dotOf(tab) === 'runtime' ? STY.chipAccent : STY.chipMuted) }} title={chipTitle(tab)}>
               {dotOf(tab) === 'runtime' ? tr("运行时自定义") : dotOf(tab) === 'static' ? tr("静态 · YAML") : tr("跟随全局")}
             </span>

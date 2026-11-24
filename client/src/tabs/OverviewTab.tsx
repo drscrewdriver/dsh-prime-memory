@@ -301,9 +301,9 @@ export function OverviewTab(props: { rpc: RpcFn }) {
            * 与下方「图谱读工具」（能否向模型注册读图工具）是两个独立的面；
            * 旧版只有后者，而“图谱投影”四个字落在蒸馏预算输入框旁边（那是预算分层标签）。
            */}
-          <div style={S.panelLabel}>{GRAPH_FEATURE_LABEL}</div>
+          <div style={S.panelLabel}>{tr(GRAPH_FEATURE_LABEL)}</div>
           <SwitchRow
-            label={tr("{p1}投影", { p1: GRAPH_FEATURE_LABEL })}
+            label={tr("{p1}投影", { p1: tr(GRAPH_FEATURE_LABEL) })}
             desc={graphSwitchDesc(graphEnabled)}
             checked={graphEnabled}
             disabled={!master}
@@ -335,7 +335,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             onChange={(v) => { toggle('toolRoom', v); }}
           />
           <SwitchRow
-            label={GRAPH_TOOL_LABEL}
+            label={tr(GRAPH_TOOL_LABEL)}
             desc={toolGraph ? tr("已注册：memory_search_graph / memory_expand_graph_node") : tr("已封印：图谱读工具从模型工具列表移除")}
             checked={toolGraph}
             onChange={(v) => { toggle('toolGraph', v); }}

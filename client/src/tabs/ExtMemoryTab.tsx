@@ -612,7 +612,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
             <div style={{ marginTop: 12 }}>
               <div style={S.muted}>{tr("影子账本：")}</div>
               <div style={{ ...S.detail, marginTop: 4 }}>
-                {shadowRows.map(([st, n]) => (SHADOW_STATE_LABELS[st] ?? st) + ' ' + n).join(' / ')}
+                {shadowRows.map(([st, n]) => tr(SHADOW_STATE_LABELS[st] ?? st) + ' ' + n).join(' / ')}
               </div>
             </div>
           ) : null}
@@ -646,12 +646,12 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
             <div style={{ marginTop: 12 }}>
               <div style={S.muted}>
                 {tr("同步冲突") + conflicts.open + tr("条") +
-                  Object.entries(conflicts.byKind).map(([k, n]) => ' · ' + (CONFLICT_KIND_LABELS[k] ?? k) + ' ' + n).join('')}
+                  Object.entries(conflicts.byKind).map(([k, n]) => ' · ' + tr(CONFLICT_KIND_LABELS[k] ?? k) + ' ' + n).join('')}
               </div>
               {conflicts.items.map((c) => (
                 <div key={c.conflictId} className="dsh-mem-card" style={{ ...S.card, marginTop: 6 }}>
                   <div style={S.cardHead}>
-                    <strong>{CONFLICT_KIND_LABELS[c.kind] ?? c.kind}</strong>
+                    <strong>{tr(CONFLICT_KIND_LABELS[c.kind] ?? c.kind)}</strong>
                     <span style={S.muted}>{'· ' + c.driverId + (c.externalId ? tr("· 远端") + c.externalId : '')}</span>
                     <div style={S.grow} />
                     <NButton onClick={() => resolveConflict(c.conflictId, 'resolve')}>{tr("裁决")}</NButton>
@@ -682,7 +682,7 @@ export function ExtMemoryTab(props: { rpc: RpcFn }) {
           <div style={{ display: 'grid', gap: 8 }}>
             {(['id', 'endpoint', 'apiKey', 'space', 'extra'] as const).map((key) => (
               <label key={key} style={{ display: 'grid', gap: 2 }}>
-                <span style={S.muted}>{FIELD_LABELS[key]}</span>
+                <span style={S.muted}>{tr(FIELD_LABELS[key])}</span>
                 <NInput
                   value={draft[key]}
                   placeholder={fieldPlaceholder(key, draft.mode === 'edit')}

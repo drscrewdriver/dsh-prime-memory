@@ -41564,7 +41564,7 @@ var __create = Object.create;
 		  }, [load]);
 		  const resolve = (pair, outcome) => {
 		    if (outcome !== "defer") {
-		      const doomed = outcome === "winner" ? pair.loser_content || GONE : outcome === "loser" ? pair.winner_content || GONE : null;
+		      const doomed = outcome === "winner" ? pair.loser_content || tr(GONE) : outcome === "loser" ? pair.winner_content || tr(GONE) : null;
 		      if (doomed !== null) {
 		        const ok = window.confirm(
 		          tr("裁决这一对？ 将要退场的记忆： 「{p1}」", { p1: doomed }) + tr("它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。") + tr("裁决结论本身不可覆盖。")
@@ -41607,14 +41607,14 @@ var __create = Object.create;
 		    view !== null && view.enabled && items.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("p", { style: S.intro, children: tr("没有待裁决的冲突对。新记忆入库时若与旧记忆矛盾且冻结已开启，那一对会停到这里。") }) : null,
 		    sections.map((sec) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: { marginBottom: 12 }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { style: S.cardHead, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: { ...S.muted, fontWeight: 600 }, children: sec.label }),
+		        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: { ...S.muted, fontWeight: 600 }, children: tr(sec.label) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { style: S.muted, children: [
 		          sec.items.length,
 		          " ",
 		          tr("条")
 		        ] })
 		      ] }),
-		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { ...S.muted, fontSize: 11, marginBottom: 6 }, children: sec.hint }),
+		      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { style: { ...S.muted, fontSize: 11, marginBottom: 6 }, children: tr(sec.hint) }),
 		      sec.items.map((p) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(ConflictCard, { pair: p, busy: busy === p.pair_id, onResolve: resolve }, p.pair_id))
 		    ] }, sec.type))
 		  ] });
@@ -42357,7 +42357,7 @@ var __create = Object.create;
 		      drivers && drivers.drivers.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { style: { ...S.muted, marginTop: 8 }, children: tr("尚无驱动登记：点右上「新增驱动」接入一家外部记忆服务（写入 profile，重载后装配）。") }) : null,
 		      shadowRows.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { style: { marginTop: 12 }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { style: S.muted, children: tr("影子账本：") }),
-		        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { style: { ...S.detail, marginTop: 4 }, children: shadowRows.map(([st, n]) => (SHADOW_STATE_LABELS[st] ?? st) + " " + n).join(" / ") })
+		        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { style: { ...S.detail, marginTop: 4 }, children: shadowRows.map(([st, n]) => tr(SHADOW_STATE_LABELS[st] ?? st) + " " + n).join(" / ") })
 		      ] }) : null,
 		      importProg !== null && (importProg.running || importProg.last !== void 0) ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "dsh-mem-card", style: { ...S.card, marginTop: 12 }, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { style: S.cardHead, children: [
@@ -42381,10 +42381,10 @@ var __create = Object.create;
 		        importProg.error ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { style: { ...S.hint, marginTop: 4 }, children: tr("⚠ 导入失败：") + importProg.error }) : null
 		      ] }) : null,
 		      conflicts && conflicts.enabled && conflicts.items.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { style: { marginTop: 12 }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { style: S.muted, children: tr("同步冲突") + conflicts.open + tr("条") + Object.entries(conflicts.byKind).map(([k, n]) => " · " + (CONFLICT_KIND_LABELS[k] ?? k) + " " + n).join("") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { style: S.muted, children: tr("同步冲突") + conflicts.open + tr("条") + Object.entries(conflicts.byKind).map(([k, n]) => " · " + tr(CONFLICT_KIND_LABELS[k] ?? k) + " " + n).join("") }),
 		        conflicts.items.map((c) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "dsh-mem-card", style: { ...S.card, marginTop: 6 }, children: [
 		          /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { style: S.cardHead, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("strong", { children: CONFLICT_KIND_LABELS[c.kind] ?? c.kind }),
+		            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("strong", { children: tr(CONFLICT_KIND_LABELS[c.kind] ?? c.kind) }),
 		            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { style: S.muted, children: "· " + c.driverId + (c.externalId ? tr("· 远端") + c.externalId : "") }),
 		            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { style: S.grow }),
 		            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(NButton, { onClick: () => resolveConflict(c.conflictId, "resolve"), children: tr("裁决") }),
@@ -42406,7 +42406,7 @@ var __create = Object.create;
 		        onClose: () => setDraft(null),
 		        children: /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { style: { display: "grid", gap: 8 }, children: [
 		          ["id", "endpoint", "apiKey", "space", "extra"].map((key) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { style: { display: "grid", gap: 2 }, children: [
-		            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { style: S.muted, children: FIELD_LABELS[key] }),
+		            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { style: S.muted, children: tr(FIELD_LABELS[key]) }),
 		            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
 		              NInput,
 		              {
@@ -42770,8 +42770,8 @@ var __create = Object.create;
 		  };
 		  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { style: { ...S.flexRow, marginBottom: 10 }, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Segmented, { value: layer, options: LAYER_OPTS, onChange: setLayer }),
-		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Segmented, { value: granularity, options: GRAN_OPTS, onChange: setGranularity }),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Segmented, { value: layer, options: LAYER_OPTS.map((o) => ({ ...o, label: tr(o.label) })), onChange: setLayer }),
+		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(Segmented, { value: granularity, options: GRAN_OPTS.map((o) => ({ ...o, label: tr(o.label) })), onChange: setGranularity }),
 		      /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
 		        NButton,
 		        {
@@ -42944,7 +42944,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: S.grow }),
 		      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(NButton, { onClick: load, children: tr("刷新") })
 		    ] }),
-		    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: SOURCES.find((s) => s.id === source)?.label }) }),
+		    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: { ...S.muted, marginBottom: 10 }, children: error ? tr("加载失败") : lines === null ? tr("加载中…") : tr("最近 {p1} 条（{p2}）", { p1: lines.length, p2: tr(SOURCES.find((s) => s.id === source)?.label ?? "") }) }),
 		    error ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { style: { ...S.error, marginBottom: 10 }, children: tr("读取失败：") + error + tr("（点右上“刷新”重试）") }) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("pre", { style: S.pre, ref: preRef, children: (lines || []).join("\n") || tr("(暂无记录)") })
 		  ] });
 		}
@@ -44319,7 +44319,7 @@ var __create = Object.create;
 		    { key: "g", label: tr("全局默认"), title: tr("未单独配置的层走这条链（当前在用：") + (users.length ? users.map((k) => LAYER_META[k].seg).join("、") : tr("无")) + "）" },
 		    ...["l1", "l2", "l3"].map((k) => ({
 		      key: k,
-		      title: LAYER_META[k].title + " · " + (dotOf(k) === "runtime" ? tr("运行时自定义") : dotOf(k) === "static" ? tr("部署 YAML 层链（只读）") : tr("跟随全局")),
+		      title: tr(LAYER_META[k].title) + " · " + (dotOf(k) === "runtime" ? tr("运行时自定义") : dotOf(k) === "static" ? tr("部署 YAML 层链（只读）") : tr("跟随全局")),
 		      label: /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("span", { children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(Dot, { kind: dotOf(k) }),
 		        LAYER_META[k].seg
@@ -44355,7 +44355,7 @@ var __create = Object.create;
 		      info?.channel ? /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(ChannelEditor, { channel: info.channel, rpc, disabled }) : null
 		    ] }) : /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { style: STY3.panelHead, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: STY3.panelTitle, children: LAYER_META[tab].title }),
+		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: STY3.panelTitle, children: tr(LAYER_META[tab].title) }),
 		        /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { style: { ...STY3.chip, ...dotOf(tab) === "runtime" ? STY3.chipAccent : STY3.chipMuted }, title: chipTitle(tab), children: dotOf(tab) === "runtime" ? tr("运行时自定义") : dotOf(tab) === "static" ? tr("静态 · YAML") : tr("跟随全局") })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(RouteChainEditor, { rpc, disabled, scope: tab }, tab),
@@ -44918,7 +44918,7 @@ var __create = Object.create;
 		  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "dsh-mem-rb-card", children: [
 		    /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }, children: [
 		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { style: { fontWeight: 600, whiteSpace: "nowrap" }, children: tr("重建记忆") }),
-		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "dsh-mem-rb-muted", style: { flex: 1, minWidth: 180 }, children: running ? (RB_PHASE_LABEL[rb.phase] || rb.phase) + " · " + rb.done + "/" + rb.total + tr("会话（") + pct + "%）" : tr("从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "dsh-mem-rb-muted", style: { flex: 1, minWidth: 180 }, children: running ? tr(RB_PHASE_LABEL[rb.phase] || rb.phase) + " · " + rb.done + "/" + rb.total + tr("会话（") + pct + "%）" : tr("从 L0 原始对话重新蒸馏 L1/L2/L3；旧数据先归档（不删除）") }),
 		      running ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(NButton, { disabled: busy || rb.cancelRequested, onClick: cancel, children: rb.cancelRequested ? tr("取消中…") : tr("取消重建") }) : /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
 		        NButton,
 		        {
@@ -45771,11 +45771,11 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.panelLabel, children: GRAPH_FEATURE_LABEL }),
+		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { style: S.panelLabel, children: tr(GRAPH_FEATURE_LABEL) }),
 		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		        SwitchRow,
 		        {
-		          label: tr("{p1}投影", { p1: GRAPH_FEATURE_LABEL }),
+		          label: tr("{p1}投影", { p1: tr(GRAPH_FEATURE_LABEL) }),
 		          desc: graphSwitchDesc(graphEnabled),
 		          checked: graphEnabled,
 		          disabled: !master,
@@ -45815,7 +45815,7 @@ var __create = Object.create;
 		      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
 		        SwitchRow,
 		        {
-		          label: GRAPH_TOOL_LABEL,
+		          label: tr(GRAPH_TOOL_LABEL),
 		          desc: toolGraph ? tr("已注册：memory_search_graph / memory_expand_graph_node") : tr("已封印：图谱读工具从模型工具列表移除"),
 		          checked: toolGraph,
 		          onChange: (v) => {
@@ -46600,7 +46600,7 @@ var __create = Object.create;
 		                    color: "var(--dsh-mem-danger)",
 		                    whiteSpace: "nowrap"
 		                  },
-		                  children: tr("已退场") + (m.retiredReason ? " · " + (RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : "")
+		                  children: tr("已退场") + (m.retiredReason ? " · " + tr(RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) : "")
 		                }
 		              ) : null,
 		              /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr("优先级") + m.priority }),
@@ -46722,7 +46722,7 @@ var __create = Object.create;
 		    showRetired ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: { marginTop: 8 }, children: retired.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("p", { style: S.hint, children: retiredBusy ? " " : tr("没有已退场的记忆。") }) : /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { children: [
 		      retired.map((m) => /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { className: "dsh-mem-card", style: S.card, children: [
 		        /* @__PURE__ */ (0, import_jsx_runtime22.jsxs)("div", { style: S.cardHead, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason }),
+		          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr(RETIRE_REASON_LABEL[m.retiredReason] || m.retiredReason) }),
 		          m.verdict ? /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: tr("结论") + m.verdict }) : null,
 		          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("div", { style: S.grow }),
 		          /* @__PURE__ */ (0, import_jsx_runtime22.jsx)("span", { style: S.muted, children: fmtTime(m.retiredAt) }),
@@ -49990,7 +49990,7 @@ var __create = Object.create;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
 		  const wingText = halls.length === 1 ? wingLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} Wing` : null;
-		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? info.label : !recallResolved ? tr("只写") : wingText ? wingText : tr(info.label);
+		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? tr(info.label) : !recallResolved ? tr("只写") : wingText ? wingText : tr(info.label);
 		  ensureThemeStyle();
 		  const pillStyle = {
 		    position: "relative",
