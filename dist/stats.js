@@ -1906,6 +1906,7 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const resp = {
                 supported: live?.supported ?? false,
                 settings: sanitizeSettings(s ?? {
+                    bootMode: 'off',
                     enabled: true, capture: true, distill: true, recall: true,
                     toolRoom: true, toolGraph: true, toolRuminate: true, toolConflict: true, toolMutate: true, toolSkills: true,
                     // 默认值与 settings.ts 的 DEFAULT_LIVE 同向:管理组/旧名组默认封印(false)。
@@ -2011,6 +2012,13 @@ export async function handleEndpoint(endpoint, payload, deps) {
                     clean[key] = patch[key];
             }
             // 外部同步运行时开关(T4.2 后补):三布尔严格收;档位走白名单('' = 跟随部署)。
+            if (patch.bootMode !== undefined) {
+                const v = String(patch.bootMode);
+                if (!['on', 'off', 'last'].includes(v)) {
+                    throw new Error(`非法启动挡位: ${v}(允许 on / off / last)`);
+                }
+                clean.bootMode = v;
+            }
             // 不进白名单 = “写成功但被静默丢”,面板开关会变成暗示器。
             for (const key of ['extPushEnabled', 'extPullEnabled', 'extAllowHardDelete', 'extImportIsolate']) {
                 if (typeof patch[key] === 'boolean')

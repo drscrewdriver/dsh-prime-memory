@@ -273,7 +273,7 @@ export function CostTab(props: { rpc: RpcFn }) {
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
-                  {RANGE_LABELS[r]}
+                  {tr(RANGE_LABELS[r]!)}
                 </th>
               );
             })}
@@ -298,7 +298,7 @@ export function CostTab(props: { rpc: RpcFn }) {
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
-                  {RANGE_LABELS[r] + '-avg'}
+                  {tr(RANGE_LABELS[r]!) + '-avg'}
                 </th>
               );
             })}
@@ -323,7 +323,7 @@ export function CostTab(props: { rpc: RpcFn }) {
             {RANGES.map((r) => {
               return (
                 <th key={r} style={thStyle}>
-                  {RANGE_LABELS[r] + '-median'}
+                  {tr(RANGE_LABELS[r]!) + '-median'}
                 </th>
               );
             })}

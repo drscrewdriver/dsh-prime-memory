@@ -68,7 +68,7 @@ export function LogTab(props: { rpc: RpcFn }) {
       <div style={{ ...S.flexRow, marginBottom: 10, gap: 8 }}>
         {SOURCES.map((s) => (
           <NButton key={s.id} onClick={() => setSource(s.id as TraceKind)}>
-            {source === s.id ? '● ' + s.label : s.label}
+            {source === s.id ? '● ' + tr(s.label) : tr(s.label)}
           </NButton>
         ))}
         <div style={S.grow} />

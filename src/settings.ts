@@ -132,6 +132,7 @@ interface SettingsFormsLike {
 }
 
 const ALWAYS_ON: MemoryLiveSettings = {
+  bootMode: 'off',
   enabled: true,
   capture: true,
   distill: true,
@@ -402,8 +403,27 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
 }
 
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
-export function resolveSettings(value: unknown): MemoryLiveSettings {
-  if (!value || typeof value !== 'object') return { ...ALWAYS_ON, distillChain: [] };
+/**
+ * 启动期应用三态挡位：`on`/`off` 把初值写回 `enabled`，`last` 原样保留。
+ *
+ * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效
+ * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
+ * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
+ * 保持持久值，不阻断启动。
+ */
+export async function applyBootMode(live: LiveSettingsHandle): Promise<void> {
+  try {
+    const s = live.get();
+    if (s.bootMode !== 'on' && s.bootMode !== 'off') return;
+    const want = s.bootMode === 'on';
+    if (s.enabled === want) return;
+    await live.update({ enabled: want });
+  } catch {
+    /* 写面不可用：保持持久值，启动不受影响 */
+  }
+}
+
+export function resolveSettings(value: unknown): MemoryLiveSettings {  if (!value || typeof value !== 'object') return { ...ALWAYS_ON, distillChain: [] };
   const v = value as Partial<MemoryLiveSettings>;
   const num = (x: unknown): number => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.floor(x) : 0);
   // #37:布尔键收到非 boolean(常见于手编 YAML 写成字符串 "true" 或数字 0)时,
@@ -435,7 +455,12 @@ export function resolveSettings(value: unknown): MemoryLiveSettings {
     return out;
   };
   const rawLayer = (v.distillLayerChains ?? {}) as Partial<Record<LayerRouteKey, unknown>>;
+  // 启动挡位:缺键/非法值归 'off'(出厂默认关闭)。挡位本身**不在读侧折叠**——
+  // 启动期由 `applyBootMode` 把初值写回 `enabled`,这样本会话的手动开关永远有效。
+  const bootMode: 'on' | 'off' | 'last' =
+    v.bootMode === 'on' || v.bootMode === 'off' || v.bootMode === 'last' ? v.bootMode : 'off';
   return {
+    bootMode,
     enabled: v.enabled !== false,
     capture: v.capture !== false,
     distill: v.distill !== false,

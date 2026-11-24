@@ -84,6 +84,30 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   };
 
   /**
+   * 启动挡位写入(三态):乐观翻 UI,失败回滚。与布尔开关分开,
+   * 因为 settings-set 的布尔白名单不收字符串。
+   */
+  const setBootMode = (value: 'on' | 'off' | 'last') => {
+    if (!settingsData) return;
+    const prev = settingsData;
+    const next = { ...prev, settings: { ...prev.settings, bootMode: value } };
+    setSettingsData(next);
+    rpc('dsh-memory/settings-set', { bootMode: value })
+      .then((r) => {
+        if (!r || !r.ok) {
+          setSettingsData(prev);
+          setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
+        } else {
+          setError(null);
+        }
+      })
+      .catch((e: unknown) => {
+        setSettingsData(prev);
+        setError(tr("开关写入失败：") + String((e && (e as Error).message) || e));
+      });
+  };
+
+  /**
    * 开启投影前先问一次“大概多贵”。
    *
    * 投影是**逐批走 LLM** 的（每批 8 条记录、单批约 2 分钟），首次开启可能是几十条
@@ -219,6 +243,35 @@ export function OverviewTab(props: { rpc: RpcFn }) {
               toggle('recall', v);
             }}
           />
+          {/* 分组一·续：启动挡位——决定下次启动时记忆是开还是关（本会话随时可用上面的总开关） */}
+          <div style={S.panelLabel}>{tr("启动挡位")}</div>
+          <div style={{ ...S.switchRow, alignItems: 'flex-start' }}>
+            <span style={S.switchLabel}>{tr("下次启动")}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <select
+                value={settingsData.settings.bootMode ?? 'last'}
+                onChange={(e) => {
+                  setBootMode(e.currentTarget.value as 'on' | 'off' | 'last');
+                }}
+                style={{
+                  fontSize: 13,
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--dsh-mem-border)',
+                  background: 'var(--dsh-mem-bg-card)',
+                  color: 'var(--dsh-mem-text-1)',
+                  minWidth: 160,
+                }}
+              >
+                <option value="last">{tr("跟随上一次")}</option>
+                <option value="on">{tr("强制开启")}</option>
+                <option value="off">{tr("强制关闭")}</option>
+              </select>
+              <span style={S.switchDesc}>
+                {tr("只决定下次启动的初值；数据始终保留，本会话可随时手动切换。")}
+              </span>
+            </div>
+          </div>
           {/* 分组二：高权限模式（写删门）——模型侧写删工具与面板删除记录共用的总闸 */}
           <div style={S.panelLabel}>{tr("高权限模式")}</div>
           <SwitchRow

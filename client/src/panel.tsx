@@ -6,6 +6,8 @@ import type { RpcFn } from './rpc.js';
 import { watchSidebarIcon } from './sidebar-icon.js';
 import { applySkin, getSkin, setSkin, type Skin } from './skin.js';
 import { S } from './styles.js';
+import { GuidePanel, GuideRestartButton, guideSteps, isGuideSkipped } from './guide.js';
+import { PRIME_MEMORY_GUIDE_STEPS } from './guide-steps.js';
 import { DrscHealthBanner } from './components/DrscHealthBanner.js';
 import { ensureThemeStyle } from './theme.js';
 import { ConflictsTab } from './tabs/ConflictsTab.js';
@@ -57,6 +59,8 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
   const rpc = props.rpc;
   const [tab, setTab] = useState('overview');
   const [skin, setSkinState] = useState<Skin>(() => getSkin());
+  // 首次使用引导：懒初始化读一次「跳过」标记，之后由本组件状态决定显隐。
+  const [guideOpen, setGuideOpen] = useState(() => !isGuideSkipped('prime-memory'));
 
   // 主题令牌与组件样式在面板挂载时注入（输入栏 pill 也可能已注入，幂等）；
   // 每次渲染按当前皮肤刷新 html 属性（ensureThemeStyle 可重入，不重写样式表）。
@@ -91,6 +95,16 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
     <div className="dsh-mem-root" style={S.section}>
       <h2 style={S.heading}>{tr("记忆 (Memory)")}</h2>
       <p style={S.intro}>{tr("L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。")}</p>
+      {/* 首次使用引导：放在标题与 intro 之后、DRSC 横幅之前，一进来先看到，不打断下方表单 */}
+      {guideOpen && (
+        <GuidePanel
+          ns="prime-memory"
+          steps={guideSteps(PRIME_MEMORY_GUIDE_STEPS)}
+          onClose={() => {
+            setGuideOpen(false);
+          }}
+        />
+      )}
       {/* DRSC 依赖状态：顶部一条横幅，跨 12 个 tab 全局可见；ok 态自作 null 不占版面 */}
       <DrscHealthBanner rpc={rpc} />
       <div
@@ -109,9 +123,9 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
             key={s[0]}
             className={skin === s[0] ? 'dsh-mem-tab dsh-mem-tab-on' : 'dsh-mem-tab'}
             onClick={() => switchSkin(s[0])}
-            title={tr("皮肤：{p1}", { p1: s[1] })}
+            title={tr("皮肤：{p1}", { p1: tr(s[1]) })}
           >
-            {s[1]}
+            {tr(s[1])}
           </button>
         ))}
       </div>
@@ -131,6 +145,17 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
         })}
       </div>
       {body}
+      {/* 面板底部恒定重启入口：跳过引导后不必清浏览器存储就能再看一次 */}
+      {!guideOpen && (
+        <div style={{ marginTop: 12 }}>
+          <GuideRestartButton
+            ns="prime-memory"
+            onOpen={() => {
+              setGuideOpen(true);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -60,6 +60,7 @@ export function validateDistillChain(chain, opts) {
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
 export const MEMORY_ENTRY_ID = 'dsh-memory';
 const ALWAYS_ON = {
+    bootMode: 'off',
     enabled: true,
     capture: true,
     distill: true,
@@ -308,6 +309,28 @@ export function registerLiveSettings(ctx, config, logger) {
     };
 }
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
+/**
+ * 启动期应用三态挡位：`on`/`off` 把初值写回 `enabled`，`last` 原样保留。
+ *
+ * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效
+ * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
+ * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
+ * 保持持久值，不阻断启动。
+ */
+export async function applyBootMode(live) {
+    try {
+        const s = live.get();
+        if (s.bootMode !== 'on' && s.bootMode !== 'off')
+            return;
+        const want = s.bootMode === 'on';
+        if (s.enabled === want)
+            return;
+        await live.update({ enabled: want });
+    }
+    catch {
+        /* 写面不可用：保持持久值，启动不受影响 */
+    }
+}
 export function resolveSettings(value) {
     if (!value || typeof value !== 'object')
         return { ...ALWAYS_ON, distillChain: [] };
@@ -348,7 +371,11 @@ export function resolveSettings(value) {
         return out;
     };
     const rawLayer = (v.distillLayerChains ?? {});
+    // 启动挡位:缺键/非法值归 'off'(出厂默认关闭)。挡位本身**不在读侧折叠**——
+    // 启动期由 `applyBootMode` 把初值写回 `enabled`,这样本会话的手动开关永远有效。
+    const bootMode = v.bootMode === 'on' || v.bootMode === 'off' || v.bootMode === 'last' ? v.bootMode : 'off';
     return {
+        bootMode,
         enabled: v.enabled !== false,
         capture: v.capture !== false,
         distill: v.distill !== false,

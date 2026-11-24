@@ -86,4 +86,13 @@ export declare function suppressAutoSettingsForm(ctx: Context): void;
 export declare function readLiveRef(ref: unknown): MemoryLiveSettings;
 export declare function registerLiveSettings(ctx: Context, config: MemoryConfig, logger: MemoryLogger): LiveSettingsHandle;
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
+/**
+ * 启动期应用三态挡位：`on`/`off` 把初值写回 `enabled`，`last` 原样保留。
+ *
+ * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效
+ * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
+ * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
+ * 保持持久值，不阻断启动。
+ */
+export declare function applyBootMode(live: LiveSettingsHandle): Promise<void>;
 export declare function resolveSettings(value: unknown): MemoryLiveSettings;

@@ -122,16 +122,16 @@ export function SessionRecalledArea(props: { rpc: RpcFn; sessionId: string }) {
               ) : null}
               {r.maturity ? (
                 <span style={{ fontSize: 10, color: 'var(--dsh-mem-text-3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {MATURITY_LABEL[r.maturity]}
+                  {tr(MATURITY_LABEL[r.maturity]!)}
                 </span>
               ) : null}
               {/* 路归因：命中了哪几路就拼哪几个字（融合顺序已在串里，展示不重排）。 */}
               {r.lanes && r.lanes.length > 0 ? (
                 <span
                   style={{ fontSize: 10, color: 'var(--dsh-mem-text-3)', whiteSpace: 'nowrap', flexShrink: 0, letterSpacing: 1 }}
-                  title={tr("召回路：") + r.lanes.map((l) => LANE_FULL[l] ?? l).join('、')}
+                  title={tr("召回路：") + r.lanes.map((l) => tr(LANE_FULL[l] ?? l)).join('、')}
                 >
-                  {r.lanes.map((l) => LANE_LABEL[l] ?? l).join('')}
+                  {r.lanes.map((l) => tr(LANE_LABEL[l] ?? l)).join('')}
                 </span>
               ) : null}
             </div>

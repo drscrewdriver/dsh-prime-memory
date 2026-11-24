@@ -1,3 +1,24 @@
+## 0.27.0
+
+**记忆启动挡位（三态）—— 会话即时开关与「下次启动默认值」解耦；出厂默认改为「关闭」。**
+
+「设置 → 记忆 → 概览」的「记忆模式」总闸旁新增「启动挡位」三态下拉：`跟随上一次`（下次启动沿用上次会话最后持久化的开关）/ `强制开启`（每次启动无条件开）/ `强制关闭`（每次启动无条件关，**本版出厂默认**）。数据始终保留，本会话随时可手开/手关。
+
+**为什么**：此前「某些工作用不上记忆就手动关」，关久了忘记打开 → 下次启动没记忆。本版把「挡位＝下次启动初值」与「总闸＝本会话即时开关」彻底分开：挡位**不在读侧折叠**——挡位关时本会话仍可临时开、挡位开时仍可临时关；启动期由 `applyBootMode` 把 on/off 初值写回 `enabled` 一次，`last` 不动，写面缺席/抛错静默不阻断启动。开关经 `fiber.update` 持久化到 profile patch，跨重启保留。
+
+> ⚠️ 行为变更：出厂默认由「跟随上一次」改为「强制关闭」。升级后现有 profile 首启记忆为关；到「启动挡位」拨到「跟随上一次」或「强制开启」一次即恢复并持久。
+
+- `src/contract.ts`：`MemoryLiveSettings.bootMode` + `SettingsSetRequest.bootMode`（文档注释同步默认 off）。
+- `src/config.ts`：`liveSettingsSchema` 增 `bootMode` 枚举，默认 `off`。
+- `src/settings.ts`：`resolveSettings` 归一挡位（缺键/非法归 `off`，显式接受合法 `last`）；新增 `applyBootMode` 启动写回。
+- `src/stats.ts`：`settings-get` 回显 `bootMode`；`settings-set` 白名单校验（`on/off/last`，非法报错不静默丢）。
+- `client/src/tabs/OverviewTab.tsx`：总闸旁新增「启动挡位」下拉（乐观更新 + 失败回滚）。
+- `tests/boot-mode.test.ts`：8 条行为闸（读侧不折叠、启动写回一次、写面抛错吞掉）。
+- i18n：en / pt / ru + keys.json 补「启动挡位 / 跟随上一次 / 强制开启 / 强制关闭 / 下次启动 / 仅决定下次启动初值」6 键。
+- `dsh.plugin.json`：version 同步 0.27.0。
+
+门禁：typecheck 三工程干净；boot-mode 8/8；全量 vitest 2518 passed / 1 skipped（6 红为 md 投影文件 IO 抖动，隔离复跑 18/18，与本次无关）；eslint 0 error（4 warning）。
+
 ## 0.26.73
 
 **记忆面板 Ingress 围栏对齐宿主三段式 —— 吸收 #43 的 Host 放宽，并补上它缺的 Origin / cross-site 两档。**
