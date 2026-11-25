@@ -46,14 +46,20 @@ export type LayerRouteKey = 'l1' | 'l2' | 'l3';
 /** 记忆模式运行时开关(settings-get/set 的 settings 载荷)。 */
 export interface MemoryLiveSettings {
     /**
-     * 启动挡位(三态,设置页可见):
-     * - `on`:每次启动强制开启记忆(忽略上次运行时的 `enabled`);
-     * - `off`:每次启动强制关闭记忆(出厂默认;数据保留,本会话可手开);
-     * - `last`:跟随上一次运行时的 `enabled`。
-     * 运行时 `enabled` 仍是本会话的即时开关;挡位只决定**下次启动**的初值。
+     * 注入轴启动挡位(三态,设置页可见;控 recall)：
+     * - `on`:每次启动强制开启注入;`off`:每次启动强制关闭(出厂默认);`last`:跟随上次 recall。
+     * 拨定时还会立即把本会话 recall 同步到该值(与面板 pill 一致)。
      */
-    bootMode: 'on' | 'off' | 'last';
-    /** 总开关:关 = 捕获/蒸馏/召回注入全停(数据保留) */
+    injectBootMode: 'on' | 'off' | 'last';
+    /**
+     * 提取轴启动挡位(三态;控 capture + distill)：on/off/last 同上。
+     * 拨定时立即把本会话 capture 与 distill 同步到该值。
+     */
+    extractBootMode: 'on' | 'off' | 'last';
+    /**
+     * 总开关(内部兼容位，面板不再展示):历史各读/写闸仍检 `enabled && ...`；
+     * 两轴重构后由启动/写入钉为 true，行为改由 recall / capture / distill 三键直接控制。
+     */
     enabled: boolean;
     /** 工具分组封印:false = 该组工具不注册,从模型工具列表消失。核心读(memory_search/read_scene/receipts/conversation_search)与槽位三件不受控 */
     toolRoom: boolean;
@@ -894,8 +900,10 @@ export interface SettingsGetResponse {
 }
 /** dsh-memory/settings-set(patch 语义:只带要改的键)。 */
 export interface SettingsSetRequest {
-    /** 启动挡位:on/off = 下次启动强制开/关;off = 出厂默认(强制关);last = 跟随上次。 */
-    bootMode?: 'on' | 'off' | 'last';
+    /** 注入轴启动挡位(on/off/last)；拨定立即同步 recall。 */
+    injectBootMode?: 'on' | 'off' | 'last';
+    /** 提取轴启动挡位(on/off/last)；拨定立即同步 capture+distill。 */
+    extractBootMode?: 'on' | 'off' | 'last';
     enabled?: boolean;
     capture?: boolean;
     distill?: boolean;

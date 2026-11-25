@@ -283,19 +283,21 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
           capture: s.capture,
           distill: s.distill,
           recall: s.recall,
-          bootMode: s.bootMode,
+          injectBootMode: s.injectBootMode,
+          extractBootMode: s.extractBootMode,
           memoryMutate: s.memoryMutate,
           ceilings: { capture: config.capture.enabled, distill: config.extract.enabled, recall: config.recall.enabled },
         }
       },
-      // 命令层唯一写操作：拨总闸，写后回读（宿主可能拒写 → applied=false；回读不符 → drift）。
+      // 命令层唯一写操作：总闸已退役，/memory on|off 同时拨两轴（recall + capture + distill），
+      // 写后回读 recall 作生效代理（宿主可能拒写 → applied=false；回读不符 → drift）。
       setEnabled: async (next) => {
         try {
-          await live.update({ enabled: next })
-          const eff = live.get().enabled
+          await live.update({ recall: next, capture: next, distill: next })
+          const eff = live.get().recall
           return { applied: true, effective: eff, drift: eff !== next }
         } catch {
-          return { applied: false, effective: live.get().enabled, drift: false }
+          return { applied: false, effective: live.get().recall, drift: false }
         }
       },
       // 本会话已注入集：store 取 id 与取代/路归因，readOnly 联查 l1_records 取正文。

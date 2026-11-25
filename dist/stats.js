@@ -1906,7 +1906,8 @@ export async function handleEndpoint(endpoint, payload, deps) {
             const resp = {
                 supported: live?.supported ?? false,
                 settings: sanitizeSettings(s ?? {
-                    bootMode: 'off',
+                    injectBootMode: 'off',
+                    extractBootMode: 'off',
                     enabled: true, capture: true, distill: true, recall: true,
                     toolRoom: true, toolGraph: true, toolRuminate: true, toolConflict: true, toolMutate: true, toolSkills: true,
                     // 默认值与 settings.ts 的 DEFAULT_LIVE 同向:管理组/旧名组默认封印(false)。
@@ -2011,14 +2012,39 @@ export async function handleEndpoint(endpoint, payload, deps) {
                 if (typeof patch[key] === 'boolean')
                     clean[key] = patch[key];
             }
-            // 外部同步运行时开关(T4.2 后补):三布尔严格收;档位走白名单('' = 跟随部署)。
-            if (patch.bootMode !== undefined) {
-                const v = String(patch.bootMode);
-                if (!['on', 'off', 'last'].includes(v)) {
-                    throw new Error(`非法启动挡位: ${v}(允许 on / off / last)`);
+            // 启动挡位拆两轴：注入(injectBootMode→recall)、提取(extractBootMode→capture+distill)。
+            // 拨定除决定下次启动初值外，还立即把本会话对应键同步到该值（接线修复：
+            // 否则面板显示默认关闭、pill 仍为开，新会话需手动关）。显式传了该键则尊重显式值。'last' 不动。
+            if (patch.injectBootMode !== undefined) {
+                const v = String(patch.injectBootMode);
+                if (!['on', 'off', 'last'].includes(v))
+                    throw new Error(`非法注入挡位: ${v}(允许 on / off / last)`);
+                clean.injectBootMode = v;
+                if (patch.recall === undefined) {
+                    if (v === 'off')
+                        clean.recall = false;
+                    else if (v === 'on')
+                        clean.recall = true;
                 }
-                clean.bootMode = v;
             }
+            if (patch.extractBootMode !== undefined) {
+                const v = String(patch.extractBootMode);
+                if (!['on', 'off', 'last'].includes(v))
+                    throw new Error(`非法提取挡位: ${v}(允许 on / off / last)`);
+                clean.extractBootMode = v;
+                if (patch.capture === undefined && patch.distill === undefined) {
+                    if (v === 'off') {
+                        clean.capture = false;
+                        clean.distill = false;
+                    }
+                    else if (v === 'on') {
+                        clean.capture = true;
+                        clean.distill = true;
+                    }
+                }
+            }
+            // 总闸不再作为顶控：读侧 resolveSettings 已恒钉 enabled=true（行为由 recall/capture/distill 接管），
+            // 故写侧无需强制带 enabled——否则会把"只传非法键→空载荷"的拒绝门架空（rpc.test 守）。
             // 不进白名单 = “写成功但被静默丢”,面板开关会变成暗示器。
             for (const key of ['extPushEnabled', 'extPullEnabled', 'extAllowHardDelete', 'extImportIsolate']) {
                 if (typeof patch[key] === 'boolean')
@@ -2166,9 +2192,8 @@ export async function handleEndpoint(endpoint, payload, deps) {
             }
             if (Object.keys(clean).length === 0)
                 throw new Error('开关更新载荷为空');
-            // 启动挡位是"重启才兑现"的键：写前留插件侧旧值，写后立即回读比对——
-            // 权威源是 BootModeStore（live.update 已落盘）而不是被宿主剪枝的 forms.get（0.27.9）。
-            const beforeBoot = live.bootModeOf?.();
+            // 启动挡位是"重启才兑现"的键：写后立即回读比对——权威源是 BootModeStore
+            // （live.update 已落盘）而不是被宿主剪枝的 forms.get（0.27.9）。两轴分别校。
             // 日志脱敏:直连/远程 API key 永不出现在日志
             const logSafe = { ...clean };
             delete logSafe.directApiKey;
@@ -2176,19 +2201,26 @@ export async function handleEndpoint(endpoint, payload, deps) {
             await live.update(clean);
             deps.logger.info(`[memory] 设置更新:${JSON.stringify(logSafe)}`);
             const v = { ok: true, settings: sanitizeSettings(live.get()) };
-            if (clean.bootMode !== undefined) {
-                const persisted = live.bootModeOf?.();
-                if (persisted === undefined) {
-                    // 无插件侧存储（数据目录不可写）：无法保证重启后保留。
-                    v.persistence = { state: 'unavailable', detail: '启动挡位未能写入插件数据文件(存储不可用),重启可能回落' };
-                    deps.logger?.warn(`[memory] 挡位写入后 boot-mode.json 仍无值(bootMode=${clean.bootMode}),重启后是否生效未验证`);
+            if (clean.injectBootMode !== undefined || clean.extractBootMode !== undefined) {
+                const bad = [];
+                const miss = [];
+                for (const axis of ['inject', 'extract']) {
+                    const want = axis === 'inject' ? clean.injectBootMode : clean.extractBootMode;
+                    if (want === undefined)
+                        continue;
+                    const got = live.bootModeOf?.(axis);
+                    if (got === undefined)
+                        miss.push(axis);
+                    else if (got !== want)
+                        bad.push(`${axis}=${String(got)}(期望 ${want})`);
                 }
-                else if (persisted !== clean.bootMode) {
-                    v.persistence = {
-                        state: 'drift',
-                        detail: `挡位已提交但回读=${String(persisted)}(期望 ${clean.bootMode}${beforeBoot ? `，写前 ${beforeBoot}` : ''})，重启可能回落`,
-                    };
-                    deps.logger?.warn(`[memory] 挡位写后回读不一致: 提交=${clean.bootMode} 回读=${persisted}`);
+                if (miss.length > 0) {
+                    v.persistence = { state: 'unavailable', detail: `挡位未能写入插件数据文件(存储不可用:${miss.join('/')}),重启可能回落` };
+                    deps.logger?.warn(`[memory] 挡位写入后 boot-mode.json 仍无值: ${miss.join('/')}`);
+                }
+                else if (bad.length > 0) {
+                    v.persistence = { state: 'drift', detail: `挡位已提交但回读不一致:${bad.join('; ')}，重启可能回落` };
+                    deps.logger?.warn(`[memory] 挡位写后回读不一致: ${bad.join('; ')}`);
                 }
                 else {
                     v.persistence = { state: 'match' };

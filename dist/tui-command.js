@@ -145,10 +145,10 @@ export async function runMemoryCommand(rawInput, deps) {
         const sw = deps.switches();
         const lock = (name, on, ceil) => `${name}=${on}${!ceil ? '(部署停用)' : ''}`;
         const lines = [
-            `memory switch — 总闸=${sw.enabled}  启动挡位=${sw.bootMode}`,
+            `memory switch — 注入 recall=${sw.recall}(启动=${sw.injectBootMode})  提取 capture=${sw.capture}/distill=${sw.distill}(启动=${sw.extractBootMode})`,
             `  ${lock('捕获', sw.capture, sw.ceilings.capture)}  ${lock('蒸馏', sw.distill, sw.ceilings.distill)}  ${lock('召回', sw.recall, sw.ceilings.recall)}`,
             `  高权限写删=${sw.memoryMutate}`,
-            `  use        /memory on|off --yes  拨总闸`,
+            '  use        /memory on|off --yes  拨总闸',
         ];
         return wrap(ok(lines), sw);
     }

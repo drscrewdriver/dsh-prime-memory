@@ -16,7 +16,7 @@ function fakeDeps(over: Partial<MemoryCommandDeps> = {}): MemoryCommandDeps {
     scenes: async () => ({ chat: 0, work: 0, sample: [] }),
     switches: () => ({
       enabled: true, capture: true, distill: true, recall: true,
-      bootMode: 'off', memoryMutate: false,
+      injectBootMode: 'off', extractBootMode: 'off', memoryMutate: false,
       ceilings: { capture: true, distill: false, recall: true },
     }),
     setEnabled: async () => ({ applied: true, effective: true, drift: false }),
@@ -27,11 +27,11 @@ function fakeDeps(over: Partial<MemoryCommandDeps> = {}): MemoryCommandDeps {
 }
 
 describe('/memory switch', () => {
-  it('显示六键现值，被部署停用项加标注', async () => {
+  it('显示两轴现值，被部署停用项加标注', async () => {
     const r = await runMemoryCommand('switch', fakeDeps());
     expect(r.kind).toBe('success');
-    expect(r.text).toContain('总闸=true');
-    expect(r.text).toContain('启动挡位=off');
+    expect(r.text).toContain('注入 recall=true(启动=off)');
+    expect(r.text).toContain('提取 capture=true/distill=true(启动=off)');
     expect(r.text).toContain('蒸馏=true(部署停用)');
   });
   it('--json 单行且含 ceilings', async () => {

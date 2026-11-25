@@ -60,7 +60,8 @@ export function validateDistillChain(chain, opts) {
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
 export const MEMORY_ENTRY_ID = 'dsh-memory';
 const ALWAYS_ON = {
-    bootMode: 'off',
+    injectBootMode: 'off',
+    extractBootMode: 'off',
     enabled: true,
     capture: true,
     distill: true,
@@ -146,8 +147,17 @@ export function registerLiveSettings(ctx, config, logger, bootStore) {
     // 启动挡位以插件自有存储为准（宿主 forms.update 会剪掉新增的 bootMode 键，
     // 见 store/boot-mode.ts）；无存档时保留 volatile 解出的值。
     const withBoot = (s) => {
-        const authoritative = bootStore?.get();
-        return authoritative ? { ...s, bootMode: authoritative } : s;
+        if (!bootStore)
+            return s;
+        const inject = bootStore.get('inject');
+        const extract = bootStore.get('extract');
+        if (inject === undefined && extract === undefined)
+            return s;
+        return {
+            ...s,
+            injectBootMode: inject ?? s.injectBootMode,
+            extractBootMode: extract ?? s.extractBootMode,
+        };
     };
     const read = () => withBoot(resolveSettings(readLiveRef(ref)));
     // 变更诊断(替代旧 scope.watch):宿主把 volatile-only 变更提交进引用后,
@@ -283,7 +293,7 @@ export function registerLiveSettings(ctx, config, logger, bootStore) {
         get configWritable() {
             return modernWrite();
         },
-        bootModeOf: () => bootStore?.get(),
+        bootModeOf: (axis) => bootStore?.get(axis),
         waitForVolatile: (timeoutMs = 3000) => new Promise((resolve) => {
             let done = false;
             const finish = () => {
@@ -316,11 +326,14 @@ export function registerLiveSettings(ctx, config, logger, bootStore) {
             }
         },
         update: async (patch) => {
-            // 启动挡位先进插件自有存储（权威）——宿主 forms.update 会剪掉这个新键，
-            // 不先落盘则重启后读不回。同值时 set 会短路。先写 store，后续 read() 的
+            // 启动挡位(两轴)先进插件自有存储（权威）——宿主 forms.update 会剪掉这些新键，
+            // 不先落盘则重启后读不回。同值时 set 短路。先写 store，后续 read() 的
             // withBoot 叠加才能反映新值。
-            if (bootStore && patch.bootMode !== undefined) {
-                await bootStore.set(patch.bootMode);
+            if (bootStore && patch.injectBootMode !== undefined) {
+                await bootStore.set('inject', patch.injectBootMode);
+            }
+            if (bootStore && patch.extractBootMode !== undefined) {
+                await bootStore.set('extract', patch.extractBootMode);
             }
             if (modernWrite()) {
                 if (!forms)
@@ -338,54 +351,66 @@ export function registerLiveSettings(ctx, config, logger, bootStore) {
 }
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
 /**
- * 启动期应用三态挡位：`on`/`off` 把初值写回 `enabled`，`last` 原样保留。
+ * 启动期应用两轴三态挡位：
+ * - 注入轴 injectBootMode：on/off 把 recall 写回初值，last 原样保留；
+ * - 提取轴 extractBootMode：on/off 把 capture 与 distill 写回初值，last 原样保留；
+ * - 总闸 enabled 钉为 true（不再作为顶控，行为由三键接管）。
  *
- * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效
- * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
- * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
+ * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效。
+ * 写回一次后本会话走持久化的 recall/capture/distill；写面缺席（老宿主/降级句柄）时
  * 保持持久值，不阻断启动。
  *
- * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：
- * - 启动固定打印一行「磁盘回读 × 运行时」对照，把静默吞错的写回变成可取证；
- * - 若运行时挡位与磁盘挡位不一致（volatile 引用早于 patch 合并的竞态信号），
- *   等一次 volatile 广播（超时兜底）后重读再应用——不拿陈旧快照反写用户选择。
+ * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：启动固定打印一行
+ * 「插件存档×磁盘回读×生效值」对照；无存档且 volatile 与磁盘对不上时等一次广播后重读。
  */
 export async function applyBootMode(live, logger) {
     const say = (msg) => logger?.info(msg);
     const warn = (msg) => (logger ? logger.warn(msg) : console.warn(msg));
     try {
         let s = live.get();
-        // 插件侧权威挡位（boot-mode.json）：存在即为准，不必再等 volatile 广播。
-        const stored = live.bootModeOf?.();
-        const persisted = live.readConfig?.('live');
-        const diskBootMode = persisted?.bootMode === 'on' || persisted?.bootMode === 'off' || persisted?.bootMode === 'last' ? persisted.bootMode : '(无回读)';
-        say(`[memory] 启动挡位对照: 生效 bootMode=${s.bootMode}` +
-            (stored ? '(插件存档)' : '(无存档,取 volatile/默认)') + ` enabled=${s.enabled}` +
-            ` | 磁盘 bootMode=${diskBootMode}` +
-            ` enabled=${persisted && typeof persisted.enabled === 'boolean' ? persisted.enabled : '(无回读)'}` +
-            (live.readConfig ? '' : ' (宿主不供 forms.get,磁盘侧无法对照)'));
-        // 仅当无插件存档、且 volatile 挡位与磁盘挡位对不上时，才怀疑 patch 未并入，
-        // 等一次 volatile 广播后重读（有存档时 bootStore 已是权威，等待多余）。
-        if (!stored &&
-            persisted &&
-            typeof persisted.bootMode === 'string' &&
-            persisted.bootMode !== s.bootMode) {
-            say(`[memory] 挡位竞态信号: 磁盘=${persisted.bootMode} 运行时=${s.bootMode}，等一次 volatile 广播后重读`);
-            await live.waitForVolatile?.(3000);
-            s = live.get();
-            say(`[memory] 重读后: bootMode=${s.bootMode} enabled=${s.enabled}`);
+        const injStore = live.bootModeOf?.('inject');
+        const extStore = live.bootModeOf?.('extract');
+        say(`[memory] 启动挡位对照: 注入=${s.injectBootMode}${injStore ? '(存档)' : ''} 提取=${s.extractBootMode}${extStore ? '(存档)' : ''}` +
+            ` | 现值 recall=${s.recall} capture=${s.capture} distill=${s.distill}`);
+        // 两轴均为 last 且无存档时，不写回（沿用持久值）。
+        if (injStore === undefined && extStore === undefined) {
+            const persisted = live.readConfig?.('live');
+            const diskInject = persisted?.injectBootMode;
+            if ((diskInject === 'on' || diskInject === 'off') &&
+                diskInject !== s.injectBootMode) {
+                say(`[memory] 挡位竞态信号: 磁盘注入=${String(diskInject)} 运行时=${s.injectBootMode}，等一次 volatile 广播后重读`);
+                await live.waitForVolatile?.(3000);
+                s = live.get();
+            }
         }
-        if (s.bootMode !== 'on' && s.bootMode !== 'off') {
-            say(`[memory] 挡位=last,沿用持久 enabled=${s.enabled},不写回`);
+        const patch = { enabled: true };
+        let touched = false;
+        if (s.injectBootMode === 'on' && s.recall !== true) {
+            patch.recall = true;
+            touched = true;
+        }
+        else if (s.injectBootMode === 'off' && s.recall !== false) {
+            patch.recall = false;
+            touched = true;
+        }
+        if (s.extractBootMode === 'on' && (s.capture !== true || s.distill !== true)) {
+            patch.capture = true;
+            patch.distill = true;
+            touched = true;
+        }
+        else if (s.extractBootMode === 'off' && (s.capture !== false || s.distill !== false)) {
+            patch.capture = false;
+            patch.distill = false;
+            touched = true;
+        }
+        if (s.enabled !== true)
+            touched = true; // 总闸钉 true
+        if (!touched) {
+            say(`[memory] 启动挡位与现值已一致，免写回`);
             return;
         }
-        const want = s.bootMode === 'on';
-        if (s.enabled === want) {
-            say(`[memory] 挡位=${s.bootMode} 与 enabled 已一致,免写回`);
-            return;
-        }
-        await live.update({ enabled: want });
-        say(`[memory] 挡位=${s.bootMode} 写回初值: enabled=${want}`);
+        await live.update(patch);
+        say(`[memory] 启动挡位写回初值: recall=${patch.recall ?? s.recall} capture=${patch.capture ?? s.capture} distill=${patch.distill ?? s.distill}`);
     }
     catch (err) {
         /* 写面不可用：保持持久值，启动不受影响——但从本版起不再静默 */
@@ -432,12 +457,17 @@ export function resolveSettings(value) {
         return out;
     };
     const rawLayer = (v.distillLayerChains ?? {});
-    // 启动挡位:缺键/非法值归 'off'(出厂默认关闭)。挡位本身**不在读侧折叠**——
-    // 启动期由 `applyBootMode` 把初值写回 `enabled`,这样本会话的手动开关永远有效。
-    const bootMode = v.bootMode === 'on' || v.bootMode === 'off' || v.bootMode === 'last' ? v.bootMode : 'off';
+    // 启动挡位拆两轴：缺键/非法值均归 'off'(出厂默认关闭)。挡位本身**不在读侧折叠**——
+    // 启动期由 `applyBootMode` 把初值写回 recall / capture+distill，这样本会话的手动开关永远有效。
+    const normBoot = (x) => x === 'on' || x === 'off' || x === 'last' ? x : 'off';
+    const injectBootMode = normBoot(v.injectBootMode);
+    const extractBootMode = normBoot(v.extractBootMode);
     return {
-        bootMode,
-        enabled: v.enabled !== false,
+        injectBootMode,
+        extractBootMode,
+        // 总闸不再作为面板顶控；钉为 true，行为由 recall / capture / distill 三键接管。
+        // 旧 profile 里 enabled=false 的遗留值会被这里抹平（一次性迁移，不阻断）。
+        enabled: true,
         capture: v.capture !== false,
         distill: v.distill !== false,
         recall: v.recall !== false,

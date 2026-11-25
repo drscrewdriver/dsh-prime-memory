@@ -38,7 +38,8 @@ export interface MemorySwitches {
     capture: boolean;
     distill: boolean;
     recall: boolean;
-    bootMode: string;
+    injectBootMode: string;
+    extractBootMode: string;
     memoryMutate: boolean;
     /** 部署上限：cordis.patch.yml 停用的分项，运行时开关拨不动。 */
     ceilings: {

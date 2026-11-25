@@ -20,7 +20,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from './config.js';
-import type { BootMode, BootModeStore } from './store/boot-mode.js';
+import type { BootAxis, BootMode, BootModeStore } from './store/boot-mode.js';
 import type { MemoryLogger } from './types.js';
 import type { DistillChainEntry, MemoryLiveSettings } from './contract.js';
 export type { DistillBudgets, DistillChainEntry, EffortChoice, MemoryLiveSettings } from './contract.js';
@@ -80,11 +80,11 @@ export interface LiveSettingsHandle {
      */
     waitForVolatile?(timeoutMs?: number): Promise<void>;
     /**
-     * 启动挡位的插件侧权威值（`boot-mode.json`）。`undefined` = 未曾显式设置，
+     * 启动挡位的插件侧权威值（`boot-mode.json`，按轴取）。`undefined` = 未曾显式设置，
      * 调用方回落到 volatile / 出厂默认。存在理由见 store/boot-mode.ts 顶部注释
-     * (0.27.9：宿主 forms.update 不持久化新增的 bootMode 键，需插件自存)。
+     * (0.27.9：宿主 forms.update 不持久化新增的挡位键，需插件自存)。
      */
-    bootModeOf?(): BootMode | undefined;
+    bootModeOf?(axis: BootAxis): BootMode | undefined;
 }
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
 export declare const MEMORY_ENTRY_ID = "dsh-memory";
@@ -103,17 +103,17 @@ export declare function readLiveRef(ref: unknown): MemoryLiveSettings;
 export declare function registerLiveSettings(ctx: Context, config: MemoryConfig, logger: MemoryLogger, bootStore?: BootModeStore): LiveSettingsHandle;
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
 /**
- * 启动期应用三态挡位：`on`/`off` 把初值写回 `enabled`，`last` 原样保留。
+ * 启动期应用两轴三态挡位：
+ * - 注入轴 injectBootMode：on/off 把 recall 写回初值，last 原样保留；
+ * - 提取轴 extractBootMode：on/off 把 capture 与 distill 写回初值，last 原样保留；
+ * - 总闸 enabled 钉为 true（不再作为顶控，行为由三键接管）。
  *
- * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效
- * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
- * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
+ * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效。
+ * 写回一次后本会话走持久化的 recall/capture/distill；写面缺席（老宿主/降级句柄）时
  * 保持持久值，不阻断启动。
  *
- * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：
- * - 启动固定打印一行「磁盘回读 × 运行时」对照，把静默吞错的写回变成可取证；
- * - 若运行时挡位与磁盘挡位不一致（volatile 引用早于 patch 合并的竞态信号），
- *   等一次 volatile 广播（超时兜底）后重读再应用——不拿陈旧快照反写用户选择。
+ * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：启动固定打印一行
+ * 「插件存档×磁盘回读×生效值」对照；无存档且 volatile 与磁盘对不上时等一次广播后重读。
  */
 export declare function applyBootMode(live: LiveSettingsHandle, logger?: {
     info(msg: string): void;

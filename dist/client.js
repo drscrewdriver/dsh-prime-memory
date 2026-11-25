@@ -36336,7 +36336,6 @@ var __create = Object.create;
 		  "端口": "port",
 		  "对存量未打标记忆批量补打 wing 标签 · 未打标 {p1} 条": "Batch-tag existing untagged memories with wing tags · {p1} untagged",
 		  "对方": "counterpart",
-		  "对话时注入相关记忆与画像": "Inject relevant memories and persona during chat",
 		  "多语言": "multilingual",
 		  "反刍工具": "Rumination tools",
 		  "反刍整理": "Rumination tidy-up",
@@ -36624,8 +36623,10 @@ var __create = Object.create;
 		  "没有已退场的记忆。": "No retired memories.",
 		  "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）": "No runtime override; using llm.mode/baseURL from cordis.patch.yml (default host)",
 		  "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读": "Effective chain per layer: runtime custom → deployment YAML layer chain → global default chain, falling back at each level; with a deployment pin, runtime edits are read-only",
-		  "每次启动强制关闭（本会话仍可手动开）": "Force off at every start (this session can still turn it on manually)",
-		  "每次启动强制开启（本会话仍可手动关）": "Force on at every start (this session can still turn it off manually)",
+		  "每次启动强制关闭提取（本会话仍可手动开）": "Force extraction off at every start (this session can still turn it on)",
+		  "每次启动强制关闭注入（本会话仍可手动开）": "Force injection off at every start (this session can still turn it on)",
+		  "每次启动强制开启提取（本会话仍可手动关）": "Force extraction on at every start (this session can still turn it off)",
+		  "每次启动强制开启注入（本会话仍可手动关）": "Force injection on at every start (this session can still turn it off)",
 		  "门禁未通过": "Gate check failed",
 		  "秒": " s",
 		  "名称": "Name",
@@ -36855,6 +36856,7 @@ var __create = Object.create;
 		  "它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。": 'It is removed from the retrieval surface (no longer recalled), but the record is kept — you can restore it in the "retired" section of the "Memory" page.',
 		  "探活": "probe",
 		  "探针：": "Probe: ",
+		  "提取的状态记忆": "Extracted memory",
 		  "提示：登记/退役需先在面板开启「高权限模式」。": 'Note: registering/decommissioning requires turning on "High-privilege mode" in the panel first.',
 		  "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。": 'Note: promoting/archiving/pinning/scanning history requires turning on "High-privilege mode" in the panel.',
 		  "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。": 'Note: deleting memories requires high-privilege mode first (top-right switch or "High-privilege mode" on the Overview page); while it is off, the delete button is unavailable.',
@@ -37053,11 +37055,13 @@ var __create = Object.create;
 		  "已复制": "copied",
 		  "已改为跟随部署默认": "changed to follow the deployment default",
 		  "已更新": "updated",
-		  "已关闭：不捕获、不蒸馏、不注入（数据保留）": "off: no capture, no distillation, no injection (data is kept)",
+		  "已关闭：不捕获、不蒸馏（数据保留）": "Off: no capture, no distillation (data retained)",
+		  "已关闭：不向上下文注入记忆（数据保留）": "Off: does not inject memory into context (data retained)",
 		  "已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启": 'off: the "memory store" sidebar entry is removed; turning it on restores it instantly, no restart needed',
 		  "已归档": "archived",
 		  "已就绪": "ready",
-		  "已开启：捕获对话并蒸馏记忆": "on: conversations are captured and memories distilled",
+		  "已开启：捕获对话并蒸馏为记忆": "On: captures the conversation and distills it into memory",
+		  "已开启：对话时注入相关记忆与画像": "On: injects relevant memories and profile into the conversation",
 		  "已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）": 'on: "flat" existing memories can be rearranged into a sectioned skeleton by type (only strictly better ones are touched)',
 		  "已开启：可登记/扫描记忆文件源并入库（「来源」页）。注意：这不是「外部记忆」页那 9 家服务驱动的总闸（那个在 profile 的 ext_memory.enabled，也可在该页直接开启）。": "On: memory file sources can be registered/scanned and ingested (on the “Sources” page). Note: this is NOT the master switch for the 9 service drivers on the “External memory” page (that one lives in the profile’s ext_memory.enabled and can also be turned on from that page).",
 		  "已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）": 'on: retrieval keywords can be backfilled in bulk for existing memories (click the button in the "backfill and reshape existing" section below)',
@@ -37223,7 +37227,7 @@ var __create = Object.create;
 		  "只读融合": "read-only merge",
 		  "只读预览：列出将被物理删除的退场记忆（前 50 条）与总数，不删任何东西": "Read-only preview: lists the retired memories that will be physically deleted (first 50) plus the total; deletes nothing",
 		  "只读预览：扫账本，找出“我们写过但现在没记录认领它”的投射文件（改名/消歧留下的残片）。来路不明的文件一律不动，也不搬任何东西": "Read-only preview: scans the ledger for projection files we wrote but that no record claims anymore (leftovers from renames/disambiguation). Files of unknown origin are never touched, and nothing is moved",
-		  "只决定下次启动的初值；数据始终保留，本会话可随时手动切换。": "Only sets the next launch default; data is always kept and you can toggle it any time this session.",
+		  "只决定下次启动的初值；拨定即刻同步本会话。": "Sets only the next-start default; choosing it syncs this session immediately.",
 		  "只看词表未退役的 room": "Only rooms not retired in the vocabulary",
 		  "只看没有任何 Room 绑定的记忆": "Only memories not bound to any Room",
 		  "只看未退场的记忆": "Only memories not retired",
@@ -37278,6 +37282,7 @@ var __create = Object.create;
 		  "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。": "The registry is empty. Register a Hall/Room above (e.g. dsh-plugin), or absorb a self-grown slug into the vocabulary — afterwards the candidate annotator prefers attaching related memories to these slugs.",
 		  "注册失败": "Registration failed",
 		  "注入": "Injection",
+		  "注入的状态记忆": "Injected memory",
 		  "注入设置失败": "Failed to set injection",
 		  "注入设置失败：": "Failed to set injection:",
 		  "注释规范": "Comment conventions",
@@ -37287,7 +37292,6 @@ var __create = Object.create;
 		  "转速": "spin speed",
 		  "状态": "status",
 		  "状态:": "Status:",
-		  "状态记忆": "State memory",
 		  "准备中（归档旧数据 · 清空检索库）": "Preparing (archiving old data · clearing the retrieval store)",
 		  "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工：": "The desktop build (DSH Desktop) cannot use `dsh plugin --profile desktop add` (the host manages it exclusively and will reject it), so do it manually:",
 		  "字符": " characters",
@@ -37774,7 +37778,6 @@ var __create = Object.create;
 		  "端口": "porta",
 		  "对存量未打标记忆批量补打 wing 标签 · 未打标 {p1} 条": "Marcação em lote de wing nas memórias existentes sem marca · {p1} sem marca",
 		  "对方": "contraparte",
-		  "对话时注入相关记忆与画像": "Injeta memórias e persona relevantes durante a conversa",
 		  "多语言": "multilíngue",
 		  "反刍工具": "Ferramentas de ruminação",
 		  "反刍整理": "Arrumação da ruminação",
@@ -38062,8 +38065,10 @@ var __create = Object.create;
 		  "没有已退场的记忆。": "Nenhuma memória retirada.",
 		  "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）": "Sem override de runtime; usa llm.mode/baseURL de cordis.patch.yml (padrão host)",
 		  "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读": "Cadeia efetiva por camada: customização de runtime → cadeia do YAML de implantação → cadeia padrão global, com fallback em cada nível; com pin de implantação, edição de runtime é somente leitura",
-		  "每次启动强制关闭（本会话仍可手动开）": "Desliga à força a cada inicialização (nesta sessão ainda pode ligar manualmente)",
-		  "每次启动强制开启（本会话仍可手动关）": "Liga à força a cada inicialização (nesta sessão ainda pode desligar manualmente)",
+		  "每次启动强制关闭提取（本会话仍可手动开）": "Desliga a extração à força a cada inicialização (nesta sessão ainda pode ligar)",
+		  "每次启动强制关闭注入（本会话仍可手动开）": "Desliga a injeção à força a cada inicialização (nesta sessão ainda pode ligar)",
+		  "每次启动强制开启提取（本会话仍可手动关）": "Liga a extração à força a cada inicialização (nesta sessão ainda pode desligar)",
+		  "每次启动强制开启注入（本会话仍可手动关）": "Liga a injeção à força a cada inicialização (nesta sessão ainda pode desligar)",
 		  "门禁未通过": "Verificação de porta falhou",
 		  "秒": " s",
 		  "名称": "Nome",
@@ -38293,6 +38298,7 @@ var __create = Object.create;
 		  "它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。": 'Ela sai da superfície de recuperação (deixa de ser chamada), mas o registro permanece — restaure na seção "retiradas" da página "Memória".',
 		  "探活": "sonda",
 		  "探针：": "Sonda: ",
+		  "提取的状态记忆": "Memória extraída",
 		  "提示：登记/退役需先在面板开启「高权限模式」。": 'Nota: registrar/descomissionar exige ligar "Privilégio elevado" no painel antes.',
 		  "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。": 'Nota: promover/arquivar/fixar/verificar histórico exige ligar "Privilégio elevado" no painel.',
 		  "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。": 'Nota: excluir memórias exige primeiro o privilégio elevado (interruptor no canto superior direito ou "Privilégio elevado" na Visão geral); desligado, o botão de exclusão fica indisponível.',
@@ -38491,11 +38497,13 @@ var __create = Object.create;
 		  "已复制": "copiado",
 		  "已改为跟随部署默认": "alterado para seguir o padrão da implantação",
 		  "已更新": "atualizado",
-		  "已关闭：不捕获、不蒸馏、不注入（数据保留）": "desligado: sem captura, sem destilação, sem injeção (dados preservados)",
+		  "已关闭：不捕获、不蒸馏（数据保留）": "Desativado: sem captura, sem destilação (dados retidos)",
+		  "已关闭：不向上下文注入记忆（数据保留）": "Desativado: não injeta memória no contexto (dados retidos)",
 		  "已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启": 'desligado: a entrada "Biblioteca de Memória" da barra lateral foi removida; ligar restaura na hora, sem reiniciar',
 		  "已归档": "arquivado",
 		  "已就绪": "pronto",
-		  "已开启：捕获对话并蒸馏记忆": "ligado: conversas são capturadas e memórias destiladas",
+		  "已开启：捕获对话并蒸馏为记忆": "Ativado: captura a conversa e destila em memória",
+		  "已开启：对话时注入相关记忆与画像": "Ativado: injeta memórias e perfil relevantes na conversa",
 		  "已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）": 'ligado: memórias "planas" do acervo podem ser reorganizadas em esqueleto por seções (só as estritamente melhores)',
 		  "已开启：可登记/扫描记忆文件源并入库（「来源」页）。注意：这不是「外部记忆」页那 9 家服务驱动的总闸（那个在 profile 的 ext_memory.enabled，也可在该页直接开启）。": 'ligado: fontes de arquivos de memória podem ser registradas/varridas e ingeridas (página "Fontes"). Atenção: isto NÃO é o interruptor mestre dos 9 drivers da página "Memória externa" (ele está em ext_memory.enabled no profile e também pode ser ligado naquela página).',
 		  "已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）": 'ligado: palavras-chave de recuperação podem ser complementadas em lote (clique no botão da seção "Retroalimentação e modelagem do acervo" abaixo)',
@@ -38661,7 +38669,7 @@ var __create = Object.create;
 		  "只读融合": "fusão somente leitura",
 		  "只读预览：列出将被物理删除的退场记忆（前 50 条）与总数，不删任何东西": "Prévia somente leitura: lista as memórias retiradas que serão excluídas fisicamente (as primeiras 50) e o total; não exclui nada",
 		  "只读预览：扫账本，找出“我们写过但现在没记录认领它”的投射文件（改名/消歧留下的残片）。来路不明的文件一律不动，也不搬任何东西": "Prévia somente leitura: varre o ledger procurando arquivos de projeção que escrevemos mas que nenhum registro mais reivindica (resíduos de renomeações/desambiguação). Arquivos de origem desconhecida nunca são tocados, e nada é movido",
-		  "只决定下次启动的初值；数据始终保留，本会话可随时手动切换。": "Define apenas o padrão da próxima inicialização; os dados são mantidos e você pode alternar a qualquer momento.",
+		  "只决定下次启动的初值；拨定即刻同步本会话。": "Define só o valor padrão do próximo início; ao escolher, sincroniza esta sessão imediatamente.",
 		  "只看词表未退役的 room": "Só rooms não descomissionados do vocabulário",
 		  "只看没有任何 Room 绑定的记忆": "Só memórias sem vínculo com nenhum Room",
 		  "只看未退场的记忆": "Só memórias não retiradas",
@@ -38716,6 +38724,7 @@ var __create = Object.create;
 		  "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。": "O registro está vazio. Registre um Hall/Room acima (ex.: dsh-plugin), ou adote um slug autogerado no vocabulário — depois o anotador de candidatos prioriza fixar memórias relacionadas nesses slugs.",
 		  "注册失败": "Falha no registro",
 		  "注入": "Injeção",
+		  "注入的状态记忆": "Memória injetada",
 		  "注入设置失败": "Falha ao configurar injeção",
 		  "注入设置失败：": "Falha ao configurar injeção:",
 		  "注释规范": "Convenções de comentários",
@@ -38725,7 +38734,6 @@ var __create = Object.create;
 		  "转速": "velocidade de rotação",
 		  "状态": "estado",
 		  "状态:": "Estado:",
-		  "状态记忆": "Memória de estado",
 		  "准备中（归档旧数据 · 清空检索库）": "Preparando (arquivando dados antigos · limpando o repositório de recuperação)",
 		  "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工：": "A versão desktop (DSH Desktop) não pode usar `dsh plugin --profile desktop add` (o host gerencia com exclusividade e recusaria); faça manualmente:",
 		  "字符": " caracteres",
@@ -39212,7 +39220,6 @@ var __create = Object.create;
 		  "端口": "порт",
 		  "对存量未打标记忆批量补打 wing 标签 · 未打标 {p1} 条": "Массово проставить теги wing записям без тегов · без тегов {p1}",
 		  "对方": "контрагент",
-		  "对话时注入相关记忆与画像": "Инъекция релевантной памяти и профиля при разговоре",
 		  "多语言": "многоязычная",
 		  "反刍工具": "Инструменты руминации",
 		  "反刍整理": "Упорядочивание руминации",
@@ -39500,8 +39507,10 @@ var __create = Object.create;
 		  "没有已退场的记忆。": "Нет отозванных памятей.",
 		  "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）": "Нет переопределения во время выполнения; используется llm.mode/baseURL из cordis.patch.yml (host по умолчанию)",
 		  "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读": "Фактическая цепочка на каждом уровне: пользовательская во время выполнения → цепочка слоёв YAML развёртывания → глобальная цепочка по умолчанию, с деградацией на каждом уровне; при pin развёртывания правки во время выполнения только для чтения",
-		  "每次启动强制关闭（本会话仍可手动开）": "Принудительно выключать при каждом запуске (в текущей сессии можно включить вручную)",
-		  "每次启动强制开启（本会话仍可手动关）": "Принудительно включать при каждом запуске (в текущей сессии можно выключить вручную)",
+		  "每次启动强制关闭提取（本会话仍可手动开）": "Принудительно выключать извлечение при каждом запуске (в текущей сессии можно включить)",
+		  "每次启动强制关闭注入（本会话仍可手动开）": "Принудительно выключать внедрение при каждом запуске (в текущей сессии можно включить)",
+		  "每次启动强制开启提取（本会话仍可手动关）": "Принудительно включать извлечение при каждом запуске (в текущей сессии можно выключить)",
+		  "每次启动强制开启注入（本会话仍可手动关）": "Принудительно включать внедрение при каждом запуске (в текущей сессии можно выключить)",
 		  "门禁未通过": "Проверка шлюза не пройдена",
 		  "秒": " с",
 		  "名称": "Название",
@@ -39731,6 +39740,7 @@ var __create = Object.create;
 		  "它会移出检索面（不再被召回），但记录仍保留 —— 可在「记忆」页的「已退场」区恢复。": "Она убирается из области поиска (больше не извлекается), но запись сохраняется — её можно восстановить в разделе «отозвано» на странице «Память».",
 		  "探活": "проба",
 		  "探针：": "Зонд: ",
+		  "提取的状态记忆": "Извлекаемая память",
 		  "提示：登记/退役需先在面板开启「高权限模式」。": "Подсказка: для регистрации/вывода из эксплуатации сначала включите «Режим высоких прав» в панели.",
 		  "提示：晋升/归档/固定/检测历史需在面板开启「高权限模式」。": "Подсказка: для повышения/архивации/закрепления/проверки истории нужно включить «Режим высоких прав» в панели.",
 		  "提示：删除记忆需先开启高权限模式（右上开关或概览页「高权限模式」），关闭时删除按钮不可用。": "Подсказка: для удаления воспоминаний сначала нужен режим высоких прав (переключатель справа вверху или «Режим высоких прав» на странице обзора); пока он выключен, кнопка удаления недоступна.",
@@ -39929,11 +39939,13 @@ var __create = Object.create;
 		  "已复制": "скопировано",
 		  "已改为跟随部署默认": "теперь как в конфигурации развёртывания",
 		  "已更新": "обновлено",
-		  "已关闭：不捕获、不蒸馏、不注入（数据保留）": "выкл.: не захватывать, не дистиллировать, не инжектировать (данные сохраняются)",
+		  "已关闭：不捕获、不蒸馏（数据保留）": "Выключено: без захвата и дистилляции (данные сохранены)",
+		  "已关闭：不向上下文注入记忆（数据保留）": "Выключено: не внедряет память в контекст (данные сохранены)",
 		  "已关闭：侧栏「记忆库」已移除；开启即时恢复，无需重启": "выкл.: пункт «хранилище памяти» в боковой панели убран; включение возвращает его сразу, перезапуск не нужен",
 		  "已归档": "в архиве",
 		  "已就绪": "готово",
-		  "已开启：捕获对话并蒸馏记忆": "вкл.: диалоги захватываются, память дистиллируется",
+		  "已开启：捕获对话并蒸馏为记忆": "Включено: захватывает диалог и дистиллирует в память",
+		  "已开启：对话时注入相关记忆与画像": "Включено: внедряет релевантные воспоминания и профиль в диалог",
 		  "已开启：可把“平”的存量记忆按类型重排成分节骨架（仅动严格更优的）": "вкл.: «плоскую» существующую память можно переразложить в секционную структуру по типам (затрагиваются только строго лучшие)",
 		  "已开启：可登记/扫描记忆文件源并入库（「来源」页）。注意：这不是「外部记忆」页那 9 家服务驱动的总闸（那个在 profile 的 ext_memory.enabled，也可在该页直接开启）。": "Включено: можно регистрировать/сканировать источники файлов памяти и заносить их в хранилище (страница «Источники»). Внимание: это НЕ главный выключатель 9 сервисных драйверов на странице «Внешняя память» (он находится в profile в ext_memory.enabled и включается также на той странице).",
 		  "已开启：可对存量记忆批量补检索关键词（下方「存量回填与整形」区点按钮）": "вкл.: можно массово дописать ключевые слова поиска к существующей памяти (нажмите кнопку в разделе «дозаполнение и выравнивание существующего» ниже)",
@@ -40099,7 +40111,7 @@ var __create = Object.create;
 		  "只读融合": "слияние «только чтение»",
 		  "只读预览：列出将被物理删除的退场记忆（前 50 条）与总数，不删任何东西": "Только просмотр: перечисляет отозванные памяти, которые будут физически удалены (первые 50), и общее число; ничего не удаляет",
 		  "只读预览：扫账本，找出“我们写过但现在没记录认领它”的投射文件（改名/消歧留下的残片）。来路不明的文件一律不动，也不搬任何东西": "Только просмотр: сканирует журнал и находит файлы проекций, которые мы писали, но записи их больше не заявляют (остатки от переименований/устранения неоднозначности). Файлы неизвестного происхождения не трогаются, и ничего не перемещается",
-		  "只决定下次启动的初值；数据始终保留，本会话可随时手动切换。": "Задаёт только значение при следующем запуске; данные сохраняются, переключить можно в любой момент.",
+		  "只决定下次启动的初值；拨定即刻同步本会话。": "Задаёт только значение при следующем запуске; выбор сразу синхронизирует текущую сессию.",
 		  "只看词表未退役的 room": "Только не отозванные в словаре room",
 		  "只看没有任何 Room 绑定的记忆": "Только памяти без привязки к Room",
 		  "只看未退场的记忆": "Только не отозванные памяти",
@@ -40154,6 +40166,7 @@ var __create = Object.create;
 		  "注册表为空。在上方注册 Hall/Room(如 dsh-plugin),或把自生长 slug「收编」进词表 —— 之后候选标注器会优先把相关记忆挂到这些 slug 上。": "Реестр пуст. Зарегистрируйте Hall/Room выше (например, dsh-plugin) или включите самовыращенный slug в словарь — после этого аннотатор кандидатов будет предпочитать привязывать связанные памяти к этим slug.",
 		  "注册失败": "Ошибка регистрации",
 		  "注入": "Инъекция",
+		  "注入的状态记忆": "Впрыскиваемая память",
 		  "注入设置失败": "Не удалось настроить инъекцию",
 		  "注入设置失败：": "Не удалось настроить инъекцию:",
 		  "注释规范": "Соглашения по комментариям",
@@ -40163,7 +40176,6 @@ var __create = Object.create;
 		  "转速": "скорость вращения",
 		  "状态": "статус",
 		  "状态:": "Состояние:",
-		  "状态记忆": "Память состояния",
 		  "准备中（归档旧数据 · 清空检索库）": "Подготовка (архивация старых данных · очистка хранилища поиска)",
 		  "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工：": "Настольная версия (DSH Desktop) не может использовать `dsh plugin --profile desktop add` (хост управляет этим единолично и отклонит запрос), поэтому только вручную:",
 		  "字符": " символов",
@@ -45678,12 +45690,26 @@ var __create = Object.create;
 		      if (key === "explorerEnabled") explorerEntryState.set(prev.settings.explorerEnabled !== false);
 		    });
 		  };
-		  const setBootMode = (value) => {
+		  const setBootMode = (axis, value) => {
 		    if (!settingsData) return;
 		    const prev = settingsData;
-		    const next = { ...prev, settings: { ...prev.settings, bootMode: value } };
+		    const key = axis === "inject" ? "injectBootMode" : "extractBootMode";
+		    const coupled = {};
+		    if (axis === "inject") {
+		      if (value === "off") coupled.recall = false;
+		      else if (value === "on") coupled.recall = true;
+		    } else {
+		      if (value === "off") {
+		        coupled.capture = false;
+		        coupled.distill = false;
+		      } else if (value === "on") {
+		        coupled.capture = true;
+		        coupled.distill = true;
+		      }
+		    }
+		    const next = { ...prev, settings: { ...prev.settings, [key]: value, ...coupled } };
 		    setSettingsData(next);
-		    rpc("dsh-memory/settings-set", { bootMode: value }).then((r) => {
+		    rpc("dsh-memory/settings-set", { [key]: value }).then((r) => {
 		      if (!r || !r.ok) {
 		        setSettingsData(prev);
 		        setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
@@ -45697,6 +45723,21 @@ var __create = Object.create;
 		      } else {
 		        setError(null);
 		      }
+		    }).catch((e) => {
+		      setSettingsData(prev);
+		      setError(tr("开关写入失败：") + String(e && e.message || e));
+		    });
+		  };
+		  const setExtractMaster = (v) => {
+		    if (!settingsData) return;
+		    const prev = settingsData;
+		    const next = { ...prev, settings: { ...prev.settings, capture: v, distill: v } };
+		    setSettingsData(next);
+		    rpc("dsh-memory/settings-set", { capture: v, distill: v }).then((r) => {
+		      if (!r || !r.ok) {
+		        setSettingsData(prev);
+		        setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
+		      } else setError(null);
 		    }).catch((e) => {
 		      setSettingsData(prev);
 		      setError(tr("开关写入失败：") + String(e && e.message || e));
@@ -45747,7 +45788,10 @@ var __create = Object.create;
 		    infos.push([tr("待 L3 新记忆"), stats.memoriesSinceL3 + " / " + (th.l3Interval != null ? th.l3Interval : 20)]);
 		  }
 		  const degraded = stats && stats.message && stats.message !== "running";
-		  const master = settingsData && settingsData.settings ? settingsData.settings.enabled : true;
+		  const injectOn = settingsData && settingsData.settings ? settingsData.settings.recall !== false : true;
+		  const captureOn = settingsData && settingsData.settings ? settingsData.settings.capture !== false : true;
+		  const distillOn = settingsData && settingsData.settings ? settingsData.settings.distill !== false : true;
+		  const extractOn = captureOn && distillOn;
 		  let ceilingNote = "";
 		  if (settingsData && settingsData.ceilings) {
 		    const off = [];
@@ -45774,15 +45818,15 @@ var __create = Object.create;
 		  const bfConcurrency = settingsData && settingsData.settings ? settingsData.settings.backfillConcurrency ?? 0 : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { children: [
 		    settingsData && settingsData.supported === false ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { style: S.hint, children: tr("settings 服务不可用，记忆模式开关未启用（记忆保持全开）。") }) : settingsData ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: S.switchPanel, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.panelLabel, children: tr("状态记忆") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.panelLabel, children: tr("注入的状态记忆") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		        SwitchRow,
 		        {
-		          label: tr("状态记忆"),
-		          desc: master ? tr("已开启：捕获对话并蒸馏记忆") : tr("已关闭：不捕获、不蒸馏、不注入（数据保留）"),
-		          checked: master,
+		          label: tr("注入的状态记忆"),
+		          desc: injectOn ? tr("已开启：对话时注入相关记忆与画像") : tr("已关闭：不向上下文注入记忆（数据保留）"),
+		          checked: injectOn,
 		          onChange: (v) => {
-		            toggle("enabled", v);
+		            toggle("recall", v);
 		          }
 		        }
 		      ),
@@ -45794,18 +45838,52 @@ var __create = Object.create;
 		            Segmented,
 		            {
 		              stretch: true,
-		              value: settingsData.settings.bootMode ?? "off",
+		              value: settingsData.settings.injectBootMode ?? "off",
 		              options: [
 		                { key: "last", label: tr("跟随上一次"), title: tr("沿用上一次运行结束时的开关状态") },
-		                { key: "on", label: tr("默认开启"), title: tr("每次启动强制开启（本会话仍可手动关）") },
-		                { key: "off", label: tr("默认关闭"), title: tr("每次启动强制关闭（本会话仍可手动开）") }
+		                { key: "on", label: tr("默认开启"), title: tr("每次启动强制开启注入（本会话仍可手动关）") },
+		                { key: "off", label: tr("默认关闭"), title: tr("每次启动强制关闭注入（本会话仍可手动开）") }
 		              ],
 		              onChange: (k) => {
-		                setBootMode(k);
+		                setBootMode("inject", k);
 		              }
 		            }
 		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.switchDesc, children: tr("只决定下次启动的初值；数据始终保留，本会话可随时手动切换。") })
+		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.switchDesc, children: tr("只决定下次启动的初值；拨定即刻同步本会话。") })
+		        ] })
+		      ] }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.panelLabel, children: tr("提取的状态记忆") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		        SwitchRow,
+		        {
+		          label: tr("提取的状态记忆"),
+		          desc: extractOn ? tr("已开启：捕获对话并蒸馏为记忆") : tr("已关闭：不捕获、不蒸馏（数据保留）"),
+		          checked: extractOn,
+		          onChange: (v) => {
+		            setExtractMaster(v);
+		          }
+		        }
+		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { ...S.switchRow, alignItems: "flex-start" }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: { width: 36, flexShrink: 0 } }),
+		        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6, flex: 1, maxWidth: 320 }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: { ...S.switchLabel, minWidth: 0 }, children: tr("下次启动") }),
+		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		            Segmented,
+		            {
+		              stretch: true,
+		              value: settingsData.settings.extractBootMode ?? "off",
+		              options: [
+		                { key: "last", label: tr("跟随上一次"), title: tr("沿用上一次运行结束时的开关状态") },
+		                { key: "on", label: tr("默认开启"), title: tr("每次启动强制开启提取（本会话仍可手动关）") },
+		                { key: "off", label: tr("默认关闭"), title: tr("每次启动强制关闭提取（本会话仍可手动开）") }
+		              ],
+		              onChange: (k) => {
+		                setBootMode("extract", k);
+		              }
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.switchDesc, children: tr("只决定下次启动的初值；拨定即刻同步本会话。") })
 		        ] })
 		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
@@ -45814,7 +45892,6 @@ var __create = Object.create;
 		          label: tr("捕获"),
 		          desc: tr("L0：记录原始对话（关闭后蒸馏也无输入）"),
 		          checked: settingsData.settings.capture,
-		          disabled: !master,
 		          onChange: (v) => {
 		            toggle("capture", v);
 		          }
@@ -45826,21 +45903,8 @@ var __create = Object.create;
 		          label: tr("蒸馏"),
 		          desc: tr("L1 抽取 + L2 场景 + L3 画像"),
 		          checked: settingsData.settings.distill,
-		          disabled: !master,
 		          onChange: (v) => {
 		            toggle("distill", v);
-		          }
-		        }
-		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
-		        SwitchRow,
-		        {
-		          label: tr("召回"),
-		          desc: tr("对话时注入相关记忆与画像"),
-		          checked: settingsData.settings.recall,
-		          disabled: !master,
-		          onChange: (v) => {
-		            toggle("recall", v);
 		          }
 		        }
 		      ),
@@ -45875,7 +45939,7 @@ var __create = Object.create;
 		          label: tr("{p1}投影", { p1: tr(GRAPH_FEATURE_LABEL) }),
 		          desc: graphSwitchDesc(graphEnabled),
 		          checked: graphEnabled,
-		          disabled: !master,
+		          disabled: !extractOn,
 		          onChange: (v) => {
 		            if (v) {
 		              requestGraphOn();
@@ -46044,7 +46108,7 @@ var __create = Object.create;
 		        }
 		      ),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.panelLabel, children: tr("蒸馏参数") }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(DistillSettings, { rpc, disabled: !master, data: settingsData, setData: setSettingsData, onError: setError }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(DistillSettings, { rpc, disabled: !extractOn, data: settingsData, setData: setSettingsData, onError: setError }),
 		      ceilingNote ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { style: S.hint, children: ceilingNote }) : null
 		    ] }) : null,
 		    /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(EmbeddingSection, { rpc }),
