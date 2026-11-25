@@ -17,14 +17,19 @@ import { ownInjectionFromEvent } from '../src/hooks/recall.js';
 import { SessionRecalledStore } from '../src/store/session-recalled.js';
 
 const dirs: string[] = [];
+const stores: SessionRecalledStore[] = [];
 afterAll(async () => {
-  for (const d of dirs) await rm(d, { recursive: true, force: true });
+  // 先排空每个 store 的异步 persist 链，再删目录：否则收尾的 add/reconcile 会在
+  // rm 进行中又原子写出临时文件，触发 ENOTEMPTY/EBUSY 竞态（CI 全量跑偶发红）。
+  await Promise.all(stores.map((s) => s.flush()));
+  for (const d of dirs) await rm(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 async function freshStore() {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-recalled-'));
   dirs.push(dir);
   const store = new SessionRecalledStore(dir);
+  stores.push(store);
   await store.flush();
   return { dir, store };
 }
@@ -129,6 +134,7 @@ describe('injectedBy 的持久化纪律', () => {
     dirs.push(dir2);
     await writeFile(join(dir2, 'session-recalled.json'), JSON.stringify(legacy), 'utf8');
     const store2 = new SessionRecalledStore(dir2);
+    stores.push(store2);
     await store2.flush();
     expect(store2.list('s9')).toEqual(['x']);
     // 没有 injectedBy → 无从判，对账不动状态
