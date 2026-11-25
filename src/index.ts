@@ -33,6 +33,7 @@ import { normCsv, normCsvNumbers, sha256Hex } from './ext-memory/util.js';
 import { applyCoexistGate } from './ext-memory/types.js';
 import { readTombstones, type TombstoneSet } from './store/retire-journal.js';
 import { applyBootMode, registerLiveSettings, suppressAutoSettingsForm } from './settings.js';
+import { BootModeStore } from './store/boot-mode.js';
 import { NoopEmbeddingService, type EmbeddingProviderInfo } from './store/embedding.js';
 import {
   EmbeddingManager,
@@ -147,10 +148,10 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   }
 
   // ── 记忆模式运行时开关(0.1.7 声明式:Config 的 live volatile 节;缺失时恒开) ──
-  const live = registerLiveSettings(ctx, config, logger);
-  // 启动挡位（三态 on/off/last）：on/off 把初值写回 enabled，last 保持持久值。
-  // 异步写、失败不阻断启动（写面缺席的老宿主保持持久值）。
-  void applyBootMode(live);
+  // 启动挡位另存插件自有文件（宿主 forms.update 不持久化新增的 bootMode 键，
+  // 见 store/boot-mode.ts）；数据目录不可写时不建 store，挡位回落 volatile/默认。
+  const bootStore = storageOk ? new BootModeStore(dataDir, logger) : undefined;
+  const live = registerLiveSettings(ctx, config, logger, bootStore);
   // 自带自定义设置页(client 半 settings.section「记忆」分节)→ 关掉宿主按
   // volatile 字段自动生成的表单页,避免同一插件出现两份设置入口。
   suppressAutoSettingsForm(ctx);
@@ -167,6 +168,10 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
       logger.warn(`[memory] 会话档位载入失败(降级为默认档内存态): ${err instanceof Error ? err.message : String(err)}`);
     }
   }
+
+  // 启动挡位：控制新会话默认档位（而非系统级 recall/capture/distill）。
+  // 异步、失败不阻断启动。
+  void applyBootMode(live, logger, modes);
 
   // ── 嵌入源三态(远程/本地/关闭)——状态文件优先于静态配置 ──
   const sourceStore = new EmbeddingSourceStore(dataDir, logger);
@@ -270,6 +275,60 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
         const work = await stores.scenes.work.listFiles()
         return { chat: chat.length, work: work.length, sample: [...chat, ...work].slice(0, 10) }
       },
+      // 开关现值（live.get 投影 + 部署上限；与 settings-get 的 ceilings 同口径）。
+      switches: () => {
+        const s = live.get()
+        return {
+          enabled: s.enabled,
+          capture: s.capture,
+          distill: s.distill,
+          recall: s.recall,
+          injectBootMode: s.injectBootMode,
+          extractBootMode: s.extractBootMode,
+          memoryMutate: s.memoryMutate,
+          ceilings: { capture: config.capture.enabled, distill: config.extract.enabled, recall: config.recall.enabled },
+        }
+      },
+      // 命令层唯一写操作：总闸已退役，/memory on|off 同时拨两轴（recall + capture + distill），
+      // 写后回读 recall 作生效代理（宿主可能拒写 → applied=false；回读不符 → drift）。
+      setEnabled: async (next) => {
+        try {
+          await live.update({ recall: next, capture: next, distill: next })
+          const eff = live.get().recall
+          return { applied: true, effective: eff, drift: eff !== next }
+        } catch {
+          return { applied: false, effective: live.get().recall, drift: false }
+        }
+      },
+      // 本会话已注入集：store 取 id 与取代/路归因，readOnly 联查 l1_records 取正文。
+      recalled: (sessionId, n) => {
+        const ids = (stores.recalled?.list(sessionId) ?? []).slice(0, n)
+        if (ids.length === 0) return []
+        const sup = stores.recalled?.supersededOf(sessionId)
+        const lanes = stores.recalled?.lanesOf(sessionId)
+        const place = ids.map(() => '?').join(',')
+        const byId = new Map<string, Record<string, unknown>>()
+        try {
+          const rs = (reader()?.prepare(
+            `SELECT record_id, content, type, family, scene_name FROM l1_records WHERE record_id IN (${place})`,
+          ).all(...ids) ?? []) as Array<Record<string, unknown>>
+          for (const r of rs) byId.set(String(r.record_id ?? ''), r)
+        } catch { /* 查不到正文则仅列 id */ }
+        return ids.map((id) => {
+          const r = byId.get(id) ?? {}
+          return {
+            id,
+            content: typeof r.content === 'string' ? r.content : undefined,
+            type: typeof r.type === 'string' ? r.type : undefined,
+            family: typeof r.family === 'string' ? r.family : undefined,
+            scene_name: typeof r.scene_name === 'string' ? r.scene_name : undefined,
+            superseded: sup?.has(id) ?? false,
+            lane: lanes?.get(id),
+          }
+        })
+      },
+      // 最近有注入记录的会话（--last / 无参提示用；闭包运行时才读，同 rooms 先例）。
+      recentSessions: () => stores.recalled?.recent(8) ?? [],
     })
   })
 

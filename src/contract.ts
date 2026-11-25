@@ -59,14 +59,20 @@ export type LayerRouteKey = 'l1' | 'l2' | 'l3';
 /** 记忆模式运行时开关(settings-get/set 的 settings 载荷)。 */
 export interface MemoryLiveSettings {
   /**
-   * 启动挡位(三态,设置页可见):
-   * - `on`:每次启动强制开启记忆(忽略上次运行时的 `enabled`);
-   * - `off`:每次启动强制关闭记忆(出厂默认;数据保留,本会话可手开);
-   * - `last`:跟随上一次运行时的 `enabled`。
-   * 运行时 `enabled` 仍是本会话的即时开关;挡位只决定**下次启动**的初值。
+   * 注入轴启动挡位(三态,设置页可见;控 recall)：
+   * - `on`:每次启动强制开启注入;`off`:每次启动强制关闭(出厂默认);`last`:跟随上次 recall。
+   * 拨定时还会立即把本会话 recall 同步到该值(与面板 pill 一致)。
    */
-  bootMode: 'on' | 'off' | 'last';
-  /** 总开关:关 = 捕获/蒸馏/召回注入全停(数据保留) */
+  injectBootMode: 'on' | 'off' | 'last';
+  /**
+   * 提取轴启动挡位(三态;控 capture + distill)：on/off/last 同上。
+   * 拨定时立即把本会话 capture 与 distill 同步到该值。
+   */
+  extractBootMode: 'on' | 'off' | 'last';
+  /**
+   * 总开关(内部兼容位，面板不再展示):历史各读/写闸仍检 `enabled && ...`；
+   * 两轴重构后由启动/写入钉为 true，行为改由 recall / capture / distill 三键直接控制。
+   */
   enabled: boolean;
   /** 工具分组封印:false = 该组工具不注册,从模型工具列表消失。核心读(memory_search/read_scene/receipts/conversation_search)与槽位三件不受控 */
   toolRoom: boolean;
@@ -598,6 +604,11 @@ export interface SessionModeGetResponse {
   recall: boolean | null;
   /** host 解析后的注入生效值(会话覆盖 ?? 全局开关):pill 面文直接消费。 */
   recallResolved: boolean;
+  /**
+   * host 解析后的提取生效值（全局 capture && distill）：pill 面文据此区分
+   * “只写”（写但不注）与“关闭”（既不注也不写）——修复与设置面板不同步的误标。
+   */
+  extractResolved: boolean;
   /** 会话级域锁定(wing 八边形手动挡):角 id = 锁定单域;null = 中心(智能档)。
    *  Phase 2 多选:完整选择集在 halls,本字段取第一个锁定域(兼容)。 */
   hall: string | null;
@@ -631,6 +642,8 @@ export interface SessionModeSetResponse {
   recall: boolean | null;
   /** 设置后的注入生效值(client 面文直接消费;清除覆盖后由 host 告知解析结果)。 */
   recallResolved: boolean;
+  /** 设置后的提取生效值（全局 capture&&distill 且 mode≠off）。 */
+  extractResolved: boolean;
   /** 设置后的域锁定(null = 中心);多选完整集在 halls。 */
   hall: string | null;
   halls: string[];
@@ -889,8 +902,10 @@ export interface SettingsGetResponse {
 
 /** dsh-memory/settings-set(patch 语义:只带要改的键)。 */
 export interface SettingsSetRequest {
-  /** 启动挡位:on/off = 下次启动强制开/关;off = 出厂默认(强制关);last = 跟随上次。 */
-  bootMode?: 'on' | 'off' | 'last';
+  /** 注入轴启动挡位(on/off/last)；拨定立即同步 recall。 */
+  injectBootMode?: 'on' | 'off' | 'last';
+  /** 提取轴启动挡位(on/off/last)；拨定立即同步 capture+distill。 */
+  extractBootMode?: 'on' | 'off' | 'last';
   enabled?: boolean;
   capture?: boolean;
   distill?: boolean;
@@ -937,6 +952,12 @@ export interface SettingsSetRequest {
 export interface SettingsSetResponse {
   ok: true;
   settings: MemoryLiveSettings;
+  /**
+   * 写后即时持久化对照(0.27.9 起 settings-set 也回传,与 settings-get 的 #37 同形状)。
+   * 现阶段只在写了启动挡位时给结论:挡位是"重启才兑现"的键,当场发现
+   * "写成功但没落盘"比重启后回落再盲推便宜得多。未写挡位 / 宿主读不回 = 缺席。
+   */
+  persistence?: { state: 'match' | 'drift' | 'unavailable'; detail?: string };
 }
 
 /** dsh-memory/list-records(记忆浏览器;hitToUiRecord 投影)。 */

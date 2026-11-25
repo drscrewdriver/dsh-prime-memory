@@ -9,10 +9,17 @@ name: release
 # 只把「安装」与「门禁」换成 dsh-prime-memory 自己 `.github/workflows/ci.yml` 的真实序列，
 # 避免出现「CI 绿、release 红」或反过来的静默降级。
 #
-# 触发：push tag v*（自动发版）/ workflow_dispatch（dry_run 默认 true，只打包不推 npm）。
+# 触发（双通道，2026-11-26 起）：
+# - push tag v*（手动 tag 发版，保留）/ workflow_dispatch（dry_run 默认 true，只打包不推 npm）
+# - push 分支 main / prerelease（prerelease 双路径流水线）：
+#     prerelease + 版本含 -rc.  → 发 rc 通道（publish --tag rc，不动 latest/线标签/Release）
+#     prerelease + 正式号      → 只跑门禁不发版（防预发分支误触 latest）
+#     main + 正式号            → 全链路自动正式版（无 tag 则自动打 v 号 + latest + 线标签 + Release）
+#     main + -rc. 号           → 拒绝（main 只允许正式号）
 on:
   push:
     tags: ['v*']
+    branches: ['main', 'prerelease']
   workflow_dispatch:
     inputs:
       tag:     { description: 要发布的 tag（如 v0.27.7）, required: true, type: string }
@@ -43,19 +50,34 @@ jobs:
           node-version: '22'
           registry-url: https://registry.npmjs.org
 
-      # ① 三方版本对齐：tag / package.json / dsh.plugin.json
+      # ① 三方版本对齐 + 通道判定（rc / stable / gates-only）
       - name: 版本对齐
         run: |
           set -euo pipefail
-          V="${TAG#v}"
           P=$(node -p "require('./package.json').version")
-          [ "$V" = "$P" ] || { echo "::error::tag $TAG 与 package.json $P 不一致"; exit 1; }
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && case "$GITHUB_REF" in refs/tags/*) false;; *) true;; esac; then
+            # 分支触发：TAG 按版本号合成（rc 号不建 tag，不打 -latest 徽标）
+            TAG="v$P"
+            if [ "$GITHUB_REF_NAME" = "prerelease" ]; then
+              case "$P" in *-rc.*) CHANNEL=rc;; *) CHANNEL=gates;; esac
+            else
+              case "$P" in *-rc.*) echo "::error::main 分支只允许正式号，当前 $P"; exit 1;; *) CHANNEL=stable;; esac
+            fi
+          else
+            TAG="${TAG:-${GITHUB_REF_NAME}}"
+            V="${TAG#v}"
+            [ "$V" = "$P" ] || { echo "::error::tag $TAG 与 package.json $P 不一致"; exit 1; }
+            case "$P" in *-rc.*) CHANNEL=rc;; *) CHANNEL=stable;; esac
+          fi
           if [ -f dsh.plugin.json ]; then
             D=$(node -p "try{require('./dsh.plugin.json').version||''}catch{''}" 2>/dev/null || echo "")
             [ -z "$D" ] || [ "$D" = "$P" ] || { echo "::error::dsh.plugin.json $D 与 $P 不一致"; exit 1; }
           fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "VERSION=$P" >> "$GITHUB_ENV"
+          echo "CHANNEL=$CHANNEL" >> "$GITHUB_ENV"
           echo "PKG_NAME=$(node -p "require('./package.json').name")" >> "$GITHUB_ENV"
+          echo "通道=$CHANNEL 版本=$P tag=$TAG"
 
       # ② 依赖安装：本仓 ci.yml 用 npm ci（package-lock.json 是权威锁；
       #    pnpm-lock.yaml 是工具链遗留，不能优先走它）
@@ -70,11 +92,14 @@ jobs:
       # ③ 门禁：逐项复刻 ci.yml（typecheck → test → lint → build → smoke → 目录核验）。
       #    test 加 --no-file-parallelism：memory-md-* 在文件级并行下会互抢全局投影状态，
       #    是已知假红（单跑全绿），CI 上也必须串行才稳定。
+      #    --retry=2：个别下载/IO 计时用例（如 embedding-subsystem cancel）在全量跑下
+      #    偶发假红（隔离必绿），正式版为单次发布闸，重试 2 次防瞬时竞态卡住发版；
+      #    真失败会连红 3 次仍拦得住，不掩盖回归。
       - name: 门禁
         run: |
           set -euo pipefail
           npm run typecheck
-          npm test -- --no-file-parallelism
+          npm test -- --no-file-parallelism --retry=2
           npm run lint
           npm run build
           npm run build:smoke
@@ -96,15 +121,28 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ⑥ 发布
+      # ⑥ 发布：rc 通道挂 rc 标签；stable 通道维持 publishConfig.tag=latest。
+      #    stable 且 tag 不存在（main 分支触发合成号）→ publish 成功后再对当前 SHA
+      #    打 tag 推送（先发后打，避免 publish 失败留下无 npm 版的孤立 tag）。
       - name: npm publish
-        if: steps.guard.outputs.exists == 'false' && (github.event_name == 'push' || inputs.dry_run == false)
-        run: npm publish --registry https://registry.npmjs.org
+        if: steps.guard.outputs.exists == 'false' && env.CHANNEL != 'gates' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false)
+        run: |
+          set -euo pipefail
+          if [ "$CHANNEL" = rc ]; then
+            npm publish --tag rc --registry https://registry.npmjs.org
+          else
+            npm publish --registry https://registry.npmjs.org
+            if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              git tag "$TAG"
+              git push origin "$TAG"
+            fi
+          fi
 
-      # ⑦ dist-tag 同步：三档判定（查询失败→重试；无线标签→收工；有标签→逐个 add）
+      # ⑦ dist-tag 同步：三档判定（查询失败→重试；无线标签→收工；有标签→逐个 add）。
+      #    rc 通道跳过：预发版不得顶到任何 dsh-* 线标签。
       - name: 同步 dsh-* 线标签
         id: disttag
-        if: steps.guard.outputs.exists == 'false' && (github.event_name == 'push' || inputs.dry_run == false)
+        if: steps.guard.outputs.exists == 'false' && env.CHANNEL == 'stable' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false)
         run: |
           set -uo pipefail
           REG=https://registry.npmjs.org
@@ -129,11 +167,11 @@ jobs:
           echo "::warning::线标签同步未完成，需本地补跑 node mine-dsh-plugins/_tools/sync-dist-tags.mjs --only $PKG_NAME"
           echo "synced=PENDING" >> "$GITHUB_OUTPUT"
 
-      # ⑧ Release + Latest 徽标。
+      # ⑧ Release + Latest 徽标（仅 stable 通道；rc 不建 Release 不顶 latest 徽标）。
       #    --target 传「checkout 后的 HEAD 完整 SHA」：dispatch 时 GITHUB_SHA 是默认分支
       #    的 head 而非 tag 的 commit，直接用它会把 Release 挂错提交。
       - name: GitHub Release
-        if: steps.guard.outputs.exists == 'false' && (github.event_name == 'push' || inputs.dry_run == false)
+        if: steps.guard.outputs.exists == 'false' && env.CHANNEL == 'stable' && (github.event_name != 'workflow_dispatch' || inputs.dry_run == false)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -154,6 +192,7 @@ jobs:
             echo "|---|---|"
             echo "| 包 | ${PKG_NAME:-?} |"
             echo "| 版本 | ${VERSION:-?} |"
+            echo "| 通道 | ${CHANNEL:-?} |"
             echo "| 已存在跳过 | ${{ steps.guard.outputs.exists }} |"
             echo "| 线标签 | ${{ steps.disttag.outputs.synced || '-' }} |"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -763,14 +763,17 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // 注入解析权威在 host:recall 是原始覆盖(null=跟随全局),recallResolved 是生效值
       const s = live?.get();
       const globalRecall = s?.recall ?? true;
+      const globalExtract = (s?.capture ?? true) && (s?.distill ?? true);
       const bounds = modes.wingBoundaries(sessionId);
       const locked = modes.getWings(sessionId);
+      const sessionMode = modes.get(sessionId);
       const v: SessionModeGetResponse = {
         sessionId,
-        mode: modes.get(sessionId),
+        mode: sessionMode,
         defaultMode: modes.default,
         recall: modes.getRecall(sessionId) ?? null,
-        recallResolved: modes.resolvedRecall(sessionId, globalRecall),
+        recallResolved: sessionMode === 'off' ? false : modes.resolvedRecall(sessionId, globalRecall),
+        extractResolved: sessionMode === 'off' ? false : globalExtract,
         hall: locked[0] ?? null,
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
@@ -1092,11 +1095,14 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const s = live?.get();
       const bounds = modes.wingBoundaries(sessionId);
       const locked = modes.getWings(sessionId);
+      const setMode = modes.get(sessionId);
+      const globalExtract2 = (s?.capture ?? true) && (s?.distill ?? true);
       const v: SessionModeSetResponse = {
         sessionId,
-        mode: modes.get(sessionId),
+        mode: setMode,
         recall: modes.getRecall(sessionId) ?? null,
-        recallResolved: modes.resolvedRecall(sessionId, s?.recall ?? true),
+        recallResolved: setMode === 'off' ? false : modes.resolvedRecall(sessionId, s?.recall ?? true),
+        extractResolved: setMode === 'off' ? false : globalExtract2,
         hall: locked[0] ?? null,
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
@@ -2139,7 +2145,8 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const resp: SettingsGetResponse = {
         supported: live?.supported ?? false,
         settings: sanitizeSettings(s ?? {
-          bootMode: 'off',
+          injectBootMode: 'last',
+          extractBootMode: 'last',
           enabled: true, capture: true, distill: true, recall: true,
           toolRoom: true, toolGraph: true, toolRuminate: true, toolConflict: true, toolMutate: true, toolSkills: true,
           // 默认值与 settings.ts 的 DEFAULT_LIVE 同向:管理组/旧名组默认封印(false)。
@@ -2241,14 +2248,36 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'explorerEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills', 'toolGraphAdmin', 'toolLegacy'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
       }
-      // 外部同步运行时开关(T4.2 后补):三布尔严格收;档位走白名单('' = 跟随部署)。
-      if (patch.bootMode !== undefined) {
-        const v = String(patch.bootMode);
-        if (!['on', 'off', 'last'].includes(v)) {
-          throw new Error(`非法启动挡位: ${v}(允许 on / off / last)`);
-        }
-        clean.bootMode = v;
+      // 启动挡位拆两轴：滑块控制新会话默认档位，不碰系统级 recall/capture/distill。
+      // 拨定时立即更新 modes 的默认档（影响后续新会话），但不写系统级开关。
+      if (patch.injectBootMode !== undefined) {
+        const v = String(patch.injectBootMode);
+        if (!['on', 'off', 'last'].includes(v)) throw new Error(`非法注入挡位: ${v}(允许 on / off / last)`);
+        clean.injectBootMode = v;
       }
+      if (patch.extractBootMode !== undefined) {
+        const v = String(patch.extractBootMode);
+        if (!['on', 'off', 'last'].includes(v)) throw new Error(`非法提取挡位: ${v}(允许 on / off / last)`);
+        clean.extractBootMode = v;
+      }
+      // 滑块变更后立即应用到会话默认档（与 applyBootMode 同逻辑）
+      if (modes && (clean.injectBootMode !== undefined || clean.extractBootMode !== undefined)) {
+        const inj = clean.injectBootMode ?? live.get().injectBootMode;
+        const ext = clean.extractBootMode ?? live.get().extractBootMode;
+        if (ext === 'off') {
+          modes.setDefaultMode('off');
+          modes.setDefaultRecall(undefined);
+        } else if (ext === 'on' && inj === 'off') {
+          modes.setDefaultMode('auto');
+          modes.setDefaultRecall(false);
+        } else if (ext === 'on' && inj === 'on') {
+          modes.setDefaultMode('auto');
+          modes.setDefaultRecall(undefined);
+        }
+        // 'last' 不改
+      }
+      // 总闸不再作为顶控：读侧 resolveSettings 已恒钉 enabled=true（行为由 recall/capture/distill 接管），
+      // 故写侧无需强制带 enabled——否则会把"只传非法键→空载荷"的拒绝门架空（rpc.test 守）。
       // 不进白名单 = “写成功但被静默丢”,面板开关会变成暗示器。
       for (const key of ['extPushEnabled', 'extPullEnabled', 'extAllowHardDelete', 'extImportIsolate'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
@@ -2385,6 +2414,8 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         clean.embedRemoteApiKey = key;
       }
       if (Object.keys(clean).length === 0) throw new Error('开关更新载荷为空');
+      // 启动挡位是"重启才兑现"的键：写后立即回读比对——权威源是 BootModeStore
+      // （live.update 已落盘）而不是被宿主剪枝的 forms.get（0.27.9）。两轴分别校。
       // 日志脱敏:直连/远程 API key 永不出现在日志
       const logSafe = { ...clean } as Record<string, unknown>;
       delete logSafe.directApiKey;
@@ -2392,6 +2423,26 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       await live.update(clean);
       deps.logger.info(`[memory] 设置更新:${JSON.stringify(logSafe)}`);
       const v: SettingsSetResponse = { ok: true, settings: sanitizeSettings(live.get()) };
+      if (clean.injectBootMode !== undefined || clean.extractBootMode !== undefined) {
+        const bad: string[] = [];
+        const miss: string[] = [];
+        for (const axis of ['inject', 'extract'] as const) {
+          const want = axis === 'inject' ? clean.injectBootMode : clean.extractBootMode;
+          if (want === undefined) continue;
+          const got = live.bootModeOf?.(axis);
+          if (got === undefined) miss.push(axis);
+          else if (got !== want) bad.push(`${axis}=${String(got)}(期望 ${want})`);
+        }
+        if (miss.length > 0) {
+          v.persistence = { state: 'unavailable', detail: `挡位未能写入插件数据文件(存储不可用:${miss.join('/')}),重启可能回落` };
+          deps.logger?.warn(`[memory] 挡位写入后 boot-mode.json 仍无值: ${miss.join('/')}`);
+        } else if (bad.length > 0) {
+          v.persistence = { state: 'drift', detail: `挡位已提交但回读不一致:${bad.join('; ')}，重启可能回落` };
+          deps.logger?.warn(`[memory] 挡位写后回读不一致: ${bad.join('; ')}`);
+        } else {
+          v.persistence = { state: 'match' };
+        }
+      }
       return v;
     }
 

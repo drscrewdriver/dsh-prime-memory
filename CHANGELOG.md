@@ -1,3 +1,37 @@
+## 0.29.0
+
+**启动挡位持久化诊断与竞态防护（用户反馈「选了下次关闭，重启不生效」）。**
+- `applyBootMode` 不再静默吞错：启动固定打印一行「磁盘回读 × 运行时」对照（bootMode/enabled 两组），宿主不供 `forms.get` 时明说无法对照；写回/免写回/失败各有日志。
+- **竞态门**：插件挂载时 volatile 引用可能还没并入 profile patch（读到出厂默认）——磁盘挡位≠运行时挡位时等一次 `loader/volatile-update`（3s 超时兜底）后重读再应用，不拿陈旧快照反写用户选择。
+- `settings-set` 写启动挡位后同步回读磁盘值，不一致时响应附 `persistence:{state:'drift',detail}`（新契约字段，与 settings-get 的 #37 同形状）；面板消费之——挡位没落盘当场报错，不等重启后才发现。
+- **根因锁定（写侧 drop）**：扫 11-12→11-26 共 13 份 `cordis.patch.yml` 备份，`dsh-memory` 的 `live` 块含 memoryMutate/skillsEnabled 等旧键（均非默认值，证明是运行时写入），但 `bootMode` **0 次出现**——`forms.update` 按宿主缓存的 entry schema 剪掉了 v0.27.0 才新增的 bootMode 键。
+- **终修（BootModeStore）**：新增 `src/store/boot-mode.ts`，把启动挡位另存插件自有文件 `<dataDir>/boot-mode.json`；读侧以存档为权威覆盖 volatile（`enabled` 旧键仍可正常落盘），彻底绕开宿主对新键的不持久化。settings-set 写后回读改取 `live.bootModeOf()`。新测 `tests/boot-mode-store.test.ts`（落盘往返 + 存档优先 5 例）。
+- 修面板挡位展示兜底 `'last'` → `'off'`（与出厂默认一致，不再出现"显示跟随上一次、实际默认关闭"的假象）。
+- 发版流水线改双路径（prerelease 分支常驻）：push prerelease + `-rc.N` 号 → 自动 `publish --tag rc`（不动 latest/线标签/Release）；PR 合并 main + 正式号 → 自动全链路正式版（先发后打 tag）；正式号推 prerelease 只跑门禁。新增 `scripts/publish-rc.mjs` 本地兜底。
+- 测试：boot-mode 新增竞态重试/一致免等/诊断日志 3 用例（11/11 绿）；i18n 双键入 en/ru/pt 全集。
+
+**两级开关 UI（状态记忆 pill + 启动挡位三态滑条）。**
+
+- 概览页「记忆模式」重构为两级：第一级 pill 总闸（文案改「状态记忆」，控本会话 enabled）；第二级启动挡位从原生 `<select>` 换为 `Segmented` 三态滑条（跟随上一次/默认开启/默认关闭，值 last/on/off 不变）。
+- 三态语义文案重写并补 tooltip；en/pt/ru 三语新增 6 键（状态记忆/沿用上一次…/默认开启/…/默认关闭/…）入 keys.json 与字典全集。
+- 验证：typecheck 三工程绿 / build 出包 / i18n-dict 12/12 / 面板目视两级结构。
+
+**TUI 终端面新增三面（switch / on|off / injected）。**
+
+- `/memory switch`：显示总闸/捕获/蒸馏/召回/启动挡位/高权限六键现值，被部署上限锁死的分项加 `(部署停用)` 后缀；`--json` 单行。
+- `/memory on|off`：命令层首个写操作——默认 dry 回显将写入值，加 `--yes` 才走 `live.update({enabled})` 并写后回读，不一致报 drift。
+- `/memory injected [--last|--session=<id>] [--n]`：接 SessionRecalledStore（与 `dsh-memory/session-recalled` 端点同源）列出本会话已注入记忆，含 `[已取代]` 标记与路归因；store 新增 `recent()` 枚举最近会话。
+- 验证：新增 `tests/tui-command.test.ts`（8 例：switch/on-off dry+yes+漂移/injected 三支）全绿；typecheck/build/lint 干净。
+
+**状态记忆拆为注入/提取两轴（用户反馈「默认关闭但开新会话仍要手动关，接线错误」）。**
+
+- 单一「状态记忆」总闸拆为两组，各自两级：**注入的状态记忆**（pill=召回 recall + 三态下次启动滑条 injectBootMode）与**提取的状态记忆**（pill=捕获+蒸馏 capture&distill + 三态滑条 extractBootMode，下带捕获/蒸馏细调分项）。
+- 契约/配置：`bootMode` 拆为 `injectBootMode` + `extractBootMode`；`enabled` 退役为内部兼容位（读侧 `resolveSettings` 恒钉 true，行为改由 recall/capture/distill 三键接管）。
+- **接线修复**：`settings-set` 拨任一轴挡位时立即同步本会话对应生效键（off→关、on→开、last→不动），不再只等下次启动——直接消除“面板显示默认关闭、新会话仍继承开启需手动关”。
+- **不起效真因（启动写面未就绪）**：启动日志实锤 `启动挡位应用失败: settings 服务不可用`——`applyBootMode` 在插件挂载时跑，而宿主 settings 服务尚未上线，`live.update` 抛错→启动挡位从未应用，recall/capture/distill 永远停在 true 默认。修：新增 `live.whenReady()` 门，`applyBootMode` 先等写面就绪（10s 超时）再写回；新测 whenReady=false 跳过/true 才写。
+- `BootModeStore` 改双轴存 `{inject, extract}`；`applyBootMode` 启动分别写回两轴；TUI `/memory switch` 改显两轴、`/memory on|off` 改拨两轴。
+- i18n 三语新增 11 键（注入/提取的状态记忆 + 两轴三态描述）入 keys.json 与字典全集；测试 boot-mode 双轴矩阵 + boot-mode-store 两轴 + tui switch 随动。全量 suite 绿（仅无关 IO 重负载用例在并发下偶发超时，隔离必绿）。
+
 ## 0.27.8
 
 **接入 CI 发版通道（tag push 自动 publish / dist-tag / Release）+ 清掉 3 个既有 lint error。**

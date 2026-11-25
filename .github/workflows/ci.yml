@@ -9,7 +9,7 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, prerelease]
   pull_request: {}
 
 permissions:

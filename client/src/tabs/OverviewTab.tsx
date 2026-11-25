@@ -6,7 +6,7 @@ import { fmtTime } from '../format.js';
 import { modeLabel } from '../pill/modes.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
-import { SwitchRow } from '../ui/controls.js';
+import { Segmented, SwitchRow } from '../ui/controls.js';
 import { NButton, NModal } from '../ui/primitives.js';
 import { GRAPH_FEATURE_LABEL, GRAPH_TOOL_LABEL, graphSwitchDesc } from '../copy.js';
 import { ArchiveSection } from './ArchiveSection.js';
@@ -84,22 +84,54 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   };
 
   /**
-   * 启动挡位写入(三态):乐观翻 UI,失败回滚。与布尔开关分开,
-   * 因为 settings-set 的布尔白名单不收字符串。
+   * 启动挡位写入(两轴三态):滑块只写挡位本身，不碰系统级 recall/capture/distill。
+   * 滑块控制的是新会话默认档位（服务端会立即更新 modes 默认）。
+   * 写成功后消费 persistence——挡位没落盘(漂移)时当场报错。
    */
-  const setBootMode = (value: 'on' | 'off' | 'last') => {
+  const setBootMode = (axis: 'inject' | 'extract', value: 'on' | 'off' | 'last') => {
     if (!settingsData) return;
     const prev = settingsData;
-    const next = { ...prev, settings: { ...prev.settings, bootMode: value } };
+    const key = axis === 'inject' ? 'injectBootMode' : 'extractBootMode';
+    const next = { ...prev, settings: { ...prev.settings, [key]: value } };
     setSettingsData(next);
-    rpc('dsh-memory/settings-set', { bootMode: value })
+    rpc('dsh-memory/settings-set', { [key]: value } as SettingsSetRequest)
       .then((r) => {
         if (!r || !r.ok) {
           setSettingsData(prev);
           setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
+          return;
+        }
+        const resp = (r.value || {}) as { persistence?: { state: string; detail?: string } };
+        if (resp.persistence && resp.persistence.state !== 'match') {
+          setError(
+            resp.persistence.state === 'drift'
+              ? tr("挡位可能未落盘：") + (resp.persistence.detail || '')
+              : tr("挡位已提交，但宿主不支持配置回读，无法确认已落盘"),
+          );
         } else {
           setError(null);
         }
+      })
+      .catch((e: unknown) => {
+        setSettingsData(prev);
+        setError(tr("开关写入失败：") + String((e && (e as Error).message) || e));
+      });
+  };
+
+  /**
+   * 提取轴顶控（capture+distill 一起拨）：一次 RPC 写两键，乐观同翻。
+   */
+  const setExtractMaster = (v: boolean) => {
+    if (!settingsData) return;
+    const prev = settingsData;
+    const next = { ...prev, settings: { ...prev.settings, capture: v, distill: v } };
+    setSettingsData(next);
+    rpc('dsh-memory/settings-set', { capture: v, distill: v } as SettingsSetRequest)
+      .then((r) => {
+        if (!r || !r.ok) {
+          setSettingsData(prev);
+          setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
+        } else setError(null);
       })
       .catch((e: unknown) => {
         setSettingsData(prev);
@@ -169,7 +201,11 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   // message 非 running = 管线降级（数据为最后一次成功读取）
   const degraded = stats && stats.message && stats.message !== 'running';
 
-  const master = settingsData && settingsData.settings ? settingsData.settings.enabled : true;
+  // 两轴顶控：注入=recall；提取=capture 与 distill 的台并（两者都开才算提取开）。
+  const injectOn = settingsData && settingsData.settings ? settingsData.settings.recall !== false : true;
+  const captureOn = settingsData && settingsData.settings ? settingsData.settings.capture !== false : true;
+  const distillOn = settingsData && settingsData.settings ? settingsData.settings.distill !== false : true;
+  const extractOn = captureOn && distillOn;
   // 部署上限提示：cordis.patch.yml 停用的分项，运行时开关打不开
   let ceilingNote = '';
   if (settingsData && settingsData.ceilings) {
@@ -206,21 +242,68 @@ export function OverviewTab(props: { rpc: RpcFn }) {
         <p style={S.hint}>{tr("settings 服务不可用，记忆模式开关未启用（记忆保持全开）。")}</p>
       ) : settingsData ? (
         <div style={S.switchPanel}>
-          {/* 分组一：记忆模式（总闸 + 三个分项；总闸关闭时分项置灰） */}
-          <div style={S.panelLabel}>{tr("记忆模式")}</div>
+          {/* 分组一：注入的状态记忆（=召回 recall）——pill 总控本会话是否注入；三态滑条定下次启动初值 */}
+          <div style={S.panelLabel}>{tr("注入的状态记忆")}</div>
           <SwitchRow
-            label={tr("记忆模式")}
-            desc={master ? tr("已开启：捕获对话并蒸馏记忆") : tr("已关闭：不捕获、不蒸馏、不注入（数据保留）")}
-            checked={master}
+            label={tr("注入的状态记忆")}
+            desc={injectOn ? tr("已开启：对话时注入相关记忆与画像") : tr("已关闭：不向上下文注入记忆（数据保留）")}
+            checked={injectOn}
             onChange={(v) => {
-              toggle('enabled', v);
+              toggle('recall', v);
             }}
           />
+          <div style={{ ...S.switchRow, alignItems: 'flex-start' }}>
+            <div style={{ width: 36, flexShrink: 0 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, maxWidth: 320 }}>
+              <span style={{ ...S.switchLabel, minWidth: 0 }}>{tr("下次启动")}</span>
+              <Segmented
+                stretch
+                value={settingsData.settings.injectBootMode ?? 'off'}
+                options={[
+                  { key: 'last', label: tr("跟随上一次"), title: tr("沿用上一次运行结束时的开关状态") },
+                  { key: 'on', label: tr("默认开启"), title: tr("每次启动强制开启注入（本会话仍可手动关）") },
+                  { key: 'off', label: tr("默认关闭"), title: tr("每次启动强制关闭注入（本会话仍可手动开）") },
+                ]}
+                onChange={(k) => {
+                  setBootMode('inject', k as 'on' | 'off' | 'last');
+                }}
+              />
+              <span style={S.switchDesc}>{tr("只决定下次启动的初值；拨定即刻同步本会话。")}</span>
+            </div>
+          </div>
+          {/* 分组二：提取的状态记忆（=捕获 capture + 蒸馏 distill）——pill 总控两者；下面两个分项可细调 */}
+          <div style={S.panelLabel}>{tr("提取的状态记忆")}</div>
+          <SwitchRow
+            label={tr("提取的状态记忆")}
+            desc={extractOn ? tr("已开启：捕获对话并蒸馏为记忆") : tr("已关闭：不捕获、不蒸馏（数据保留）")}
+            checked={extractOn}
+            onChange={(v) => {
+              setExtractMaster(v);
+            }}
+          />
+          <div style={{ ...S.switchRow, alignItems: 'flex-start' }}>
+            <div style={{ width: 36, flexShrink: 0 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, maxWidth: 320 }}>
+              <span style={{ ...S.switchLabel, minWidth: 0 }}>{tr("下次启动")}</span>
+              <Segmented
+                stretch
+                value={settingsData.settings.extractBootMode ?? 'off'}
+                options={[
+                  { key: 'last', label: tr("跟随上一次"), title: tr("沿用上一次运行结束时的开关状态") },
+                  { key: 'on', label: tr("默认开启"), title: tr("每次启动强制开启提取（本会话仍可手动关）") },
+                  { key: 'off', label: tr("默认关闭"), title: tr("每次启动强制关闭提取（本会话仍可手动开）") },
+                ]}
+                onChange={(k) => {
+                  setBootMode('extract', k as 'on' | 'off' | 'last');
+                }}
+              />
+              <span style={S.switchDesc}>{tr("只决定下次启动的初值；拨定即刻同步本会话。")}</span>
+            </div>
+          </div>
           <SwitchRow
             label={tr("捕获")}
             desc={tr("L0：记录原始对话（关闭后蒸馏也无输入）")}
             checked={settingsData.settings.capture}
-            disabled={!master}
             onChange={(v) => {
               toggle('capture', v);
             }}
@@ -229,49 +312,10 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             label={tr("蒸馏")}
             desc={tr("L1 抽取 + L2 场景 + L3 画像")}
             checked={settingsData.settings.distill}
-            disabled={!master}
             onChange={(v) => {
               toggle('distill', v);
             }}
           />
-          <SwitchRow
-            label={tr("召回")}
-            desc={tr("对话时注入相关记忆与画像")}
-            checked={settingsData.settings.recall}
-            disabled={!master}
-            onChange={(v) => {
-              toggle('recall', v);
-            }}
-          />
-          {/* 分组一·续：启动挡位——决定下次启动时记忆是开还是关（本会话随时可用上面的总开关） */}
-          <div style={S.panelLabel}>{tr("启动挡位")}</div>
-          <div style={{ ...S.switchRow, alignItems: 'flex-start' }}>
-            <span style={S.switchLabel}>{tr("下次启动")}</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <select
-                value={settingsData.settings.bootMode ?? 'last'}
-                onChange={(e) => {
-                  setBootMode(e.currentTarget.value as 'on' | 'off' | 'last');
-                }}
-                style={{
-                  fontSize: 13,
-                  padding: '6px 10px',
-                  borderRadius: 8,
-                  border: '1px solid var(--dsh-mem-border)',
-                  background: 'var(--dsh-mem-bg-card)',
-                  color: 'var(--dsh-mem-text-1)',
-                  minWidth: 160,
-                }}
-              >
-                <option value="last">{tr("跟随上一次")}</option>
-                <option value="on">{tr("强制开启")}</option>
-                <option value="off">{tr("强制关闭")}</option>
-              </select>
-              <span style={S.switchDesc}>
-                {tr("只决定下次启动的初值；数据始终保留，本会话可随时手动切换。")}
-              </span>
-            </div>
-          </div>
           {/* 分组二：高权限模式（写删门）——模型侧写删工具与面板删除记录共用的总闸 */}
           <div style={S.panelLabel}>{tr("高权限模式")}</div>
           <SwitchRow
@@ -306,7 +350,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             label={tr("{p1}投影", { p1: tr(GRAPH_FEATURE_LABEL) })}
             desc={graphSwitchDesc(graphEnabled)}
             checked={graphEnabled}
-            disabled={!master}
+            disabled={!extractOn}
             onChange={(v) => {
               if (v) {
                 // 开启前先看预估：投影逐批走 LLM，不给数字就热开等于黑盒花钱
@@ -428,7 +472,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
           {/* 分组三：蒸馏参数（B 形态分段：全局默认链 + 按层路由 l1/l2/l3 + 预算随层归组；
               旧「蒸馏思考」全局切换器与「蒸馏模型」单路由选择器已并入 RouteChainEditor） */}
           <div style={S.panelLabel}>{tr("蒸馏参数")}</div>
-          <DistillSettings rpc={rpc} disabled={!master} data={settingsData} setData={setSettingsData} onError={setError} />
+          <DistillSettings rpc={rpc} disabled={!extractOn} data={settingsData} setData={setSettingsData} onError={setError} />
           {ceilingNote ? <p style={S.hint}>{ceilingNote}</p> : null}
         </div>
       ) : null}

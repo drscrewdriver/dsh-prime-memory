@@ -594,6 +594,11 @@ dsh-tui 不加载插件的 client 半边（面板/卡片/设置页），也调�
 | `/memory rooms` | Room 注册表（major / major-minor） |
 | `/memory scenes` | 场景文件计数（chat / work 分族） |
 | `/memory ext` | 外部记忆驱动与同步模式 |
+| `/memory switch` | 记忆开关现值（注入=召回、提取=捕获+蒸馏两轴，各自启动挡位，高权限；部署停用项标注） |
+| `/memory on\|off` | 拨两轴（recall+capture+distill；总闸已退役）（默认 dry 回显；`--yes` 才写入并回读确认） |
+| `/memory injected` | 本会话已注入记忆（`--last` 取最近会话 / `--session=<id>`，含取代标记） |
 | `/memory rebuild` | dry run：预估重蒸馏影响面（不写库） |
 
 命令由插件自己在宿主侧注册（`ctx.inject(['commands'], …)`）：命令服务缺席的老宿主线上不激活、不报错。
+
+> 开关的完整配置（两组两级开关：注入的状态记忆 pill + 下次启动三态滑条、提取的状态记忆 pill + 三态滑条，及捕获/蒸馏细调、高权限、蒸馏路由链等）仍在 Desktop 设置页；终端面以只读为主，仅 `/memory on|off --yes` 提供两轴写入。

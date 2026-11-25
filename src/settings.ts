@@ -23,6 +23,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type {} from '@deepseek-ai/cordis-plugin-loader';
 import type { MemoryConfig } from './config.js';
 import { EFFORT_CHOICES, liveSettingsSchema } from './config.js';
+import type { BootAxis, BootMode, BootModeStore } from './store/boot-mode.js';
 import type { MemoryLogger } from './types.js';
 
 // EffortChoice/DistillBudgets/DistillChainEntry/MemoryLiveSettings 来自契约单一事实源
@@ -112,6 +113,27 @@ export interface LiveSettingsHandle {
    * 调用方拿读回值与刚提交的值比对，不一致就必得报告“未完全生效”，而不是假定成功。
    */
   readConfig?(key: string): unknown;
+  /**
+   * 等下一次 `loader/volatile-update` 广播(带超时兜底)——启动挡位的竞态门。
+   *
+   * 背景：插件挂载时 volatile 引用可能还没并入 profile patch 的持久值，
+   * `get()` 读到的是 schema 出厂默认。`applyBootMode` 拿磁盘回读值与运行值对不上时，
+   * 等一次广播再重读，避免拿陈旧快照反写用户刚选的挡位。超时/不支持都 resolve
+   * (调用方重读后照常推进，不能把启动卡在宿主不发广播上)。
+   */
+  waitForVolatile?(timeoutMs?: number): Promise<void>;
+  /**
+   * 启动挡位的插件侧权威值（`boot-mode.json`，按轴取）。`undefined` = 未曾显式设置，
+   * 调用方回落到 volatile / 出厂默认。存在理由见 store/boot-mode.ts 顶部注释
+   * (0.27.9：宿主 forms.update 不持久化新增的挡位键，需插件自存)。
+   */
+  bootModeOf?(axis: BootAxis): BootMode | undefined;
+  /**
+   * 等写面（settings.forms）就绪。插件挂载时宿主 settings 服务可能尚未上线，
+   * 此时 `update` 会抛“settings 服务不可用”——启动挡位写回必须等它就绪后重试。
+   * 就绪返回 true；超时返回 false（调用方据此放弃本次写回，不阻断启动）。
+   */
+  whenReady?(timeoutMs?: number): Promise<boolean>;
 }
 
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
@@ -132,7 +154,8 @@ interface SettingsFormsLike {
 }
 
 const ALWAYS_ON: MemoryLiveSettings = {
-  bootMode: 'off',
+  injectBootMode: 'last',
+  extractBootMode: 'last',
   enabled: true,
   capture: true,
   distill: true,
@@ -213,16 +236,38 @@ export function readLiveRef(ref: unknown): MemoryLiveSettings {
   return typeof maybe?.get === 'function' ? maybe.get() : (maybe as MemoryLiveSettings);
 }
 
-export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger: MemoryLogger): LiveSettingsHandle {
+export function registerLiveSettings(
+  ctx: Context,
+  config: MemoryConfig,
+  logger: MemoryLogger,
+  bootStore?: BootModeStore,
+): LiveSettingsHandle {
   // 读面:volatile 引用恒在(由 Config schema 默认值兜底),读数现取现解析,
   // 无进程内缓存——旧「服务就绪探测 / scope 复用 / 实例判活」整套机制随
-  // 命令式注册面一起删除(0.1.7 无注册,自然无 already-registered 竞态)。
+  // 命 令式注册面一起删除(0.1.7 无注册,自然无 already-registered 竞态)。
   const ref = config.live;
-  const read = (): MemoryLiveSettings => resolveSettings(readLiveRef(ref));
+  // 启动挡位以插件自有存储为准（宿主 forms.update 会剪掉新增的 bootMode 键，
+  // 见 store/boot-mode.ts）；无存档时保留 volatile 解出的值。
+  const withBoot = (s: MemoryLiveSettings): MemoryLiveSettings => {
+    if (!bootStore) return s;
+    const inject = bootStore.get('inject');
+    const extract = bootStore.get('extract');
+    if (inject === undefined && extract === undefined) return s;
+    return {
+      ...s,
+      injectBootMode: inject ?? s.injectBootMode,
+      extractBootMode: extract ?? s.extractBootMode,
+    };
+  };
+  const read = (): MemoryLiveSettings => withBoot(resolveSettings(readLiveRef(ref)));
 
   // 变更诊断(替代旧 scope.watch):宿主把 volatile-only 变更提交进引用后,
   // 向持有 fiber 广播一次 loader/volatile-update(路径为键数组,只关心 live 节)。
+  // 同时拨一下竞态门 waitForVolatile(启动挡位在 patch 未并入时等这里)。
+  let releaseVolatile: (() => void) | undefined;
   ctx.on('loader/volatile-update', (paths) => {
+    releaseVolatile?.();
+    releaseVolatile = undefined;
     if (!paths.some((p) => p[0] === 'live')) return;
     const current = read();
     const b = current.distillBudgets;
@@ -364,11 +409,32 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
 
   return {
     supported: true,
-    get: () => (modernWrite() ? read() : inner.get()),
+    get: () => (modernWrite() ? read() : withBoot(inner.get())),
     /** 面板据此置灰:把"写不了"伪装成"写成功"比明确不支持更坑。 */
     get configWritable() {
       return modernWrite();
     },
+    bootModeOf: (axis) => bootStore?.get(axis),
+    whenReady: async (timeoutMs = 10000) => {
+      // 轮询写面就绪：宿主 settings 服务上线后 ctx.inject 会填充 forms → modernWrite() 转真。
+      const start = Date.now();
+      while (!modernWrite()) {
+        if (Date.now() - start >= timeoutMs) return false;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return true;
+    },
+    waitForVolatile: (timeoutMs = 3000) =>
+      new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        releaseVolatile = finish;
+        setTimeout(finish, timeoutMs).unref?.();
+      }),
     updateConfig: async (patch: Record<string, unknown>) => {
       const f = forms as SettingsFormsLike | undefined;
       if (f === undefined || typeof f.update !== 'function') {
@@ -388,6 +454,15 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
       }
     },
     update: async (patch) => {
+      // 启动挡位(两轴)先进插件自有存储（权威）——宿主 forms.update 会剪掉这些新键，
+      // 不先落盘则重启后读不回。同值时 set 短路。先写 store，后续 read() 的
+      // withBoot 叠加才能反映新值。
+      if (bootStore && patch.injectBootMode !== undefined) {
+        await bootStore.set('inject', patch.injectBootMode);
+      }
+      if (bootStore && patch.extractBootMode !== undefined) {
+        await bootStore.set('extract', patch.extractBootMode);
+      }
       if (modernWrite()) {
         if (!forms) throw new Error('settings 服务不可用,记忆开关无法写入');
         // patch 合并语义与旧 scope.update 一致:只改传入键。合并在插件侧完成后
@@ -404,22 +479,59 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
 
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
 /**
- * 启动期应用三态挡位：`on`/`off` 把初值写回 `enabled`，`last` 原样保留。
+ * 启动期应用两轴三态挡位：控制的是**新会话默认档位**，而非系统级功能开关。
  *
- * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效
- * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
- * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
- * 保持持久值，不阻断启动。
+ * 设计意图（用户澄清 2026-11-26）：
+ * - 系统级 recall/capture/distill = 功能可用性，由 pill 控制，滑块不碰；
+ * - 滑块“下次启动” = 新会话的默认行为（用不用记忆）。
+ *   • extract='off' → 新会话 mode='off'（记忆完全不可见，但系统功能仍可用）；
+ *   • extract='on' + inject='off' → 新会话 mode='auto' + recall=false（只写不注）；
+ *   • 两轴均 'on' → 新会话 mode='auto' + recall=undefined（跟随全局）；
+ *   • 两轴均 'last' → 不改会话默认（沿用上次）。
+ *
+ * 诊断日志与 whenReady 保留（系统级开关的写回仍需要 whenReady 等待宿主服务就绪）。
  */
-export async function applyBootMode(live: LiveSettingsHandle): Promise<void> {
+export async function applyBootMode(
+  live: LiveSettingsHandle,
+  logger?: { info(msg: string): void; warn(msg: string): void },
+  modes?: { setDefaultMode(mode: string): void; setDefaultRecall(r: boolean | undefined): void },
+): Promise<void> {
+  const say = (msg: string) => logger?.info(msg);
+  const warn = (msg: string) => (logger ? logger.warn(msg) : console.warn(msg));
   try {
     const s = live.get();
-    if (s.bootMode !== 'on' && s.bootMode !== 'off') return;
-    const want = s.bootMode === 'on';
-    if (s.enabled === want) return;
-    await live.update({ enabled: want });
-  } catch {
-    /* 写面不可用：保持持久值，启动不受影响 */
+    const injStore = live.bootModeOf?.('inject');
+    const extStore = live.bootModeOf?.('extract');
+    say(
+      `[memory] 启动挡位对照: 注入=${s.injectBootMode}${injStore ? '(存档)' : ''} 提取=${s.extractBootMode}${extStore ? '(存档)' : ''}` +
+        ` | 系统级 recall=${s.recall} capture=${s.capture} distill=${s.distill}`,
+    );
+    // 确定新会话默认档
+    if (modes) {
+      const inj = s.injectBootMode;
+      const ext = s.extractBootMode;
+      if (ext === 'off') {
+        // 提取关 → 新会话完全不用记忆
+        modes.setDefaultMode('off');
+        modes.setDefaultRecall(undefined);
+        say(`[memory] 启动挡位应用: 新会话默认 mode=off (提取关闭)`);
+      } else if (ext === 'on' && inj === 'off') {
+        // 提取开 + 注入关 → 只写不注
+        modes.setDefaultMode('auto');
+        modes.setDefaultRecall(false);
+        say(`[memory] 启动挡位应用: 新会话默认 mode=auto recall=false (只写不注)`);
+      } else if (ext === 'on' && inj === 'on') {
+        // 两轴均开 → 跟随全局
+        modes.setDefaultMode('auto');
+        modes.setDefaultRecall(undefined);
+        say(`[memory] 启动挡位应用: 新会话默认 mode=auto recall=跟随全局`);
+      }
+      // 'last' 不改——沿用上次设置的默认档
+    }
+    // 系统级开关不再被滑块写回（仅 pill 控制）。保留 whenReady 等待以防后续有系统级写需求。
+    say(`[memory] 启动挡位与现值已一致，免写回`);
+  } catch (err) {
+    warn(`[memory] 启动挡位应用失败: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -455,13 +567,18 @@ export function resolveSettings(value: unknown): MemoryLiveSettings {  if (!valu
     return out;
   };
   const rawLayer = (v.distillLayerChains ?? {}) as Partial<Record<LayerRouteKey, unknown>>;
-  // 启动挡位:缺键/非法值归 'off'(出厂默认关闭)。挡位本身**不在读侧折叠**——
-  // 启动期由 `applyBootMode` 把初值写回 `enabled`,这样本会话的手动开关永远有效。
-  const bootMode: 'on' | 'off' | 'last' =
-    v.bootMode === 'on' || v.bootMode === 'off' || v.bootMode === 'last' ? v.bootMode : 'off';
+  // 启动挡位拆两轴：缺键/非法值均归 'last'(出厂默认跟随上次，新安装无历史即开)。挡位本身**不在读侧折叠**——
+  // 启动期由 `applyBootMode` 把初值写回 recall / capture+distill，这样本会话的手动开关永远有效。
+  const normBoot = (x: unknown): 'on' | 'off' | 'last' =>
+    x === 'on' || x === 'off' || x === 'last' ? x : 'last';
+  const injectBootMode = normBoot(v.injectBootMode);
+  const extractBootMode = normBoot(v.extractBootMode);
   return {
-    bootMode,
-    enabled: v.enabled !== false,
+    injectBootMode,
+    extractBootMode,
+    // 总闸不再作为面板顶控；钉为 true，行为由 recall / capture / distill 三键接管。
+    // 旧 profile 里 enabled=false 的遗留值会被这里抹平（一次性迁移，不阻断）。
+    enabled: true,
     capture: v.capture !== false,
     distill: v.distill !== false,
     recall: v.recall !== false,

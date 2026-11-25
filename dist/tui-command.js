@@ -28,34 +28,43 @@ function parse(rawInput) {
     const argv = [];
     let json = false;
     let all = false;
+    let last = false;
+    let session;
     let limit = 10;
     for (const token of String(rawInput ?? '').trim().split(/\s+/).filter(Boolean)) {
         if (token === '--json')
             json = true;
         else if (token === '--all')
             all = true;
+        else if (token === '--last')
+            last = true;
+        else if (token.startsWith('--session='))
+            session = token.slice('--session='.length);
         else if (/^--n=\d+$/.test(token))
             limit = Math.min(40, Math.max(1, Number(token.slice(4))));
         else if (!token.startsWith('--'))
             argv.push(token);
     }
-    return { argv, json, all, limit: all ? 40 : limit };
+    return { argv, json, all, last, session, limit: all ? 40 : limit };
 }
 const HELP = [
-    'memory — 分层蒸馏记忆（L0/L1/L2/L3）的只读终端面',
+    'memory — 分层蒸馏记忆（L0/L1/L2/L3）的终端面',
     '  /memory              库状态与各层计数',
     '  /memory records      最近 10 条 L1（--n=20 / --all 调数量）',
     '  /memory conflicts    待裁决冲突',
     '  /memory rooms        Room 注册表（major / major-minor）',
     '  /memory scenes       场景文件计数（chat / work 分族）',
     '  /memory ext          外部记忆驱动与同步模式',
+    '  /memory switch       查看记忆开关现值（总闸/捕获/蒸馏/召回/挡位/高权限）',
+    '  /memory on|off       拨总闸 enabled（默认 dry 回显；加 --yes 才写入）',
+    '  /memory injected     本会话已注入的记忆（--last 取最近会话 / --session=<id>）',
     '  /memory rebuild      dry run：预估重蒸馏影响面（不写库）',
     '  flags                --json 单行 JSON',
-    '  note                 蒸馏/重建等写操作仍在 Desktop 面板；命令层只读',
+    '  note                 除 on/off 外写入仍在 Desktop 面板；命令层其余只读',
 ];
 /** 纯函数入口。scenes 读目录，所以整体异步。 */
 export async function runMemoryCommand(rawInput, deps) {
-    const { argv, json, limit } = parse(rawInput);
+    const { argv, json, limit, last, session } = parse(rawInput);
     const sub = (argv[0] ?? 'status').toLowerCase();
     const wrap = (result, data) => {
         if (!json)
@@ -131,6 +140,66 @@ export async function runMemoryCommand(rawInput, deps) {
             '  note       配置是事实源；改驱动走 Desktop 设置页',
         ];
         return wrap(ok(lines), ext);
+    }
+    if (sub === 'switch') {
+        const sw = deps.switches();
+        const lock = (name, on, ceil) => `${name}=${on}${!ceil ? '(部署停用)' : ''}`;
+        const lines = [
+            `memory switch — 注入 recall=${sw.recall}(启动=${sw.injectBootMode})  提取 capture=${sw.capture}/distill=${sw.distill}(启动=${sw.extractBootMode})`,
+            `  ${lock('捕获', sw.capture, sw.ceilings.capture)}  ${lock('蒸馏', sw.distill, sw.ceilings.distill)}  ${lock('召回', sw.recall, sw.ceilings.recall)}`,
+            `  高权限写删=${sw.memoryMutate}`,
+            '  use        /memory on|off --yes  拨总闸',
+        ];
+        return wrap(ok(lines), sw);
+    }
+    if (sub === 'on' || sub === 'off') {
+        const want = sub === 'on';
+        const yes = /(^|\s)--yes(\s|$)/.test(String(rawInput ?? ''));
+        if (!yes) {
+            return wrap(ok([
+                `memory ${sub} — dry run（未写入）`,
+                `  would     将总闸 enabled 置为 ${want}`,
+                '  next      加 --yes 才真写（影响捕获/蒸馏/召回注入）',
+            ]), { dry: true, willSet: want });
+        }
+        const res = await deps.setEnabled(want);
+        const lines = [
+            `memory ${sub} — ${res.applied ? '已写入' : '写入失败'}`,
+            `  effective  enabled=${res.effective}`,
+            res.drift ? '  warning    写后回读不一致（可能被宿主剪枝），重启可能回落' : '  persisted  回读一致',
+        ];
+        const result = res.applied && !res.drift
+            ? { kind: 'success', text: renderLines(lines) }
+            : { kind: 'error', text: renderLines(lines) };
+        return wrap(result, { ...res });
+    }
+    if (sub === 'injected') {
+        let sid = session;
+        if (!sid) {
+            if (!last) {
+                const recent = deps.recentSessions();
+                if (recent.length === 0)
+                    return wrap(ok(['memory injected — 近期无注入记录', '  next 在有记忆的会话里对话后再试，或 --session=<id>']), { sessions: 0 });
+                return wrap(ok([
+                    'memory injected — 需指定会话：--last 取最近一个，或 --session=<id>',
+                    ...recent.slice(0, 8).map((s) => `  ${new Date(s.at).toISOString().slice(0, 19).replace('T', ' ')}  ${s.count} 条  ${clip(s.key, 40)}`),
+                ]), { hint: true, recent: recent.slice(0, 8) });
+            }
+            const recent = deps.recentSessions();
+            if (recent.length === 0)
+                return wrap(ok(['memory injected — 近期无任何会话有注入记录']), { rows: 0 });
+            sid = recent[0].key;
+        }
+        const rows = deps.recalled(sid, limit);
+        if (rows.length === 0)
+            return wrap(ok([`memory injected — 会话 ${clip(sid, 32)} 无已注入记忆`]), { sessionId: sid, rows: 0 });
+        const lines = [`memory injected — 会话 ${clip(sid, 36)}  共 ${rows.length} 条`];
+        for (const r of rows) {
+            const meta = [r.type, r.family, r.scene_name].filter(Boolean).join('/');
+            const flags = `${r.superseded ? ' [已取代]' : ''}${r.lane ? ` (${r.lane})` : ''}`;
+            lines.push(`  ${clip(meta || '—', 18)}  ${clip(String(r.content ?? ''), 48)}${flags}`);
+        }
+        return wrap(ok(lines), { sessionId: sid, rows });
     }
     if (sub === 'rebuild') {
         const status = deps.status();
