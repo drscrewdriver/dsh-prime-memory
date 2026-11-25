@@ -72,4 +72,31 @@ describe('applyBootMode 两轴写回', () => {
     await expect(applyBootMode(handle, { info: () => {}, warn: (m) => warned.push(m) })).resolves.toBeUndefined();
     expect(warned.some((m) => m.includes('启动挡位应用失败'))).toBe(true);
   });
+
+  it('写面未就绪（whenReady=false）→ 等不到就跳过写回，不报错不阻断', async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    const warned: string[] = [];
+    const handle: LiveSettingsHandle = {
+      supported: true,
+      get: () => resolveSettings({ injectBootMode: 'off', recall: true, capture: true, distill: true }),
+      update: async (patch) => { writes.push(patch as Record<string, unknown>); },
+      whenReady: async () => false,
+    };
+    await applyBootMode(handle, { info: () => {}, warn: (m) => warned.push(m) });
+    expect(writes).toEqual([]); // 未就绪 → 不尝试写
+    expect(warned.some((m) => m.includes('写面仍未就绪'))).toBe(true);
+  });
+
+  it('写面就绪（whenReady=true）后才写回两轴初值', async () => {
+    const writes: Array<Record<string, unknown>> = [];
+    const handle: LiveSettingsHandle = {
+      supported: true,
+      get: () => resolveSettings({ injectBootMode: 'off', extractBootMode: 'off', recall: true, capture: true, distill: true }),
+      update: async (patch) => { writes.push(patch as Record<string, unknown>); },
+      whenReady: async () => true,
+    };
+    await applyBootMode(handle, { info: () => {}, warn: () => {} });
+    expect(writes.length).toBe(1);
+    expect(writes[0]).toMatchObject({ recall: false, capture: false, distill: false, enabled: true });
+  });
 });

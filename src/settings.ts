@@ -128,6 +128,12 @@ export interface LiveSettingsHandle {
    * (0.27.9：宿主 forms.update 不持久化新增的挡位键，需插件自存)。
    */
   bootModeOf?(axis: BootAxis): BootMode | undefined;
+  /**
+   * 等写面（settings.forms）就绪。插件挂载时宿主 settings 服务可能尚未上线，
+   * 此时 `update` 会抛“settings 服务不可用”——启动挡位写回必须等它就绪后重试。
+   * 就绪返回 true；超时返回 false（调用方据此放弃本次写回，不阻断启动）。
+   */
+  whenReady?(timeoutMs?: number): Promise<boolean>;
 }
 
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
@@ -409,6 +415,15 @@ export function registerLiveSettings(
       return modernWrite();
     },
     bootModeOf: (axis) => bootStore?.get(axis),
+    whenReady: async (timeoutMs = 10000) => {
+      // 轮询写面就绪：宿主 settings 服务上线后 ctx.inject 会填充 forms → modernWrite() 转真。
+      const start = Date.now();
+      while (!modernWrite()) {
+        if (Date.now() - start >= timeoutMs) return false;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return true;
+    },
     waitForVolatile: (timeoutMs = 3000) =>
       new Promise<void>((resolve) => {
         let done = false;
@@ -512,6 +527,12 @@ export async function applyBootMode(
     if (s.enabled !== true) touched = true; // 总闸钉 true
     if (!touched) {
       say(`[memory] 启动挡位与现值已一致，免写回`);
+      return;
+    }
+    // 写面未就绪时先等（插件挂载早于宿主 settings 服务上线是常见时序）。
+    const ready = await live.whenReady?.(10000);
+    if (ready === false) {
+      warn(`[memory] 启动挡位写回跳过：等 10s 后 settings 写面仍未就绪（本次启动不应用挡位，下次启动或面板操作时重试）`);
       return;
     }
     await live.update(patch);

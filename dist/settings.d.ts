@@ -85,6 +85,12 @@ export interface LiveSettingsHandle {
      * (0.27.9：宿主 forms.update 不持久化新增的挡位键，需插件自存)。
      */
     bootModeOf?(axis: BootAxis): BootMode | undefined;
+    /**
+     * 等写面（settings.forms）就绪。插件挂载时宿主 settings 服务可能尚未上线，
+     * 此时 `update` 会抛“settings 服务不可用”——启动挡位写回必须等它就绪后重试。
+     * 就绪返回 true；超时返回 false（调用方据此放弃本次写回，不阻断启动）。
+     */
+    whenReady?(timeoutMs?: number): Promise<boolean>;
 }
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
 export declare const MEMORY_ENTRY_ID = "dsh-memory";
