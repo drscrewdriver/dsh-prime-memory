@@ -1,7 +1,6 @@
 ## Unreleased (prerelease)
 
 **启动挡位持久化诊断与竞态防护（用户反馈「选了下次关闭，重启不生效」）。**
-
 - `applyBootMode` 不再静默吞错：启动固定打印一行「磁盘回读 × 运行时」对照（bootMode/enabled 两组），宿主不供 `forms.get` 时明说无法对照；写回/免写回/失败各有日志。
 - **竞态门**：插件挂载时 volatile 引用可能还没并入 profile patch（读到出厂默认）——磁盘挡位≠运行时挡位时等一次 `loader/volatile-update`（3s 超时兜底）后重读再应用，不拿陈旧快照反写用户选择。
 - `settings-set` 写启动挡位后同步回读磁盘值，不一致时响应附 `persistence:{state:'drift',detail}`（新契约字段，与 settings-get 的 #37 同形状）；面板消费之——挡位没落盘当场报错，不等重启后才发现。
@@ -10,6 +9,12 @@
 - 修面板挡位展示兜底 `'last'` → `'off'`（与出厂默认一致，不再出现"显示跟随上一次、实际默认关闭"的假象）。
 - 发版流水线改双路径（prerelease 分支常驻）：push prerelease + `-rc.N` 号 → 自动 `publish --tag rc`（不动 latest/线标签/Release）；PR 合并 main + 正式号 → 自动全链路正式版（先发后打 tag）；正式号推 prerelease 只跑门禁。新增 `scripts/publish-rc.mjs` 本地兜底。
 - 测试：boot-mode 新增竞态重试/一致免等/诊断日志 3 用例（11/11 绿）；i18n 双键入 en/ru/pt 全集。
+
+**两级开关 UI（状态记忆 pill + 启动挡位三态滑条）。**
+
+- 概览页「记忆模式」重构为两级：第一级 pill 总闸（文案改「状态记忆」，控本会话 enabled）；第二级启动挡位从原生 `<select>` 换为 `Segmented` 三态滑条（跟随上一次/默认开启/默认关闭，值 last/on/off 不变）。
+- 三态语义文案重写并补 tooltip；en/pt/ru 三语新增 6 键（状态记忆/沿用上一次…/默认开启/…/默认关闭/…）入 keys.json 与字典全集。
+- 验证：typecheck 三工程绿 / build 出包 / i18n-dict 12/12 / 面板目视两级结构。
 
 ## 0.27.8
 

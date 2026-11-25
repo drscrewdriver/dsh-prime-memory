@@ -6,7 +6,7 @@ import { fmtTime } from '../format.js';
 import { modeLabel } from '../pill/modes.js';
 import type { RpcFn } from '../rpc.js';
 import { S } from '../styles.js';
-import { SwitchRow } from '../ui/controls.js';
+import { Segmented, SwitchRow } from '../ui/controls.js';
 import { NButton, NModal } from '../ui/primitives.js';
 import { GRAPH_FEATURE_LABEL, GRAPH_TOOL_LABEL, graphSwitchDesc } from '../copy.js';
 import { ArchiveSection } from './ArchiveSection.js';
@@ -217,16 +217,37 @@ export function OverviewTab(props: { rpc: RpcFn }) {
         <p style={S.hint}>{tr("settings 服务不可用，记忆模式开关未启用（记忆保持全开）。")}</p>
       ) : settingsData ? (
         <div style={S.switchPanel}>
-          {/* 分组一：记忆模式（总闸 + 三个分项；总闸关闭时分项置灰） */}
-          <div style={S.panelLabel}>{tr("记忆模式")}</div>
+          {/* 分组一：状态记忆——两级开关设计：第一级 pill 总闸（本会话开不开），
+              第二级三态滑条（下次启动初值）；总闸关时下面三个分项置灰 */}
+          <div style={S.panelLabel}>{tr("状态记忆")}</div>
           <SwitchRow
-            label={tr("记忆模式")}
+            label={tr("状态记忆")}
             desc={master ? tr("已开启：捕获对话并蒸馏记忆") : tr("已关闭：不捕获、不蒸馏、不注入（数据保留）")}
             checked={master}
             onChange={(v) => {
               toggle('enabled', v);
             }}
           />
+          {/* 第二级：启动挡位三态滑条——决定下次启动时记忆是开还是关（本会话随时可用上面的总开关） */}
+          <div style={{ ...S.switchRow, alignItems: 'flex-start', paddingLeft: 20 }}>
+            <span style={S.switchLabel}>{tr("下次启动")}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Segmented
+                value={settingsData.settings.bootMode ?? 'off'}
+                options={[
+                  { key: 'last', label: tr("跟随上一次"), title: tr("沿用上一次运行结束时的开关状态") },
+                  { key: 'on', label: tr("默认开启"), title: tr("每次启动强制开启（本会话仍可手动关）") },
+                  { key: 'off', label: tr("默认关闭"), title: tr("每次启动强制关闭（本会话仍可手动开）") },
+                ]}
+                onChange={(k) => {
+                  setBootMode(k as 'on' | 'off' | 'last');
+                }}
+              />
+              <span style={S.switchDesc}>
+                {tr("只决定下次启动的初值；数据始终保留，本会话可随时手动切换。")}
+              </span>
+            </div>
+          </div>
           <SwitchRow
             label={tr("捕获")}
             desc={tr("L0：记录原始对话（关闭后蒸馏也无输入）")}
@@ -254,35 +275,6 @@ export function OverviewTab(props: { rpc: RpcFn }) {
               toggle('recall', v);
             }}
           />
-          {/* 分组一·续：启动挡位——决定下次启动时记忆是开还是关（本会话随时可用上面的总开关） */}
-          <div style={S.panelLabel}>{tr("启动挡位")}</div>
-          <div style={{ ...S.switchRow, alignItems: 'flex-start' }}>
-            <span style={S.switchLabel}>{tr("下次启动")}</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <select
-                value={settingsData.settings.bootMode ?? 'off'}
-                onChange={(e) => {
-                  setBootMode(e.currentTarget.value as 'on' | 'off' | 'last');
-                }}
-                style={{
-                  fontSize: 13,
-                  padding: '6px 10px',
-                  borderRadius: 8,
-                  border: '1px solid var(--dsh-mem-border)',
-                  background: 'var(--dsh-mem-bg-card)',
-                  color: 'var(--dsh-mem-text-1)',
-                  minWidth: 160,
-                }}
-              >
-                <option value="last">{tr("跟随上一次")}</option>
-                <option value="on">{tr("强制开启")}</option>
-                <option value="off">{tr("强制关闭")}</option>
-              </select>
-              <span style={S.switchDesc}>
-                {tr("只决定下次启动的初值；数据始终保留，本会话可随时手动切换。")}
-              </span>
-            </div>
-          </div>
           {/* 分组二：高权限模式（写删门）——模型侧写删工具与面板删除记录共用的总闸 */}
           <div style={S.panelLabel}>{tr("高权限模式")}</div>
           <SwitchRow
