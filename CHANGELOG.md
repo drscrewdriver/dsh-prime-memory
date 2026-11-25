@@ -1,3 +1,12 @@
+## 0.28.1
+
+**TUI 终端面新增三面（switch / on|off / injected）。**
+
+- `/memory switch`：显示总闸/捕获/蒸馏/召回/启动挡位/高权限六键现值，被部署上限锁死的分项加 `(部署停用)` 后缀；`--json` 单行。
+- `/memory on|off`：命令层首个写操作——默认 dry 回显将写入值，加 `--yes` 才走 `live.update({enabled})` 并写后回读，不一致报 drift。
+- `/memory injected [--last|--session=<id>] [--n]`：接 SessionRecalledStore 列出本会话已注入记忆，含 `[已取代]` 标记与路归因；store 新增 `recent()`。
+- 验证：新增 `tests/tui-command.test.ts`（8 例）；继承 0.28.0 UI 与 0.27.9 BootModeStore。
+
 ## 0.28.0
 
 **两级开关 UI（状态记忆 pill + 启动挡位三态滑条）。**

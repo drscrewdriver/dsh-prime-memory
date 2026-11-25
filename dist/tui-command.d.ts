@@ -33,6 +33,29 @@ export interface MemoryStatus {
     conflicts: number;
     error?: string;
 }
+export interface MemorySwitches {
+    enabled: boolean;
+    capture: boolean;
+    distill: boolean;
+    recall: boolean;
+    bootMode: string;
+    memoryMutate: boolean;
+    /** 部署上限：cordis.patch.yml 停用的分项，运行时开关拨不动。 */
+    ceilings: {
+        capture: boolean;
+        distill: boolean;
+        recall: boolean;
+    };
+}
+export interface RecalledRow {
+    id: string;
+    content?: string;
+    type?: string;
+    family?: string;
+    scene_name?: string;
+    superseded?: boolean;
+    lane?: string;
+}
 export interface MemoryCommandDeps {
     status(): MemoryStatus;
     records(limit: number): MemoryRow[];
@@ -54,6 +77,25 @@ export interface MemoryCommandDeps {
         chat: number;
         work: number;
         sample: string[];
+    }>;
+    /** 开关现值（live.get 投影 + 部署上限）。 */
+    switches(): MemorySwitches;
+    /**
+     * 写总闸 enabled（命令层唯一写操作）。实现方内部走 live.update 并回读，
+     * 返回是否写入、回读生效值、是否发生漂移（写入成功但回读不一致）。
+     */
+    setEnabled(next: boolean): Promise<{
+        applied: boolean;
+        effective: boolean;
+        drift: boolean;
+    }>;
+    /** 某会话已注入的召回集（正文从 l1_records 取；superseded=正文已被摘要取代）。 */
+    recalled(sessionId: string, limit: number): RecalledRow[];
+    /** 最近有注入记录的会话（--last 用；按 updatedAt 倒序）。 */
+    recentSessions(): Array<{
+        key: string;
+        at: number;
+        count: number;
     }>;
 }
 export declare function clip(text: string, width?: number): string;
