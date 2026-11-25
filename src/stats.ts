@@ -766,13 +766,14 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const globalExtract = (s?.capture ?? true) && (s?.distill ?? true);
       const bounds = modes.wingBoundaries(sessionId);
       const locked = modes.getWings(sessionId);
+      const sessionMode = modes.get(sessionId);
       const v: SessionModeGetResponse = {
         sessionId,
-        mode: modes.get(sessionId),
+        mode: sessionMode,
         defaultMode: modes.default,
         recall: modes.getRecall(sessionId) ?? null,
-        recallResolved: modes.resolvedRecall(sessionId, globalRecall),
-        extractResolved: globalExtract,
+        recallResolved: sessionMode === 'off' ? false : modes.resolvedRecall(sessionId, globalRecall),
+        extractResolved: sessionMode === 'off' ? false : globalExtract,
         hall: locked[0] ?? null,
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
@@ -1094,11 +1095,14 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const s = live?.get();
       const bounds = modes.wingBoundaries(sessionId);
       const locked = modes.getWings(sessionId);
+      const setMode = modes.get(sessionId);
+      const globalExtract2 = (s?.capture ?? true) && (s?.distill ?? true);
       const v: SessionModeSetResponse = {
         sessionId,
-        mode: modes.get(sessionId),
+        mode: setMode,
         recall: modes.getRecall(sessionId) ?? null,
-        recallResolved: modes.resolvedRecall(sessionId, s?.recall ?? true),
+        recallResolved: setMode === 'off' ? false : modes.resolvedRecall(sessionId, s?.recall ?? true),
+        extractResolved: setMode === 'off' ? false : globalExtract2,
         hall: locked[0] ?? null,
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
@@ -2244,26 +2248,33 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       for (const key of ['enabled', 'capture', 'distill', 'recall', 'memoryMutate', 'conflictFreeze', 'skillsEnabled', 'graphEnabled', 'keywordEnabled', 'redistillEnabled', 'mdSyncEnabled', 'memportEnabled', 'explorerEnabled', 'toolRoom', 'toolGraph', 'toolRuminate', 'toolConflict', 'toolMutate', 'toolSkills', 'toolGraphAdmin', 'toolLegacy'] as const) {
         if (typeof patch[key] === 'boolean') clean[key] = patch[key] as boolean;
       }
-      // 启动挡位拆两轴：注入(injectBootMode→recall)、提取(extractBootMode→capture+distill)。
-      // 拨定除决定下次启动初值外，还立即把本会话对应键同步到该值（接线修复：
-      // 否则面板显示默认关闭、pill 仍为开，新会话需手动关）。显式传了该键则尊重显式值。'last' 不动。
+      // 启动挡位拆两轴：滑块控制新会话默认档位，不碰系统级 recall/capture/distill。
+      // 拨定时立即更新 modes 的默认档（影响后续新会话），但不写系统级开关。
       if (patch.injectBootMode !== undefined) {
         const v = String(patch.injectBootMode);
         if (!['on', 'off', 'last'].includes(v)) throw new Error(`非法注入挡位: ${v}(允许 on / off / last)`);
         clean.injectBootMode = v;
-        if (patch.recall === undefined) {
-          if (v === 'off') clean.recall = false;
-          else if (v === 'on') clean.recall = true;
-        }
       }
       if (patch.extractBootMode !== undefined) {
         const v = String(patch.extractBootMode);
         if (!['on', 'off', 'last'].includes(v)) throw new Error(`非法提取挡位: ${v}(允许 on / off / last)`);
         clean.extractBootMode = v;
-        if (patch.capture === undefined && patch.distill === undefined) {
-          if (v === 'off') { clean.capture = false; clean.distill = false; }
-          else if (v === 'on') { clean.capture = true; clean.distill = true; }
+      }
+      // 滑块变更后立即应用到会话默认档（与 applyBootMode 同逻辑）
+      if (modes && (clean.injectBootMode !== undefined || clean.extractBootMode !== undefined)) {
+        const inj = clean.injectBootMode ?? live.get().injectBootMode;
+        const ext = clean.extractBootMode ?? live.get().extractBootMode;
+        if (ext === 'off') {
+          modes.setDefaultMode('off');
+          modes.setDefaultRecall(undefined);
+        } else if (ext === 'on' && inj === 'off') {
+          modes.setDefaultMode('auto');
+          modes.setDefaultRecall(false);
+        } else if (ext === 'on' && inj === 'on') {
+          modes.setDefaultMode('auto');
+          modes.setDefaultRecall(undefined);
         }
+        // 'last' 不改
       }
       // 总闸不再作为顶控：读侧 resolveSettings 已恒钉 enabled=true（行为由 recall/capture/distill 接管），
       // 故写侧无需强制带 enabled——否则会把"只传非法键→空载荷"的拒绝门架空（rpc.test 守）。

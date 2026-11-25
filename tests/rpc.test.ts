@@ -321,6 +321,7 @@ describe('rpc: session mode endpoints', () => {
       mode: 'work',
       recall: false,
       recallResolved: false,
+      extractResolved: true,
       hall: null,
       halls: [],
       hallIncludeUnlabeled: true,

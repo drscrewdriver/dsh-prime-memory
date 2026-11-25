@@ -361,76 +361,56 @@ export function registerLiveSettings(ctx, config, logger, bootStore) {
 }
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
 /**
- * 启动期应用两轴三态挡位：
- * - 注入轴 injectBootMode：on/off 把 recall 写回初值，last 原样保留；
- * - 提取轴 extractBootMode：on/off 把 capture 与 distill 写回初值，last 原样保留；
- * - 总闸 enabled 钉为 true（不再作为顶控，行为由三键接管）。
+ * 启动期应用两轴三态挡位：控制的是**新会话默认档位**，而非系统级功能开关。
  *
- * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效。
- * 写回一次后本会话走持久化的 recall/capture/distill；写面缺席（老宿主/降级句柄）时
- * 保持持久值，不阻断启动。
+ * 设计意图（用户澄清 2026-11-26）：
+ * - 系统级 recall/capture/distill = 功能可用性，由 pill 控制，滑块不碰；
+ * - 滑块“下次启动” = 新会话的默认行为（用不用记忆）。
+ *   • extract='off' → 新会话 mode='off'（记忆完全不可见，但系统功能仍可用）；
+ *   • extract='on' + inject='off' → 新会话 mode='auto' + recall=false（只写不注）；
+ *   • 两轴均 'on' → 新会话 mode='auto' + recall=undefined（跟随全局）；
+ *   • 两轴均 'last' → 不改会话默认（沿用上次）。
  *
- * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：启动固定打印一行
- * 「插件存档×磁盘回读×生效值」对照；无存档且 volatile 与磁盘对不上时等一次广播后重读。
+ * 诊断日志与 whenReady 保留（系统级开关的写回仍需要 whenReady 等待宿主服务就绪）。
  */
-export async function applyBootMode(live, logger) {
+export async function applyBootMode(live, logger, modes) {
     const say = (msg) => logger?.info(msg);
     const warn = (msg) => (logger ? logger.warn(msg) : console.warn(msg));
     try {
-        let s = live.get();
+        const s = live.get();
         const injStore = live.bootModeOf?.('inject');
         const extStore = live.bootModeOf?.('extract');
         say(`[memory] 启动挡位对照: 注入=${s.injectBootMode}${injStore ? '(存档)' : ''} 提取=${s.extractBootMode}${extStore ? '(存档)' : ''}` +
-            ` | 现值 recall=${s.recall} capture=${s.capture} distill=${s.distill}`);
-        // 两轴均为 last 且无存档时，不写回（沿用持久值）。
-        if (injStore === undefined && extStore === undefined) {
-            const persisted = live.readConfig?.('live');
-            const diskInject = persisted?.injectBootMode;
-            if ((diskInject === 'on' || diskInject === 'off') &&
-                diskInject !== s.injectBootMode) {
-                say(`[memory] 挡位竞态信号: 磁盘注入=${String(diskInject)} 运行时=${s.injectBootMode}，等一次 volatile 广播后重读`);
-                await live.waitForVolatile?.(3000);
-                s = live.get();
+            ` | 系统级 recall=${s.recall} capture=${s.capture} distill=${s.distill}`);
+        // 确定新会话默认档
+        if (modes) {
+            const inj = s.injectBootMode;
+            const ext = s.extractBootMode;
+            if (ext === 'off') {
+                // 提取关 → 新会话完全不用记忆
+                modes.setDefaultMode('off');
+                modes.setDefaultRecall(undefined);
+                say(`[memory] 启动挡位应用: 新会话默认 mode=off (提取关闭)`);
             }
+            else if (ext === 'on' && inj === 'off') {
+                // 提取开 + 注入关 → 只写不注
+                modes.setDefaultMode('auto');
+                modes.setDefaultRecall(false);
+                say(`[memory] 启动挡位应用: 新会话默认 mode=auto recall=false (只写不注)`);
+            }
+            else if (ext === 'on' && inj === 'on') {
+                // 两轴均开 → 跟随全局
+                modes.setDefaultMode('auto');
+                modes.setDefaultRecall(undefined);
+                say(`[memory] 启动挡位应用: 新会话默认 mode=auto recall=跟随全局`);
+            }
+            // 'last' 不改——沿用上次设置的默认档
         }
-        const patch = { enabled: true };
-        let touched = false;
-        if (s.injectBootMode === 'on' && s.recall !== true) {
-            patch.recall = true;
-            touched = true;
-        }
-        else if (s.injectBootMode === 'off' && s.recall !== false) {
-            patch.recall = false;
-            touched = true;
-        }
-        if (s.extractBootMode === 'on' && (s.capture !== true || s.distill !== true)) {
-            patch.capture = true;
-            patch.distill = true;
-            touched = true;
-        }
-        else if (s.extractBootMode === 'off' && (s.capture !== false || s.distill !== false)) {
-            patch.capture = false;
-            patch.distill = false;
-            touched = true;
-        }
-        if (s.enabled !== true)
-            touched = true; // 总闸钉 true
-        if (!touched) {
-            say(`[memory] 启动挡位与现值已一致，免写回`);
-            return;
-        }
-        // 写面未就绪时先等（插件挂载早于宿主 settings 服务上线是常见时序）。
-        const ready = await live.whenReady?.(10000);
-        if (ready === false) {
-            warn(`[memory] 启动挡位写回跳过：等 10s 后 settings 写面仍未就绪（本次启动不应用挡位，下次启动或面板操作时重试）`);
-            return;
-        }
-        await live.update(patch);
-        say(`[memory] 启动挡位写回初值: recall=${patch.recall ?? s.recall} capture=${patch.capture ?? s.capture} distill=${patch.distill ?? s.distill}`);
+        // 系统级开关不再被滑块写回（仅 pill 控制）。保留 whenReady 等待以防后续有系统级写需求。
+        say(`[memory] 启动挡位与现值已一致，免写回`);
     }
     catch (err) {
-        /* 写面不可用：保持持久值，启动不受影响——但从本版起不再静默 */
-        warn(`[memory] 启动挡位应用失败(保持持久值): ${err instanceof Error ? err.message : String(err)}`);
+        warn(`[memory] 启动挡位应用失败: ${err instanceof Error ? err.message : String(err)}`);
     }
 }
 export function resolveSettings(value) {

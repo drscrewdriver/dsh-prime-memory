@@ -45694,20 +45694,7 @@ var __create = Object.create;
 		    if (!settingsData) return;
 		    const prev = settingsData;
 		    const key = axis === "inject" ? "injectBootMode" : "extractBootMode";
-		    const coupled = {};
-		    if (axis === "inject") {
-		      if (value === "off") coupled.recall = false;
-		      else if (value === "on") coupled.recall = true;
-		    } else {
-		      if (value === "off") {
-		        coupled.capture = false;
-		        coupled.distill = false;
-		      } else if (value === "on") {
-		        coupled.capture = true;
-		        coupled.distill = true;
-		      }
-		    }
-		    const next = { ...prev, settings: { ...prev.settings, [key]: value, ...coupled } };
+		    const next = { ...prev, settings: { ...prev.settings, [key]: value } };
 		    setSettingsData(next);
 		    rpc("dsh-memory/settings-set", { [key]: value }).then((r) => {
 		      if (!r || !r.ok) {

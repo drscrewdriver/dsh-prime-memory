@@ -50,50 +50,49 @@ describe('BootModeStore 两轴落盘与重启读回', () => {
   });
 });
 
-describe('applyBootMode 两轴写回', () => {
-  it('注入轴 off → recall=false；提取轴 off → capture+distill=false；enabled 钉 true', async () => {
+describe('applyBootMode 写会话默认档（新语义：不写 recall/capture/distill）', () => {
+  it('两轴 off → 不写系统级开关，只设 modes.default', async () => {
     const writes: Array<Record<string, unknown>> = [];
+    const modeCalls: string[] = [];
     const handle: LiveSettingsHandle = {
       supported: true,
       get: () => resolveSettings({ recall: true, capture: true, distill: true, injectBootMode: 'off', extractBootMode: 'off' }),
       update: async (patch) => { writes.push(patch as Record<string, unknown>); },
       bootModeOf: (axis) => (axis === 'inject' ? 'off' : 'off'),
     };
-    await applyBootMode(handle, { info: () => {}, warn: () => {} });
-    expect(writes.length).toBe(1);
-    const w = writes[0] as Record<string, unknown>;
-    expect(w.recall).toBe(false);
-    expect(w.capture).toBe(false);
-    expect(w.distill).toBe(false);
-    expect(w.enabled).toBe(true);
+    const modes = { setDefaultMode: (m: string) => modeCalls.push(m), setDefaultRecall: () => {} };
+    await applyBootMode(handle, { info: () => {}, warn: () => {} }, modes);
+    expect(writes.length).toBe(0); // 新语义：不写系统级
+    expect(modeCalls).toContain('off'); // 会话默认设为 off
   });
 
-  it('两轴均 last → 只钉 enabled，不动 recall/capture/distill', async () => {
-    const writes: Array<Record<string, unknown>> = [];
+  it('两轴均 last → 不改 modes', async () => {
+    let called = false;
     const handle: LiveSettingsHandle = {
       supported: true,
-      get: () => resolveSettings({ recall: true, capture: true, distill: true, injectBootMode: 'last', extractBootMode: 'last' }),
-      update: async (patch) => { writes.push(patch as Record<string, unknown>); },
+      get: () => resolveSettings({ injectBootMode: 'last', extractBootMode: 'last' }),
+      update: async () => {},
       bootModeOf: () => undefined,
     };
-    await applyBootMode(handle, { info: () => {}, warn: () => {} });
-    // recall/capture/distill 已是 true，与 last 无冲突；enabled 已 true → 无写回
-    expect(writes).toEqual([]);
+    const modes = { setDefaultMode: () => { called = true; }, setDefaultRecall: () => { called = true; } };
+    await applyBootMode(handle, { info: () => {}, warn: () => {} }, modes);
+    expect(called).toBe(false);
   });
 
-  it('注入轴 on 而 recall 已 true → 不写 recall；提取轴 off 而 capture=true → 只写提取侧', async () => {
-    const writes: Array<Record<string, unknown>> = [];
+  it('extract=on + inject=off → mode=auto + recall=false', async () => {
+    const modeCalls: Array<{ m: string; r: boolean | undefined }> = [];
     const handle: LiveSettingsHandle = {
       supported: true,
-      get: () => resolveSettings({ recall: true, capture: true, distill: true, injectBootMode: 'on', extractBootMode: 'off' }),
-      update: async (patch) => { writes.push(patch as Record<string, unknown>); },
+      get: () => resolveSettings({ injectBootMode: 'off', extractBootMode: 'on' }),
+      update: async () => {},
       bootModeOf: () => undefined,
     };
-    await applyBootMode(handle, { info: () => {}, warn: () => {} });
-    expect(writes.length).toBe(1);
-    const w = writes[0] as Record<string, unknown>;
-    expect('recall' in w).toBe(false); // inject=on 与 recall=true 已一致，不写
-    expect(w.capture).toBe(false);
-    expect(w.distill).toBe(false);
+    const modes = {
+      setDefaultMode: (m: string) => modeCalls.push({ m, r: undefined }),
+      setDefaultRecall: (r: boolean | undefined) => { modeCalls[modeCalls.length - 1] = { ...modeCalls[modeCalls.length - 1], r }; },
+    };
+    await applyBootMode(handle, { info: () => {}, warn: () => {} }, modes);
+    expect(modeCalls[0]?.m).toBe('auto');
+    expect(modeCalls[0]?.r).toBe(false);
   });
 });

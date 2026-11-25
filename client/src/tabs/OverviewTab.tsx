@@ -84,23 +84,15 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   };
 
   /**
-   * 启动挡位写入(两轴三态):乐观翻 UI(同时预改耦合的生效键)，失败回滚。
-   * inject→recall，extract→capture+distill；last 不碰生效键。
-   * 写成功后消费 persistence——挡位没落盘(漂移)时当场报错，不等重启后才发现。
+   * 启动挡位写入(两轴三态):滑块只写挡位本身，不碰系统级 recall/capture/distill。
+   * 滑块控制的是新会话默认档位（服务端会立即更新 modes 默认）。
+   * 写成功后消费 persistence——挡位没落盘(漂移)时当场报错。
    */
   const setBootMode = (axis: 'inject' | 'extract', value: 'on' | 'off' | 'last') => {
     if (!settingsData) return;
     const prev = settingsData;
     const key = axis === 'inject' ? 'injectBootMode' : 'extractBootMode';
-    const coupled: Record<string, boolean> = {};
-    if (axis === 'inject') {
-      if (value === 'off') coupled.recall = false;
-      else if (value === 'on') coupled.recall = true;
-    } else {
-      if (value === 'off') { coupled.capture = false; coupled.distill = false; }
-      else if (value === 'on') { coupled.capture = true; coupled.distill = true; }
-    }
-    const next = { ...prev, settings: { ...prev.settings, [key]: value, ...coupled } };
+    const next = { ...prev, settings: { ...prev.settings, [key]: value } };
     setSettingsData(next);
     rpc('dsh-memory/settings-set', { [key]: value } as SettingsSetRequest)
       .then((r) => {

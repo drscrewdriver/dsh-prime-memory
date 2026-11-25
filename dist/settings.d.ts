@@ -109,20 +109,23 @@ export declare function readLiveRef(ref: unknown): MemoryLiveSettings;
 export declare function registerLiveSettings(ctx: Context, config: MemoryConfig, logger: MemoryLogger, bootStore?: BootModeStore): LiveSettingsHandle;
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
 /**
- * 启动期应用两轴三态挡位：
- * - 注入轴 injectBootMode：on/off 把 recall 写回初值，last 原样保留；
- * - 提取轴 extractBootMode：on/off 把 capture 与 distill 写回初值，last 原样保留；
- * - 总闸 enabled 钉为 true（不再作为顶控，行为由三键接管）。
+ * 启动期应用两轴三态挡位：控制的是**新会话默认档位**，而非系统级功能开关。
  *
- * 为什么在启动期写而不是读侧折叠：读侧折叠会让「本会话手动开关」永远失效。
- * 写回一次后本会话走持久化的 recall/capture/distill；写面缺席（老宿主/降级句柄）时
- * 保持持久值，不阻断启动。
+ * 设计意图（用户澄清 2026-11-26）：
+ * - 系统级 recall/capture/distill = 功能可用性，由 pill 控制，滑块不碰；
+ * - 滑块“下次启动” = 新会话的默认行为（用不用记忆）。
+ *   • extract='off' → 新会话 mode='off'（记忆完全不可见，但系统功能仍可用）；
+ *   • extract='on' + inject='off' → 新会话 mode='auto' + recall=false（只写不注）；
+ *   • 两轴均 'on' → 新会话 mode='auto' + recall=undefined（跟随全局）；
+ *   • 两轴均 'last' → 不改会话默认（沿用上次）。
  *
- * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：启动固定打印一行
- * 「插件存档×磁盘回读×生效值」对照；无存档且 volatile 与磁盘对不上时等一次广播后重读。
+ * 诊断日志与 whenReady 保留（系统级开关的写回仍需要 whenReady 等待宿主服务就绪）。
  */
 export declare function applyBootMode(live: LiveSettingsHandle, logger?: {
     info(msg: string): void;
     warn(msg: string): void;
+}, modes?: {
+    setDefaultMode(mode: string): void;
+    setDefaultRecall(r: boolean | undefined): void;
 }): Promise<void>;
 export declare function resolveSettings(value: unknown): MemoryLiveSettings;
