@@ -33,9 +33,11 @@ export function liveSettingsSchema() {
         reasoningEffort: Schema.union([...EFFORT_CHOICES]).default(''),
     });
     const node = Schema.object({
-        // 启动挡位拆两轴：注入(recall)与提取(capture+distill)各一，出厂均默认关闭。
-        injectBootMode: Schema.union(['on', 'off', 'last']).default('off'),
-        extractBootMode: Schema.union(['on', 'off', 'last']).default('off'),
+        // 启动挡位拆两轴：注入(recall)与提取(capture+distill)各一。
+        // 出厂默认 'last'（跟随上次）——新安装无历史时 fallthrough 到 recall/capture/distill=true，
+        // 即记忆开箱即用；用户显式选 'off' 后下次启动才强制关。
+        injectBootMode: Schema.union(['on', 'off', 'last']).default('last'),
+        extractBootMode: Schema.union(['on', 'off', 'last']).default('last'),
         enabled: Schema.boolean().default(true),
         capture: Schema.boolean().default(true),
         distill: Schema.boolean().default(true),

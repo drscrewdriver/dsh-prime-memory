@@ -604,6 +604,11 @@ export interface SessionModeGetResponse {
   recall: boolean | null;
   /** host 解析后的注入生效值(会话覆盖 ?? 全局开关):pill 面文直接消费。 */
   recallResolved: boolean;
+  /**
+   * host 解析后的提取生效值（全局 capture && distill）：pill 面文据此区分
+   * “只写”（写但不注）与“关闭”（既不注也不写）——修复与设置面板不同步的误标。
+   */
+  extractResolved: boolean;
   /** 会话级域锁定(wing 八边形手动挡):角 id = 锁定单域;null = 中心(智能档)。
    *  Phase 2 多选:完整选择集在 halls,本字段取第一个锁定域(兼容)。 */
   hall: string | null;
