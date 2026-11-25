@@ -32,6 +32,7 @@ import { normCsv, normCsvNumbers, sha256Hex } from './ext-memory/util.js';
 import { applyCoexistGate } from './ext-memory/types.js';
 import { readTombstones } from './store/retire-journal.js';
 import { applyBootMode, registerLiveSettings, suppressAutoSettingsForm } from './settings.js';
+import { BootModeStore } from './store/boot-mode.js';
 import { NoopEmbeddingService } from './store/embedding.js';
 import { EmbeddingManager, EmbeddingSourceStore, makeLocalServiceFactory, resolveInitialEmbedding, } from './store/embedding-source.js';
 import { LocalEmbeddingService } from './store/local-embedding.js';
@@ -127,10 +128,14 @@ export async function apply(ctx, config) {
         }
     }
     // ── 记忆模式运行时开关(0.1.7 声明式:Config 的 live volatile 节;缺失时恒开) ──
-    const live = registerLiveSettings(ctx, config, logger);
+    // 启动挡位另存插件自有文件（宿主 forms.update 不持久化新增的 bootMode 键，
+    // 见 store/boot-mode.ts）；数据目录不可写时不建 store，挡位回落 volatile/默认。
+    const bootStore = storageOk ? new BootModeStore(dataDir, logger) : undefined;
+    const live = registerLiveSettings(ctx, config, logger, bootStore);
     // 启动挡位（三态 on/off/last）：on/off 把初值写回 enabled，last 保持持久值。
-    // 异步写、失败不阻断启动（写面缺席的老宿主保持持久值）。
-    void applyBootMode(live);
+    // 异步写、失败不阻断启动（写面缺席的老宿主保持持久值）；0.27.9 起带诊断日志
+    // 与竞态门（磁盘×运行时对照，不一致等一次 volatile 广播后重读）。
+    void applyBootMode(live, logger);
     // 自带自定义设置页(client 半 settings.section「记忆」分节)→ 关掉宿主按
     // volatile 字段自动生成的表单页,避免同一插件出现两份设置入口。
     suppressAutoSettingsForm(ctx);

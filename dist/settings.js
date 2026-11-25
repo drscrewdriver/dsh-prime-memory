@@ -138,15 +138,25 @@ export function readLiveRef(ref) {
     const maybe = ref;
     return typeof maybe?.get === 'function' ? maybe.get() : maybe;
 }
-export function registerLiveSettings(ctx, config, logger) {
+export function registerLiveSettings(ctx, config, logger, bootStore) {
     // 读面:volatile 引用恒在(由 Config schema 默认值兜底),读数现取现解析,
     // 无进程内缓存——旧「服务就绪探测 / scope 复用 / 实例判活」整套机制随
-    // 命令式注册面一起删除(0.1.7 无注册,自然无 already-registered 竞态)。
+    // 命 令式注册面一起删除(0.1.7 无注册,自然无 already-registered 竞态)。
     const ref = config.live;
-    const read = () => resolveSettings(readLiveRef(ref));
+    // 启动挡位以插件自有存储为准（宿主 forms.update 会剪掉新增的 bootMode 键，
+    // 见 store/boot-mode.ts）；无存档时保留 volatile 解出的值。
+    const withBoot = (s) => {
+        const authoritative = bootStore?.get();
+        return authoritative ? { ...s, bootMode: authoritative } : s;
+    };
+    const read = () => withBoot(resolveSettings(readLiveRef(ref)));
     // 变更诊断(替代旧 scope.watch):宿主把 volatile-only 变更提交进引用后,
     // 向持有 fiber 广播一次 loader/volatile-update(路径为键数组,只关心 live 节)。
+    // 同时拨一下竞态门 waitForVolatile(启动挡位在 patch 未并入时等这里)。
+    let releaseVolatile;
     ctx.on('loader/volatile-update', (paths) => {
+        releaseVolatile?.();
+        releaseVolatile = undefined;
         if (!paths.some((p) => p[0] === 'live'))
             return;
         const current = read();
@@ -268,11 +278,23 @@ export function registerLiveSettings(ctx, config, logger) {
     };
     return {
         supported: true,
-        get: () => (modernWrite() ? read() : inner.get()),
+        get: () => (modernWrite() ? read() : withBoot(inner.get())),
         /** 面板据此置灰:把"写不了"伪装成"写成功"比明确不支持更坑。 */
         get configWritable() {
             return modernWrite();
         },
+        bootModeOf: () => bootStore?.get(),
+        waitForVolatile: (timeoutMs = 3000) => new Promise((resolve) => {
+            let done = false;
+            const finish = () => {
+                if (done)
+                    return;
+                done = true;
+                resolve();
+            };
+            releaseVolatile = finish;
+            setTimeout(finish, timeoutMs).unref?.();
+        }),
         updateConfig: async (patch) => {
             const f = forms;
             if (f === undefined || typeof f.update !== 'function') {
@@ -294,6 +316,12 @@ export function registerLiveSettings(ctx, config, logger) {
             }
         },
         update: async (patch) => {
+            // 启动挡位先进插件自有存储（权威）——宿主 forms.update 会剪掉这个新键，
+            // 不先落盘则重启后读不回。同值时 set 会短路。先写 store，后续 read() 的
+            // withBoot 叠加才能反映新值。
+            if (bootStore && patch.bootMode !== undefined) {
+                await bootStore.set(patch.bootMode);
+            }
             if (modernWrite()) {
                 if (!forms)
                     throw new Error('settings 服务不可用,记忆开关无法写入');
@@ -316,19 +344,52 @@ export function registerLiveSettings(ctx, config, logger) {
  * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
  * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
  * 保持持久值，不阻断启动。
+ *
+ * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：
+ * - 启动固定打印一行「磁盘回读 × 运行时」对照，把静默吞错的写回变成可取证；
+ * - 若运行时挡位与磁盘挡位不一致（volatile 引用早于 patch 合并的竞态信号），
+ *   等一次 volatile 广播（超时兜底）后重读再应用——不拿陈旧快照反写用户选择。
  */
-export async function applyBootMode(live) {
+export async function applyBootMode(live, logger) {
+    const say = (msg) => logger?.info(msg);
+    const warn = (msg) => (logger ? logger.warn(msg) : console.warn(msg));
     try {
-        const s = live.get();
-        if (s.bootMode !== 'on' && s.bootMode !== 'off')
+        let s = live.get();
+        // 插件侧权威挡位（boot-mode.json）：存在即为准，不必再等 volatile 广播。
+        const stored = live.bootModeOf?.();
+        const persisted = live.readConfig?.('live');
+        const diskBootMode = persisted?.bootMode === 'on' || persisted?.bootMode === 'off' || persisted?.bootMode === 'last' ? persisted.bootMode : '(无回读)';
+        say(`[memory] 启动挡位对照: 生效 bootMode=${s.bootMode}` +
+            (stored ? '(插件存档)' : '(无存档,取 volatile/默认)') + ` enabled=${s.enabled}` +
+            ` | 磁盘 bootMode=${diskBootMode}` +
+            ` enabled=${persisted && typeof persisted.enabled === 'boolean' ? persisted.enabled : '(无回读)'}` +
+            (live.readConfig ? '' : ' (宿主不供 forms.get,磁盘侧无法对照)'));
+        // 仅当无插件存档、且 volatile 挡位与磁盘挡位对不上时，才怀疑 patch 未并入，
+        // 等一次 volatile 广播后重读（有存档时 bootStore 已是权威，等待多余）。
+        if (!stored &&
+            persisted &&
+            typeof persisted.bootMode === 'string' &&
+            persisted.bootMode !== s.bootMode) {
+            say(`[memory] 挡位竞态信号: 磁盘=${persisted.bootMode} 运行时=${s.bootMode}，等一次 volatile 广播后重读`);
+            await live.waitForVolatile?.(3000);
+            s = live.get();
+            say(`[memory] 重读后: bootMode=${s.bootMode} enabled=${s.enabled}`);
+        }
+        if (s.bootMode !== 'on' && s.bootMode !== 'off') {
+            say(`[memory] 挡位=last,沿用持久 enabled=${s.enabled},不写回`);
             return;
+        }
         const want = s.bootMode === 'on';
-        if (s.enabled === want)
+        if (s.enabled === want) {
+            say(`[memory] 挡位=${s.bootMode} 与 enabled 已一致,免写回`);
             return;
+        }
         await live.update({ enabled: want });
+        say(`[memory] 挡位=${s.bootMode} 写回初值: enabled=${want}`);
     }
-    catch {
-        /* 写面不可用：保持持久值，启动不受影响 */
+    catch (err) {
+        /* 写面不可用：保持持久值，启动不受影响——但从本版起不再静默 */
+        warn(`[memory] 启动挡位应用失败(保持持久值): ${err instanceof Error ? err.message : String(err)}`);
     }
 }
 export function resolveSettings(value) {

@@ -2166,6 +2166,9 @@ export async function handleEndpoint(endpoint, payload, deps) {
             }
             if (Object.keys(clean).length === 0)
                 throw new Error('开关更新载荷为空');
+            // 启动挡位是"重启才兑现"的键：写前留插件侧旧值，写后立即回读比对——
+            // 权威源是 BootModeStore（live.update 已落盘）而不是被宿主剪枝的 forms.get（0.27.9）。
+            const beforeBoot = live.bootModeOf?.();
             // 日志脱敏:直连/远程 API key 永不出现在日志
             const logSafe = { ...clean };
             delete logSafe.directApiKey;
@@ -2173,6 +2176,24 @@ export async function handleEndpoint(endpoint, payload, deps) {
             await live.update(clean);
             deps.logger.info(`[memory] 设置更新:${JSON.stringify(logSafe)}`);
             const v = { ok: true, settings: sanitizeSettings(live.get()) };
+            if (clean.bootMode !== undefined) {
+                const persisted = live.bootModeOf?.();
+                if (persisted === undefined) {
+                    // 无插件侧存储（数据目录不可写）：无法保证重启后保留。
+                    v.persistence = { state: 'unavailable', detail: '启动挡位未能写入插件数据文件(存储不可用),重启可能回落' };
+                    deps.logger?.warn(`[memory] 挡位写入后 boot-mode.json 仍无值(bootMode=${clean.bootMode}),重启后是否生效未验证`);
+                }
+                else if (persisted !== clean.bootMode) {
+                    v.persistence = {
+                        state: 'drift',
+                        detail: `挡位已提交但回读=${String(persisted)}(期望 ${clean.bootMode}${beforeBoot ? `，写前 ${beforeBoot}` : ''})，重启可能回落`,
+                    };
+                    deps.logger?.warn(`[memory] 挡位写后回读不一致: 提交=${clean.bootMode} 回读=${persisted}`);
+                }
+                else {
+                    v.persistence = { state: 'match' };
+                }
+            }
             return v;
         }
         case 'dsh-memory/list-records': {

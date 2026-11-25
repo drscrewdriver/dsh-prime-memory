@@ -2385,9 +2385,9 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         clean.embedRemoteApiKey = key;
       }
       if (Object.keys(clean).length === 0) throw new Error('开关更新载荷为空');
-      // 启动挡位是"重启才兑现"的键：写前留磁盘旧值，写后立即回读比对——
-      // 把"面板显示已保存、下次启动却回落"变成当场可见的 drift（0.27.9）。
-      const before = live.readConfig?.('live') as Record<string, unknown> | undefined;
+      // 启动挡位是"重启才兑现"的键：写前留插件侧旧值，写后立即回读比对——
+      // 权威源是 BootModeStore（live.update 已落盘）而不是被宿主剪枝的 forms.get（0.27.9）。
+      const beforeBoot = live.bootModeOf?.();
       // 日志脱敏:直连/远程 API key 永不出现在日志
       const logSafe = { ...clean } as Record<string, unknown>;
       delete logSafe.directApiKey;
@@ -2396,16 +2396,17 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       deps.logger.info(`[memory] 设置更新:${JSON.stringify(logSafe)}`);
       const v: SettingsSetResponse = { ok: true, settings: sanitizeSettings(live.get()) };
       if (clean.bootMode !== undefined) {
-        const after = live.readConfig?.('live') as Record<string, unknown> | undefined;
-        if (after === undefined) {
-          v.persistence = { state: 'unavailable', detail: '宿主不提供配置读回(forms.get 缺席),挡位是否落盘无法当场确认' };
-          deps.logger?.warn(`[memory] 挡位写入后无法回读磁盘值(bootMode=${clean.bootMode}),重启后是否生效未验证`);
-        } else if (after.bootMode !== clean.bootMode) {
+        const persisted = live.bootModeOf?.();
+        if (persisted === undefined) {
+          // 无插件侧存储（数据目录不可写）：无法保证重启后保留。
+          v.persistence = { state: 'unavailable', detail: '启动挡位未能写入插件数据文件(存储不可用),重启可能回落' };
+          deps.logger?.warn(`[memory] 挡位写入后 boot-mode.json 仍无值(bootMode=${clean.bootMode}),重启后是否生效未验证`);
+        } else if (persisted !== clean.bootMode) {
           v.persistence = {
             state: 'drift',
-            detail: `挡位已提交但磁盘回读=${String(after.bootMode ?? '(缺键)')}(期望 ${clean.bootMode}${before ? `，写前 ${String(before.bootMode ?? '(缺键)')}` : ''})，重启可能回落`,
+            detail: `挡位已提交但回读=${String(persisted)}(期望 ${clean.bootMode}${beforeBoot ? `，写前 ${beforeBoot}` : ''})，重启可能回落`,
           };
-          deps.logger?.warn(`[memory] 挡位写后回读不一致: 提交=${clean.bootMode} 磁盘=${String(after.bootMode ?? '(缺键)')}`);
+          deps.logger?.warn(`[memory] 挡位写后回读不一致: 提交=${clean.bootMode} 回读=${persisted}`);
         } else {
           v.persistence = { state: 'match' };
         }

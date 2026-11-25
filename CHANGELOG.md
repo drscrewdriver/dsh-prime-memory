@@ -5,6 +5,8 @@
 - `applyBootMode` 不再静默吞错：启动固定打印一行「磁盘回读 × 运行时」对照（bootMode/enabled 两组），宿主不供 `forms.get` 时明说无法对照；写回/免写回/失败各有日志。
 - **竞态门**：插件挂载时 volatile 引用可能还没并入 profile patch（读到出厂默认）——磁盘挡位≠运行时挡位时等一次 `loader/volatile-update`（3s 超时兜底）后重读再应用，不拿陈旧快照反写用户选择。
 - `settings-set` 写启动挡位后同步回读磁盘值，不一致时响应附 `persistence:{state:'drift',detail}`（新契约字段，与 settings-get 的 #37 同形状）；面板消费之——挡位没落盘当场报错，不等重启后才发现。
+- **根因锁定（写侧 drop）**：扫 11-12→11-26 共 13 份 `cordis.patch.yml` 备份，`dsh-memory` 的 `live` 块含 memoryMutate/skillsEnabled 等旧键（均非默认值，证明是运行时写入），但 `bootMode` **0 次出现**——`forms.update` 按宿主缓存的 entry schema 剪掉了 v0.27.0 才新增的 bootMode 键。
+- **终修（BootModeStore）**：新增 `src/store/boot-mode.ts`，把启动挡位另存插件自有文件 `<dataDir>/boot-mode.json`；读侧以存档为权威覆盖 volatile（`enabled` 旧键仍可正常落盘），彻底绕开宿主对新键的不持久化。settings-set 写后回读改取 `live.bootModeOf()`。新测 `tests/boot-mode-store.test.ts`（落盘往返 + 存档优先 5 例）。
 - 修面板挡位展示兜底 `'last'` → `'off'`（与出厂默认一致，不再出现"显示跟随上一次、实际默认关闭"的假象）。
 - 发版流水线改双路径（prerelease 分支常驻）：push prerelease + `-rc.N` 号 → 自动 `publish --tag rc`（不动 latest/线标签/Release）；PR 合并 main + 正式号 → 自动全链路正式版（先发后打 tag）；正式号推 prerelease 只跑门禁。新增 `scripts/publish-rc.mjs` 本地兜底。
 - 测试：boot-mode 新增竞态重试/一致免等/诊断日志 3 用例（11/11 绿）；i18n 双键入 en/ru/pt 全集。

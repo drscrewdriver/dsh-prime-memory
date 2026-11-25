@@ -20,6 +20,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { MemoryConfig } from './config.js';
+import type { BootMode, BootModeStore } from './store/boot-mode.js';
 import type { MemoryLogger } from './types.js';
 import type { DistillChainEntry, MemoryLiveSettings } from './contract.js';
 export type { DistillBudgets, DistillChainEntry, EffortChoice, MemoryLiveSettings } from './contract.js';
@@ -69,6 +70,21 @@ export interface LiveSettingsHandle {
      * 调用方拿读回值与刚提交的值比对，不一致就必得报告“未完全生效”，而不是假定成功。
      */
     readConfig?(key: string): unknown;
+    /**
+     * 等下一次 `loader/volatile-update` 广播(带超时兜底)——启动挡位的竞态门。
+     *
+     * 背景：插件挂载时 volatile 引用可能还没并入 profile patch 的持久值，
+     * `get()` 读到的是 schema 出厂默认。`applyBootMode` 拿磁盘回读值与运行值对不上时，
+     * 等一次广播再重读，避免拿陈旧快照反写用户刚选的挡位。超时/不支持都 resolve
+     * (调用方重读后照常推进，不能把启动卡在宿主不发广播上)。
+     */
+    waitForVolatile?(timeoutMs?: number): Promise<void>;
+    /**
+     * 启动挡位的插件侧权威值（`boot-mode.json`）。`undefined` = 未曾显式设置，
+     * 调用方回落到 volatile / 出厂默认。存在理由见 store/boot-mode.ts 顶部注释
+     * (0.27.9：宿主 forms.update 不持久化新增的 bootMode 键，需插件自存)。
+     */
+    bootModeOf?(): BootMode | undefined;
 }
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
 export declare const MEMORY_ENTRY_ID = "dsh-memory";
@@ -84,7 +100,7 @@ export declare function suppressAutoSettingsForm(ctx: Context): void;
  * 不兼容这一形就是在老线报 `ref.get is not a function`（把加载期崩换成运行期崩）。
  */
 export declare function readLiveRef(ref: unknown): MemoryLiveSettings;
-export declare function registerLiveSettings(ctx: Context, config: MemoryConfig, logger: MemoryLogger): LiveSettingsHandle;
+export declare function registerLiveSettings(ctx: Context, config: MemoryConfig, logger: MemoryLogger, bootStore?: BootModeStore): LiveSettingsHandle;
 /** scope.get() 的防御性解析:异常值回退默认(宁可多记不可静默停摆)。 */
 /**
  * 启动期应用三态挡位：`on`/`off` 把初值写回 `enabled`，`last` 原样保留。
@@ -93,6 +109,14 @@ export declare function registerLiveSettings(ctx: Context, config: MemoryConfig,
  * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
  * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
  * 保持持久值，不阻断启动。
+ *
+ * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：
+ * - 启动固定打印一行「磁盘回读 × 运行时」对照，把静默吞错的写回变成可取证；
+ * - 若运行时挡位与磁盘挡位不一致（volatile 引用早于 patch 合并的竞态信号），
+ *   等一次 volatile 广播（超时兜底）后重读再应用——不拿陈旧快照反写用户选择。
  */
-export declare function applyBootMode(live: LiveSettingsHandle): Promise<void>;
+export declare function applyBootMode(live: LiveSettingsHandle, logger?: {
+    info(msg: string): void;
+    warn(msg: string): void;
+}): Promise<void>;
 export declare function resolveSettings(value: unknown): MemoryLiveSettings;

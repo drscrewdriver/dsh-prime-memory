@@ -36285,6 +36285,8 @@ var __create = Object.create;
 		  "当前已导入/关联 {p1} 条外源条目，关闭后会一起进入取数窗口": "{p1} external entries already imported/linked; after turning this off they all enter the retrieval window",
 		  "当前执行会话": "current executing session",
 		  "当前状态:": "Current status:",
+		  "挡位可能未落盘：": "Gear may not have persisted:",
+		  "挡位已提交，但宿主不支持配置回读，无法确认已落盘": "Gear submitted, but the host does not support config read-back, so persistence is unverified",
 		  "档位": "Mode",
 		  "档位读取失败：": "Failed to read mode:",
 		  "档位关闭": "Mode off",
@@ -37719,6 +37721,8 @@ var __create = Object.create;
 		  "当前已导入/关联 {p1} 条外源条目，关闭后会一起进入取数窗口": "{p1} entradas externas já importadas/vinculadas; ao desligar, todas entram na janela de recuperação",
 		  "当前执行会话": "sessão de execução atual",
 		  "当前状态:": "Estado atual:",
+		  "挡位可能未落盘：": "A marcha pode não ter sido salva:",
+		  "挡位已提交，但宿主不支持配置回读，无法确认已落盘": "Marcha enviada, mas o host não suporta leitura de configuração; persistência não confirmada",
 		  "档位": "Modo",
 		  "档位读取失败：": "Falha ao ler modo:",
 		  "档位关闭": "Modo desligado",
@@ -39153,6 +39157,8 @@ var __create = Object.create;
 		  "当前已导入/关联 {p1} 条外源条目，关闭后会一起进入取数窗口": "уже импортировано/связано {p1} внешних записей; после отключения все они попадут в окно выборки",
 		  "当前执行会话": "текущая исполняющая сессия",
 		  "当前状态:": "Текущее состояние:",
+		  "挡位可能未落盘：": "Возможно, режим не сохранён:",
+		  "挡位已提交，但宿主不支持配置回读，无法确认已落盘": "Режим отправлен, но хост не поддерживает чтение конфигурации — сохранение не подтверждено",
 		  "档位": "Режим",
 		  "档位读取失败：": "Не удалось прочитать режим:",
 		  "档位关闭": "Режим выкл.",
@@ -45673,6 +45679,13 @@ var __create = Object.create;
 		      if (!r || !r.ok) {
 		        setSettingsData(prev);
 		        setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
+		        return;
+		      }
+		      const resp = r.value || {};
+		      if (resp.persistence && resp.persistence.state !== "match") {
+		        setError(
+		          resp.persistence.state === "drift" ? tr("挡位可能未落盘：") + (resp.persistence.detail || "") : tr("挡位已提交，但宿主不支持配置回读，无法确认已落盘")
+		        );
 		      } else {
 		        setError(null);
 		      }
@@ -45808,7 +45821,7 @@ var __create = Object.create;
 		          /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
 		            "select",
 		            {
-		              value: settingsData.settings.bootMode ?? "last",
+		              value: settingsData.settings.bootMode ?? "off",
 		              onChange: (e) => {
 		                setBootMode(e.currentTarget.value);
 		              },
