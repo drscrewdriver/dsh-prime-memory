@@ -40905,7 +40905,7 @@ var __create = Object.create;
 		          type: "button",
 		          style: { appearance: "none", font: "inherit", fontSize: 11, padding: "2px 8px", borderRadius: 999, border: "1px solid rgba(127,127,127,.45)", background: "transparent", cursor: "pointer", color: "inherit" },
 		          onClick: () => {
-		            let ok = false;
+		            let ok;
 		            try {
 		              ok = typeof window !== "undefined" && window.confirm(tr("确定隐藏「LLM 使用提示」？之后面板不再展示；清空 localStorage 键 dsh.llm-notice.prime-memory.hidden.v1 可恢复。"));
 		            } catch {

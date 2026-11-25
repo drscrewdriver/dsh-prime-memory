@@ -8,7 +8,7 @@
  * 不做写入——写入口仍在「概览 → 蒸馏通道」（ChannelEditor）。
  */
 import { tr } from './i18n.js';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { DirectChannelView } from '../../src/contract.js';
 
 const STY: Record<string, CSSProperties> = {
@@ -56,10 +56,12 @@ export function LlmCostNotice(props: { channel: DirectChannelView | null }) {
             type="button"
             style={{ appearance: 'none', font: 'inherit', fontSize: 11, padding: '2px 8px', borderRadius: 999, border: '1px solid rgba(127,127,127,.45)', background: 'transparent', cursor: 'pointer', color: 'inherit' }}
             onClick={() => {
-              let ok = false
+              // 两条分支都赋值，不要初始化器（no-useless-assignment）
+              let ok: boolean
               try { ok = typeof window !== 'undefined' && window.confirm(tr('确定隐藏「LLM 使用提示」？之后面板不再展示；清空 localStorage 键 dsh.llm-notice.prime-memory.hidden.v1 可恢复。')) } catch { ok = false }
               if (!ok) return
-              try { localStorage.setItem(HIDDEN_FLAG, '1') } catch {}
+              // 隐私模式下 localStorage 可能抛错；写不进去也不阻断当前会话的隐藏
+              try { localStorage.setItem(HIDDEN_FLAG, '1') } catch { /* 写入失败可忽略：本次仍 setHidden */ }
               setHidden(true)
             }}
           >

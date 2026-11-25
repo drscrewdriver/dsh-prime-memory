@@ -1,3 +1,13 @@
+## 0.27.8
+
+**接入 CI 发版通道（tag push 自动 publish / dist-tag / Release）+ 清掉 3 个既有 lint error。**
+
+- 新增 `.github/workflows/release.yml`（仓内自持）：push tag `v*` 或手动 dispatch（`dry_run` 默认 true）→ 版本对齐 → 安装（`npm ci`）→ 门禁（复刻 `ci.yml`：typecheck → test 串行 → lint → build → build:smoke → smoke → verify-catalog）→ 打包清单 → 幂等 guard → publish → `dsh-*` 线标签 → Release + Latest。
+- **为什么不是 caller**：`_tools/templates/release-caller.dispatch.yml` 指向中心仓 `drscrewdriver/.github` 的 reusable workflow，而该仓尚不存在（`gh api` 404）；故按 README 13.3 走仓内自持，已在 `_tools/release-matrix.json` 登记为变体。
+- 补入 `scripts/release-notes.mjs`（Release 正文：CHANGELOG 版本节优先，<80 字符拒绝写）。
+- 修 `client/src/LlmNotice.tsx` 3 个既有 lint error（未使用的 `useEffect`、`let ok = false` 无用初始化、空 catch）—— 这是本仓 CI 持续红的唯一原因。
+- 门禁：typecheck 三工程 / lint 0 error / 全量串行 243 文件 2529 passed / build 出 `dist/client.js` 3,278,413 字节。
+
 ## 0.27.7
 
 **修 8 字流转「一动就破型」：自动档必须在外层解析成 eight，轨道参数才传得进。**
