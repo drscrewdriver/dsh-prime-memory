@@ -294,6 +294,16 @@ export function registerLiveSettings(ctx, config, logger, bootStore) {
             return modernWrite();
         },
         bootModeOf: (axis) => bootStore?.get(axis),
+        whenReady: async (timeoutMs = 10000) => {
+            // 轮询写面就绪：宿主 settings 服务上线后 ctx.inject 会填充 forms → modernWrite() 转真。
+            const start = Date.now();
+            while (!modernWrite()) {
+                if (Date.now() - start >= timeoutMs)
+                    return false;
+                await new Promise((r) => setTimeout(r, 150));
+            }
+            return true;
+        },
         waitForVolatile: (timeoutMs = 3000) => new Promise((resolve) => {
             let done = false;
             const finish = () => {
@@ -407,6 +417,12 @@ export async function applyBootMode(live, logger) {
             touched = true; // 总闸钉 true
         if (!touched) {
             say(`[memory] 启动挡位与现值已一致，免写回`);
+            return;
+        }
+        // 写面未就绪时先等（插件挂载早于宿主 settings 服务上线是常见时序）。
+        const ready = await live.whenReady?.(10000);
+        if (ready === false) {
+            warn(`[memory] 启动挡位写回跳过：等 10s 后 settings 写面仍未就绪（本次启动不应用挡位，下次启动或面板操作时重试）`);
             return;
         }
         await live.update(patch);

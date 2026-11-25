@@ -28,6 +28,7 @@
 - 单一「状态记忆」总闸拆为两组，各自两级：**注入的状态记忆**（pill=召回 recall + 三态下次启动滑条 injectBootMode）与**提取的状态记忆**（pill=捕获+蒸馏 capture&distill + 三态滑条 extractBootMode，下带捕获/蒸馏细调分项）。
 - 契约/配置：`bootMode` 拆为 `injectBootMode` + `extractBootMode`；`enabled` 退役为内部兼容位（读侧 `resolveSettings` 恒钉 true，行为改由 recall/capture/distill 三键接管）。
 - **接线修复**：`settings-set` 拨任一轴挡位时立即同步本会话对应生效键（off→关、on→开、last→不动），不再只等下次启动——直接消除“面板显示默认关闭、新会话仍继承开启需手动关”。
+- **不起效真因（启动写面未就绪）**：启动日志实锤 `启动挡位应用失败: settings 服务不可用`——`applyBootMode` 在插件挂载时跑，而宿主 settings 服务尚未上线，`live.update` 抛错→启动挡位从未应用，recall/capture/distill 永远停在 true 默认。修：新增 `live.whenReady()` 门，`applyBootMode` 先等写面就绪（10s 超时）再写回；新测 whenReady=false 跳过/true 才写。
 - `BootModeStore` 改双轴存 `{inject, extract}`；`applyBootMode` 启动分别写回两轴；TUI `/memory switch` 改显两轴、`/memory on|off` 改拨两轴。
 - i18n 三语新增 11 键（注入/提取的状态记忆 + 两轴三态描述）入 keys.json 与字典全集；测试 boot-mode 双轴矩阵 + boot-mode-store 两轴 + tui switch 随动。全量 suite 绿（仅无关 IO 重负载用例在并发下偶发超时，隔离必绿）。
 
