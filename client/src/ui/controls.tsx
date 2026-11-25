@@ -86,12 +86,15 @@ export function Segmented(props: {
   value: string | null | undefined;
   options: SegOption[];
   disabled?: boolean;
+  /** 等分填满容器（每项 flex:1 居中）——用于定宽的分段条，避免右侧留白。 */
+  stretch?: boolean;
   onChange?(key: string): void;
 }) {
   const value = props.value;
   const disabled = !!props.disabled;
+  const stretch = !!props.stretch;
   return (
-    <div style={{ ...S.seg, ...(disabled ? S.switchDisabled : null) }}>
+    <div style={{ ...S.seg, ...(stretch ? { display: 'flex', width: '100%' } : null), ...(disabled ? S.switchDisabled : null) }}>
       {props.options.map((opt, i) => {
         const on = opt.key === value;
         const optDisabled = disabled || !!opt.disabled;
@@ -102,6 +105,7 @@ export function Segmented(props: {
             style={{
               ...S.segBtn,
               ...(on ? S.segBtnOn : null),
+              ...(stretch ? { flex: 1, textAlign: 'center' } : null),
               ...(i === props.options.length - 1 ? { borderRight: 'none' } : null),
               ...(optDisabled ? { cursor: 'not-allowed', opacity: 0.45 } : null),
             }}

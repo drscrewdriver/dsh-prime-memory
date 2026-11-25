@@ -42678,7 +42678,8 @@ var __create = Object.create;
 		function Segmented(props) {
 		  const value = props.value;
 		  const disabled = !!props.disabled;
-		  return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { style: { ...S.seg, ...disabled ? S.switchDisabled : null }, children: props.options.map((opt, i) => {
+		  const stretch = !!props.stretch;
+		  return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { style: { ...S.seg, ...stretch ? { display: "flex", width: "100%" } : null, ...disabled ? S.switchDisabled : null }, children: props.options.map((opt, i) => {
 		    const on = opt.key === value;
 		    const optDisabled = disabled || !!opt.disabled;
 		    return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
@@ -42688,6 +42689,7 @@ var __create = Object.create;
 		        style: {
 		          ...S.segBtn,
 		          ...on ? S.segBtnOn : null,
+		          ...stretch ? { flex: 1, textAlign: "center" } : null,
 		          ...i === props.options.length - 1 ? { borderRight: "none" } : null,
 		          ...optDisabled ? { cursor: "not-allowed", opacity: 0.45 } : null
 		        },
@@ -45784,12 +45786,14 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { ...S.switchRow, alignItems: "flex-start", paddingLeft: 20 }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.switchLabel, children: tr("下次启动") }),
-		        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { ...S.switchRow, alignItems: "flex-start" }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: { width: 36, flexShrink: 0 } }),
+		        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6, flex: 1, maxWidth: 320 }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: { ...S.switchLabel, minWidth: 0 }, children: tr("下次启动") }),
 		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		            Segmented,
 		            {
+		              stretch: true,
 		              value: settingsData.settings.bootMode ?? "off",
 		              options: [
 		                { key: "last", label: tr("跟随上一次"), title: tr("沿用上一次运行结束时的开关状态") },
