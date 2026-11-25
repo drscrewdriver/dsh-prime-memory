@@ -36500,7 +36500,6 @@ var __create = Object.create;
 		  "记忆概况": "Memory overview",
 		  "记忆库": "Memory store",
 		  "记忆库入口": "Memory store entry",
-		  "记忆模式": "Memory mode",
 		  "记忆稳定区": "Stable memory zone",
 		  "记忆占用": "Memory usage",
 		  "记忆蒸馏使用 LLM 能力": "LLM usage for memory distillation",
@@ -36625,6 +36624,8 @@ var __create = Object.create;
 		  "没有已退场的记忆。": "No retired memories.",
 		  "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）": "No runtime override; using llm.mode/baseURL from cordis.patch.yml (default host)",
 		  "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读": "Effective chain per layer: runtime custom → deployment YAML layer chain → global default chain, falling back at each level; with a deployment pin, runtime edits are read-only",
+		  "每次启动强制关闭（本会话仍可手动开）": "Force off at every start (this session can still turn it on manually)",
+		  "每次启动强制开启（本会话仍可手动关）": "Force on at every start (this session can still turn it off manually)",
 		  "门禁未通过": "Gate check failed",
 		  "秒": " s",
 		  "名称": "Name",
@@ -36637,6 +36638,7 @@ var __create = Object.create;
 		  "模型加载中…": "Loading models…",
 		  "模型名": "Model name",
 		  "默认档": "Default mode",
+		  "默认关闭": "Off by default",
 		  "默认关闭；风险高于导出（会写库），需先开 md 投射再开本项": "Off by default; riskier than export (writes to the store); enable md projection first, then this",
 		  "默认关闭；开启后 memport 相关端点可用（仅影响文件源导入，不影响外部记忆服务驱动）。": "Off by default; when on, the memport endpoints become available (only affects file-source import, not the external memory service drivers).",
 		  "默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）": "Off by default; when on, keyword backfill can run (feeds the FTS keyword axis)",
@@ -36645,6 +36647,7 @@ var __create = Object.create;
 		  "默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除": "Off by default; when on, the model gets memory write/delete tools and the panel unlocks memory deletion",
 		  "默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）": "Off by default; when on, registers the memory_skill_* tools and injection (the switch takes effect immediately)",
 		  "默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时": "Off by default: the knowledge graph is only built once this is on; this step calls the LLM per record, and the estimated duration is shown before the first enable",
+		  "默认开启": "On by default",
 		  "目标": "goal",
 		  "目标 slug": "Target slug",
 		  "目标 slug 不能为空": "Target slug must not be empty",
@@ -36664,7 +36667,6 @@ var __create = Object.create;
 		  "漂移": "Drift",
 		  "平铺": "flat",
 		  "评价": "review",
-		  "启动挡位": "Startup gear",
 		  "启动失败": "Startup failed",
 		  "启动中…": "Starting…",
 		  "启用": "Enable",
@@ -36676,8 +36678,6 @@ var __create = Object.create;
 		  "嵌入源已关闭，请先启用": "The embedding source is off; enable it first",
 		  "嵌入状态读取失败：": "Failed to read embedding status:",
 		  "嵌入状态读取中…": "Reading embedding status…",
-		  "强制关闭": "Force off",
-		  "强制开启": "Force on",
 		  "且 md 投射当前开着：导入 N 条会生成 N 个 .memory.md 文件，后续人工改动会与远端形成 both_dirty。": "and .memory.md projection is currently on: importing N entries generates N .memory.md files, and later manual edits will put them into both_dirty against the remote.",
 		  "切到 2D 力导星图并 ego 聚焦首实体": "Switch to the 2D force-directed star map and ego-focus the first entity",
 		  "切到 3D 记忆海并 ego 聚焦首实体": "Switch to the 3D memory sea and ego-focus the first entity",
@@ -37029,6 +37029,7 @@ var __create = Object.create;
 		  "选 hall…": "select hall…",
 		  "选定某个角（单 Wing）后，这两项才生效": "these two only take effect after a corner (single Wing) is selected",
 		  "学习": "learning",
+		  "沿用上一次运行结束时的开关状态": "Reuse the switch state from the end of the last run",
 		  "一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。": 'how many projection files are updated per click at most (export writes + suffix renames both use quota). Ones that "never changed" do not use quota. 0 = follow the deployment default (2000); the cap is 10000.',
 		  "一次最多退场": "max retired per run",
 		  "一致 {p1}": "consistent {p1}",
@@ -37286,6 +37287,7 @@ var __create = Object.create;
 		  "转速": "spin speed",
 		  "状态": "status",
 		  "状态:": "Status:",
+		  "状态记忆": "State memory",
 		  "准备中（归档旧数据 · 清空检索库）": "Preparing (archiving old data · clearing the retrieval store)",
 		  "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工：": "The desktop build (DSH Desktop) cannot use `dsh plugin --profile desktop add` (the host manages it exclusively and will reject it), so do it manually:",
 		  "字符": " characters",
@@ -37936,7 +37938,6 @@ var __create = Object.create;
 		  "记忆概况": "Visão geral da memória",
 		  "记忆库": "Biblioteca de Memória",
 		  "记忆库入口": "Entrada da Biblioteca de Memória",
-		  "记忆模式": "Modo de memória",
 		  "记忆稳定区": "Zona de memória estável",
 		  "记忆占用": "Uso de memória",
 		  "记忆蒸馏使用 LLM 能力": "Uso de LLM para a destilação de memória",
@@ -38061,6 +38062,8 @@ var __create = Object.create;
 		  "没有已退场的记忆。": "Nenhuma memória retirada.",
 		  "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）": "Sem override de runtime; usa llm.mode/baseURL de cordis.patch.yml (padrão host)",
 		  "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读": "Cadeia efetiva por camada: customização de runtime → cadeia do YAML de implantação → cadeia padrão global, com fallback em cada nível; com pin de implantação, edição de runtime é somente leitura",
+		  "每次启动强制关闭（本会话仍可手动开）": "Desliga à força a cada inicialização (nesta sessão ainda pode ligar manualmente)",
+		  "每次启动强制开启（本会话仍可手动关）": "Liga à força a cada inicialização (nesta sessão ainda pode desligar manualmente)",
 		  "门禁未通过": "Verificação de porta falhou",
 		  "秒": " s",
 		  "名称": "Nome",
@@ -38073,6 +38076,7 @@ var __create = Object.create;
 		  "模型加载中…": "Carregando modelos…",
 		  "模型名": "Nome do modelo",
 		  "默认档": "Modo padrão",
+		  "默认关闭": "Desligado por padrão",
 		  "默认关闭；风险高于导出（会写库），需先开 md 投射再开本项": "Desligado por padrão; mais arriscado que exportar (grava no repositório); ligue a projeção .memory.md antes deste",
 		  "默认关闭；开启后 memport 相关端点可用（仅影响文件源导入，不影响外部记忆服务驱动）。": "Desligado por padrão; ao ligar, os endpoints do memport ficam disponíveis (afeta só a importação de fontes de arquivos, não os drivers de serviços de memória externa).",
 		  "默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）": "Desligado por padrão; ao ligar, a retroalimentação de palavras-chave pode rodar (alimenta o eixo de palavras-chave do FTS)",
@@ -38081,6 +38085,7 @@ var __create = Object.create;
 		  "默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除": "Desligado por padrão; ao ligar, o modelo recebe ferramentas de escrita/exclusão de memórias e o painel libera exclusão",
 		  "默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）": "Desligado por padrão; ao ligar, registra as ferramentas memory_skill_* e a injeção (o interruptor vale imediatamente)",
 		  "默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时": "Desligado por padrão: o grafo de conhecimento só é gerado quando isto está ligado; esta etapa passa pelo LLM registro a registro, e o tempo estimado é mostrado antes da primeira ativação",
+		  "默认开启": "Ligado por padrão",
 		  "目标": "meta",
 		  "目标 slug": "slug de destino",
 		  "目标 slug 不能为空": "O slug de destino não pode ser vazio",
@@ -38100,7 +38105,6 @@ var __create = Object.create;
 		  "漂移": "Deriva",
 		  "平铺": "plano",
 		  "评价": "avaliação",
-		  "启动挡位": "Modo de inicialização",
 		  "启动失败": "Falha na inicialização",
 		  "启动中…": "Inicializando…",
 		  "启用": "Habilitar",
@@ -38112,8 +38116,6 @@ var __create = Object.create;
 		  "嵌入源已关闭，请先启用": "A fonte de embedding está desligada; habilite primeiro",
 		  "嵌入状态读取失败：": "Falha ao ler estado do embedding:",
 		  "嵌入状态读取中…": "Lendo estado do embedding…",
-		  "强制关闭": "Forçar desligado",
-		  "强制开启": "Forçar ligado",
 		  "且 md 投射当前开着：导入 N 条会生成 N 个 .memory.md 文件，后续人工改动会与远端形成 both_dirty。": "e a projeção .memory.md está ligada: importar N entradas gera N arquivos .memory.md, e edições manuais posteriores criarão both_dirty com o remoto.",
 		  "切到 2D 力导星图并 ego 聚焦首实体": "Alternar ao mapa estelar 2D de força e focar ego na primeira entidade",
 		  "切到 3D 记忆海并 ego 聚焦首实体": "Alternar ao mar de memórias 3D e focar ego na primeira entidade",
@@ -38465,6 +38467,7 @@ var __create = Object.create;
 		  "选 hall…": "selecionar hall…",
 		  "选定某个角（单 Wing）后，这两项才生效": "estas duas opções só valem depois de escolher um canto (Wing único)",
 		  "学习": "aprendizado",
+		  "沿用上一次运行结束时的开关状态": "Reutiliza o estado do interruptor ao final da última execução",
 		  "一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。": 'quantos arquivos de projeção são atualizados por clique no máximo (gravações da exportação + renomeações por sufixo consomem cota). Os "que nunca mudaram" não consomem. 0 = seguir padrão da implantação (2000); teto de 10000.',
 		  "一次最多退场": "máx. retiradas por rodada",
 		  "一致 {p1}": "consistentes {p1}",
@@ -38722,6 +38725,7 @@ var __create = Object.create;
 		  "转速": "velocidade de rotação",
 		  "状态": "estado",
 		  "状态:": "Estado:",
+		  "状态记忆": "Memória de estado",
 		  "准备中（归档旧数据 · 清空检索库）": "Preparando (arquivando dados antigos · limpando o repositório de recuperação)",
 		  "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工：": "A versão desktop (DSH Desktop) não pode usar `dsh plugin --profile desktop add` (o host gerencia com exclusividade e recusaria); faça manualmente:",
 		  "字符": " caracteres",
@@ -39372,7 +39376,6 @@ var __create = Object.create;
 		  "记忆概况": "Обзор памяти",
 		  "记忆库": "Хранилище памяти",
 		  "记忆库入口": "Вход в хранилище памяти",
-		  "记忆模式": "Режим памяти",
 		  "记忆稳定区": "Стабильная зона памяти",
 		  "记忆占用": "Занято памятью",
 		  "记忆蒸馏使用 LLM 能力": "Использование LLM для дистилляции памяти",
@@ -39497,6 +39500,8 @@ var __create = Object.create;
 		  "没有已退场的记忆。": "Нет отозванных памятей.",
 		  "没有运行时覆盖，用 cordis.patch.yml 的 llm.mode/baseURL（默认 host）": "Нет переопределения во время выполнения; используется llm.mode/baseURL из cordis.patch.yml (host по умолчанию)",
 		  "每层实际链：运行时自定义 → 部署 YAML 层链 → 全局默认链，逐级兜底；部署 pin 时运行时编辑只读": "Фактическая цепочка на каждом уровне: пользовательская во время выполнения → цепочка слоёв YAML развёртывания → глобальная цепочка по умолчанию, с деградацией на каждом уровне; при pin развёртывания правки во время выполнения только для чтения",
+		  "每次启动强制关闭（本会话仍可手动开）": "Принудительно выключать при каждом запуске (в текущей сессии можно включить вручную)",
+		  "每次启动强制开启（本会话仍可手动关）": "Принудительно включать при каждом запуске (в текущей сессии можно выключить вручную)",
 		  "门禁未通过": "Проверка шлюза не пройдена",
 		  "秒": " с",
 		  "名称": "Название",
@@ -39509,6 +39514,7 @@ var __create = Object.create;
 		  "模型加载中…": "Загрузка моделей…",
 		  "模型名": "Имя модели",
 		  "默认档": "Режим по умолчанию",
+		  "默认关闭": "По умолчанию выключено",
 		  "默认关闭；风险高于导出（会写库），需先开 md 投射再开本项": "Выключено по умолчанию; рискованнее экспорта (пишет в хранилище); сначала включите md-проекцию, затем этот пункт",
 		  "默认关闭；开启后 memport 相关端点可用（仅影响文件源导入，不影响外部记忆服务驱动）。": "По умолчанию выключено; при включении становятся доступны endpoints memport (влияет только на импорт из файловых источников, не на драйверы внешних сервисов памяти).",
 		  "默认关闭；开启后才能跑关键词回填（喂 FTS 关键词轴）": "Выключено по умолчанию; после включения можно запускать обратное заполнение ключевых слов (питает ось ключевых слов FTS)",
@@ -39517,6 +39523,7 @@ var __create = Object.create;
 		  "默认关闭；开启后模型获得写删记忆工具，面板解锁记忆删除": "Выключено по умолчанию; после включения модель получает инструменты записи и удаления памятей, а панель разрешает удаление памятей",
 		  "默认关闭；开启后注册 memory_skill_* 工具与注入（开关即时生效）": "Выключено по умолчанию; после включения регистрирует инструменты memory_skill_* и инъекцию (переключатель действует сразу)",
 		  "默认关闭：开启后才会生成知识图谱；这一步会逐条走 LLM，首次开启前会先给出预计耗时": "Выключено по умолчанию: граф знаний строится только после включения; этот шаг проходит по записям через LLM, а перед первым включением показывается оценка времени",
+		  "默认开启": "По умолчанию включено",
 		  "目标": "цель",
 		  "目标 slug": "Целевой slug",
 		  "目标 slug 不能为空": "Целевой slug не может быть пустым",
@@ -39536,7 +39543,6 @@ var __create = Object.create;
 		  "漂移": "Дрейф",
 		  "平铺": "плоский",
 		  "评价": "оценка",
-		  "启动挡位": "Стартовый режим",
 		  "启动失败": "Ошибка запуска",
 		  "启动中…": "Запуск…",
 		  "启用": "Включить",
@@ -39548,8 +39554,6 @@ var __create = Object.create;
 		  "嵌入源已关闭，请先启用": "Источник эмбеддингов отключён; сначала включите его",
 		  "嵌入状态读取失败：": "Не удалось прочитать статус эмбеддингов:",
 		  "嵌入状态读取中…": "Чтение статуса эмбеддингов…",
-		  "强制关闭": "Принудительно выкл.",
-		  "强制开启": "Принудительно вкл.",
 		  "且 md 投射当前开着：导入 N 条会生成 N 个 .memory.md 文件，后续人工改动会与远端形成 both_dirty。": "и проецирование .memory.md сейчас включено: импорт N записей создаст N файлов .memory.md, и последующие ручные правки приведут к both_dirty с удалённой стороной.",
 		  "切到 2D 力导星图并 ego 聚焦首实体": "Переключиться на 2D-карту звёзд с силовой раскладкой и сфокусировать ego на первой сущности",
 		  "切到 3D 记忆海并 ego 聚焦首实体": "Переключиться на 3D-море памятей и сфокусировать ego на первой сущности",
@@ -39901,6 +39905,7 @@ var __create = Object.create;
 		  "选 hall…": "выбрать hall…",
 		  "选定某个角（单 Wing）后，这两项才生效": "эти два параметра действуют только после выбора угла (одного Wing)",
 		  "学习": "обучение",
+		  "沿用上一次运行结束时的开关状态": "Использовать состояние переключателя на момент завершения прошлого запуска",
 		  "一次点击最多更新多少个投射文件（导出写入 + 后缀改名都占额度）。“没变过”的不占额度。0 = 跟随部署默认（2000）；上限 10000。": "сколько файлов проекций обновляется за один клик максимум (запись при экспорте и переименование по суффиксу расходуют квоту). «Не менявшиеся» квоту не расходуют. 0 = как в конфигурации развёртывания (2000); предел 10000.",
 		  "一次最多退场": "максимум отзывов за раз",
 		  "一致 {p1}": "совпадает {p1}",
@@ -40158,6 +40163,7 @@ var __create = Object.create;
 		  "转速": "скорость вращения",
 		  "状态": "статус",
 		  "状态:": "Состояние:",
+		  "状态记忆": "Память состояния",
 		  "准备中（归档旧数据 · 清空检索库）": "Подготовка (архивация старых данных · очистка хранилища поиска)",
 		  "桌面版（DSH Desktop）不能用 `dsh plugin --profile desktop add`（宿主独占管理，会被拒绝），只能手工：": "Настольная версия (DSH Desktop) не может использовать `dsh plugin --profile desktop add` (хост управляет этим единолично и отклонит запрос), поэтому только вручную:",
 		  "字符": " символов",
@@ -45766,11 +45772,11 @@ var __create = Object.create;
 		  const bfConcurrency = settingsData && settingsData.settings ? settingsData.settings.backfillConcurrency ?? 0 : 0;
 		  return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { children: [
 		    settingsData && settingsData.supported === false ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("p", { style: S.hint, children: tr("settings 服务不可用，记忆模式开关未启用（记忆保持全开）。") }) : settingsData ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: S.switchPanel, children: [
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.panelLabel, children: tr("记忆模式") }),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.panelLabel, children: tr("状态记忆") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		        SwitchRow,
 		        {
-		          label: tr("记忆模式"),
+		          label: tr("状态记忆"),
 		          desc: master ? tr("已开启：捕获对话并蒸馏记忆") : tr("已关闭：不捕获、不蒸馏、不注入（数据保留）"),
 		          checked: master,
 		          onChange: (v) => {
@@ -45778,6 +45784,26 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
+		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { ...S.switchRow, alignItems: "flex-start", paddingLeft: 20 }, children: [
+		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.switchLabel, children: tr("下次启动") }),
+		        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
+		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+		            Segmented,
+		            {
+		              value: settingsData.settings.bootMode ?? "off",
+		              options: [
+		                { key: "last", label: tr("跟随上一次"), title: tr("沿用上一次运行结束时的开关状态") },
+		                { key: "on", label: tr("默认开启"), title: tr("每次启动强制开启（本会话仍可手动关）") },
+		                { key: "off", label: tr("默认关闭"), title: tr("每次启动强制关闭（本会话仍可手动开）") }
+		              ],
+		              onChange: (k) => {
+		                setBootMode(k);
+		              }
+		            }
+		          ),
+		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.switchDesc, children: tr("只决定下次启动的初值；数据始终保留，本会话可随时手动切换。") })
+		        ] })
+		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		        SwitchRow,
 		        {
@@ -45814,36 +45840,6 @@ var __create = Object.create;
 		          }
 		        }
 		      ),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.panelLabel, children: tr("启动挡位") }),
-		      /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { ...S.switchRow, alignItems: "flex-start" }, children: [
-		        /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.switchLabel, children: tr("下次启动") }),
-		        /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: 6 }, children: [
-		          /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
-		            "select",
-		            {
-		              value: settingsData.settings.bootMode ?? "off",
-		              onChange: (e) => {
-		                setBootMode(e.currentTarget.value);
-		              },
-		              style: {
-		                fontSize: 13,
-		                padding: "6px 10px",
-		                borderRadius: 8,
-		                border: "1px solid var(--dsh-mem-border)",
-		                background: "var(--dsh-mem-bg-card)",
-		                color: "var(--dsh-mem-text-1)",
-		                minWidth: 160
-		              },
-		              children: [
-		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("option", { value: "last", children: tr("跟随上一次") }),
-		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("option", { value: "on", children: tr("强制开启") }),
-		                /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("option", { value: "off", children: tr("强制关闭") })
-		              ]
-		            }
-		          ),
-		          /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("span", { style: S.switchDesc, children: tr("只决定下次启动的初值；数据始终保留，本会话可随时手动切换。") })
-		        ] })
-		      ] }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)("div", { style: S.panelLabel, children: tr("高权限模式") }),
 		      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
 		        SwitchRow,
