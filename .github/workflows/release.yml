@@ -1,0 +1,159 @@
+name: release
+
+# 仓内自持的发版 workflow（2026-11-25 起，按 mine-dsh-plugins/README.md 第 13 章落）。
+#
+# 为什么不是 `_tools/templates/release-caller.dispatch.yml`：
+# 那份 caller 指向 `drscrewdriver/.github` 的 reusable workflow，而该仓**目前不存在**
+# （`gh api repos/drscrewdriver/.github` 与 repo list 均 404）。本文件以已实测全链路
+# 通过的 `dsh-sidebar-fold/.github/workflows/release.yml`（v0.1.14）为基线，
+# 只把「安装」与「门禁」换成 dsh-prime-memory 自己 `.github/workflows/ci.yml` 的真实序列，
+# 避免出现「CI 绿、release 红」或反过来的静默降级。
+#
+# 触发：push tag v*（自动发版）/ workflow_dispatch（dry_run 默认 true，只打包不推 npm）。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:     { description: 要发布的 tag（如 v0.27.7）, required: true, type: string }
+      dry_run: { description: 只打包不推 npm, type: boolean, default: true }
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+
+      # ① 三方版本对齐：tag / package.json / dsh.plugin.json
+      - name: 版本对齐
+        run: |
+          set -euo pipefail
+          V="${TAG#v}"
+          P=$(node -p "require('./package.json').version")
+          [ "$V" = "$P" ] || { echo "::error::tag $TAG 与 package.json $P 不一致"; exit 1; }
+          if [ -f dsh.plugin.json ]; then
+            D=$(node -p "try{require('./dsh.plugin.json').version||''}catch{''}" 2>/dev/null || echo "")
+            [ -z "$D" ] || [ "$D" = "$P" ] || { echo "::error::dsh.plugin.json $D 与 $P 不一致"; exit 1; }
+          fi
+          echo "VERSION=$P" >> "$GITHUB_ENV"
+          echo "PKG_NAME=$(node -p "require('./package.json').name")" >> "$GITHUB_ENV"
+
+      # ② 依赖安装：本仓 ci.yml 用 npm ci（package-lock.json 是权威锁；
+      #    pnpm-lock.yaml 是工具链遗留，不能优先走它）
+      - name: 安装依赖
+        run: |
+          set -euo pipefail
+          if   [ -f package-lock.json ];    then npm ci --no-audit --no-fund
+          elif [ -f pnpm-lock.yaml ];       then corepack enable && pnpm install --frozen-lockfile
+          else                                   npm install --no-audit --no-fund
+          fi
+
+      # ③ 门禁：逐项复刻 ci.yml（typecheck → test → lint → build → smoke → 目录核验）。
+      #    test 加 --no-file-parallelism：memory-md-* 在文件级并行下会互抢全局投影状态，
+      #    是已知假红（单跑全绿），CI 上也必须串行才稳定。
+      - name: 门禁
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm test -- --no-file-parallelism
+          npm run lint
+          npm run build
+          npm run build:smoke
+          npm run smoke
+          node scripts/verify-catalog.mjs
+
+      # ④ 入包清单断言（防漏文件 / 防发错来源）
+      - name: 打包清单
+        run: npm pack --dry-run
+
+      # ⑤ 幂等：同版本已存在则整体跳过发布动作
+      - name: 幂等检查
+        id: guard
+        run: |
+          if npm view "$PKG_NAME@$VERSION" version --registry https://registry.npmjs.org 2>/dev/null | grep -q .; then
+            echo "exists=true"  >> "$GITHUB_OUTPUT"
+            echo "::warning::$PKG_NAME@$VERSION 已存在于 registry，跳过 publish/dist-tag/Release"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ⑥ 发布
+      - name: npm publish
+        if: steps.guard.outputs.exists == 'false' && (github.event_name == 'push' || inputs.dry_run == false)
+        run: npm publish --registry https://registry.npmjs.org
+
+      # ⑦ dist-tag 同步：三档判定（查询失败→重试；无线标签→收工；有标签→逐个 add）
+      - name: 同步 dsh-* 线标签
+        id: disttag
+        if: steps.guard.outputs.exists == 'false' && (github.event_name == 'push' || inputs.dry_run == false)
+        run: |
+          set -uo pipefail
+          REG=https://registry.npmjs.org
+          for attempt in 1 2 3 4 5 6; do
+            RAW=$(npm view "$PKG_NAME" dist-tags --json --registry "$REG" 2>/dev/null)
+            if [ -n "${RAW:-}" ]; then
+              TAGS=$(printf '%s' "$RAW" \
+                | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(Object.keys(JSON.parse(s)).filter(t=>t.startsWith('dsh-')).join(' '))}catch{console.log('')}})")
+              if [ -z "${TAGS:-}" ]; then
+                echo "::notice::$PKG_NAME 没有 dsh-* 线标签，无需同步"
+                echo "synced=none" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              ok=1
+              for t in $TAGS; do
+                npm dist-tag add "$PKG_NAME@$VERSION" "$t" --registry "$REG" || ok=0
+              done
+              [ "$ok" = 1 ] && { echo "synced=$TAGS" >> "$GITHUB_OUTPUT"; exit 0; }
+            fi
+            echo "第 $attempt 轮未拿到 dist-tags（读侧滞后），30s 后重试"; sleep 30
+          done
+          echo "::warning::线标签同步未完成，需本地补跑 node mine-dsh-plugins/_tools/sync-dist-tags.mjs --only $PKG_NAME"
+          echo "synced=PENDING" >> "$GITHUB_OUTPUT"
+
+      # ⑧ Release + Latest 徽标。
+      #    --target 传「checkout 后的 HEAD 完整 SHA」：dispatch 时 GITHUB_SHA 是默认分支
+      #    的 head 而非 tag 的 commit，直接用它会把 Release 挂错提交。
+      - name: GitHub Release
+        if: steps.guard.outputs.exists == 'false' && (github.event_name == 'push' || inputs.dry_run == false)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/release-notes.mjs --version "$VERSION" --tag "$TAG" --out notes.md
+          SHA=$(git rev-parse HEAD)
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --target "$SHA" --title "$TAG" --notes-file notes.md
+          gh release edit "$TAG" --latest
+
+      # ⑨ 事实表
+      - name: Job Summary
+        if: always()
+        run: |
+          {
+            echo "### $TAG"
+            echo "| 项 | 值 |"
+            echo "|---|---|"
+            echo "| 包 | ${PKG_NAME:-?} |"
+            echo "| 版本 | ${VERSION:-?} |"
+            echo "| 已存在跳过 | ${{ steps.guard.outputs.exists }} |"
+            echo "| 线标签 | ${{ steps.disttag.outputs.synced || '-' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
