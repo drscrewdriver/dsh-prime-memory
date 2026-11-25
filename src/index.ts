@@ -275,6 +275,58 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
         const work = await stores.scenes.work.listFiles()
         return { chat: chat.length, work: work.length, sample: [...chat, ...work].slice(0, 10) }
       },
+      // 开关现值（live.get 投影 + 部署上限；与 settings-get 的 ceilings 同口径）。
+      switches: () => {
+        const s = live.get()
+        return {
+          enabled: s.enabled,
+          capture: s.capture,
+          distill: s.distill,
+          recall: s.recall,
+          bootMode: s.bootMode,
+          memoryMutate: s.memoryMutate,
+          ceilings: { capture: config.capture.enabled, distill: config.extract.enabled, recall: config.recall.enabled },
+        }
+      },
+      // 命令层唯一写操作：拨总闸，写后回读（宿主可能拒写 → applied=false；回读不符 → drift）。
+      setEnabled: async (next) => {
+        try {
+          await live.update({ enabled: next })
+          const eff = live.get().enabled
+          return { applied: true, effective: eff, drift: eff !== next }
+        } catch {
+          return { applied: false, effective: live.get().enabled, drift: false }
+        }
+      },
+      // 本会话已注入集：store 取 id 与取代/路归因，readOnly 联查 l1_records 取正文。
+      recalled: (sessionId, n) => {
+        const ids = (stores.recalled?.list(sessionId) ?? []).slice(0, n)
+        if (ids.length === 0) return []
+        const sup = stores.recalled?.supersededOf(sessionId)
+        const lanes = stores.recalled?.lanesOf(sessionId)
+        const place = ids.map(() => '?').join(',')
+        const byId = new Map<string, Record<string, unknown>>()
+        try {
+          const rs = (reader()?.prepare(
+            `SELECT record_id, content, type, family, scene_name FROM l1_records WHERE record_id IN (${place})`,
+          ).all(...ids) ?? []) as Array<Record<string, unknown>>
+          for (const r of rs) byId.set(String(r.record_id ?? ''), r)
+        } catch { /* 查不到正文则仅列 id */ }
+        return ids.map((id) => {
+          const r = byId.get(id) ?? {}
+          return {
+            id,
+            content: typeof r.content === 'string' ? r.content : undefined,
+            type: typeof r.type === 'string' ? r.type : undefined,
+            family: typeof r.family === 'string' ? r.family : undefined,
+            scene_name: typeof r.scene_name === 'string' ? r.scene_name : undefined,
+            superseded: sup?.has(id) ?? false,
+            lane: lanes?.get(id),
+          }
+        })
+      },
+      // 最近有注入记录的会话（--last / 无参提示用；闭包运行时才读，同 rooms 先例）。
+      recentSessions: () => stores.recalled?.recent(8) ?? [],
     })
   })
 

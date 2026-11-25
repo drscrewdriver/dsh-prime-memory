@@ -16,6 +16,13 @@
 - 三态语义文案重写并补 tooltip；en/pt/ru 三语新增 6 键（状态记忆/沿用上一次…/默认开启/…/默认关闭/…）入 keys.json 与字典全集。
 - 验证：typecheck 三工程绿 / build 出包 / i18n-dict 12/12 / 面板目视两级结构。
 
+**TUI 终端面新增三面（switch / on|off / injected）。**
+
+- `/memory switch`：显示总闸/捕获/蒸馏/召回/启动挡位/高权限六键现值，被部署上限锁死的分项加 `(部署停用)` 后缀；`--json` 单行。
+- `/memory on|off`：命令层首个写操作——默认 dry 回显将写入值，加 `--yes` 才走 `live.update({enabled})` 并写后回读，不一致报 drift。
+- `/memory injected [--last|--session=<id>] [--n]`：接 SessionRecalledStore（与 `dsh-memory/session-recalled` 端点同源）列出本会话已注入记忆，含 `[已取代]` 标记与路归因；store 新增 `recent()` 枚举最近会话。
+- 验证：新增 `tests/tui-command.test.ts`（8 例：switch/on-off dry+yes+漂移/injected 三支）全绿；typecheck/build/lint 干净。
+
 ## 0.27.8
 
 **接入 CI 发版通道（tag push 自动 publish / dist-tag / Release）+ 清掉 3 个既有 lint error。**

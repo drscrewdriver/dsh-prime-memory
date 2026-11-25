@@ -22,6 +22,17 @@ export declare class SessionRecalledStore {
     protect(sessionKey: string, recordIds: readonly string[]): void;
     list(sessionKey: string): string[];
     /**
+     * 按最近活跃倒序返回有注入记录的会话（TUI `/memory injected --last` 用）。
+     *
+     * 为什么需要：终端没有 GUI 的「当前会话」上下文，也没有 pill 的 sessionId，
+     * 只能靠 updatedAt 挑最近真正注入过记忆的那一个。空集会话跳过。
+     */
+    recent(limit?: number): Array<{
+        key: string;
+        at: number;
+        count: number;
+    }>;
+    /**
      * 上下文事件：按原因区分。`'clear'`（用户主动清空）整表清；`'compact'`（摘要替换）**只打取代标记**。
      *
      * 旧实现两种都整表清，于是“压缩过一次”就把本会话召回历史（含已判过时的裁决凭证）抹平；
