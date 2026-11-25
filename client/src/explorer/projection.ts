@@ -441,8 +441,11 @@ export function buildClusterShapeLayout(
       //       横向偏移用 (cos(u/2), sin(u/2)) 而非固定方向 → 带子在环上自我扭转。
       const A = 560;
       const u = (rand01(`s:${n.id}`) + (rand01(`u2:${n.id}`) - 0.5) * 0.006) * Math.PI * 2;
-      // 带半宽:中心略窄、两端(∞ 交叉处)略宽,读起来像被拉开的绸带
-      const halfW = 34 + 18 * Math.abs(Math.cos(u));
+      // 带半宽:中心略窄、两端(∞ 交叉处)略宽,读起来像被拉开的绸带。
+      // 2026-11-25 收窄:旧值 34+18 让带的截面达 ±52（≈半径的 9%），加上透视后
+      // 读作"粗管、偏离轨道"（用户报的偏离度过高）；现取 15+9 → ±24（≈ 4~5%），
+      // 点半径本身还有 ~2 世界单位，视觉上仍是一条有厚度的星尘带而不是一条线。
+      const halfW = 15 + 9 * Math.abs(Math.cos(u));
       const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
       // 莫比乌斯扭转:横向方向随 u/2 旋转
       const twist = u / 2;
@@ -576,10 +579,12 @@ export function buildClusterShapeLayout(
       const c8 = eightCurve(orbU, orbA);
       const a = rand01(`a:${n.id}`) * Math.PI * 2;
       const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
-      const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
+      // 簇内散布半径同步收窄（旧 16+120 会让法向偏移达 ±81，= 半径的 14%，
+      // 成簇版 8 字看起来像一圈粗棍而不是贴轨星团）。
+      const rr = 10 + Math.pow(rand01(`s:${n.id}`), 0.65) * 85;
       const ring = Math.sin(b) * Math.cos(a) * rr; // 切向（簇沿环的宽度）
-      const cross = Math.sin(b) * Math.sin(a) * rr * 0.6; // 法向（带厚）
-      const y8 = (rand01(`s:${n.id}:y`) - 0.5) * 52;
+      const cross = Math.sin(b) * Math.sin(a) * rr * 0.3; // 法向（带厚）
+      const y8 = (rand01(`s:${n.id}:y`) - 0.5) * 28;
       out.set(n.id, {
         x: c8.x + c8.tx * ring + c8.nx * cross,
         y: y8,

@@ -18,6 +18,16 @@ import { HOST_MEMORY_TYPES, EXTERNAL_MEMORY_TYPES, slugOf, UNCLASSIFIED_DIR } fr
 
 export const THEME_STYLE_ID = 'dsh-mem-theme-style';
 
+// ── 图表 8 档系列色（canvas 侧兜底也读它，避免两处色值漂移）──
+/**
+ * 图表令牌实色（浅/暗）。导出原因：canvas 不吃 CSS 变量，`getComputedStyle` 又依赖
+ * 主题样式表已注入——Scene3D 可能先于任何 pill/tab 挂载，此刻变量还不存在，
+ * 旧的单级解析会把整张图永久画成 #8a8f98 灰（用户报的"颜色全灰"）。
+ * 以这两组数组作单一事实源，令牌行与 canvas 兜底同源。
+ */
+export const CHART_SERIES_LIGHT: readonly string[] = ['#4d6bfe', '#0e9c8f', '#1f9d55', '#a8821c', '#d97a0d', '#d64570', '#7c5cff', '#61666b'];
+export const CHART_SERIES_DARK: readonly string[] = ['#6e85ff', '#35c4b5', '#52c98d', '#d9b23e', '#f59e5b', '#f47ba2', '#a78bfa', '#8892a6'];
+
 // ── 令牌（浅色）。中性色链选用【真实存在】的 dsw 令牌（design-platform.css 校对）：
 //    bg-layer-2/3、bg-overlay、border-l1/l2/l3、border-inverted、label-*、
 //    interactive-bg-hover、state-error-primary、tooltip-bg、dsw-shadow-lv1/lv3 ──
@@ -39,14 +49,7 @@ const LIGHT_TOK: string[] = [
   '  --dsh-mem-text-3: var(--dsw-alias-label-tertiary, #6e7781);',
   '  --dsh-mem-danger: var(--dsw-alias-state-error-primary, #d0403f);',
   // 成本折线图系列色：8 档固定色；PALETTE 只引用 var()，1 档锚品牌蓝、8 档中性"其他"
-  '  --dsh-mem-chart-1: #4d6bfe;',
-  '  --dsh-mem-chart-2: #0e9c8f;',
-  '  --dsh-mem-chart-3: #1f9d55;',
-  '  --dsh-mem-chart-4: #a8821c;',
-  '  --dsh-mem-chart-5: #d97a0d;',
-  '  --dsh-mem-chart-6: #d64570;',
-  '  --dsh-mem-chart-7: #7c5cff;',
-  '  --dsh-mem-chart-8: #61666b;',
+  ...CHART_SERIES_LIGHT.map((c, i) => `  --dsh-mem-chart-${i + 1}: ${c};`),
   // 档位色 = 灰 → 品牌蓝的渐变阶（chat/work 过渡蓝、auto 品牌蓝）；
   // 文字对比度按 pill 实际底色（流光内底 = bg-card 97% + 档位色 3%）复算 AA 达标
   '  --dsh-mem-mode-chat: #5a69b0;',
@@ -83,14 +86,7 @@ const DARK_TOK: string[] = [
   '  --dsh-mem-text-2: var(--dsw-alias-label-secondary, #cfd3d6);',
   '  --dsh-mem-text-3: var(--dsw-alias-label-tertiary, #8892a6);',
   '  --dsh-mem-danger: var(--dsw-alias-state-error-primary, #f4707b);',
-  '  --dsh-mem-chart-1: #6e85ff;',
-  '  --dsh-mem-chart-2: #35c4b5;',
-  '  --dsh-mem-chart-3: #52c98d;',
-  '  --dsh-mem-chart-4: #d9b23e;',
-  '  --dsh-mem-chart-5: #f59e5b;',
-  '  --dsh-mem-chart-6: #f47ba2;',
-  '  --dsh-mem-chart-7: #a78bfa;',
-  '  --dsh-mem-chart-8: #8892a6;',
+  ...CHART_SERIES_DARK.map((c, i) => `  --dsh-mem-chart-${i + 1}: ${c};`),
   '  --dsh-mem-mode-chat: #97a4ff;',
   '  --dsh-mem-mode-work: #8295ff;',
   '  --dsh-mem-mode-auto: #7b90ff;',

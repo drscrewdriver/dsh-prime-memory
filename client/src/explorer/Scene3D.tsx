@@ -49,6 +49,7 @@ import {
 } from './projection.js';
 import type { ClusterAxis, DiskStyle, ClusterShape, EightOrbit, EightStyle, Projected, Vec3 } from './projection.js';
 import { HALL_FALLBACK, HALL_ORDER, hallLabel, defaultHallToken, HALL_GALAXY_COLORS, variantOf } from './hall-palette.js';
+import { CHART_SERIES_DARK, CHART_SERIES_LIGHT, ensureThemeStyle } from '../theme.js';
 import { NButton } from '../ui/primitives.js';
 
 /** type → 既有图表系列令牌（与 GraphCanvas / GraphTab 同源七色，不引入新色值）。 */
@@ -70,10 +71,30 @@ const FALLBACK_COLOR = '#8a8f98';
  */
 const ARM_SPREAD = 0.55;
 
-/** CSS 变量 → 实色（与 GraphCanvas 同款：插件自注入的 theme 样式在容器上生效）。 */
+/**
+ * CSS 变量 → 实色（**三级解析**，防"颜色全灰"复发）：
+ *  ① 容器 computed style（正常路径，令牌由 :root 继承）；
+ *  ② documentElement（容器处于隔离样式/兄弟子树时的退路）；
+ *  ③ 内置系列色表（与 theme.ts 令牌同源）。
+ *
+ * 为什么必须做第三级：插件的主题样式表是按需注入的（ensureThemeStyle），而
+ * Scene3D 可能先于任何 pill/tab 挂载——这时 ① 读到空串，旧实现直接落
+ * FALLBACK_COLOR（#8a8f98），整图永久灰且不会自愈（metas 只在 full 变化时重建）。
+ * 现在先幂等注入再读，仍读不到时用与令牌同源的色表兜底。
+ */
 function resolveColor(host: HTMLElement, token: string): string {
+  ensureThemeStyle(); // 幂等：保证令牌样式已存在再读（首次挂载时序竞争）
   const v = getComputedStyle(host).getPropertyValue(token).trim();
-  return v.length > 0 ? v : FALLBACK_COLOR;
+  if (v.length > 0) return v;
+  const root = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  if (root.length > 0) return root;
+  const hit = /^--dsh-mem-chart-(\d+)$/.exec(token);
+  if (hit) {
+    const series = document.body?.hasAttribute('data-ds-dark-theme') ? CHART_SERIES_DARK : CHART_SERIES_LIGHT;
+    const c = series[Number(hit[1]) - 1];
+    if (c) return c;
+  }
+  return FALLBACK_COLOR;
 }
 
 /** 辉光 sprite 的画布边长（预渲染径向渐变，逐帧只 drawImage 缩放——shadowBlur 每帧重算扛不住千点）。 */
@@ -403,6 +424,9 @@ export function Scene3D(props: {
     if (!host || !canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    // 首帧前先幂等注入主题令牌（否则 refreshColors 的 getComputedStyle 读到空串，
+    // 边/标签会保持 #8a8f98 灰直到下一次 resize；点色同理）。
+    ensureThemeStyle();
     // 任何依赖变化（老化亮度/辉光/主题…）重跑本 effect 时闭包重建，
     // staticDirty/needsPresent 初始即 true → 首帧必重画必上屏，不会停在透明态。
 

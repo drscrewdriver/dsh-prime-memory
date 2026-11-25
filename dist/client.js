@@ -41190,6 +41190,8 @@ var __create = Object.create;
 		
 		// client/src/theme.ts
 		var THEME_STYLE_ID = "dsh-mem-theme-style";
+		var CHART_SERIES_LIGHT = ["#4d6bfe", "#0e9c8f", "#1f9d55", "#a8821c", "#d97a0d", "#d64570", "#7c5cff", "#61666b"];
+		var CHART_SERIES_DARK = ["#6e85ff", "#35c4b5", "#52c98d", "#d9b23e", "#f59e5b", "#f47ba2", "#a78bfa", "#8892a6"];
 		var LIGHT_TOK = [
 		  "  --dsh-mem-accent: #4d6bfe;",
 		  "  --dsh-mem-accent-text: #3d5be0;",
@@ -41208,14 +41210,7 @@ var __create = Object.create;
 		  "  --dsh-mem-text-3: var(--dsw-alias-label-tertiary, #6e7781);",
 		  "  --dsh-mem-danger: var(--dsw-alias-state-error-primary, #d0403f);",
 		  // 成本折线图系列色：8 档固定色；PALETTE 只引用 var()，1 档锚品牌蓝、8 档中性"其他"
-		  "  --dsh-mem-chart-1: #4d6bfe;",
-		  "  --dsh-mem-chart-2: #0e9c8f;",
-		  "  --dsh-mem-chart-3: #1f9d55;",
-		  "  --dsh-mem-chart-4: #a8821c;",
-		  "  --dsh-mem-chart-5: #d97a0d;",
-		  "  --dsh-mem-chart-6: #d64570;",
-		  "  --dsh-mem-chart-7: #7c5cff;",
-		  "  --dsh-mem-chart-8: #61666b;",
+		  ...CHART_SERIES_LIGHT.map((c, i) => `  --dsh-mem-chart-${i + 1}: ${c};`),
 		  // 档位色 = 灰 → 品牌蓝的渐变阶（chat/work 过渡蓝、auto 品牌蓝）；
 		  // 文字对比度按 pill 实际底色（流光内底 = bg-card 97% + 档位色 3%）复算 AA 达标
 		  "  --dsh-mem-mode-chat: #5a69b0;",
@@ -41250,14 +41245,7 @@ var __create = Object.create;
 		  "  --dsh-mem-text-2: var(--dsw-alias-label-secondary, #cfd3d6);",
 		  "  --dsh-mem-text-3: var(--dsw-alias-label-tertiary, #8892a6);",
 		  "  --dsh-mem-danger: var(--dsw-alias-state-error-primary, #f4707b);",
-		  "  --dsh-mem-chart-1: #6e85ff;",
-		  "  --dsh-mem-chart-2: #35c4b5;",
-		  "  --dsh-mem-chart-3: #52c98d;",
-		  "  --dsh-mem-chart-4: #d9b23e;",
-		  "  --dsh-mem-chart-5: #f59e5b;",
-		  "  --dsh-mem-chart-6: #f47ba2;",
-		  "  --dsh-mem-chart-7: #a78bfa;",
-		  "  --dsh-mem-chart-8: #8892a6;",
+		  ...CHART_SERIES_DARK.map((c, i) => `  --dsh-mem-chart-${i + 1}: ${c};`),
 		  "  --dsh-mem-mode-chat: #97a4ff;",
 		  "  --dsh-mem-mode-work: #8295ff;",
 		  "  --dsh-mem-mode-auto: #7b90ff;",
@@ -50898,7 +50886,7 @@ var __create = Object.create;
 		    if (shape === "lemniscate" && eightStyle === "continuous") {
 		      const A = 560;
 		      const u = (rand01(`s:${n.id}`) + (rand01(`u2:${n.id}`) - 0.5) * 6e-3) * Math.PI * 2;
-		      const halfW = 34 + 18 * Math.abs(Math.cos(u));
+		      const halfW = 15 + 9 * Math.abs(Math.cos(u));
 		      const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
 		      const twist = u / 2;
 		      const c8 = eightCurve(u, A);
@@ -50998,10 +50986,10 @@ var __create = Object.create;
 		      const c8 = eightCurve(orbU, orbA);
 		      const a = rand01(`a:${n.id}`) * Math.PI * 2;
 		      const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
-		      const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
+		      const rr = 10 + Math.pow(rand01(`s:${n.id}`), 0.65) * 85;
 		      const ring = Math.sin(b) * Math.cos(a) * rr;
-		      const cross = Math.sin(b) * Math.sin(a) * rr * 0.6;
-		      const y8 = (rand01(`s:${n.id}:y`) - 0.5) * 52;
+		      const cross = Math.sin(b) * Math.sin(a) * rr * 0.3;
+		      const y8 = (rand01(`s:${n.id}:y`) - 0.5) * 28;
 		      out.set(n.id, {
 		        x: c8.x + c8.tx * ring + c8.nx * cross,
 		        y: y8,
@@ -51248,8 +51236,18 @@ var __create = Object.create;
 		var FALLBACK_COLOR3 = "#8a8f98";
 		var ARM_SPREAD = 0.55;
 		function resolveColor2(host, token2) {
+		  ensureThemeStyle();
 		  const v = getComputedStyle(host).getPropertyValue(token2).trim();
-		  return v.length > 0 ? v : FALLBACK_COLOR3;
+		  if (v.length > 0) return v;
+		  const root = getComputedStyle(document.documentElement).getPropertyValue(token2).trim();
+		  if (root.length > 0) return root;
+		  const hit = /^--dsh-mem-chart-(\d+)$/.exec(token2);
+		  if (hit) {
+		    const series = document.body?.hasAttribute("data-ds-dark-theme") ? CHART_SERIES_DARK : CHART_SERIES_LIGHT;
+		    const c = series[Number(hit[1]) - 1];
+		    if (c) return c;
+		  }
+		  return FALLBACK_COLOR3;
 		}
 		var SPRITE_PX = 64;
 		function useLatest(fn) {
@@ -51484,6 +51482,7 @@ var __create = Object.create;
 		    if (!host || !canvas) return;
 		    const ctx = canvas.getContext("2d");
 		    if (!ctx) return;
+		    ensureThemeStyle();
 		    const buffer = document.createElement("canvas");
 		    const bctx = buffer.getContext("2d");
 		    const edgeCv = document.createElement("canvas");
