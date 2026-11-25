@@ -47,7 +47,7 @@ import {
   projectAll,
   zoomBy,
 } from './projection.js';
-import type { ClusterAxis, DiskStyle, ClusterShape, EightStyle, Projected, Vec3 } from './projection.js';
+import type { ClusterAxis, DiskStyle, ClusterShape, EightOrbit, EightStyle, Projected, Vec3 } from './projection.js';
 import { HALL_FALLBACK, HALL_ORDER, hallLabel, defaultHallToken, HALL_GALAXY_COLORS, variantOf } from './hall-palette.js';
 import { NButton } from '../ui/primitives.js';
 
@@ -63,6 +63,12 @@ const TYPE_TOKENS: Record<string, string> = {
 };
 const FALLBACK_TOKEN = '--dsh-mem-chart-8';
 const FALLBACK_COLOR = '#8a8f98';
+/**
+ * 悬臂散度：**固定值，不再暴露滑条**（用户裁定：全图流转不需要散度，它与幅度职责重叠、
+ * 拖到外沿会读成"炸开"）。0.55 保留星系外沿的星尘感。焦点展示的散度是另一回事，
+ * 由 buildEgoLayout 的 spread 参数控制。
+ */
+const ARM_SPREAD = 0.55;
 
 /** CSS 变量 → 实色（与 GraphCanvas 同款：插件自注入的 theme 样式在容器上生效）。 */
 function resolveColor(host: HTMLElement, token: string): string {
@@ -128,7 +134,7 @@ export function Scene3D(props: {
   const [flowOn, setFlowOn] = useState(false);
   const flowRef = useRef(false);
   flowRef.current = flowOn;
-  /** 流转参数:转速(0.2~3×基准)与幅度(0~2×基准,点级摆动幅度)。 */
+  /** 流转参数:转速(0.2~3×基准)与幅度(0~2×基准:盘状=悬臂带长,8字=带厚/簇宽)。 */
   const [flowSpeed, setFlowSpeed] = useState(1);
   const [flowAmp, setFlowAmp] = useState(1);
   const flowSpeedRef = useRef(1);
@@ -157,8 +163,12 @@ export function Scene3D(props: {
   const [shape, setShape] = useState<ClusterShape>('sphere');
   /** 盘子风格:legacy 既有双臂 / flat 平铺 / spiral 星系悬臂(巨簇独臂)。 */
   const [diskStyle, setDiskStyle] = useState<DiskStyle>('spiral');
-  /** 悬臂散度 0~1:内圈紧凑、外沿扇开成稀疏星尘尖端。仅「悬臂」生效。 */
-  const [armSpread, setArmSpread] = useState(0.55);
+  /**
+   * 焦点展示的散度(聚拢密度):只作用于 ego 壳层,全图流转不吃它。1 = 既有壳层。
+   */
+  const [egoSpread, setEgoSpread] = useState(1);
+  const egoSpreadRef = useRef(1);
+  egoSpreadRef.current = egoSpread;
   /** 圆盘(吸积盘)种子:每次进入「圆盘」重新掷一次 → 臂数与整体朝向都不同,不永远同一角度。 */
   const [discSeed, setDiscSeed] = useState(0);
   /** 8 字子风格:成簇(按簇分段)/ 连续(全体混编成一条扭转无限环,弱化类型聚类)。 */
@@ -177,8 +187,6 @@ export function Scene3D(props: {
       setDiscSeed(s);
     }
   }
-  const armSpreadRef = useRef(0.55);
-  armSpreadRef.current = armSpread;
   const shapeRef = useRef<ClusterShape>('sphere');
   const diskStyleRef = useRef<DiskStyle>('spiral');
   diskStyleRef.current = diskStyle;
@@ -257,10 +265,15 @@ export function Scene3D(props: {
   // ── 布局：cluster 随数据重建；ego 进入时算一次并缓存 ──
   const axisNodes = useMemo(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: (n as { hall?: string }).hall })), [full]);
   /** clusterLayout 由 full+axis 派生:轴切换会换布局引用,但硬落位 effect 只认 [full](F4)。 */
-  const clusterLayout = useMemo(
-    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current, discSeedRef.current, eightStyleRef.current),
-    [axisNodes, axis, shape, diskStyle, armSpread, discSeed, eightStyle],
-  );
+  /** 8 字轨道参数（布局产物）:流转沿环推移用;形态/轴/数据变了随 clusterLayout 重建。 */
+  const orbitsRef = useRef<Map<string, EightOrbit>>(new Map());
+  const clusterLayout = useMemo(() => {
+    const orbits = new Map<string, EightOrbit>();
+    const layout = buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, ARM_SPREAD, discSeedRef.current, eightStyleRef.current, orbits);
+    orbitsRef.current = orbits;
+    return layout;
+    // ARM_SPREAD 是模块级固定值常量,不进依赖;armSpread 滑条已移除(用户裁定全图不要散度)。
+  }, [axisNodes, axis, shape, diskStyle, discSeed, eightStyle]);
   const layoutRef = useRef<Map<string, Vec3>>(clusterLayout);
   const egoLayoutRef = useRef<Map<string, Vec3> | null>(null);
   const transRef = useRef<{ from: Map<string, Vec3>; to: Map<string, Vec3>; start: number } | null>(null);
@@ -294,7 +307,7 @@ export function Scene3D(props: {
     if (!emphasisId || emphasisId === focusRef.current) return;
     // 确认该节点在当前图里存在
     if (!clusterLayout.has(emphasisId)) return;
-    const egoL = buildEgoLayout(adj, emphasisId, EGO_HOPS_MAX);
+    const egoL = buildEgoLayout(adj, emphasisId, EGO_HOPS_MAX, egoSpreadRef.current);
     egoLayoutRef.current = egoL;
     modeRef.current = 'ego';
     focusRef.current = emphasisId;
@@ -305,6 +318,18 @@ export function Scene3D(props: {
     camRef.current.panY = 0;
     wakeRef.current?.();
   }, [emphasisId, adj, clusterLayout]);
+
+  /**
+   * 焦点散度变化:重算 ego 壳层并 520ms 过渡过去(形状变了不能硬落,否则丢空间定向)。
+   * 只认 ego 模式——全图流转不吃散度(用户裁定)。
+   */
+  useEffect(() => {
+    if (modeRef.current !== 'ego' || !focusRef.current) return;
+    const to = buildEgoLayout(adj, focusRef.current, EGO_HOPS_MAX, egoSpread);
+    egoLayoutRef.current = to;
+    transRef.current = { from: layoutRef.current, to, start: performance.now() };
+    wakeRef.current?.();
+  }, [egoSpread, adj]);
 
   // ── 派生色/半径表：随令牌解析与开关变化重建 ──
   const metasRef = useRef<Map<string, NodeMeta>>(new Map());
@@ -592,10 +617,11 @@ export function Scene3D(props: {
         // 而不是整盘刚体转。圆盘无臂结构,差速剪切只会让纹路更旋涡,不会被缠成一团。
         const autoStyle = shapeRef.current === 'disk' && diskStyleRef.current === 'disc' ? 'accretion' : undefined;
         const useStyle = flowStyleRef.current === 'auto' ? autoStyle : flowStyleRef.current;
-        // 幅度只喂给 8 字流(它的"幅度"= 点级游走/带宽);盘状/圆盘的幅度已由上面的
+        // 幅度只喂给 8 字流(它的"幅度"= 带厚/簇宽);盘状/圆盘的幅度已由上面的
         // applyArmLength 静态施加,这里必须传 1,否则又会出现"不动却自己伸缩"。
         const flowAmp = useStyle === 'eight' ? flowAmpRef.current : 1;
-        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmp, useStyle);
+        // 8 字流转传布局期留下的轨道参数:沿环推移、形状守恒(不重算半径,所以拖幅度不会炸开)。
+        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmp, useStyle, useStyle === 'eight' ? orbitsRef.current : undefined);
         edgeDirty = true;
         nodeDirty = true;
       }
@@ -898,7 +924,7 @@ export function Scene3D(props: {
         startTransition(clusterLayout);
         camRef.current.dist = CAM_DEFAULT.dist;
       } else if (!ego) {
-        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX);
+        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX, egoSpreadRef.current);
         egoLayoutRef.current = egoL;
         modeRef.current = 'ego';
         focusRef.current = hit;
@@ -910,7 +936,7 @@ export function Scene3D(props: {
         camRef.current.panY = 0;
       } else {
         // ego 中点别的节点 = 换焦点重建壳层
-        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX);
+        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX, egoSpreadRef.current);
         egoLayoutRef.current = egoL;
         focusRef.current = hit;
         startTransition(egoL);
@@ -1179,11 +1205,6 @@ export function Scene3D(props: {
             </span>
           ) : null}
         </span>
-        {shape === 'disk' && diskStyle === 'spiral' ? (
-          <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 6 }}>
-            {tr("散度")} <input type="range" min={0} max={1} step={0.05} value={armSpread} onChange={(e) => setArmSpread(Number(e.target.value))} />
-          </label>
-        ) : null}
         {toggle(tr("流转"), flowOn, setFlowOn)}
         {flowOn && shape !== 'sphere' ? (
           <>
@@ -1227,8 +1248,15 @@ export function Scene3D(props: {
           {tr("点")} <input type="range" min={1.2} max={4} step={0.2} value={pointSize} onChange={(e) => setPointSize(Number(e.target.value))} />
         </label>
         {mode === 'ego' ? (
-          <NButton onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))} title={tr("回到全图")} style={{ color: ui.text, borderColor: ui.border }}>
-            {tr("回全图")} </NButton>
+          <>
+            {/* 焦点散度 = 三维空间的聚拢密度:小 → 壳层收拢;大 → 星尘散开。
+                只在这里出现——全图流转的"幅度"已管带厚,不再另设全图散度。 */}
+            <label style={{ fontSize: 11, color: ui.dim, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {tr("散度")} <input type="range" min={0.5} max={2} step={0.05} value={egoSpread} onChange={(e) => setEgoSpread(Number(e.target.value))} title={tr("散度")} />
+            </label>
+            <NButton onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))} title={tr("回到全图")} style={{ color: ui.text, borderColor: ui.border }}>
+              {tr("回全图")} </NButton>
+          </>
         ) : null}
       </div>
     </div>

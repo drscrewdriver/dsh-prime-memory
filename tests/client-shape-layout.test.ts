@@ -514,4 +514,66 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     }
     expect(innerMax).toBeGreaterThan(10);
   });
+
+  it('8字流转=沿轨道推移:轨道参数留痕、带内偏移守恒、拖幅度不炸开', async () => {
+    const { flowShape } = await import('../client/src/explorer/projection.js');
+    const ns: ReturnType<typeof mk>[] = [];
+    const halls = ['work', 'learning', 'health', 'finance', 'journey', 'creative'];
+    for (const h of halls) for (let i = 0; i < 60; i++) ns.push(mk(h + i, 'tool', h));
+
+    // ① 布局期留下轨道参数:每个点都有有限 (u,A,t,n,y),A 落在布局尺度带内
+    const orbits = new Map<string, { u: number; A: number; t: number; n: number; y: number }>();
+    const L = buildClusterShapeLayout(ns, 'hall', 'lemniscate', 'spiral', 0.55, 0, 'continuous', orbits);
+    expect(orbits.size).toBe(L.size);
+    for (const o of orbits.values()) {
+      expect(Number.isFinite(o.u)).toBe(true);
+      expect(Number.isFinite(o.t)).toBe(true);
+      expect(Number.isFinite(o.n)).toBe(true);
+      expect(o.A).toBeGreaterThan(400);
+      expect(o.A).toBeLessThan(700);
+    }
+
+    // 曲线基（与 projection.ts 的 eightCurve 同式）:用来把点投影回切向/法向
+    const basis = (u: number, A: number) => {
+      const cu = Math.cos(u); const su = Math.sin(u);
+      let tx = -su * A; let tz = (cu * cu - su * su) * A * 0.72;
+      const len = Math.hypot(tx, tz) || 1; tx /= len; tz /= len;
+      return { x: cu * A, z: su * cu * A * 0.72, tx, tz, nx: -tz, nz: tx };
+    };
+
+    // ② 带内偏移守恒:任意时刻把点投影回"自己相位处的轨道基",切/法向分量
+    //    必须等于布局时的 t/n——这就是"整条带子沿 ∞ 环平移"而不是每点乱飞。
+    for (const t of [3000, 30000, 300000]) {
+      const om = t / 20000;
+      const S = flowShape(L, t, 'lemniscate', 1, 1, 'eight', orbits);
+      for (const [id, o] of orbits) {
+        const b1 = basis(o.u + om, o.A);
+        const q = S.get(id)!;
+        const tComp = (q.x - b1.x) * b1.tx + (q.z - b1.z) * b1.tz;
+        const nComp = (q.x - b1.x) * b1.nx + (q.z - b1.z) * b1.nz;
+        expect(tComp).toBeCloseTo(o.t, 6);
+        expect(nComp).toBeCloseTo(o.n, 6);
+        expect(q.y).toBeCloseTo(o.y, 6);
+      }
+    }
+
+    // ③ 幅度只缩放带厚/簇宽:amp=2 的包络仍在画面内（旧实现 wob=146 会炸开）
+    const amp2 = flowShape(L, 45000, 'lemniscate', 1, 2, 'eight', orbits);
+    let maxR = 0;
+    for (const q of amp2.values()) maxR = Math.max(maxR, Math.hypot(q.x, q.z));
+    expect(maxR).toBeLessThan(1500);
+    // 且幅度真的生效:amp=2 的法向离散度明显大于 amp=0
+    const nSpread = (S: Map<string, { x: number; y: number; z: number }>) => {
+      const om = 45000 / 20000;
+      let s = 0;
+      for (const [id, o] of orbits) {
+        const b1 = basis(o.u + om, o.A);
+        const q = S.get(id)!;
+        s += Math.abs((q.x - b1.x) * b1.nx + (q.z - b1.z) * b1.nz);
+      }
+      return s / orbits.size;
+    };
+    const amp0 = flowShape(L, 45000, 'lemniscate', 1, 0, 'eight', orbits);
+    expect(nSpread(amp2)).toBeGreaterThan(nSpread(amp0) * 1.5);
+  });
 });

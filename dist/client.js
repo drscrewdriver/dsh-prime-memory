@@ -50739,7 +50739,19 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
-		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral", armSpread = 0.55, discSeed = 0, eightStyle = "cluster") {
+		function eightCurve(u, A) {
+		  const cosU = Math.cos(u);
+		  const sinU = Math.sin(u);
+		  const x = cosU * A;
+		  const z = sinU * cosU * A * 0.72;
+		  let tx = -sinU * A;
+		  let tz = (cosU * cosU - sinU * sinU) * A * 0.72;
+		  const len = Math.hypot(tx, tz) || 1;
+		  tx /= len;
+		  tz /= len;
+		  return { x, z, tx, tz, nx: -tz, nz: tx };
+		}
+		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral", armSpread = 0.55, discSeed = 0, eightStyle = "cluster", orbitsOut) {
 		  if (shape === "sphere") return buildClusterLayoutByAxis(nodes, axis);
 		  const out = /* @__PURE__ */ new Map();
 		  const baseCount = /* @__PURE__ */ new Map();
@@ -50766,6 +50778,8 @@ var __create = Object.create;
 		  };
 		  const groups = groupOrder(nodes.map(keyOf), axis);
 		  const centers = /* @__PURE__ */ new Map();
+		  const eightU = /* @__PURE__ */ new Map();
+		  const eightA = /* @__PURE__ */ new Map();
 		  const total = Math.max(1, groups.length);
 		  const countOf = /* @__PURE__ */ new Map();
 		  for (const n of nodes) {
@@ -50856,6 +50870,8 @@ var __create = Object.create;
 		      groups.forEach((key, i) => {
 		        const phi = i * GA8 % (Math.PI * 2);
 		        const A = 560 + rand01(`r:${key}`) * 80;
+		        eightU.set(key, phi);
+		        eightA.set(key, A);
 		        centers.set(key, {
 		          x: Math.cos(phi) * A,
 		          y: (rand01(`r:${key}:y`) - 0.5) * 26,
@@ -50867,6 +50883,8 @@ var __create = Object.create;
 		        const jitter = rand01(`c:${key}`) * 0.5;
 		        const t8 = i / total * Math.PI * 2 + jitter;
 		        const A = 560 + rand01(`r:${key}`) * 80;
+		        eightU.set(key, t8);
+		        eightA.set(key, A);
 		        centers.set(key, {
 		          x: Math.cos(t8) * A,
 		          y: (rand01(`r:${key}:y`) - 0.5) * 36,
@@ -50883,20 +50901,16 @@ var __create = Object.create;
 		      const halfW = 34 + 18 * Math.abs(Math.cos(u));
 		      const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
 		      const twist = u / 2;
-		      const cx8 = Math.cos(u) * A;
-		      const cz8 = Math.sin(u) * Math.cos(u) * A * 0.72;
-		      const dx = -Math.sin(u) * A;
-		      const dz = (Math.cos(u) * Math.cos(u) - Math.sin(u) * Math.sin(u)) * A * 0.72;
-		      const dl = Math.hypot(dx, dz) || 1;
-		      const nx = -dz / dl;
-		      const nz = dx / dl;
+		      const c8 = eightCurve(u, A);
 		      const twistY = Math.sin(twist) * w * 0.62;
 		      const twistN = Math.cos(twist) * w;
+		      const y8 = (rand01(`r:${gk}:y`) - 0.5) * 12 + twistY;
 		      out.set(n.id, {
-		        x: cx8 + nx * twistN,
-		        y: (rand01(`r:${gk}:y`) - 0.5) * 12 + twistY,
-		        z: cz8 + nz * twistN
+		        x: c8.x + c8.nx * twistN,
+		        y: y8,
+		        z: c8.z + c8.nz * twistN
 		      });
+		      orbitsOut?.set(n.id, { u, A, t: 0, n: twistN, y: y8 });
 		      continue;
 		    }
 		    if (shape === "disk") {
@@ -50979,20 +50993,21 @@ var __create = Object.create;
 		        });
 		      }
 		    } else {
-		      const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
+		      const orbU = eightU.get(gk) ?? 0;
+		      const orbA = eightA.get(gk) ?? 560;
+		      const c8 = eightCurve(orbU, orbA);
 		      const a = rand01(`a:${n.id}`) * Math.PI * 2;
 		      const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
 		      const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
-		      const len = Math.hypot(c.x, c.z) || 1;
-		      const tx = -c.z / len;
-		      const tz = c.x / len;
 		      const ring = Math.sin(b) * Math.cos(a) * rr;
 		      const cross = Math.sin(b) * Math.sin(a) * rr * 0.6;
+		      const y8 = (rand01(`s:${n.id}:y`) - 0.5) * 52;
 		      out.set(n.id, {
-		        x: c.x + tx * ring + c.x / len * cross,
-		        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 52,
-		        z: c.z + tz * ring + c.z / len * cross
+		        x: c8.x + c8.tx * ring + c8.nx * cross,
+		        y: y8,
+		        z: c8.z + c8.tz * ring + c8.nz * cross
 		      });
+		      orbitsOut?.set(n.id, { u: orbU, A: orbA, t: ring, n: cross, y: y8 });
 		    }
 		  }
 		  return out;
@@ -51018,7 +51033,7 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
-		function flowShape(base, t, shape, speed = 1, amp = 1, flowStyle) {
+		function flowShape(base, t, shape, speed = 1, amp = 1, flowStyle, orbits) {
 		  const out = /* @__PURE__ */ new Map();
 		  if (shape === "sphere") return out;
 		  const style = flowStyle ?? (shape === "lemniscate" ? "eight" : "spin");
@@ -51062,17 +51077,28 @@ var __create = Object.create;
 		      });
 		    } else {
 		      const om = ts / 2e4;
+		      const orb = orbits?.get(id);
+		      if (orb) {
+		        const k = 0.3 + 0.7 * amp;
+		        const c8 = eightCurve(orb.u + om, orb.A);
+		        out.set(id, {
+		          x: c8.x + c8.tx * orb.t * k + c8.nx * orb.n * k,
+		          y: orb.y * k,
+		          z: c8.z + c8.tz * orb.t * k + c8.nz * orb.n * k
+		        });
+		        continue;
+		      }
 		      const off = (rand01("f:" + id) - 0.5) * 0.6;
 		      const r0 = Math.hypot(p.x, p.z) || 1;
 		      const ct = Math.max(-1, Math.min(1, p.x / r0));
 		      let t8 = Math.acos(ct);
 		      if (Math.sin(t8) * Math.cos(t8) * (p.z / r0) < 0) t8 = Math.PI * 2 - t8;
 		      const ph = t8 + om + off;
-		      const jit = (rand01("j:" + id) - 0.5) * (0.06 + 0.9 * amp);
-		      const A = Math.min(r0 * 2.2, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
+		      const jit = (rand01("j:" + id) - 0.5) * (0.06 + 0.25 * amp);
+		      const A = Math.min(r0 * 1.6, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
 		      const x = Math.cos(ph) * A;
 		      const z = Math.sin(ph) * Math.cos(ph) * A;
-		      const wob = 6 + 70 * amp;
+		      const wob = 8 + 26 * amp;
 		      out.set(id, {
 		        x: x + Math.sin(ph * 3.1) * wob,
 		        y: p.y + Math.cos(ph * 2.3) * wob * 0.8,
@@ -51082,8 +51108,9 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
-		function buildEgoLayout(adj, focusId, hops) {
+		function buildEgoLayout(adj, focusId, hops, spread = 1) {
 		  const out = /* @__PURE__ */ new Map();
+		  const k = Math.min(2.4, Math.max(0.35, spread));
 		  const depth = Math.min(Math.max(Math.floor(hops), 1), EGO_HOPS_MAX2);
 		  const hopOf = /* @__PURE__ */ new Map([[focusId, 0]]);
 		  let frontier = [focusId];
@@ -51103,7 +51130,7 @@ var __create = Object.create;
 		    if (next.length === 0) break;
 		  }
 		  for (const [h, ids] of byHop) {
-		    const R2 = h * SHELL_GAP;
+		    const R2 = h * SHELL_GAP * k;
 		    const total = ids.length;
 		    ids.forEach((id, i) => {
 		      if (h === 0) {
@@ -51113,7 +51140,7 @@ var __create = Object.create;
 		      const y = total === 1 ? 0 : 1 - i / (total - 1) * 2;
 		      const ring = Math.sqrt(Math.max(0, 1 - y * y));
 		      const phi = i * Math.PI * (3 - Math.sqrt(5)) + rand01(`e:${id}`) * 0.7;
-		      const jitter = 1 + (rand01(`j:${id}`) - 0.5) * 0.18;
+		      const jitter = 1 + (rand01(`j:${id}`) - 0.5) * 0.18 * (0.5 + 0.5 * k);
 		      out.set(id, {
 		        x: Math.cos(phi) * ring * R2 * jitter,
 		        y: y * R2 * 0.85 * jitter,
@@ -51219,6 +51246,7 @@ var __create = Object.create;
 		};
 		var FALLBACK_TOKEN2 = "--dsh-mem-chart-8";
 		var FALLBACK_COLOR3 = "#8a8f98";
+		var ARM_SPREAD = 0.55;
 		function resolveColor2(host, token2) {
 		  const v = getComputedStyle(host).getPropertyValue(token2).trim();
 		  return v.length > 0 ? v : FALLBACK_COLOR3;
@@ -51262,7 +51290,9 @@ var __create = Object.create;
 		  const [variant, setVariant] = (0, import_react36.useState)(0.35);
 		  const [shape, setShape] = (0, import_react36.useState)("sphere");
 		  const [diskStyle, setDiskStyle] = (0, import_react36.useState)("spiral");
-		  const [armSpread, setArmSpread] = (0, import_react36.useState)(0.55);
+		  const [egoSpread, setEgoSpread] = (0, import_react36.useState)(1);
+		  const egoSpreadRef = (0, import_react36.useRef)(1);
+		  egoSpreadRef.current = egoSpread;
 		  const [discSeed, setDiscSeed] = (0, import_react36.useState)(0);
 		  const [eightStyle, setEightStyle] = (0, import_react36.useState)("cluster");
 		  const eightStyleRef = (0, import_react36.useRef)("cluster");
@@ -51278,8 +51308,6 @@ var __create = Object.create;
 		      setDiscSeed(s);
 		    }
 		  }
-		  const armSpreadRef = (0, import_react36.useRef)(0.55);
-		  armSpreadRef.current = armSpread;
 		  const shapeRef = (0, import_react36.useRef)("sphere");
 		  const diskStyleRef = (0, import_react36.useRef)("spiral");
 		  diskStyleRef.current = diskStyle;
@@ -51342,10 +51370,13 @@ var __create = Object.create;
 		  const nodeById = (0, import_react36.useMemo)(() => new Map(full.nodes.map((n) => [n.id, n])), [full]);
 		  const nodeKeySeed = (0, import_react36.useMemo)(() => full.nodes.map((n) => n.id).join("|") || "empty", [full]);
 		  const axisNodes = (0, import_react36.useMemo)(() => full.nodes.map((n) => ({ id: n.id, type: n.type, hall: n.hall })), [full]);
-		  const clusterLayout = (0, import_react36.useMemo)(
-		    () => buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, armSpreadRef.current, discSeedRef.current, eightStyleRef.current),
-		    [axisNodes, axis, shape, diskStyle, armSpread, discSeed, eightStyle]
-		  );
+		  const orbitsRef = (0, import_react36.useRef)(/* @__PURE__ */ new Map());
+		  const clusterLayout = (0, import_react36.useMemo)(() => {
+		    const orbits = /* @__PURE__ */ new Map();
+		    const layout = buildClusterShapeLayout(axisNodes, axisRef.current, shape, diskStyle, ARM_SPREAD, discSeedRef.current, eightStyleRef.current, orbits);
+		    orbitsRef.current = orbits;
+		    return layout;
+		  }, [axisNodes, axis, shape, diskStyle, discSeed, eightStyle]);
 		  const layoutRef = (0, import_react36.useRef)(clusterLayout);
 		  const egoLayoutRef = (0, import_react36.useRef)(null);
 		  const transRef = (0, import_react36.useRef)(null);
@@ -51371,7 +51402,7 @@ var __create = Object.create;
 		  (0, import_react36.useEffect)(() => {
 		    if (!emphasisId || emphasisId === focusRef.current) return;
 		    if (!clusterLayout.has(emphasisId)) return;
-		    const egoL = buildEgoLayout(adj, emphasisId, EGO_HOPS_MAX2);
+		    const egoL = buildEgoLayout(adj, emphasisId, EGO_HOPS_MAX2, egoSpreadRef.current);
 		    egoLayoutRef.current = egoL;
 		    modeRef.current = "ego";
 		    focusRef.current = emphasisId;
@@ -51382,6 +51413,13 @@ var __create = Object.create;
 		    camRef.current.panY = 0;
 		    wakeRef.current?.();
 		  }, [emphasisId, adj, clusterLayout]);
+		  (0, import_react36.useEffect)(() => {
+		    if (modeRef.current !== "ego" || !focusRef.current) return;
+		    const to = buildEgoLayout(adj, focusRef.current, EGO_HOPS_MAX2, egoSpread);
+		    egoLayoutRef.current = to;
+		    transRef.current = { from: layoutRef.current, to, start: performance.now() };
+		    wakeRef.current?.();
+		  }, [egoSpread, adj]);
 		  const metasRef = (0, import_react36.useRef)(/* @__PURE__ */ new Map());
 		  const spritesRef = (0, import_react36.useRef)(/* @__PURE__ */ new Map());
 		  (0, import_react36.useEffect)(() => {
@@ -51608,7 +51646,7 @@ var __create = Object.create;
 		        const autoStyle = shapeRef.current === "disk" && diskStyleRef.current === "disc" ? "accretion" : void 0;
 		        const useStyle = flowStyleRef.current === "auto" ? autoStyle : flowStyleRef.current;
 		        const flowAmp2 = useStyle === "eight" ? flowAmpRef.current : 1;
-		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmp2, useStyle);
+		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmp2, useStyle, useStyle === "eight" ? orbitsRef.current : void 0);
 		        edgeDirty = true;
 		        nodeDirty = true;
 		      }
@@ -51862,7 +51900,7 @@ var __create = Object.create;
 		        startTransition(clusterLayout);
 		        camRef.current.dist = CAM_DEFAULT.dist;
 		      } else if (!ego) {
-		        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX2);
+		        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX2, egoSpreadRef.current);
 		        egoLayoutRef.current = egoL;
 		        modeRef.current = "ego";
 		        focusRef.current = hit;
@@ -51872,7 +51910,7 @@ var __create = Object.create;
 		        camRef.current.panX = 0;
 		        camRef.current.panY = 0;
 		      } else {
-		        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX2);
+		        const egoL = buildEgoLayout(adj, hit, EGO_HOPS_MAX2, egoSpreadRef.current);
 		        egoLayoutRef.current = egoL;
 		        focusRef.current = hit;
 		        startTransition(egoL);
@@ -52147,11 +52185,6 @@ var __create = Object.create;
 		              e
 		            )) }) : null
 		          ] }),
-		          shape === "disk" && diskStyle === "spiral" ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }, children: [
-		            tr("散度"),
-		            " ",
-		            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("input", { type: "range", min: 0, max: 1, step: 0.05, value: armSpread, onChange: (e) => setArmSpread(Number(e.target.value)) })
-		          ] }) : null,
 		          toggle(tr("流转"), flowOn, setFlowOn),
 		          flowOn && shape !== "sphere" ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(import_jsx_runtime35.Fragment, { children: [
 		            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { style: { display: "inline-flex", gap: 0, border: ui.border, borderRadius: 8, overflow: "hidden", marginLeft: 6 }, children: ["auto", "spin", "eight"].map((f) => {
@@ -52196,9 +52229,16 @@ var __create = Object.create;
 		            " ",
 		            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("input", { type: "range", min: 1.2, max: 4, step: 0.2, value: pointSize, onChange: (e) => setPointSize(Number(e.target.value)) })
 		          ] }),
-		          mode === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(NButton, { onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })), title: tr("回到全图"), style: { color: ui.text, borderColor: ui.border }, children: [
-		            tr("回全图"),
-		            " "
+		          mode === "ego" ? /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(import_jsx_runtime35.Fragment, { children: [
+		            /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("label", { style: { fontSize: 11, color: ui.dim, display: "inline-flex", alignItems: "center", gap: 4 }, children: [
+		              tr("散度"),
+		              " ",
+		              /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("input", { type: "range", min: 0.5, max: 2, step: 0.05, value: egoSpread, onChange: (e) => setEgoSpread(Number(e.target.value)), title: tr("散度") })
+		            ] }),
+		            /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(NButton, { onClick: () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })), title: tr("回到全图"), style: { color: ui.text, borderColor: ui.border }, children: [
+		              tr("回全图"),
+		              " "
+		            ] })
 		          ] }) : null
 		        ]
 		      }

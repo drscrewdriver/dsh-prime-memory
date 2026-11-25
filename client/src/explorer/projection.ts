@@ -183,6 +183,46 @@ export type DiskStyle = 'disc' | 'legacy' | 'flat' | 'spiral';
 export type ClusterShape = 'sphere' | 'disk' | 'lemniscate';
 
 /**
+ * 8 字**轨道参数**（布局产物）：点在 ∞ 轨道上的固有相位 + 带内固定偏移。
+ *
+ * 为什么必须在布局期留痕、而不是流转时从坐标反解：
+ * 反解对贴轴点（|cos u|≈0）病态——A 会被算成巨大值再夹到 2.2×r0，于是一族大小不同的
+ * ∞ 环叠在一起；拖动幅度时 A 与 wob 同时放大，整图直接飞散（真机就是"炸开"）。
+ * 留下 (u, A, t, n, y) 后，流转只做「u += ω」一件事：带子沿环整体平移、逐点形状守恒，
+ * 这才是参考图那条连续星尘带该有的动作。
+ */
+export interface EightOrbit {
+  /** 曲线相位 u（0~2π）；流转时 u+ω。 */
+  u: number;
+  /** 该点所属曲线尺度 A（布局定，流转中恒定）。 */
+  A: number;
+  /** 沿切向的固定偏移（簇沿环的宽度）。 */
+  t: number;
+  /** 沿法向的固定偏移（带厚方向）。 */
+  n: number;
+  /** 竖直固定偏移（薄层 / 莫比乌斯扭转分量）。 */
+  y: number;
+}
+
+/**
+ * ∞ 曲线参数化（布局与流转**共用同一函数**，防两边各抄一份导致漂移）：
+ * x = A·cos u，z = A·sin u·cos u（横向压到 0.72 保持薄环观感）。
+ * 同时给出单位切向与平面内法向：带厚沿法向铺、簇宽沿切向铺。
+ */
+function eightCurve(u: number, A: number): { x: number; z: number; tx: number; tz: number; nx: number; nz: number } {
+  const cosU = Math.cos(u);
+  const sinU = Math.sin(u);
+  const x = cosU * A;
+  const z = sinU * cosU * A * 0.72;
+  let tx = -sinU * A;
+  let tz = (cosU * cosU - sinU * sinU) * A * 0.72;
+  const len = Math.hypot(tx, tz) || 1;
+  tx /= len;
+  tz /= len;
+  return { x, z, tx, tz, nx: -tz, nz: tx };
+}
+
+/**
  * 形态参数化的簇布局。组键序复用 groupOrder(axis),簇内散布种子前缀 `c:`/`r:`/`a:`/`b:`/`s:`
  * **一个不改**——同一节点 id 在任意形态/轴组合下球内角度分量保持一致,形态切换过渡读作
  * 「同一批点换队形」而不是「满屏乱飞」。
@@ -203,6 +243,11 @@ export function buildClusterShapeLayout(
   discSeed = 0,
   /** 8 字子风格:成簇(按簇分段)/ 连续(全体混编成一条扭转带)。仅 lemniscate 生效。 */
   eightStyle: EightStyle = 'cluster',
+  /**
+   * 8 字轨道参数**输出口**（可选）：lemniscate 形态下为每个点写一条 (u,A,t,n,y)。
+   * flowShape 拿到它才能做「沿环推移而不重算半径」的流转；不传则调用方只拿点位。
+   */
+  orbitsOut?: Map<string, EightOrbit>,
 ): Map<string, Vec3> {
   if (shape === 'sphere') return buildClusterLayoutByAxis(nodes, axis);
   const out = new Map<string, Vec3>();
@@ -240,6 +285,9 @@ export function buildClusterShapeLayout(
   };
   const groups = groupOrder(nodes.map(keyOf), axis);
   const centers = new Map<string, Vec3>();
+  /** 8 字：簇 → 轨道相位 u / 曲线尺度 A。点级摆放与流转都读这张表（单一事实来源）。 */
+  const eightU = new Map<string, number>();
+  const eightA = new Map<string, number>();
   const total = Math.max(1, groups.length);
   const countOf = new Map<string, number>();
   for (const n of nodes) {
@@ -360,6 +408,8 @@ export function buildClusterShapeLayout(
       groups.forEach((key, i) => {
         const phi = (i * GA8) % (Math.PI * 2);
         const A = 560 + rand01(`r:${key}`) * 80;
+        eightU.set(key, phi);
+        eightA.set(key, A);
         centers.set(key, {
           x: Math.cos(phi) * A,
           y: (rand01(`r:${key}:y`) - 0.5) * 26,
@@ -371,6 +421,8 @@ export function buildClusterShapeLayout(
         const jitter = rand01(`c:${key}`) * 0.5;
         const t8 = (i / total) * Math.PI * 2 + jitter;
         const A = 560 + rand01(`r:${key}`) * 80;
+        eightU.set(key, t8);
+        eightA.set(key, A);
         centers.set(key, {
           x: Math.cos(t8) * A,
           y: (rand01(`r:${key}:y`) - 0.5) * 36,
@@ -394,22 +446,18 @@ export function buildClusterShapeLayout(
       const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
       // 莫比乌斯扭转:横向方向随 u/2 旋转
       const twist = u / 2;
-      // 曲线位置
-      const cx8 = Math.cos(u) * A;
-      const cz8 = Math.sin(u) * Math.cos(u) * A * 0.72;
-      // 切向(对 u 求导后归一)与法向 → 横向偏移沿法向铺开,并叠扭转分量到 y
-      const dx = -Math.sin(u) * A;
-      const dz = (Math.cos(u) * Math.cos(u) - Math.sin(u) * Math.sin(u)) * A * 0.72;
-      const dl = Math.hypot(dx, dz) || 1;
-      const nx = -dz / dl; const nz = dx / dl; // 平面内法向
+      const c8 = eightCurve(u, A);
       // 扭转把一部分横向偏移转到竖直方向 → 环在交叉处翻面
       const twistY = Math.sin(twist) * w * 0.62;
       const twistN = Math.cos(twist) * w;
+      const y8 = (rand01(`r:${gk}:y`) - 0.5) * 12 + twistY;
       out.set(n.id, {
-        x: cx8 + nx * twistN,
-        y: (rand01(`r:${gk}:y`) - 0.5) * 12 + twistY,
-        z: cz8 + nz * twistN,
+        x: c8.x + c8.nx * twistN,
+        y: y8,
+        z: c8.z + c8.nz * twistN,
       });
+      // 轨道留痕:u 是固有相位,A 固定,带厚 twistN 与竖向 twistY 作为固定偏移。
+      orbitsOut?.set(n.id, { u, A, t: 0, n: twistN, y: y8 });
       continue;
     }
     if (shape === 'disk') {
@@ -520,21 +568,24 @@ export function buildClusterShapeLayout(
         });
       }
     } else {
-      // lemniscate:簇心沿 ∞ 曲线,簇内环向散布 + 法向薄层
-      const c = centers.get(gk) ?? { x: 0, y: 0, z: 0 };
+      // lemniscate:簇心沿 ∞ 曲线,簇内沿**曲线切向**铺簇宽、沿**曲线法向**铺带厚 + 竖直薄层。
+      // 旧实现用「以原点为心的圆切向」，簇在 ∞ 曲线上是歪的；改成曲线自身的切/法向后，
+      // 成簇形态也贴合同一条轨道，流转时整簇沿环平移不会散架。
+      const orbU = eightU.get(gk) ?? 0;
+      const orbA = eightA.get(gk) ?? 560;
+      const c8 = eightCurve(orbU, orbA);
       const a = rand01(`a:${n.id}`) * Math.PI * 2;
       const b = Math.acos(2 * rand01(`b:${n.id}`) - 1);
       const rr = 16 + Math.pow(rand01(`s:${n.id}`), 0.65) * 120;
-      const len = Math.hypot(c.x, c.z) || 1;
-      const tx = -c.z / len;
-      const tz = c.x / len;
-      const ring = Math.sin(b) * Math.cos(a) * rr;
-      const cross = Math.sin(b) * Math.sin(a) * rr * 0.6;
+      const ring = Math.sin(b) * Math.cos(a) * rr; // 切向（簇沿环的宽度）
+      const cross = Math.sin(b) * Math.sin(a) * rr * 0.6; // 法向（带厚）
+      const y8 = (rand01(`s:${n.id}:y`) - 0.5) * 52;
       out.set(n.id, {
-        x: c.x + tx * ring + (c.x / len) * cross,
-        y: c.y + (rand01(`s:${n.id}:y`) - 0.5) * 52,
-        z: c.z + tz * ring + (c.z / len) * cross,
+        x: c8.x + c8.tx * ring + c8.nx * cross,
+        y: y8,
+        z: c8.z + c8.tz * ring + c8.nz * cross,
       });
+      orbitsOut?.set(n.id, { u: orbU, A: orbA, t: ring, n: cross, y: y8 });
     }
   }
   return out;
@@ -557,8 +608,10 @@ export type EightStyle = 'cluster' | 'continuous';
 
 /**
  * 形态动画帧变换（炫技档）。样式与形态解耦——任意盘/环都可选自转或 8 字流：
- * - spin: 差速自转（内圈快外圈慢，星系感的关键），对 disk/lemniscate 通用；
- * - eight: 真 8 字轨道流（点沿 ∞ 曲线 x=A·cosφ / z=A·sinφ·cosφ 连续推进），对任意形态通用。
+ * - spin: 刚体自转（与半径无关 → 螺旋臂永不被剪切）；
+ * - eight: 真 8 字轨道流——**只推进固有相位**（u += ω），点相对轨道的偏移原样保留，
+ *   所以带子沿 ∞ 环整体流动、形状守恒（传 orbits 时）；无轨道参数时兜底按坐标反解。
+ * 幅度：盘状 = 悬臂带长（静态，见 applyArmLength）；8 字 = 带厚/簇宽缩放（0.3~1.7×）。
  * 纯几何驱动，只吃 (t, 布局, 参数)，不含状态 → 同一 t 必得同一帧（可回放）。
  */
 /**
@@ -605,6 +658,8 @@ export function flowShape(
   speed = 1,
   amp = 1,
   flowStyle?: FlowStyle,
+  /** 8 字轨道参数（buildClusterShapeLayout 的 orbitsOut 产物）：有则沿环推移，无则兜底反解。 */
+  orbits?: ReadonlyMap<string, EightOrbit>,
 ): Map<string, Vec3> {
   const out = new Map<string, Vec3>();
   if (shape === 'sphere') return out; // 球面堆不流转(调用方直接跳过)
@@ -673,21 +728,36 @@ export function flowShape(
         z: p.x * sy + p.z * cy,
       });
     } else {
-      // 8 字真轨道流:反解每点固有轨道相位 φ0,φ = φ0 + om·t 沿 ∞ 曲线推进。
+      // ── 8 字真轨道流：只推进**固有相位**，不重算半径 ──
+      // 点 = C(u+ω) + 切向·t + 法向·n + 竖向 y。带子（或簇）沿 ∞ 环整体平移，
+      // 逐点偏移量保持 → 形状守恒；幅度只缩放带厚/簇宽（0.3~1.7×），永远拉不出画面。
+      // 这是参考图那条连续星尘带的动作；旧的「反解 A + wob 摆动」在贴轴点会把
+      // A 算成巨大值，拖幅度时整图飞散（用户报的"炸开"）。
       const om = ts / 20000;
+      const orb = orbits?.get(id);
+      if (orb) {
+        const k = 0.3 + 0.7 * amp; // 幅度 = 带厚/簇宽的比例（1 → 原尺寸）
+        const c8 = eightCurve(orb.u + om, orb.A);
+        out.set(id, {
+          x: c8.x + c8.tx * orb.t * k + c8.nx * orb.n * k,
+          y: orb.y * k,
+          z: c8.z + c8.tz * orb.t * k + c8.nz * orb.n * k,
+        });
+        continue;
+      }
+      // 兜底：非 lemniscate 布局（如盘）显式选 8 字流时按坐标反解轨道。
+      // A 与 wob 都夹死上限——宁可转得保守，也不能把点甩到画外。
       const off = (rand01('f:' + id) - 0.5) * 0.6; // 点级小偏移,带子错落
       const r0 = Math.hypot(p.x, p.z) || 1;
       const ct = Math.max(-1, Math.min(1, p.x / r0));
       let t8 = Math.acos(ct);
       if (Math.sin(t8) * Math.cos(t8) * (p.z / r0) < 0) t8 = Math.PI * 2 - t8;
       const ph = t8 + om + off;
-      // 幅度:放大 A 的个体差(整条星尘带的径向厚度),并放大点级游走
-      const jit = (rand01('j:' + id) - 0.5) * (0.06 + 0.9 * amp);
-      // 反解 A 时夹到 2.2×r0 上限——否则贴 z 轴的点(|cos|≈0)会算出巨大 A 飞出画面
-      const A = Math.min(r0 * 2.2, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
+      const jit = (rand01('j:' + id) - 0.5) * (0.06 + 0.25 * amp);
+      const A = Math.min(r0 * 1.6, r0 / Math.max(0.18, Math.abs(Math.cos(t8)) + Math.abs(Math.sin(t8) * Math.cos(t8)))) * (1 + jit);
       const x = Math.cos(ph) * A;
       const z = Math.sin(ph) * Math.cos(ph) * A;
-      const wob = 6 + 70 * amp; // 幅度 0→6(几乎不动),2→146(明显荡漾)
+      const wob = 8 + 26 * amp; // 幅度 0→不超过±8,2→不超过±60（旧值 146 是炸开主因）
       out.set(id, {
         x: x + Math.sin(ph * 3.1) * wob,
         y: p.y + Math.cos(ph * 2.3) * wob * 0.8,
@@ -711,8 +781,14 @@ export function buildEgoLayout(
   adj: ReadonlyMap<string, readonly string[]>,
   focusId: string,
   hops: number,
+  /**
+   * 散度（聚拢密度）：1 = 既有壳层（±9% 层内抖动）；<1 更聚拢（层间距与层内抖动同收），
+   * >1 更散开。只作用于焦点展示——全图流转不吃它（用户裁定：全图不需要散度）。
+   */
+  spread = 1,
 ): Map<string, Vec3> {
   const out = new Map<string, Vec3>();
+  const k = Math.min(2.4, Math.max(0.35, spread));
   const depth = Math.min(Math.max(Math.floor(hops), 1), EGO_HOPS_MAX);
   const hopOf = new Map<string, number>([[focusId, 0]]);
   let frontier: readonly string[] = [focusId];
@@ -732,7 +808,7 @@ export function buildEgoLayout(
     if (next.length === 0) break;
   }
   for (const [h, ids] of byHop) {
-    const R = h * SHELL_GAP;
+    const R = h * SHELL_GAP * k;
     const total = ids.length;
     ids.forEach((id, i) => {
       if (h === 0) {
@@ -742,7 +818,8 @@ export function buildEgoLayout(
       const y = total === 1 ? 0 : 1 - (i / (total - 1)) * 2;
       const ring = Math.sqrt(Math.max(0, 1 - y * y));
       const phi = i * Math.PI * (3 - Math.sqrt(5)) + rand01(`e:${id}`) * 0.7;
-      const jitter = 1 + (rand01(`j:${id}`) - 0.5) * 0.18;
+      // 层内抖动随散度缩放：聚拢时同壳点贴得更紧，散开时更像星尘（spread=1 逐位回到原值）
+      const jitter = 1 + (rand01(`j:${id}`) - 0.5) * 0.18 * (0.5 + 0.5 * k);
       out.set(id, {
         x: Math.cos(phi) * ring * R * jitter,
         y: y * R * 0.85 * jitter,

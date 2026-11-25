@@ -133,6 +133,22 @@ describe('buildEgoLayout —— 跳数同心壳', () => {
   it('两次调用逐位一致（确定性）', () => {
     expect([...buildEgoLayout(adj, 'a', 3).entries()]).toEqual([...buildEgoLayout(adj, 'a', 3).entries()]);
   });
+
+  it('焦点散度:spread<1 壳层内收、spread>1 外扩;默认值 1 与不传逐位一致', () => {
+    const base = buildEgoLayout(adj, 'a', 2);
+    const def = buildEgoLayout(adj, 'a', 2, 1);
+    expect([...def.entries()]).toEqual([...base.entries()]);
+    const tight = buildEgoLayout(adj, 'a', 2, 0.6);
+    const loose = buildEgoLayout(adj, 'a', 2, 1.8);
+    const r = (m: Map<string, { x: number; y: number; z: number }>, id: string) => {
+      const p = m.get(id)!;
+      return Math.hypot(p.x, p.y, p.z);
+    };
+    expect(r(tight, 'd')).toBeLessThan(r(base, 'd'));
+    expect(r(loose, 'd')).toBeGreaterThan(r(base, 'd'));
+    // 焦点恒在球心，与散度无关（壳层语义不能被散度改写）
+    for (const m of [tight, loose]) expect(m.get('a')).toEqual({ x: 0, y: 0, z: 0 });
+  });
 });
 
 describe('projectAll —— 透视与深度排序', () => {
