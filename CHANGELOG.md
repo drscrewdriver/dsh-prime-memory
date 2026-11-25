@@ -23,6 +23,14 @@
 - `/memory injected [--last|--session=<id>] [--n]`：接 SessionRecalledStore（与 `dsh-memory/session-recalled` 端点同源）列出本会话已注入记忆，含 `[已取代]` 标记与路归因；store 新增 `recent()` 枚举最近会话。
 - 验证：新增 `tests/tui-command.test.ts`（8 例：switch/on-off dry+yes+漂移/injected 三支）全绿；typecheck/build/lint 干净。
 
+**状态记忆拆为注入/提取两轴（用户反馈「默认关闭但开新会话仍要手动关，接线错误」）。**
+
+- 单一「状态记忆」总闸拆为两组，各自两级：**注入的状态记忆**（pill=召回 recall + 三态下次启动滑条 injectBootMode）与**提取的状态记忆**（pill=捕获+蒸馏 capture&distill + 三态滑条 extractBootMode，下带捕获/蒸馏细调分项）。
+- 契约/配置：`bootMode` 拆为 `injectBootMode` + `extractBootMode`；`enabled` 退役为内部兼容位（读侧 `resolveSettings` 恒钉 true，行为改由 recall/capture/distill 三键接管）。
+- **接线修复**：`settings-set` 拨任一轴挡位时立即同步本会话对应生效键（off→关、on→开、last→不动），不再只等下次启动——直接消除“面板显示默认关闭、新会话仍继承开启需手动关”。
+- `BootModeStore` 改双轴存 `{inject, extract}`；`applyBootMode` 启动分别写回两轴；TUI `/memory switch` 改显两轴、`/memory on|off` 改拨两轴。
+- i18n 三语新增 11 键（注入/提取的状态记忆 + 两轴三态描述）入 keys.json 与字典全集；测试 boot-mode 双轴矩阵 + boot-mode-store 两轴 + tui switch 随动。全量 suite 绿（仅无关 IO 重负载用例在并发下偶发超时，隔离必绿）。
+
 ## 0.27.8
 
 **接入 CI 发版通道（tag push 自动 publish / dist-tag / Release）+ 清掉 3 个既有 lint error。**
