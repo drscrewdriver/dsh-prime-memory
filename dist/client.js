@@ -50739,6 +50739,10 @@ var __create = Object.create;
 		  tz /= len;
 		  return { x, z, tx, tz, nx: -tz, nz: tx };
 		}
+		var EIGHT_TILT_MAX = 0.38;
+		function eightTilt(u) {
+		  return Math.sin(u) * EIGHT_TILT_MAX;
+		}
 		function buildClusterShapeLayout(nodes, axis, shape, diskStyle = "spiral", armSpread = 0.55, discSeed = 0, eightStyle = "cluster", orbitsOut) {
 		  if (shape === "sphere") return buildClusterLayoutByAxis(nodes, axis);
 		  const out = /* @__PURE__ */ new Map();
@@ -50889,13 +50893,16 @@ var __create = Object.create;
 		      const halfW = 18;
 		      const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
 		      const c8 = eightCurve(u, A);
-		      const y8 = (rand01(`y:${n.id}`) - 0.5) * 28;
+		      const tilt = eightTilt(u);
+		      const cosT = Math.cos(tilt);
+		      const sinT = Math.sin(tilt);
+		      const yJit = (rand01(`y:${n.id}`) - 0.5) * 8;
 		      out.set(n.id, {
-		        x: c8.x + c8.nx * w,
-		        y: y8,
-		        z: c8.z + c8.nz * w
+		        x: c8.x + c8.nx * w * cosT,
+		        y: yJit + w * sinT,
+		        z: c8.z + c8.nz * w * cosT
 		      });
-		      orbitsOut?.set(n.id, { u, A, t: 0, n: w, y: y8 });
+		      orbitsOut?.set(n.id, { u, A, t: 0, n: w, y: yJit });
 		      continue;
 		    }
 		    if (shape === "disk") {
@@ -50997,6 +51004,12 @@ var __create = Object.create;
 		  }
 		  return out;
 		}
+		function resolveFlowStyle(uiStyle, shape, diskStyle) {
+		  if (uiStyle !== "auto") return uiStyle;
+		  if (shape === "lemniscate") return "eight";
+		  if (shape === "disk" && diskStyle === "disc") return "accretion";
+		  return "spin";
+		}
 		function applyArmLength(base, amp) {
 		  const L = Math.max(0.35, 1 + (amp - 1) * 0.45);
 		  if (Math.abs(L - 1) < 1e-6) return new Map(base);
@@ -51065,11 +51078,16 @@ var __create = Object.create;
 		      const orb = orbits?.get(id);
 		      if (orb) {
 		        const k = 0.3 + 0.7 * amp;
-		        const c8 = eightCurve(orb.u + om, orb.A);
+		        const u2 = orb.u + om;
+		        const c8 = eightCurve(u2, orb.A);
+		        const tilt = eightTilt(u2);
+		        const nOff = orb.n * Math.cos(tilt) * k;
+		        const yOff = (orb.y + orb.n * Math.sin(tilt)) * k;
+		        const tOff = orb.t * k;
 		        out.set(id, {
-		          x: c8.x + c8.tx * orb.t * k + c8.nx * orb.n * k,
-		          y: orb.y * k,
-		          z: c8.z + c8.tz * orb.t * k + c8.nz * orb.n * k
+		          x: c8.x + c8.tx * tOff + c8.nx * nOff,
+		          y: yOff,
+		          z: c8.z + c8.tz * tOff + c8.nz * nOff
 		        });
 		        continue;
 		      }
@@ -51639,8 +51657,7 @@ var __create = Object.create;
 		        const dt = flowLastRef.current === 0 ? 0 : Math.min(100, Math.max(0, now - flowLastRef.current));
 		        flowLastRef.current = now;
 		        flowAccRef.current += dt * flowSpeedRef.current;
-		        const autoStyle = shapeRef.current === "disk" && diskStyleRef.current === "disc" ? "accretion" : void 0;
-		        const useStyle = flowStyleRef.current === "auto" ? autoStyle : flowStyleRef.current;
+		        const useStyle = resolveFlowStyle(flowStyleRef.current, shapeRef.current, diskStyleRef.current);
 		        const flowAmp2 = useStyle === "eight" ? flowAmpRef.current : 1;
 		        layout = flowShape(layout, flowAccRef.current, shapeRef.current, 1, flowAmp2, useStyle, useStyle === "eight" ? orbitsRef.current : void 0);
 		        edgeDirty = true;

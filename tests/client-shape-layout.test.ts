@@ -168,6 +168,15 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     expect(diff).toBeGreaterThan(1);
   });
 
+  it('flowStyle 解析:auto 在 8 字上必须落到 eight(否则 orbits 传不进去，流转会破型)', async () => {
+    const { resolveFlowStyle } = await import('../client/src/explorer/projection.js');
+    expect(resolveFlowStyle('auto', 'lemniscate', 'spiral')).toBe('eight');
+    expect(resolveFlowStyle('auto', 'disk', 'disc')).toBe('accretion');
+    expect(resolveFlowStyle('auto', 'disk', 'spiral')).toBe('spin');
+    expect(resolveFlowStyle('spin', 'lemniscate', 'spiral')).toBe('spin');
+    expect(resolveFlowStyle('eight', 'disk', 'flat')).toBe('eight');
+  });
+
   it('悬臂=对数螺线:同臂簇的半径与卷角同步增长,六臂在任意半径处角向互不交缠', () => {
     const big: ReturnType<typeof mk>[] = [];
     for (let i = 0; i < 200; i++) big.push(mk('bb' + i, 'tool', 'bilibili'));
@@ -469,10 +478,11 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
       return vals[Math.floor(vals.length / 2)]!;
     };
     expect(spreadOf(N)).toBeGreaterThan(spreadOf(C));
-    // ③ 立体薄层:y 的跨度不再接近 0(纯平面带从侧面看会缩成一条线)
+    // ③ 立体：带厚在「法向 ↔ 竖直」之间缓慢倾斜（不交换面），y 跨度不应接近 0
+    //    （阈值 12：纯平面带为 0；现在倾斜幅度 sin(u)·0.38 + 点级 jitter 实测 ~18）
     const ys = [...N.values()].map((q) => q.y);
     const span = Math.max(...ys) - Math.min(...ys);
-    expect(span).toBeGreaterThan(20);
+    expect(span).toBeGreaterThan(12);
     // ④ 确定性
     const N2 = buildClusterShapeLayout(ns, 'hall', 'lemniscate', 'spiral', 0.55, 0, 'continuous');
     expect([...N.entries()]).toEqual([...N2.entries()]);
@@ -541,8 +551,8 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
       return { x: cu * A, z: su * cu * A * 0.72, tx, tz, nx: -tz, nz: tx };
     };
 
-    // ② 带内偏移守恒:任意时刻把点投影回"自己相位处的轨道基",切/法向分量
-    //    必须等于布局时的 t/n——这就是"整条带子沿 ∞ 环平移"而不是每点乱飞。
+    // ② 带内偏移守恒:任意时刻把点投影回"自己相位处的轨道基",切向分量必须等于布局时的 t;
+    //    法向与竖向的**合成幅度**恒等于带厚 |n|（倾斜在两者间分配，不交换面）。
     for (const t of [3000, 30000, 300000]) {
       const om = t / 20000;
       const S = flowShape(L, t, 'lemniscate', 1, 1, 'eight', orbits);
@@ -552,8 +562,10 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
         const tComp = (q.x - b1.x) * b1.tx + (q.z - b1.z) * b1.tz;
         const nComp = (q.x - b1.x) * b1.nx + (q.z - b1.z) * b1.nz;
         expect(tComp).toBeCloseTo(o.t, 6);
-        expect(nComp).toBeCloseTo(o.n, 6);
-        expect(q.y).toBeCloseTo(o.y, 6);
+        const radial = Math.hypot(nComp, q.y - o.y);
+        expect(radial).toBeCloseTo(Math.abs(o.n), 6);
+        // 离轨率 0%：所有点都落在带厚包络内（用户要求 < 1% 离开轨道）
+        expect(radial).toBeLessThanOrEqual(18 + 1e-6);
       }
     }
 

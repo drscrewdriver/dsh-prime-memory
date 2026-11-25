@@ -45,6 +45,7 @@ import {
   pickNearest,
   phaseOf,
   projectAll,
+  resolveFlowStyle,
   zoomBy,
 } from './projection.js';
 import type { ClusterAxis, DiskStyle, ClusterShape, EightOrbit, EightStyle, Projected, Vec3 } from './projection.js';
@@ -641,10 +642,10 @@ export function Scene3D(props: {
         const dt = flowLastRef.current === 0 ? 0 : Math.min(100, Math.max(0, now - flowLastRef.current));
         flowLastRef.current = now;
         flowAccRef.current += dt * flowSpeedRef.current;
-        // 圆盘(auto 档)走吸积盘流:每颗粒子有自己的轨道(开普勒差速 + 点级个体差),
-        // 而不是整盘刚体转。圆盘无臂结构,差速剪切只会让纹路更旋涡,不会被缠成一团。
-        const autoStyle = shapeRef.current === 'disk' && diskStyleRef.current === 'disc' ? 'accretion' : undefined;
-        const useStyle = flowStyleRef.current === 'auto' ? autoStyle : flowStyleRef.current;
+        // 「自动」档必须在**外层**先解析成具体样式：flowShape 拿到 undefined 会自己按形态兜底，
+        // 而下面传 orbits 的判断却只认 'eight' —— 两边各算一套，8 字走 auto 时 orbits
+        // 永远传不进去，只能回落"按坐标反解半径"（真机：一开流转就破型）。
+        const useStyle = resolveFlowStyle(flowStyleRef.current, shapeRef.current, diskStyleRef.current);
         // 幅度只喂给 8 字流(它的"幅度"= 带厚/簇宽);盘状/圆盘的幅度已由上面的
         // applyArmLength 静态施加,这里必须传 1,否则又会出现"不动却自己伸缩"。
         const flowAmp = useStyle === 'eight' ? flowAmpRef.current : 1;

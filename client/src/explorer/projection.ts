@@ -223,6 +223,17 @@ function eightCurve(u: number, A: number): { x: number; z: number; tx: number; t
 }
 
 /**
+ * 连续 8 字带的**无翻转**扭转：厚度方向绕切向缓慢摆动 ±EIGHT_TILT_MAX。
+ *
+ * `sin(u)` 一个周期回到 0 —— 有绸带"拧动"的莫比乌斯感，但**不交换面**
+ * （不是 `cos/sin(u/2)` 那种走一圈翻面）。且偏移量恒为带厚 `|w|`，点永远在轨道管内。
+ */
+export const EIGHT_TILT_MAX = 0.38;
+function eightTilt(u: number): number {
+  return Math.sin(u) * EIGHT_TILT_MAX;
+}
+
+/**
  * 形态参数化的簇布局。组键序复用 groupOrder(axis),簇内散布种子前缀 `c:`/`r:`/`a:`/`b:`/`s:`
  * **一个不改**——同一节点 id 在任意形态/轴组合下球内角度分量保持一致,形态切换过渡读作
  * 「同一批点换队形」而不是「满屏乱飞」。
@@ -447,15 +458,21 @@ export function buildClusterShapeLayout(
       const halfW = 18;
       const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
       const c8 = eightCurve(u, A);
-      // 竖向薄层按点独立（旧实现按簇共用 y → 同簇点共面叠成一片，读作聚类）。
-      const y8 = (rand01(`y:${n.id}`) - 0.5) * 28;
+      // 截面：带厚 w 在"平面法向 ↔ 竖直"之间缓慢倾斜（sin(u) 一个周期回零，**不交换面**），
+      // 既保留绸带拧动的莫比乌斯感，又保持连续稳定；偏移量恒为 |w|，点永远在轨道管内。
+      const tilt = eightTilt(u);
+      const cosT = Math.cos(tilt);
+      const sinT = Math.sin(tilt);
+      // 竖向薄层按点独立（旧按簇共用 y → 同簇点共面叠成一片，读作聚类）。
+      const yJit = (rand01(`y:${n.id}`) - 0.5) * 8;
       out.set(n.id, {
-        x: c8.x + c8.nx * w,
-        y: y8,
-        z: c8.z + c8.nz * w,
+        x: c8.x + c8.nx * w * cosT,
+        y: yJit + w * sinT,
+        z: c8.z + c8.nz * w * cosT,
       });
-      // 轨道留痕:u 是固有相位，A 固定，带厚 w 与竖向 y8 作为固定偏移。
-      orbitsOut?.set(n.id, { u, A, t: 0, n: w, y: y8 });
+      // 轨道留痕:u 是固有相位，A 固定，带厚 w 与竖向 jitter 作为固定偏移；
+      // 倾斜不在 orbit 里（它是 u 的函数，流转时与布局用同一公式重算）。
+      orbitsOut?.set(n.id, { u, A, t: 0, n: w, y: yJit });
       continue;
     }
     if (shape === 'disk') {
@@ -599,6 +616,27 @@ export function buildClusterShapeLayout(
 export type FlowStyle = 'spin' | 'eight' | 'accretion';
 
 /**
+ * 把 UI 的「自动」档解析成具体样式（**单一事实源**，纯函数可单测）。
+ *
+ * 调用方必须先解析再传 flowShape：旧实现把 auto 留给 flowShape 内部兜底，外层却用
+ * `useStyle === 'eight'` 决定要不要传 orbits —— 两边各算一套，8 字走 auto 时 orbits
+ * 永远传不进去，流转只能回落到"按坐标反解半径"，每个点被算到不同大小的 ∞ 上，
+ * 真机表现就是"一动就破型"。
+ *
+ * 规则：环 → eight；圆盘(disc) → accretion；其余盘 → spin。
+ */
+export function resolveFlowStyle(
+  uiStyle: 'auto' | FlowStyle,
+  shape: ClusterShape,
+  diskStyle: DiskStyle,
+): FlowStyle {
+  if (uiStyle !== 'auto') return uiStyle;
+  if (shape === 'lemniscate') return 'eight';
+  if (shape === 'disk' && diskStyle === 'disc') return 'accretion';
+  return 'spin';
+}
+
+/**
  * 8 字子风格:
  * - cluster:    按簇分角度成团，每个簇在 ∞ 曲线的一段上成块（看归属用，流转时是大块平移）；
  * - continuous: **连续混编**——所有点按 id 独立均匀采样相位，沿 ∞ 曲线铺满；
@@ -737,11 +775,18 @@ export function flowShape(
       const orb = orbits?.get(id);
       if (orb) {
         const k = 0.3 + 0.7 * amp; // 幅度 = 带厚/簇宽的比例（1 → 原尺寸）
-        const c8 = eightCurve(orb.u + om, orb.A);
+        const u2 = orb.u + om;
+        const c8 = eightCurve(u2, orb.A);
+        // 与布局同一截面公式（倾斜只由 u 决定）→ 带子沿环**拧动但不翻面**；
+        // 偏移合成幅度恒为 |n|·k，绝不离轨（旧兜底路径会把点甩到不同 A 的环上）。
+        const tilt = eightTilt(u2);
+        const nOff = orb.n * Math.cos(tilt) * k;
+        const yOff = (orb.y + orb.n * Math.sin(tilt)) * k;
+        const tOff = orb.t * k; // 切向偏移（成簇版的簇宽）照旧保留
         out.set(id, {
-          x: c8.x + c8.tx * orb.t * k + c8.nx * orb.n * k,
-          y: orb.y * k,
-          z: c8.z + c8.tz * orb.t * k + c8.nz * orb.n * k,
+          x: c8.x + c8.tx * tOff + c8.nx * nOff,
+          y: yOff,
+          z: c8.z + c8.tz * tOff + c8.nz * nOff,
         });
         continue;
       }
