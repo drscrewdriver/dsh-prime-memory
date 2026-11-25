@@ -12,12 +12,12 @@ import { describe, expect, it } from 'vitest';
 import { applyBootMode, resolveSettings, type LiveSettingsHandle } from '../src/settings.js';
 
 describe('resolveSettings 归一两轴启动挡位', () => {
-  it('缺键 / 非法值一律归 off（出厂默认关闭）', () => {
+  it('缺键 / 非法值一律归 last（出厂默认跟随上次，新安装即开）', () => {
     const s = resolveSettings({});
-    expect(s.injectBootMode).toBe('off');
-    expect(s.extractBootMode).toBe('off');
-    expect(resolveSettings({ injectBootMode: 'ON' }).injectBootMode).toBe('off');
-    expect(resolveSettings({ extractBootMode: 1 }).extractBootMode).toBe('off');
+    expect(s.injectBootMode).toBe('last');
+    expect(s.extractBootMode).toBe('last');
+    expect(resolveSettings({ injectBootMode: 'ON' }).injectBootMode).toBe('last');
+    expect(resolveSettings({ extractBootMode: 1 }).extractBootMode).toBe('last');
   });
 
   it('合法三态原样保留', () => {

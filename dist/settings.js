@@ -60,8 +60,8 @@ export function validateDistillChain(chain, opts) {
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
 export const MEMORY_ENTRY_ID = 'dsh-memory';
 const ALWAYS_ON = {
-    injectBootMode: 'off',
-    extractBootMode: 'off',
+    injectBootMode: 'last',
+    extractBootMode: 'last',
     enabled: true,
     capture: true,
     distill: true,
@@ -473,9 +473,9 @@ export function resolveSettings(value) {
         return out;
     };
     const rawLayer = (v.distillLayerChains ?? {});
-    // 启动挡位拆两轴：缺键/非法值均归 'off'(出厂默认关闭)。挡位本身**不在读侧折叠**——
+    // 启动挡位拆两轴：缺键/非法值均归 'last'(出厂默认跟随上次，新安装无历史即开)。挡位本身**不在读侧折叠**——
     // 启动期由 `applyBootMode` 把初值写回 recall / capture+distill，这样本会话的手动开关永远有效。
-    const normBoot = (x) => x === 'on' || x === 'off' || x === 'last' ? x : 'off';
+    const normBoot = (x) => x === 'on' || x === 'off' || x === 'last' ? x : 'last';
     const injectBootMode = normBoot(v.injectBootMode);
     const extractBootMode = normBoot(v.extractBootMode);
     return {

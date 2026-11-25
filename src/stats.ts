@@ -763,6 +763,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       // 注入解析权威在 host:recall 是原始覆盖(null=跟随全局),recallResolved 是生效值
       const s = live?.get();
       const globalRecall = s?.recall ?? true;
+      const globalExtract = (s?.capture ?? true) && (s?.distill ?? true);
       const bounds = modes.wingBoundaries(sessionId);
       const locked = modes.getWings(sessionId);
       const v: SessionModeGetResponse = {
@@ -771,6 +772,7 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
         defaultMode: modes.default,
         recall: modes.getRecall(sessionId) ?? null,
         recallResolved: modes.resolvedRecall(sessionId, globalRecall),
+        extractResolved: globalExtract,
         hall: locked[0] ?? null,
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
@@ -2139,8 +2141,8 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const resp: SettingsGetResponse = {
         supported: live?.supported ?? false,
         settings: sanitizeSettings(s ?? {
-          injectBootMode: 'off',
-          extractBootMode: 'off',
+          injectBootMode: 'last',
+          extractBootMode: 'last',
           enabled: true, capture: true, distill: true, recall: true,
           toolRoom: true, toolGraph: true, toolRuminate: true, toolConflict: true, toolMutate: true, toolSkills: true,
           // 默认值与 settings.ts 的 DEFAULT_LIVE 同向:管理组/旧名组默认封印(false)。
