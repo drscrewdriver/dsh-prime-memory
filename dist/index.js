@@ -132,10 +132,6 @@ export async function apply(ctx, config) {
     // 见 store/boot-mode.ts）；数据目录不可写时不建 store，挡位回落 volatile/默认。
     const bootStore = storageOk ? new BootModeStore(dataDir, logger) : undefined;
     const live = registerLiveSettings(ctx, config, logger, bootStore);
-    // 启动挡位（三态 on/off/last）：on/off 把初值写回 enabled，last 保持持久值。
-    // 异步写、失败不阻断启动（写面缺席的老宿主保持持久值）；0.27.9 起带诊断日志
-    // 与竞态门（磁盘×运行时对照，不一致等一次 volatile 广播后重读）。
-    void applyBootMode(live, logger);
     // 自带自定义设置页(client 半 settings.section「记忆」分节)→ 关掉宿主按
     // volatile 字段自动生成的表单页,避免同一插件出现两份设置入口。
     suppressAutoSettingsForm(ctx);
@@ -151,6 +147,9 @@ export async function apply(ctx, config) {
             logger.warn(`[memory] 会话档位载入失败(降级为默认档内存态): ${err instanceof Error ? err.message : String(err)}`);
         }
     }
+    // 启动挡位：控制新会话默认档位（而非系统级 recall/capture/distill）。
+    // 异步、失败不阻断启动。
+    void applyBootMode(live, logger, modes);
     // ── 嵌入源三态(远程/本地/关闭)——状态文件优先于静态配置 ──
     const sourceStore = new EmbeddingSourceStore(dataDir, logger);
     const installer = new RuntimeInstaller(dataDir, PINNED_TRANSFORMERS_VERSION, { logger });

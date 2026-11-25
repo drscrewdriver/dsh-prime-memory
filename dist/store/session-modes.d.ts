@@ -3,11 +3,12 @@ export declare function isMemoryMode(v: unknown): v is MemoryMode;
 /** 合法角 id 判定(锁域只认 8 角;general 是兜底值不是角,不可锁定)。 */
 export declare function isWingCorner(v: unknown): v is string;
 export declare class SessionModeStore {
-    private readonly defaultMode;
     private readonly logger?;
     private readonly file;
     private readonly entries;
     private readonly loaded;
+    /** 新会话默认注入覆盖（undefined = 跟随全局）。由 applyBootMode 设置。 */
+    private _defaultRecall;
     private persistFailed;
     /** 只读降级原因(undefined = 正常):非空时内存态照常生效,但停止回写。 */
     private degraded;
@@ -18,7 +19,14 @@ export declare class SessionModeStore {
     private onModeChange?;
     /** 串行化持久化写(避免并发原子写撞临时文件名)。 */
     private writeChain;
-    constructor(dataDir: string, defaultMode: Extract<MemoryMode, 'auto' | 'chat' | 'work'>, logger?: MemoryLogger | undefined);
+    constructor(dataDir: string, defaultMode: MemoryMode, logger?: MemoryLogger | undefined);
+    /** 当前默认档（新会话未显式设置时的回落值）。 */
+    get default(): MemoryMode;
+    private _defaultMode;
+    /** 由 applyBootMode 调用：设置新会话默认档位。 */
+    setDefaultMode(mode: MemoryMode): void;
+    /** 由 applyBootMode 调用：设置新会话默认注入覆盖。 */
+    setDefaultRecall(recall: boolean | undefined): void;
     /**
      * 载入持久化映射(index.ts 启动时 await;失败降级内存态)。
      *
@@ -27,7 +35,6 @@ export declare class SessionModeStore {
      * 版本回退后全部失效)+ 只读降级(禁写)。
      */
     init(): Promise<void>;
-    get default(): MemoryMode;
     /** 同步读取:未设置过的会话返回默认档。 */
     get(sessionId: string): MemoryMode;
     /**
@@ -39,8 +46,7 @@ export declare class SessionModeStore {
     hasEntry(sessionId: string): boolean;
     /** 会话级注入覆盖原始值:undefined = 未覆盖,跟随全局。 */
     getRecall(sessionId: string): boolean | undefined;
-    /** 解析后的注入开关:会话覆盖 ?? 全局运行时开关(部署级 cfg.recall.enabled
-     *  与主闸 s.enabled 不经此处,仍按既有硬门生效——覆盖打不穿部署上限)。 */
+    /** 解析后的注入开关:会话覆盖 ?? 启动默认 ?? 全局运行时开关。 */
     resolvedRecall(sessionId: string, globalRecall: boolean): boolean;
     /** 设置会话级注入覆盖(undefined = 清除覆盖跟随全局。写穿持久化)。 */
     setRecall(sessionId: string, recall: boolean | undefined): void;

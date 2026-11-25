@@ -1,15 +1,23 @@
 /**
- * 两轴启动挡位（injectBootMode / extractBootMode）的行为闸（0.27.9 两轴重构）。
+ * 两轴启动挡位（injectBootMode / extractBootMode）的行为闸（0.28.1 语义重构）。
  *
- * 语义钉成两条：
- *   ① resolveSettings 只归一两轴挡位（缺键/非法→'off'），enabled 恒被钉 true，
- *      读侧不折叠挡位到 recall/capture/distill；
- *   ② applyBootMode 在启动期把 on/off 写回对应生效键（inject→recall，
- *      extract→capture+distill），last 不动，且总钉 enabled=true。
+ * 新语义：滑块控制新会话默认档位，不碰系统级 recall/capture/distill。
+ *   • extract='off' → modes.setDefaultMode('off')
+ *   • extract='on' + inject='off' → modes.setDefaultMode('auto') + setDefaultRecall(false)
+ *   • 两轴 'on' → modes.setDefaultMode('auto') + setDefaultRecall(undefined)
+ *   • 两轴 'last' → 不改
  */
 import { describe, expect, it } from 'vitest';
 
 import { applyBootMode, resolveSettings, type LiveSettingsHandle } from '../src/settings.js';
+
+function mkLive(overrides: Record<string, unknown> = {}): LiveSettingsHandle {
+  return {
+    supported: true,
+    get: () => resolveSettings(overrides),
+    update: async () => {},
+  };
+}
 
 describe('resolveSettings 归一两轴启动挡位', () => {
   it('缺键 / 非法值一律归 last（出厂默认跟随上次，新安装即开）', () => {
@@ -28,75 +36,69 @@ describe('resolveSettings 归一两轴启动挡位', () => {
 
   it('总闸 enabled 恒被钉 true（不再作为顶控）', () => {
     expect(resolveSettings({ enabled: false }).enabled).toBe(true);
-    expect(resolveSettings({}).enabled).toBe(true);
-  });
-
-  it('读侧**不**折叠挡位：recall/capture/distill 只认自己的键', () => {
-    expect(resolveSettings({ injectBootMode: 'off', recall: true }).recall).toBe(true);
-    expect(resolveSettings({ extractBootMode: 'on', capture: false }).capture).toBe(false);
   });
 });
 
-describe('applyBootMode 两轴写回', () => {
-  const mk = (value: Record<string, unknown>, writes: Array<Record<string, unknown>>): LiveSettingsHandle => ({
-    supported: true,
-    get: () => resolveSettings(value),
-    update: async (patch) => { writes.push(patch as Record<string, unknown>); },
-  });
-
-  it('inject=off + recall=true → 写 { recall:false, enabled:true }', async () => {
-    const writes: Array<Record<string, unknown>> = [];
-    await applyBootMode(mk({ injectBootMode: 'off', recall: true }, writes), { info: () => {}, warn: () => {} });
-    expect(writes[0]).toMatchObject({ recall: false, enabled: true });
-  });
-
-  it('extract=off + capture/distill=true → 写 capture:false distill:false', async () => {
-    const writes: Array<Record<string, unknown>> = [];
-    await applyBootMode(mk({ extractBootMode: 'off', capture: true, distill: true }, writes), { info: () => {}, warn: () => {} });
-    expect(writes[0]).toMatchObject({ capture: false, distill: false, enabled: true });
-  });
-
-  it('两轴均 last 且生效键已 true → 一次都不写', async () => {
-    const writes: Array<Record<string, unknown>> = [];
-    await applyBootMode(mk({ injectBootMode: 'last', extractBootMode: 'last', recall: true, capture: true, distill: true }, writes), { info: () => {}, warn: () => {} });
-    expect(writes).toEqual([]);
-  });
-
-  it('写面抛错 → 吞掉不阻断，走 logger.warn', async () => {
-    const warned: string[] = [];
-    const handle: LiveSettingsHandle = {
-      supported: true,
-      get: () => resolveSettings({ injectBootMode: 'off', recall: true }),
-      update: async () => { throw new Error('volatile 写面不可用'); },
+describe('applyBootMode 写会话默认档（新语义）', () => {
+  it('extract=off → setDefaultMode(off)', async () => {
+    const calls: Array<{ method: string; args: unknown[] }> = [];
+    const modes = {
+      setDefaultMode: (m: string) => calls.push({ method: 'mode', args: [m] }),
+      setDefaultRecall: (r: boolean | undefined) => calls.push({ method: 'recall', args: [r] }),
     };
-    await expect(applyBootMode(handle, { info: () => {}, warn: (m) => warned.push(m) })).resolves.toBeUndefined();
-    expect(warned.some((m) => m.includes('启动挡位应用失败'))).toBe(true);
+    await applyBootMode(mkLive({ extractBootMode: 'off', injectBootMode: 'off' }), { info: () => {}, warn: () => {} }, modes);
+    expect(calls).toContainEqual({ method: 'mode', args: ['off'] });
+    expect(calls).toContainEqual({ method: 'recall', args: [undefined] });
   });
 
-  it('写面未就绪（whenReady=false）→ 等不到就跳过写回，不报错不阻断', async () => {
-    const writes: Array<Record<string, unknown>> = [];
-    const warned: string[] = [];
+  it('extract=on + inject=off → mode=auto + recall=false（只写不注）', async () => {
+    const calls: Array<{ method: string; args: unknown[] }> = [];
+    const modes = {
+      setDefaultMode: (m: string) => calls.push({ method: 'mode', args: [m] }),
+      setDefaultRecall: (r: boolean | undefined) => calls.push({ method: 'recall', args: [r] }),
+    };
+    await applyBootMode(mkLive({ extractBootMode: 'on', injectBootMode: 'off' }), { info: () => {}, warn: () => {} }, modes);
+    expect(calls).toContainEqual({ method: 'mode', args: ['auto'] });
+    expect(calls).toContainEqual({ method: 'recall', args: [false] });
+  });
+
+  it('两轴均 on → mode=auto + recall=undefined（跟随全局）', async () => {
+    const calls: Array<{ method: string; args: unknown[] }> = [];
+    const modes = {
+      setDefaultMode: (m: string) => calls.push({ method: 'mode', args: [m] }),
+      setDefaultRecall: (r: boolean | undefined) => calls.push({ method: 'recall', args: [r] }),
+    };
+    await applyBootMode(mkLive({ extractBootMode: 'on', injectBootMode: 'on' }), { info: () => {}, warn: () => {} }, modes);
+    expect(calls).toContainEqual({ method: 'mode', args: ['auto'] });
+    expect(calls).toContainEqual({ method: 'recall', args: [undefined] });
+  });
+
+  it('两轴均 last → 不改 modes', async () => {
+    let called = false;
+    const modes = {
+      setDefaultMode: () => { called = true; },
+      setDefaultRecall: () => { called = true; },
+    };
+    await applyBootMode(mkLive({ extractBootMode: 'last', injectBootMode: 'last' }), { info: () => {}, warn: () => {} }, modes);
+    expect(called).toBe(false);
+  });
+
+  it('modes 缺席（老宿主降级）→ 不报错不阻断', async () => {
+    await expect(
+      applyBootMode(mkLive({ extractBootMode: 'off' }), { info: () => {}, warn: () => {} }, undefined),
+    ).resolves.toBeUndefined();
+  });
+
+  it('系统级 recall/capture/distill 不被滑块写回', async () => {
+    const writes: Record<string, unknown>[] = [];
     const handle: LiveSettingsHandle = {
       supported: true,
-      get: () => resolveSettings({ injectBootMode: 'off', recall: true, capture: true, distill: true }),
+      get: () => resolveSettings({ extractBootMode: 'off', injectBootMode: 'off', recall: true, capture: true, distill: true }),
       update: async (patch) => { writes.push(patch as Record<string, unknown>); },
-      whenReady: async () => false,
     };
-    await applyBootMode(handle, { info: () => {}, warn: (m) => warned.push(m) });
-    expect(writes).toEqual([]); // 未就绪 → 不尝试写
-    expect(warned.some((m) => m.includes('写面仍未就绪'))).toBe(true);
-  });
-
-  it('写面就绪（whenReady=true）后才写回两轴初值', async () => {
-    const writes: Array<Record<string, unknown>> = [];
-    const handle: LiveSettingsHandle = {
-      supported: true,
-      get: () => resolveSettings({ injectBootMode: 'off', extractBootMode: 'off', recall: true, capture: true, distill: true }),
-      update: async (patch) => { writes.push(patch as Record<string, unknown>); },
-      whenReady: async () => true,
-    };
-    await applyBootMode(handle, { info: () => {}, warn: () => {} });
-    expect(writes.length).toBe(1);
-    expect(writes[0]).toMatchObject({ recall: false, capture: false, distill: false, enabled: true });
+    const modes = { setDefaultMode: () => {}, setDefaultRecall: () => {} };
+    await applyBootMode(handle, { info: () => {}, warn: () => {} }, modes);
+    // 新语义：不写 recall/capture/distill
+    expect(writes.length).toBe(0);
   });
 });

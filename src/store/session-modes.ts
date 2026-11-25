@@ -53,6 +53,8 @@ export class SessionModeStore {
   private readonly file: string;
   private readonly entries = new Map<string, ModeEntry>();
   private readonly loaded: MemoryMode;
+  /** 新会话默认注入覆盖（undefined = 跟随全局）。由 applyBootMode 设置。 */
+  private _defaultRecall: boolean | undefined;
   private persistFailed = false;
   /** 只读降级原因(undefined = 正常):非空时内存态照常生效,但停止回写。 */
   private degraded: string | undefined;
@@ -66,12 +68,21 @@ export class SessionModeStore {
 
   constructor(
     dataDir: string,
-    private readonly defaultMode: Extract<MemoryMode, 'auto' | 'chat' | 'work'>,
+    defaultMode: MemoryMode,
     private readonly logger?: MemoryLogger,
   ) {
     this.file = path.join(dataDir, 'session-modes.json');
+    this._defaultMode = defaultMode;
     this.loaded = defaultMode;
   }
+
+  /** 当前默认档（新会话未显式设置时的回落值）。 */
+  get default(): MemoryMode { return this._defaultMode; }
+  private _defaultMode: MemoryMode;
+  /** 由 applyBootMode 调用：设置新会话默认档位。 */
+  setDefaultMode(mode: MemoryMode): void { this._defaultMode = mode; }
+  /** 由 applyBootMode 调用：设置新会话默认注入覆盖。 */
+  setDefaultRecall(recall: boolean | undefined): void { this._defaultRecall = recall; }
 
   /**
    * 载入持久化映射(index.ts 启动时 await;失败降级内存态)。
@@ -127,16 +138,12 @@ export class SessionModeStore {
       });
       count++;
     }
-    if (count > 0) this.logger?.info(`[memory] 会话档位载入 ${count} 条(默认档=${this.defaultMode})`);
-  }
-
-  get default(): MemoryMode {
-    return this.loaded;
+    if (count > 0) this.logger?.info(`[memory] 会话档位载入 ${count} 条(默认档=${this._defaultMode})`);
   }
 
   /** 同步读取:未设置过的会话返回默认档。 */
   get(sessionId: string): MemoryMode {
-    return this.entries.get(sessionId)?.mode ?? this.loaded;
+    return this.entries.get(sessionId)?.mode ?? this._defaultMode;
   }
 
   /**
@@ -154,17 +161,19 @@ export class SessionModeStore {
     return this.entries.get(sessionId)?.recall;
   }
 
-  /** 解析后的注入开关:会话覆盖 ?? 全局运行时开关(部署级 cfg.recall.enabled
-   *  与主闸 s.enabled 不经此处,仍按既有硬门生效——覆盖打不穿部署上限)。 */
+  /** 解析后的注入开关:会话覆盖 ?? 启动默认 ?? 全局运行时开关。 */
   resolvedRecall(sessionId: string, globalRecall: boolean): boolean {
-    return this.entries.get(sessionId)?.recall ?? globalRecall;
+    const entry = this.entries.get(sessionId);
+    if (entry?.recall !== undefined) return entry.recall;
+    if (this._defaultRecall !== undefined) return this._defaultRecall;
+    return globalRecall;
   }
 
   /** 设置会话级注入覆盖(undefined = 清除覆盖跟随全局。写穿持久化)。 */
   setRecall(sessionId: string, recall: boolean | undefined): void {
     const entry = this.entries.get(sessionId);
     this.entries.set(sessionId, {
-      mode: entry?.mode ?? this.loaded,
+      mode: entry?.mode ?? this._defaultMode,
       recall,
       // 域锁定与注入正交:设置注入不动锁域(照抄"切档不动覆盖"模板)
       hall: entry?.hall,
@@ -211,7 +220,7 @@ export class SessionModeStore {
     const locked =
       halls === undefined ? undefined : Array.from(new Set(halls.filter((x) => isWingCorner(x))));
     this.entries.set(sessionId, {
-      mode: entry?.mode ?? this.loaded,
+      mode: entry?.mode ?? this._defaultMode,
       recall: entry?.recall,
       hall: locked === undefined ? entry?.hall : locked.length === 1 ? locked[0] : undefined,
       halls: locked === undefined ? entry?.halls : locked.length > 0 ? locked : undefined,
