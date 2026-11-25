@@ -86,6 +86,8 @@ export function OverviewTab(props: { rpc: RpcFn }) {
   /**
    * 启动挡位写入(三态):乐观翻 UI,失败回滚。与布尔开关分开,
    * 因为 settings-set 的布尔白名单不收字符串。
+   * 0.27.9:写成功后还消费 persistence——挡位没落盘(漂移)时当场报错，
+   * 不等用户重启后才发现"选了下次关闭却没关"。
    */
   const setBootMode = (value: 'on' | 'off' | 'last') => {
     if (!settingsData) return;
@@ -97,6 +99,15 @@ export function OverviewTab(props: { rpc: RpcFn }) {
         if (!r || !r.ok) {
           setSettingsData(prev);
           setError(r && r.error ? tr("开关写入失败：") + r.error.message : tr("开关写入失败"));
+          return;
+        }
+        const resp = (r.value || {}) as { persistence?: { state: string; detail?: string } };
+        if (resp.persistence && resp.persistence.state !== 'match') {
+          setError(
+            resp.persistence.state === 'drift'
+              ? tr("挡位可能未落盘：") + (resp.persistence.detail || '')
+              : tr("挡位已提交，但宿主不支持配置回读，无法确认已落盘"),
+          );
         } else {
           setError(null);
         }
@@ -249,7 +260,7 @@ export function OverviewTab(props: { rpc: RpcFn }) {
             <span style={S.switchLabel}>{tr("下次启动")}</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <select
-                value={settingsData.settings.bootMode ?? 'last'}
+                value={settingsData.settings.bootMode ?? 'off'}
                 onChange={(e) => {
                   setBootMode(e.currentTarget.value as 'on' | 'off' | 'last');
                 }}

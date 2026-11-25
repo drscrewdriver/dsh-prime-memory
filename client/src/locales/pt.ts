@@ -349,6 +349,8 @@ export const pt: Record<string, string> = {
   "当前已导入/关联 {p1} 条外源条目，关闭后会一起进入取数窗口": "{p1} entradas externas já importadas/vinculadas; ao desligar, todas entram na janela de recuperação",
   "当前执行会话": "sessão de execução atual",
   "当前状态:": "Estado atual:",
+  "挡位可能未落盘：": "A marcha pode não ter sido salva:",
+  "挡位已提交，但宿主不支持配置回读，无法确认已落盘": "Marcha enviada, mas o host não suporta leitura de configuração; persistência não confirmada",
   "档位": "Modo",
   "档位读取失败：": "Falha ao ler modo:",
   "档位关闭": "Modo desligado",

@@ -67,7 +67,8 @@ describe('applyBootMode 启动期写回', () => {
     expect(handle.writes).toEqual([]);
   });
 
-  it('写面抛错 → 吞掉，不阻断启动', async () => {
+  it('写面抛错 → 吞掉，不阻断启动（但不再静默：走 logger.warn）', async () => {
+    const warned: string[] = [];
     const handle: LiveSettingsHandle = {
       supported: true,
       get: () => resolveSettings({ bootMode: 'off', enabled: true }),
@@ -75,6 +76,55 @@ describe('applyBootMode 启动期写回', () => {
         throw new Error('volatile 写面不可用');
       },
     };
-    await expect(applyBootMode(handle)).resolves.toBeUndefined();
+    await expect(applyBootMode(handle, { info: () => {}, warn: (m) => warned.push(m) })).resolves.toBeUndefined();
+    expect(warned.some((m) => m.includes('启动挡位应用失败'))).toBe(true);
+  });
+});
+
+describe('applyBootMode 诊断与竞态防护（0.27.9）', () => {
+  it('启动固定打印磁盘×运行时对照行；宿主不供 readConfig 时明说无法对照', async () => {
+    const infos: string[] = [];
+    const handle: LiveSettingsHandle = {
+      supported: true,
+      get: () => resolveSettings({ bootMode: 'off', enabled: false }),
+      update: async () => {},
+    };
+    await applyBootMode(handle, { info: (m) => infos.push(m), warn: () => {} });
+    expect(infos.some((m) => m.includes('启动挡位对照') && m.includes('磁盘侧无法对照'))).toBe(true);
+    expect(infos.some((m) => m.includes('已一致,免写回'))).toBe(true);
+  });
+
+  it('竞态：磁盘挡位 ≠ 运行挡位 → 等一次 volatile 广播后重读再应用', async () => {
+    // 首读 = 出厂默认（patch 未并入）；广播后重读 = 用户真选的 last。
+    // 若不等待就会把 enabled 反写成 false（陈旧快照顶掉用户选择）。
+    let phase = 0;
+    let released = false;
+    const handle: LiveSettingsHandle = {
+      supported: true,
+      get: () => resolveSettings(phase === 0 ? { bootMode: 'off', enabled: true } : { bootMode: 'last', enabled: true }),
+      update: async () => { phase = 1; },
+      readConfig: () => ({ bootMode: 'last', enabled: true }),
+      waitForVolatile: async () => { released = true; phase = 1; },
+    };
+    const infos: string[] = [];
+    await applyBootMode(handle, { info: (m) => infos.push(m), warn: () => {} });
+    expect(released).toBe(true);
+    expect(infos.some((m) => m.includes('挡位竞态信号'))).toBe(true);
+    expect(infos.some((m) => m.includes('挡位=last'))).toBe(true);
+    // 重读后是 last → 一次都不写
+    void phase;
+  });
+
+  it('磁盘与运行时一致 → 不等广播，直接按挡位应用', async () => {
+    let waited = false;
+    const handle: LiveSettingsHandle = {
+      supported: true,
+      get: () => resolveSettings({ bootMode: 'off', enabled: true }),
+      update: async () => {},
+      readConfig: () => ({ bootMode: 'off', enabled: true }),
+      waitForVolatile: async () => { waited = true; },
+    };
+    await applyBootMode(handle, { info: () => {}, warn: () => {} });
+    expect(waited).toBe(false);
   });
 });

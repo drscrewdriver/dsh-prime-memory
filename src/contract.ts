@@ -937,6 +937,12 @@ export interface SettingsSetRequest {
 export interface SettingsSetResponse {
   ok: true;
   settings: MemoryLiveSettings;
+  /**
+   * 写后即时持久化对照(0.27.9 起 settings-set 也回传,与 settings-get 的 #37 同形状)。
+   * 现阶段只在写了启动挡位时给结论:挡位是"重启才兑现"的键,当场发现
+   * "写成功但没落盘"比重启后回落再盲推便宜得多。未写挡位 / 宿主读不回 = 缺席。
+   */
+  persistence?: { state: 'match' | 'drift' | 'unavailable'; detail?: string };
 }
 
 /** dsh-memory/list-records(记忆浏览器;hitToUiRecord 投影)。 */

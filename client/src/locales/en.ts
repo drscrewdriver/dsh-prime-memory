@@ -349,6 +349,8 @@ export const en: Record<string, string> = {
   "当前已导入/关联 {p1} 条外源条目，关闭后会一起进入取数窗口": "{p1} external entries already imported/linked; after turning this off they all enter the retrieval window",
   "当前执行会话": "current executing session",
   "当前状态:": "Current status:",
+  "挡位可能未落盘：": "Gear may not have persisted:",
+  "挡位已提交，但宿主不支持配置回读，无法确认已落盘": "Gear submitted, but the host does not support config read-back, so persistence is unverified",
   "档位": "Mode",
   "档位读取失败：": "Failed to read mode:",
   "档位关闭": "Mode off",

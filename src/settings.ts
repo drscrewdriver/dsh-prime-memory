@@ -112,6 +112,15 @@ export interface LiveSettingsHandle {
    * 调用方拿读回值与刚提交的值比对，不一致就必得报告“未完全生效”，而不是假定成功。
    */
   readConfig?(key: string): unknown;
+  /**
+   * 等下一次 `loader/volatile-update` 广播(带超时兜底)——启动挡位的竞态门。
+   *
+   * 背景：插件挂载时 volatile 引用可能还没并入 profile patch 的持久值，
+   * `get()` 读到的是 schema 出厂默认。`applyBootMode` 拿磁盘回读值与运行值对不上时，
+   * 等一次广播再重读，避免拿陈旧快照反写用户刚选的挡位。超时/不支持都 resolve
+   * (调用方重读后照常推进，不能把启动卡在宿主不发广播上)。
+   */
+  waitForVolatile?(timeoutMs?: number): Promise<void>;
 }
 
 /** 本插件 loader entry id(cordis.patch.yml 固定)= 0.1.7 设置表单的命名空间。 */
@@ -222,7 +231,11 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
 
   // 变更诊断(替代旧 scope.watch):宿主把 volatile-only 变更提交进引用后,
   // 向持有 fiber 广播一次 loader/volatile-update(路径为键数组,只关心 live 节)。
+  // 同时拨一下竞态门 waitForVolatile(启动挡位在 patch 未并入时等这里)。
+  let releaseVolatile: (() => void) | undefined;
   ctx.on('loader/volatile-update', (paths) => {
+    releaseVolatile?.();
+    releaseVolatile = undefined;
     if (!paths.some((p) => p[0] === 'live')) return;
     const current = read();
     const b = current.distillBudgets;
@@ -369,6 +382,17 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
     get configWritable() {
       return modernWrite();
     },
+    waitForVolatile: (timeoutMs = 3000) =>
+      new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        releaseVolatile = finish;
+        setTimeout(finish, timeoutMs).unref?.();
+      }),
     updateConfig: async (patch: Record<string, unknown>) => {
       const f = forms as SettingsFormsLike | undefined;
       if (f === undefined || typeof f.update !== 'function') {
@@ -410,16 +434,47 @@ export function registerLiveSettings(ctx: Context, config: MemoryConfig, logger:
  * （挡位 `off` 时开不了、`on` 时关不掉）。写回一次后，本会话所有读写都走
  * 持久化的 `enabled`，语义与用户直觉一致；写面缺席（老宿主/降级句柄）时
  * 保持持久值，不阻断启动。
+ *
+ * 诊断与竞态防护（0.27.9，用户反馈「选了下次关闭重启不生效」）：
+ * - 启动固定打印一行「磁盘回读 × 运行时」对照，把静默吞错的写回变成可取证；
+ * - 若运行时挡位与磁盘挡位不一致（volatile 引用早于 patch 合并的竞态信号），
+ *   等一次 volatile 广播（超时兜底）后重读再应用——不拿陈旧快照反写用户选择。
  */
-export async function applyBootMode(live: LiveSettingsHandle): Promise<void> {
+export async function applyBootMode(
+  live: LiveSettingsHandle,
+  logger?: { info(msg: string): void; warn(msg: string): void },
+): Promise<void> {
+  const say = (msg: string) => logger?.info(msg);
+  const warn = (msg: string) => (logger ? logger.warn(msg) : console.warn(msg));
   try {
-    const s = live.get();
-    if (s.bootMode !== 'on' && s.bootMode !== 'off') return;
+    let s = live.get();
+    const persisted = live.readConfig?.('live') as { bootMode?: unknown; enabled?: unknown } | undefined;
+    const diskBootMode = persisted?.bootMode === 'on' || persisted?.bootMode === 'off' || persisted?.bootMode === 'last' ? persisted.bootMode : '(无回读)';
+    say(
+      `[memory] 启动挡位对照: 运行时 bootMode=${s.bootMode} enabled=${s.enabled} | 磁盘 bootMode=${diskBootMode}` +
+        ` enabled=${persisted && typeof persisted.enabled === 'boolean' ? persisted.enabled : '(无回读)'}` +
+        (live.readConfig ? '' : ' (宿主不供 forms.get,磁盘侧无法对照)'),
+    );
+    if (persisted && typeof persisted.bootMode === 'string' && persisted.bootMode !== s.bootMode) {
+      say(`[memory] 挡位竞态信号: 磁盘=${persisted.bootMode} 运行时=${s.bootMode}，等一次 volatile 广播后重读`);
+      await live.waitForVolatile?.(3000);
+      s = live.get();
+      say(`[memory] 重读后: bootMode=${s.bootMode} enabled=${s.enabled}`);
+    }
+    if (s.bootMode !== 'on' && s.bootMode !== 'off') {
+      say(`[memory] 挡位=last,沿用持久 enabled=${s.enabled},不写回`);
+      return;
+    }
     const want = s.bootMode === 'on';
-    if (s.enabled === want) return;
+    if (s.enabled === want) {
+      say(`[memory] 挡位=${s.bootMode} 与 enabled 已一致,免写回`);
+      return;
+    }
     await live.update({ enabled: want });
-  } catch {
-    /* 写面不可用：保持持久值，启动不受影响 */
+    say(`[memory] 挡位=${s.bootMode} 写回初值: enabled=${want}`);
+  } catch (err) {
+    /* 写面不可用：保持持久值，启动不受影响——但从本版起不再静默 */
+    warn(`[memory] 启动挡位应用失败(保持持久值): ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

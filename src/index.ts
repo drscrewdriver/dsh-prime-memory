@@ -149,8 +149,9 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   // ── 记忆模式运行时开关(0.1.7 声明式:Config 的 live volatile 节;缺失时恒开) ──
   const live = registerLiveSettings(ctx, config, logger);
   // 启动挡位（三态 on/off/last）：on/off 把初值写回 enabled，last 保持持久值。
-  // 异步写、失败不阻断启动（写面缺席的老宿主保持持久值）。
-  void applyBootMode(live);
+  // 异步写、失败不阻断启动（写面缺席的老宿主保持持久值）；0.27.9 起带诊断日志
+  // 与竞态门（磁盘×运行时对照，不一致等一次 volatile 广播后重读）。
+  void applyBootMode(live, logger);
   // 自带自定义设置页(client 半 settings.section「记忆」分节)→ 关掉宿主按
   // volatile 字段自动生成的表单页,避免同一插件出现两份设置入口。
   suppressAutoSettingsForm(ctx);
