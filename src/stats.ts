@@ -766,13 +766,14 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const globalExtract = (s?.capture ?? true) && (s?.distill ?? true);
       const bounds = modes.wingBoundaries(sessionId);
       const locked = modes.getWings(sessionId);
+      const sessionMode = modes.get(sessionId);
       const v: SessionModeGetResponse = {
         sessionId,
-        mode: modes.get(sessionId),
+        mode: sessionMode,
         defaultMode: modes.default,
         recall: modes.getRecall(sessionId) ?? null,
-        recallResolved: modes.resolvedRecall(sessionId, globalRecall),
-        extractResolved: globalExtract,
+        recallResolved: sessionMode === 'off' ? false : modes.resolvedRecall(sessionId, globalRecall),
+        extractResolved: sessionMode === 'off' ? false : globalExtract,
         hall: locked[0] ?? null,
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,
@@ -1094,11 +1095,14 @@ export async function handleEndpoint(endpoint: string, payload: unknown, deps: E
       const s = live?.get();
       const bounds = modes.wingBoundaries(sessionId);
       const locked = modes.getWings(sessionId);
+      const setMode = modes.get(sessionId);
+      const globalExtract2 = (s?.capture ?? true) && (s?.distill ?? true);
       const v: SessionModeSetResponse = {
         sessionId,
-        mode: modes.get(sessionId),
+        mode: setMode,
         recall: modes.getRecall(sessionId) ?? null,
-        recallResolved: modes.resolvedRecall(sessionId, s?.recall ?? true),
+        recallResolved: setMode === 'off' ? false : modes.resolvedRecall(sessionId, s?.recall ?? true),
+        extractResolved: setMode === 'off' ? false : globalExtract2,
         hall: locked[0] ?? null,
         halls: locked,
         hallIncludeUnlabeled: bounds.includeUnlabeled,

@@ -624,6 +624,8 @@ export interface SessionModeSetResponse {
     recall: boolean | null;
     /** 设置后的注入生效值(client 面文直接消费;清除覆盖后由 host 告知解析结果)。 */
     recallResolved: boolean;
+    /** 设置后的提取生效值（全局 capture&&distill 且 mode≠off）。 */
+    extractResolved: boolean;
     /** 设置后的域锁定(null = 中心);多选完整集在 halls。 */
     hall: string | null;
     halls: string[];
