@@ -92,11 +92,14 @@ jobs:
       # ③ 门禁：逐项复刻 ci.yml（typecheck → test → lint → build → smoke → 目录核验）。
       #    test 加 --no-file-parallelism：memory-md-* 在文件级并行下会互抢全局投影状态，
       #    是已知假红（单跑全绿），CI 上也必须串行才稳定。
+      #    --retry=2：个别下载/IO 计时用例（如 embedding-subsystem cancel）在全量跑下
+      #    偶发假红（隔离必绿），正式版为单次发布闸，重试 2 次防瞬时竞态卡住发版；
+      #    真失败会连红 3 次仍拦得住，不掩盖回归。
       - name: 门禁
         run: |
           set -euo pipefail
           npm run typecheck
-          npm test -- --no-file-parallelism
+          npm test -- --no-file-parallelism --retry=2
           npm run lint
           npm run build
           npm run build:smoke

@@ -228,11 +228,14 @@ export function OverviewTab(props: { rpc: RpcFn }) {
               toggle('enabled', v);
             }}
           />
-          {/* 第二级：启动挡位三态滑条——决定下次启动时记忆是开还是关（本会话随时可用上面的总开关） */}
-          <div style={{ ...S.switchRow, alignItems: 'flex-start', paddingLeft: 20 }}>
-            <span style={S.switchLabel}>{tr("下次启动")}</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {/* 第二级：启动挡位三态滑条——决定下次启动时记忆是开还是关（本会话随时可用上面的总开关）。
+              左侧 36px 占位与父级开关列对齐，滑条 stretch 等分填满定宽容器，不再右侧留白 */}
+          <div style={{ ...S.switchRow, alignItems: 'flex-start' }}>
+            <div style={{ width: 36, flexShrink: 0 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, maxWidth: 320 }}>
+              <span style={{ ...S.switchLabel, minWidth: 0 }}>{tr("下次启动")}</span>
               <Segmented
+                stretch
                 value={settingsData.settings.bootMode ?? 'off'}
                 options={[
                   { key: 'last', label: tr("跟随上一次"), title: tr("沿用上一次运行结束时的开关状态") },
