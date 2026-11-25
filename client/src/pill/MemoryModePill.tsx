@@ -23,6 +23,8 @@ export function MemoryModePill(props: {
   // 生效值（面文直接消费——client 不另知全局开关，解析权威在 host）
   const [recall, setRecall] = useState<boolean | null>(null);
   const [recallResolved, setRecallResolved] = useState(true);
+  // 会话级提取生效值（全局 capture&&distill 且 mode≠off）：用于区分“只写”与“关”。
+  const [extractResolved, setExtractResolved] = useState(true);
   // 会话级域锁定（wing 八边形手动挡，Phase 2 多选）：空数组 = 中心（智能档）
   const [halls, setWings] = useState<string[]>([]);
   const [hallIncludeUnlabeled, setWingIncludeUnlabeled] = useState(true);
@@ -48,6 +50,7 @@ export function MemoryModePill(props: {
           setMode(r.value.mode);
           setRecall(r.value.recall);
           setRecallResolved(r.value.recallResolved);
+          setExtractResolved(r.value.extractResolved ?? true);
           setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
           setWingIncludeUnlabeled(r.value.hallIncludeUnlabeled);
           setWingIncludeGeneral(r.value.hallIncludeGeneral);
@@ -150,6 +153,7 @@ export function MemoryModePill(props: {
         } else {
           setRecall(r.value.recall);
           setRecallResolved(r.value.recallResolved);
+          setExtractResolved(r.value.extractResolved ?? true);
         }
       })
       .catch((e: unknown) => {
@@ -241,8 +245,8 @@ export function MemoryModePill(props: {
     ? error
       ? '⚠'
       : '…'
-    : isOff
-      ? tr(info.label)
+    : isOff || (!recallResolved && !extractResolved)
+      ? tr("关")
       : !recallResolved
         ? tr("只写")
         : wingText
