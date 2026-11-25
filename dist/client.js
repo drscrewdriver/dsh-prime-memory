@@ -49989,6 +49989,7 @@ var __create = Object.create;
 		  const [mode, setMode] = (0, import_react34.useState)(null);
 		  const [recall, setRecall] = (0, import_react34.useState)(null);
 		  const [recallResolved, setRecallResolved] = (0, import_react34.useState)(true);
+		  const [extractResolved, setExtractResolved] = (0, import_react34.useState)(true);
 		  const [halls, setWings] = (0, import_react34.useState)([]);
 		  const [hallIncludeUnlabeled, setWingIncludeUnlabeled] = (0, import_react34.useState)(true);
 		  const [hallIncludeGeneral, setWingIncludeGeneral] = (0, import_react34.useState)(false);
@@ -50009,6 +50010,7 @@ var __create = Object.create;
 		        setMode(r.value.mode);
 		        setRecall(r.value.recall);
 		        setRecallResolved(r.value.recallResolved);
+		        setExtractResolved(r.value.extractResolved ?? true);
 		        setWings(r.value.halls ?? (r.value.hall ? [r.value.hall] : []));
 		        setWingIncludeUnlabeled(r.value.hallIncludeUnlabeled);
 		        setWingIncludeGeneral(r.value.hallIncludeGeneral);
@@ -50088,6 +50090,7 @@ var __create = Object.create;
 		      } else {
 		        setRecall(r.value.recall);
 		        setRecallResolved(r.value.recallResolved);
+		        setExtractResolved(r.value.extractResolved ?? true);
 		      }
 		    }).catch((e) => {
 		      if (token2 !== seqRef.current) return;
@@ -50155,7 +50158,7 @@ var __create = Object.create;
 		  const isOff = loaded && mode === "off";
 		  const isFlow = loaded && !isOff;
 		  const wingText = halls.length === 1 ? wingLabels[halls[0]] ?? halls[0] : halls.length > 1 ? `${halls.length} Wing` : null;
-		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff ? tr(info.label) : !recallResolved ? tr("只写") : wingText ? wingText : tr(info.label);
+		  const faceLabel = !loaded ? error ? "⚠" : "…" : isOff || !recallResolved && !extractResolved ? tr("关") : !recallResolved ? tr("只写") : wingText ? wingText : tr(info.label);
 		  ensureThemeStyle();
 		  const pillStyle = {
 		    position: "relative",
