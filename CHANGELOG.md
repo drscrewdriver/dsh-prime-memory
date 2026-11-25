@@ -1,5 +1,18 @@
 ## Unreleased (prerelease)
 
+**滑块语义重构：bootMode 控制新会话默认档位而非系统级功能开关（用户澄清设计意图）。**
+
+- 系统级 recall/capture/distill 由 pill 控制（功能可用性）；滑块“下次启动”由 `SessionModeStore.setDefaultMode/setDefaultRecall` 控制（新会话默认档位）。
+- `applyBootMode` 不再写 recall/capture/distill，改为设置会话默认 mode：
+  - extract='off' → 新会话 mode='off'（记忆完全隐身，但系统功能仍可用）
+  - extract='on' + inject='off' → 新会话 mode='auto' + recall=false（只写不注）
+  - 两轴均 'on' → 新会话 mode='auto' + recall=undefined（跟随全局）
+  - 两轴均 'last' → 不改会话默认
+- `resolvedRecall` 三级回落：会话显式覆盖 ?? 启动默认 ?? 系统级。
+- session-mode-get/set 响应新增 `extractResolved`；mode='off' 时 recallResolved/extractResolved 均为 false，修复输入栏 pill 与设置面板不同步。
+- 出厂默认从 'off' 改为 'last'（新安装开箱即用）。
+
+---
 **启动挡位持久化诊断与竞态防护（用户反馈「选了下次关闭，重启不生效」）。**
 - `applyBootMode` 不再静默吞错：启动固定打印一行「磁盘回读 × 运行时」对照（bootMode/enabled 两组），宿主不供 `forms.get` 时明说无法对照；写回/免写回/失败各有日志。
 - **竞态门**：插件挂载时 volatile 引用可能还没并入 profile patch（读到出厂默认）——磁盘挡位≠运行时挡位时等一次 `loader/volatile-update`（3s 超时兜底）后重读再应用，不拿陈旧快照反写用户选择。
