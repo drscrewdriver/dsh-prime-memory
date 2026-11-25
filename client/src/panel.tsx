@@ -8,6 +8,8 @@ import { applySkin, getSkin, setSkin, type Skin } from './skin.js';
 import { S } from './styles.js';
 import { GuidePanel, GuideRestartButton, guideSteps, isGuideSkipped } from './guide.js';
 import { PRIME_MEMORY_GUIDE_STEPS } from './guide-steps.js';
+import { LlmCostNotice } from './LlmNotice.js';
+import type { DirectChannelView } from '../../src/contract.js';
 import { DrscHealthBanner } from './components/DrscHealthBanner.js';
 import { ensureThemeStyle } from './theme.js';
 import { ConflictsTab } from './tabs/ConflictsTab.js';
@@ -61,6 +63,25 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
   const [skin, setSkinState] = useState<Skin>(() => getSkin());
   // 首次使用引导：懒初始化读一次「跳过」标记，之后由本组件状态决定显隐。
   const [guideOpen, setGuideOpen] = useState(() => !isGuideSkipped('prime-memory'));
+  // 蒸馏通道现状（只读展示给首区块费用提示用；写入仍在概览→蒸馏通道）
+  const [llmChannel, setLlmChannel] = useState<DirectChannelView | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = () => {
+      rpc('dsh-memory/llm-providers', {})
+        .then((r) => {
+          if (alive && r && r.ok) setLlmChannel(r.value.channel);
+        })
+        .catch(() => {});
+    };
+    refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [rpc]);
 
   // 主题令牌与组件样式在面板挂载时注入（输入栏 pill 也可能已注入，幂等）；
   // 每次渲染按当前皮肤刷新 html 属性（ensureThemeStyle 可重入，不重写样式表）。
@@ -95,6 +116,8 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
     <div className="dsh-mem-root" style={S.section}>
       <h2 style={S.heading}>{tr("记忆 (Memory)")}</h2>
       <p style={S.intro}>{tr("L0~L3 分层蒸馏记忆：浏览被记住的内容，控制记忆模式开关。")}</p>
+      {/* LLM 费用提示与本地端点建议：设置面第一个区块（引导/美化排其次）。 */}
+      <LlmCostNotice channel={llmChannel} />
       {/* 设置面上方恒定重启入口：跳过引导后不必清浏览器存储就能重新显示贴士，
           所以它必须在一进来就看到的地方——贴士本身也渲染在同一位置。*/}
       <div style={{ marginBottom: 12 }}>

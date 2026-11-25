@@ -28,6 +28,10 @@
       {
         "file": "client/src/guide-steps.ts",
         "reason": "引导步骤词表刻意独立于插件字典"
+      },
+      {
+        "file": "client/src/pill/SessionRecalledArea.tsx",
+        "reason": "死文件（entry 不可达），设计上不进字典，避免抽取器重跑后被当成新硬编码"
       }
     ],
     "keysFrom": "client/src/locales/keys.json"
