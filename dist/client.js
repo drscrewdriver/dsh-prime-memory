@@ -50886,19 +50886,16 @@ var __create = Object.create;
 		    if (shape === "lemniscate" && eightStyle === "continuous") {
 		      const A = 560;
 		      const u = (rand01(`s:${n.id}`) + (rand01(`u2:${n.id}`) - 0.5) * 6e-3) * Math.PI * 2;
-		      const halfW = 15 + 9 * Math.abs(Math.cos(u));
+		      const halfW = 18;
 		      const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
-		      const twist = u / 2;
 		      const c8 = eightCurve(u, A);
-		      const twistY = Math.sin(twist) * w * 0.62;
-		      const twistN = Math.cos(twist) * w;
-		      const y8 = (rand01(`r:${gk}:y`) - 0.5) * 12 + twistY;
+		      const y8 = (rand01(`y:${n.id}`) - 0.5) * 28;
 		      out.set(n.id, {
-		        x: c8.x + c8.nx * twistN,
+		        x: c8.x + c8.nx * w,
 		        y: y8,
-		        z: c8.z + c8.nz * twistN
+		        z: c8.z + c8.nz * w
 		      });
-		      orbitsOut?.set(n.id, { u, A, t: 0, n: twistN, y: y8 });
+		      orbitsOut?.set(n.id, { u, A, t: 0, n: w, y: y8 });
 		      continue;
 		    }
 		    if (shape === "disk") {
@@ -51292,8 +51289,8 @@ var __create = Object.create;
 		  const egoSpreadRef = (0, import_react36.useRef)(1);
 		  egoSpreadRef.current = egoSpread;
 		  const [discSeed, setDiscSeed] = (0, import_react36.useState)(0);
-		  const [eightStyle, setEightStyle] = (0, import_react36.useState)("cluster");
-		  const eightStyleRef = (0, import_react36.useRef)("cluster");
+		  const [eightStyle, setEightStyle] = (0, import_react36.useState)("continuous");
+		  const eightStyleRef = (0, import_react36.useRef)("continuous");
 		  eightStyleRef.current = eightStyle;
 		  const discSeedRef = (0, import_react36.useRef)(0);
 		  discSeedRef.current = discSeed;

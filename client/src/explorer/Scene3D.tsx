@@ -192,9 +192,13 @@ export function Scene3D(props: {
   egoSpreadRef.current = egoSpread;
   /** 圆盘(吸积盘)种子:每次进入「圆盘」重新掷一次 → 臂数与整体朝向都不同,不永远同一角度。 */
   const [discSeed, setDiscSeed] = useState(0);
-  /** 8 字子风格:成簇(按簇分段)/ 连续(全体混编成一条扭转无限环,弱化类型聚类)。 */
-  const [eightStyle, setEightStyle] = useState<EightStyle>('cluster');
-  const eightStyleRef = useRef<EightStyle>('cluster');
+  /**
+   * 8 字子风格:**连续**（默认）= 全体混编成一条扭转无限环，颜色沿环交替（“打散着转”）；
+   * 成簇 = 按簇分段，适合看归属但流转时会呈几大块平移。
+   * 用户定案：8 字流默认就要混编，不再默认分段聚类。
+   */
+  const [eightStyle, setEightStyle] = useState<EightStyle>('continuous');
+  const eightStyleRef = useRef<EightStyle>('continuous');
   eightStyleRef.current = eightStyle;
   const discSeedRef = useRef(0);
   discSeedRef.current = discSeed;

@@ -443,7 +443,7 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
     for (const [id, q] of F0) { const b = L.get(id)!; expect(Math.hypot(q.x - b.x, q.z - b.z)).toBeLessThan(1e-6); }
   });
 
-  it('8字连续 continuous:全体混编成一条连续环(弱化聚类),带子有莫比乌斯扭转', () => {
+  it('8字连续 continuous:全体混编成一条连续环(不按簇分段),带内有立体薄层', () => {
     const ns: ReturnType<typeof mk>[] = [];
     const halls = ['work', 'learning', 'health', 'finance', 'journey', 'creative'];
     for (const h of halls) for (let i = 0; i < 80; i++) ns.push(mk(h + i, 'tool', h));
@@ -469,7 +469,7 @@ describe('buildClusterShapeLayout —— disk / lemniscate', () => {
       return vals[Math.floor(vals.length / 2)]!;
     };
     expect(spreadOf(N)).toBeGreaterThan(spreadOf(C));
-    // ③ 莫比乌斯扭转:y 的跨度不再接近 0(带子翻面会产生竖直分量)
+    // ③ 立体薄层:y 的跨度不再接近 0(纯平面带从侧面看会缩成一条线)
     const ys = [...N.values()].map((q) => q.y);
     const span = Math.max(...ys) - Math.min(...ys);
     expect(span).toBeGreaterThan(20);

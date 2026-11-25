@@ -434,33 +434,28 @@ export function buildClusterShapeLayout(
   for (const n of nodes) {
     const gk = keyOf(n);
     if (shape === 'lemniscate' && eightStyle === 'continuous') {
-      // ── 连续 8 字(莫比乌斯式无限环)──
-      // 核心:点的 φ **不再按簇分段**,而是全体混编沿 ∞ 曲线均匀铺开(u = 全局均匀 + 极小抖动),
-      // 于是曲线是一条连续不断的带子,颜色沿环交替流动 —— 弱化了类型聚类。
-      // 扭转:带的"厚度"沿切向做 u/2 旋转(莫比乌斯带的关键:走一圈翻一次面),
-      //       横向偏移用 (cos(u/2), sin(u/2)) 而非固定方向 → 带子在环上自我扭转。
+      // ── 连续 8 字（混编无限环）──
+      // 核心:点的相位 u **不按簇分段**——全体按 id 均匀采样（全局混编），
+      // 颜色沿环交织，不形成任何"类型段"。
+      // 截面:横向偏移固定沿**平面法向**（不再做莫比乌斯扭转）。扭转会把带子
+      // 在某些相位立起来 → 投影后忽粗忽细、看着像偏离轨道；参考图的带子是均匀
+      // 的平面环管。
       const A = 560;
       const u = (rand01(`s:${n.id}`) + (rand01(`u2:${n.id}`) - 0.5) * 0.006) * Math.PI * 2;
-      // 带半宽:中心略窄、两端(∞ 交叉处)略宽,读起来像被拉开的绸带。
-      // 2026-11-25 收窄:旧值 34+18 让带的截面达 ±52（≈半径的 9%），加上透视后
-      // 读作"粗管、偏离轨道"（用户报的偏离度过高）；现取 15+9 → ±24（≈ 4~5%），
-      // 点半径本身还有 ~2 世界单位，视觉上仍是一条有厚度的星尘带而不是一条线。
-      const halfW = 15 + 9 * Math.abs(Math.cos(u));
+      // 带半宽取**常量**（≈A 的 3.2%）:端部显蓬松是透视（端部正对视线）的副产物，
+      // 不再靠 |cos u| 人为加宽（那会让带子忽粗忽细）。
+      const halfW = 18;
       const w = (rand01(`b:${n.id}`) - 0.5) * 2 * halfW;
-      // 莫比乌斯扭转:横向方向随 u/2 旋转
-      const twist = u / 2;
       const c8 = eightCurve(u, A);
-      // 扭转把一部分横向偏移转到竖直方向 → 环在交叉处翻面
-      const twistY = Math.sin(twist) * w * 0.62;
-      const twistN = Math.cos(twist) * w;
-      const y8 = (rand01(`r:${gk}:y`) - 0.5) * 12 + twistY;
+      // 竖向薄层按点独立（旧实现按簇共用 y → 同簇点共面叠成一片，读作聚类）。
+      const y8 = (rand01(`y:${n.id}`) - 0.5) * 28;
       out.set(n.id, {
-        x: c8.x + c8.nx * twistN,
+        x: c8.x + c8.nx * w,
         y: y8,
-        z: c8.z + c8.nz * twistN,
+        z: c8.z + c8.nz * w,
       });
-      // 轨道留痕:u 是固有相位,A 固定,带厚 twistN 与竖向 twistY 作为固定偏移。
-      orbitsOut?.set(n.id, { u, A, t: 0, n: twistN, y: y8 });
+      // 轨道留痕:u 是固有相位，A 固定，带厚 w 与竖向 y8 作为固定偏移。
+      orbitsOut?.set(n.id, { u, A, t: 0, n: w, y: y8 });
       continue;
     }
     if (shape === 'disk') {
@@ -605,9 +600,9 @@ export type FlowStyle = 'spin' | 'eight' | 'accretion';
 
 /**
  * 8 字子风格:
- * - cluster:  按簇分角度成团(既有行为),每个簇在 ∞ 曲线的一段上成团块;
- * - continuous: **连续 8 字**——所有点沿 ∞ 曲线均匀铺开、混编(弱化类型聚类),
- *   带宽沿切向做 u/2 扭转 → 读作一条莫比乌斯式的连续无限环。
+ * - cluster:    按簇分角度成团，每个簇在 ∞ 曲线的一段上成块（看归属用，流转时是大块平移）；
+ * - continuous: **连续混编**——所有点按 id 独立均匀采样相位，沿 ∞ 曲线铺满；
+ *   颜色沿环交织、不构成类型段；截面固定沿平面法向（不做扭转）。UI 默认此档。
  */
 export type EightStyle = 'cluster' | 'continuous';
 
