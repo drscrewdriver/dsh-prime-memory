@@ -49010,21 +49010,34 @@ var __create = Object.create;
 		  es: "Estrella",
 		  pt: "Estrela"
 		};
+		var STAR_HIDE = {
+		  zh: "不再提示",
+		  en: "Dismiss",
+		  ja: "今後表示しない",
+		  ko: "다시 보지 않기",
+		  fr: "Masquer",
+		  de: "Ausblenden",
+		  it: "Nascondi",
+		  ru: "Скрыть",
+		  es: "Ocultar",
+		  pt: "Ocultar"
+		};
 		var STAR_S_STYLE_ID = "dsh-star-row-s-style";
 		var STAR_S_STYLE = [
 		  ".dsh-star-row-s{display:flex;align-items:center;gap:8px;flex-wrap:wrap;",
 		  "font-size:12px;line-height:1.5;color:inherit;opacity:.75;margin-top:10px;",
-		  "padding-top:8px;border-top:1px solid rgba(127,127,127,.25)}",
+		  "padding-top:8px;border-top:1px solid var(--dsw-alias-border-l2,currentColor)}",
 		  ".dsh-star-row-s:hover{opacity:1}",
 		  ".dsh-star-link{display:inline-flex;align-items:center;gap:6px;",
 		  "color:inherit;text-decoration:none}",
 		  ".dsh-star-link:hover{text-decoration:underline}",
 		  ".dsh-star-link svg{width:14px;height:14px;flex:none;display:block}",
 		  ".dsh-star-row-s .dsh-star-ask{opacity:.85;font-weight:400}",
-		  ".dsh-star-cta{font:inherit;font-size:11px;line-height:1;padding:4px 9px;",
-		  "border-radius:999px;border:1px solid currentColor;background:transparent;",
-		  "color:inherit;cursor:pointer;flex:none;opacity:.7}",
-		  ".dsh-star-cta:hover{opacity:1}"
+		  ".dsh-star-cta,.dsh-star-hide{font:inherit;font-size:11px;line-height:1;",
+		  "padding:4px 9px;border-radius:999px;border:1px solid currentColor;",
+		  "background:transparent;color:inherit;cursor:pointer;flex:none;opacity:.7}",
+		  ".dsh-star-hide{padding:4px 7px}",
+		  ".dsh-star-cta:hover,.dsh-star-hide:hover{opacity:1}"
 		].join("");
 		function starLang() {
 		  const tag = typeof document !== "undefined" && document.documentElement.lang || "";
@@ -49052,6 +49065,13 @@ var __create = Object.create;
 		  style.textContent = STAR_S_STYLE;
 		  d.head.appendChild(style);
 		}
+		function openRepo(d) {
+		  const a = d.createElement("a");
+		  a.href = REPO_URL;
+		  a.target = "_blank";
+		  a.rel = "noopener noreferrer";
+		  a.click();
+		}
 		function extendedStarRow(link, d) {
 		  if (STAR_VARIANT !== "S") return null;
 		  if (starDismissed()) return link;
@@ -49069,14 +49089,28 @@ var __create = Object.create;
 		  cta.type = "button";
 		  cta.className = "dsh-star-cta";
 		  cta.textContent = "★ " + STAR_CTA[lang];
-		  cta.addEventListener("click", () => {
+		  cta.addEventListener("click", (event) => {
+		    event.preventDefault();
+		    event.stopPropagation();
+		    openRepo(d);
+		  });
+		  row2.appendChild(cta);
+		  const hide = d.createElement("button");
+		  hide.type = "button";
+		  hide.className = "dsh-star-hide";
+		  hide.textContent = "×";
+		  hide.title = STAR_HIDE[lang];
+		  hide.setAttribute("aria-label", STAR_HIDE[lang]);
+		  hide.addEventListener("click", (event) => {
+		    event.preventDefault();
+		    event.stopPropagation();
 		    starDismiss();
 		    if (row2.parentNode) {
 		      row2.parentNode.replaceChild(link, row2);
 		      link.className = "dsh-star-row";
 		    }
 		  });
-		  row2.appendChild(cta);
+		  row2.appendChild(hide);
 		  return row2;
 		}
 		function mountStarRow(doc) {
