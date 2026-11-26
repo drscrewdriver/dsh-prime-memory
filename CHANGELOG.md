@@ -2894,3 +2894,14 @@ text-delta/reasoning chunk 事件。长回复轮次（长文本 + 推理 + 联�
 - 设置页状态面板（client bundle，Connection RPC 数据通道）。
 - 修复致命 bug：配置 schema 导出名从 `schema` 改为 `Config`（cordis 只读 `plugin.Config`，
   导错名会导致整个 profile 启动失败）；LLM 流式文本收集改为 block-end 权威（修双倍输出）。
+
+## 0.29.2 (2026-11-26)
+
+**设置卡底栏 Star 快车道：★ 直接打开仓库页（不再只静默收起），隐藏独立成 ×。**
+
+- 新增 `src/client/star-row-copy.ts`（由 `_tools/star-row/sync.mjs` 从 kit 真源生成，禁手改）：GitHub 图标 + owner/repo 链接 ｜ 求星话术 ｜ ★ CTA ｜ × 隐藏。
+- **修 S 档旧缺陷**：点 ★ 此前写成 `starDismiss()`，与「别打扰我」合流，仓库页一次都没打开过。现在 ★ 走锚点 click 打开 `REPO_URL`（不写 dismissed），× 才写 `dsh.star.<ns>.dismissed=1` 并收话术与两钮；链接段永留。
+- 真源 `STAR:EXTENDED` 段单源维护，A/L 档副本由 sync 整段剥除，已发布 A/L 仓零 diff。
+- 文案 10 语按 `documentElement.lang` 前缀自选，不依赖宿主 locale 服务；样式只走 `--dsw-alias-*` 令牌与 `currentColor`，零硬色。
+- 契约测试改写：旧断言「点 ★ 只收话术」本身把缺陷锁成了契约，改为「★ 打开仓库页且不写 dismissed / × 才隐藏」。
+
