@@ -48963,6 +48963,160 @@ var __create = Object.create;
 		  ] });
 		}
 		
+		// client/src/star-row-copy.ts
+		var REPO_URL = "https://github.com/drscrewdriver/dsh-prime-memory";
+		var STAR_NS = "prime-memory";
+		var STAR_VARIANT = "S";
+		var STAR_COPY = {
+		  zh: { ask: "觉得省事了？一颗 Star 让工具被更多人看见" },
+		  en: { ask: "Finding it handy? A star helps more people discover this tool" },
+		  ja: { ask: "便利でしたら⭐で、このツールがもっと届きます" },
+		  ko: { ask: "유용했다면 ⭐ 하나로 더 많은 사용자에게 닿습니다" },
+		  fr: { ask: "Utile ? Une étoile aide cet outil à être découvert" },
+		  de: { ask: "Nützlich? Ein Stern hilft dem Tool, gesehen zu werden" },
+		  it: { ask: "Ti è utile? Una stella aiuta questo tool a farsi scoprire" },
+		  ru: { ask: "Пригодилось? Звезда поможет большему числу людей узнать о tool" },
+		  es: { ask: "¿Te resulta útil? Una estrella ayuda a que más gente lo descubra" },
+		  pt: { ask: "Achou útil? Uma estrela ajuda mais pessoas a descobrir a ferramenta" }
+		};
+		var STAR_LANGS = ["zh", "en", "ja", "ko", "fr", "de", "it", "ru", "es", "pt"];
+		var GITHUB_MARK_PATH = "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332 -5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12";
+		var STYLE_ID = "dsh-star-row-style";
+		var STYLE_CSS = [
+		  ".dsh-star-row{display:flex;align-items:center;gap:7px;font-size:12px;",
+		  "line-height:1.5;color:inherit;text-decoration:none;opacity:.72;padding:3px 0;",
+		  "margin-top:6px;min-width:0;flex-wrap:wrap}",
+		  ".dsh-star-row:hover{opacity:1;text-decoration:underline}",
+		  ".dsh-star-row svg{width:14px;height:14px;flex:none;display:block}",
+		  ".dsh-star-row .dsh-star-ask{opacity:.85;font-weight:400}"
+		].join("");
+		function pickLang() {
+		  const tag = typeof document !== "undefined" && document.documentElement.lang || "";
+		  const low = tag.toLowerCase();
+		  for (const cand of STAR_LANGS) {
+		    if (low.startsWith(cand)) return STAR_COPY[cand];
+		  }
+		  return STAR_COPY.en;
+		}
+		var STAR_CTA = {
+		  zh: "留颗 Star",
+		  en: "Star",
+		  ja: "スター",
+		  ko: "스타",
+		  fr: "Star",
+		  de: "Stern",
+		  it: "Stella",
+		  ru: "Звезда",
+		  es: "Estrella",
+		  pt: "Estrela"
+		};
+		var STAR_S_STYLE_ID = "dsh-star-row-s-style";
+		var STAR_S_STYLE = [
+		  ".dsh-star-row-s{display:flex;align-items:center;gap:8px;flex-wrap:wrap;",
+		  "font-size:12px;line-height:1.5;color:inherit;opacity:.75;margin-top:10px;",
+		  "padding-top:8px;border-top:1px solid rgba(127,127,127,.25)}",
+		  ".dsh-star-row-s:hover{opacity:1}",
+		  ".dsh-star-link{display:inline-flex;align-items:center;gap:6px;",
+		  "color:inherit;text-decoration:none}",
+		  ".dsh-star-link:hover{text-decoration:underline}",
+		  ".dsh-star-link svg{width:14px;height:14px;flex:none;display:block}",
+		  ".dsh-star-row-s .dsh-star-ask{opacity:.85;font-weight:400}",
+		  ".dsh-star-cta{font:inherit;font-size:11px;line-height:1;padding:4px 9px;",
+		  "border-radius:999px;border:1px solid currentColor;background:transparent;",
+		  "color:inherit;cursor:pointer;flex:none;opacity:.7}",
+		  ".dsh-star-cta:hover{opacity:1}"
+		].join("");
+		function starLang() {
+		  const tag = typeof document !== "undefined" && document.documentElement.lang || "";
+		  const low = tag.toLowerCase();
+		  for (const cand of STAR_LANGS) if (low.startsWith(cand)) return cand;
+		  return "en";
+		}
+		function starDismissed() {
+		  try {
+		    return localStorage.getItem("dsh.star." + STAR_NS + ".dismissed") === "1";
+		  } catch {
+		    return false;
+		  }
+		}
+		function starDismiss() {
+		  try {
+		    localStorage.setItem("dsh.star." + STAR_NS + ".dismissed", "1");
+		  } catch {
+		  }
+		}
+		function injectStarSStyle(d) {
+		  if (d.getElementById(STAR_S_STYLE_ID)) return;
+		  const style = d.createElement("style");
+		  style.id = STAR_S_STYLE_ID;
+		  style.textContent = STAR_S_STYLE;
+		  d.head.appendChild(style);
+		}
+		function extendedStarRow(link, d) {
+		  if (STAR_VARIANT !== "S") return null;
+		  if (starDismissed()) return link;
+		  injectStarSStyle(d);
+		  link.className = "dsh-star-link";
+		  const lang = starLang();
+		  const row2 = d.createElement("div");
+		  row2.className = "dsh-star-row-s";
+		  row2.appendChild(link);
+		  const ask = d.createElement("span");
+		  ask.className = "dsh-star-ask";
+		  ask.textContent = STAR_COPY[lang].ask;
+		  row2.appendChild(ask);
+		  const cta = d.createElement("button");
+		  cta.type = "button";
+		  cta.className = "dsh-star-cta";
+		  cta.textContent = "★ " + STAR_CTA[lang];
+		  cta.addEventListener("click", () => {
+		    starDismiss();
+		    if (row2.parentNode) {
+		      row2.parentNode.replaceChild(link, row2);
+		      link.className = "dsh-star-row";
+		    }
+		  });
+		  row2.appendChild(cta);
+		  return row2;
+		}
+		function mountStarRow(doc) {
+		  const d = doc ?? document;
+		  if (!d.getElementById(STYLE_ID)) {
+		    const tag = d.createElement("style");
+		    tag.id = STYLE_ID;
+		    tag.textContent = STYLE_CSS;
+		    d.head.appendChild(tag);
+		  }
+		  const match = REPO_URL.match(/github\.com\/([^/]+\/[^/#?]+)/);
+		  const repo = match ? match[1] : "drscrewdriver";
+		  const a = d.createElement("a");
+		  a.className = "dsh-star-row";
+		  a.href = REPO_URL;
+		  a.target = "_blank";
+		  a.rel = "noreferrer";
+		  a.dataset.starNs = STAR_NS;
+		  const svg = d.createElementNS("http://www.w3.org/2000/svg", "svg");
+		  svg.setAttribute("viewBox", "0 0 24 24");
+		  svg.setAttribute("aria-hidden", "true");
+		  const path = d.createElementNS("http://www.w3.org/2000/svg", "path");
+		  path.setAttribute("fill", "currentColor");
+		  path.setAttribute("d", GITHUB_MARK_PATH);
+		  svg.appendChild(path);
+		  a.appendChild(svg);
+		  const label = d.createElement("span");
+		  label.textContent = repo;
+		  a.appendChild(label);
+		  const row2 = extendedStarRow(a, d);
+		  if (row2) return row2;
+		  if (STAR_VARIANT === "A") {
+		    const ask = d.createElement("span");
+		    ask.className = "dsh-star-ask";
+		    ask.textContent = pickLang().ask;
+		    a.appendChild(ask);
+		  }
+		  return a;
+		}
+		
 		// client/src/panel.tsx
 		var import_jsx_runtime29 = require("react/jsx-runtime");
 		var TABS = [
@@ -49093,7 +49247,15 @@ var __create = Object.create;
 		        t[0]
 		      );
 		    }) }),
-		    body
+		    body,
+		    /* @__PURE__ */ (0, import_jsx_runtime29.jsx)(
+		      "span",
+		      {
+		        ref: (node) => {
+		          if (node && !node.firstChild) node.appendChild(mountStarRow());
+		        }
+		      }
+		    )
 		  ] });
 		}
 		

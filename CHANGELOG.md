@@ -1,5 +1,14 @@
-<<<<<<< HEAD
-## Unreleased (prerelease)
+## 0.29.1 (2026-11-26)
+
+**设置面新增面板常驻 Star 快车道（panel-star-row S 档试点仓）。**
+
+- `client/src/panel.tsx` 记忆分节（`settings.section`）根容器末尾挂一行常驻条：GitHub 单色 SVG + `drscrewdriver/dsh-prime-memory` 链接（新标签页、`rel=noreferrer`）+ 一句工程化求星话术 + `★ 留颗 Star` 钮。
+- 行本体是生成副本 `client/src/star-row-copy.ts`（真源 `mine-dsh-plugins/_tools/star-row/starRow.ts`，`sync.mjs --check` 把漂移）；副本内嵌 10 语，按 `<html lang>` 前缀自选、认不出回落 en。
+- 关闭语义：点钮只收起话术与钮（`localStorage` 键 `dsh.star.prime-memory.dismissed`），**仓库链接永留**；不弹窗、不打断表单。
+- 行为契约 `tests/star-row.test.ts`（4 例：渲染/链接属性/十语切换/关闭后只剩链接）；`star-row-copy.ts` 登记进 locale 守卫白名单（10 语内嵌，按设计不进插件字典）。
+- 顺带修掉上一版合并残留的三处冲突标记（CHANGELOG 头部，纯文档；npm 包内正文此前含 `<<<<<<< HEAD`）。
+
+## 0.29.0
 
 **滑块语义重构：bootMode 控制新会话默认档位而非系统级功能开关（用户澄清设计意图）。**
 
@@ -13,11 +22,6 @@
 - session-mode-get/set 响应新增 `extractResolved`；mode='off' 时 recallResolved/extractResolved 均为 false，修复输入栏 pill 与设置面板不同步。
 - 出厂默认从 'off' 改为 'last'（新安装开箱即用）。
 
----
-=======
-## 0.29.0
-
->>>>>>> main
 **启动挡位持久化诊断与竞态防护（用户反馈「选了下次关闭，重启不生效」）。**
 - `applyBootMode` 不再静默吞错：启动固定打印一行「磁盘回读 × 运行时」对照（bootMode/enabled 两组），宿主不供 `forms.get` 时明说无法对照；写回/免写回/失败各有日志。
 - **竞态门**：插件挂载时 volatile 引用可能还没并入 profile patch（读到出厂默认）——磁盘挡位≠运行时挡位时等一次 `loader/volatile-update`（3s 超时兜底）后重读再应用，不拿陈旧快照反写用户选择。

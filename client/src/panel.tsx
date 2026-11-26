@@ -25,6 +25,7 @@ import { RoomsTab } from './tabs/RoomsTab.js';
 import { RoomTab } from './tabs/RoomTab.js';
 import { GraphTab } from './tabs/GraphTab.js';
 import { ScenesTab } from './tabs/ScenesTab.js';
+import { mountStarRow } from './star-row-copy.js';
 
 /**
  * Tab 注册表：[key, 名称]；首项为默认页。
@@ -178,6 +179,12 @@ export function MemoryPanel(props: { rpc: RpcFn }) {
         })}
       </div>
       {body}
+      {/* 面板常驻 star 快车道：仓库链接永留，求星话术可一键收起（dismissed 键 dsh.star.prime-memory） */}
+      <span
+        ref={(node) => {
+          if (node && !node.firstChild) node.appendChild(mountStarRow());
+        }}
+      />
     </div>
   );
 }

@@ -32,6 +32,10 @@
       {
         "file": "client/src/pill/SessionRecalledArea.tsx",
         "reason": "死文件（entry 不可达），设计上不进字典，避免抽取器重跑后被当成新硬编码"
+      },
+      {
+        "file": "client/src/star-row-copy.ts",
+        "reason": "star-row 生成副本（10 语内嵌、面板常驻行），由 _tools/star-row/sync.mjs 生成，改真源后重跑，禁手改"
       }
     ],
     "keysFrom": "client/src/locales/keys.json"
