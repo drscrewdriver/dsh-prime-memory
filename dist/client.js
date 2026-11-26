@@ -48998,46 +48998,28 @@ var __create = Object.create;
 		  }
 		  return STAR_COPY.en;
 		}
-		var STAR_CTA = {
-		  zh: "留颗 Star",
-		  en: "Star",
-		  ja: "スター",
-		  ko: "스타",
-		  fr: "Star",
-		  de: "Stern",
-		  it: "Stella",
-		  ru: "Звезда",
-		  es: "Estrella",
-		  pt: "Estrela"
+		var STAR_VERSION = "0.29.4";
+		var STAR_FOOT_COPY = {
+		  zh: { ask: "觉得好用？", star: "去 GitHub 点个 Star", issue: "反馈建议 / 提 issue" },
+		  en: { ask: "Finding it useful?", star: "Star on GitHub", issue: "Feedback / open an issue" },
+		  ja: { ask: "お役に立っていますか？", star: "GitHub でスター", issue: "ご意見・不具合報告" },
+		  ko: { ask: "유용한가요?", star: "GitHub 에서 스타", issue: "피드백 / 이슈 열기" },
+		  fr: { ask: "Utile ?", star: "Une étoile sur GitHub", issue: "Retour / ouvrir un ticket" },
+		  de: { ask: "Hilfreich?", star: "Stern auf GitHub", issue: "Feedback / Issue öffnen" },
+		  it: { ask: "Ti è utile?", star: "Stella su GitHub", issue: "Feedback / apri una issue" },
+		  ru: { ask: "Полезно?", star: "Звезда на GitHub", issue: "Отзыв / открыть issue" },
+		  es: { ask: "¿Te resulta útil?", star: "Danos una estrella", issue: "Sugerencias / abrir issue" },
+		  pt: { ask: "Achou útil?", star: "Dê uma estrela no GitHub", issue: "Feedback / abrir uma issue" }
 		};
-		var STAR_HIDE = {
-		  zh: "不再提示",
-		  en: "Dismiss",
-		  ja: "今後表示しない",
-		  ko: "다시 보지 않기",
-		  fr: "Masquer",
-		  de: "Ausblenden",
-		  it: "Nascondi",
-		  ru: "Скрыть",
-		  es: "Ocultar",
-		  pt: "Ocultar"
-		};
-		var STAR_S_STYLE_ID = "dsh-star-row-s-style";
-		var STAR_S_STYLE = [
-		  ".dsh-star-row-s{display:flex;align-items:center;gap:8px;flex-wrap:wrap;",
-		  "font-size:12px;line-height:1.5;color:inherit;opacity:.75;margin-top:10px;",
-		  "padding-top:8px;border-top:1px solid var(--dsw-alias-border-l2,currentColor)}",
-		  ".dsh-star-row-s:hover{opacity:1}",
-		  ".dsh-star-link{display:inline-flex;align-items:center;gap:6px;",
-		  "color:inherit;text-decoration:none}",
-		  ".dsh-star-link:hover{text-decoration:underline}",
-		  ".dsh-star-link svg{width:14px;height:14px;flex:none;display:block}",
-		  ".dsh-star-row-s .dsh-star-ask{opacity:.85;font-weight:400}",
-		  ".dsh-star-cta,.dsh-star-hide{font:inherit;font-size:11px;line-height:1;",
-		  "padding:4px 9px;border-radius:999px;border:1px solid currentColor;",
-		  "background:transparent;color:inherit;cursor:pointer;flex:none;opacity:.7}",
-		  ".dsh-star-hide{padding:4px 7px}",
-		  ".dsh-star-cta:hover,.dsh-star-hide:hover{opacity:1}"
+		var STAR_FOOT_STYLE_ID = "dsh-star-foot-style";
+		var STAR_FOOT_STYLE = [
+		  ".dsh-star-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;",
+		  "font-size:12px;line-height:1.6;color:inherit;opacity:.72;margin-top:10px}",
+		  ".dsh-star-foot:hover{opacity:1}",
+		  ".dsh-star-foot .dsh-star-ver{opacity:.6;font-variant-numeric:tabular-nums}",
+		  ".dsh-star-foot .dsh-star-dot{opacity:.4}",
+		  ".dsh-star-foot a{color:inherit;text-decoration:none}",
+		  ".dsh-star-foot a:hover{text-decoration:underline}"
 		].join("");
 		function starLang() {
 		  const tag = typeof document !== "undefined" && document.documentElement.lang || "";
@@ -49045,72 +49027,77 @@ var __create = Object.create;
 		  for (const cand of STAR_LANGS) if (low.startsWith(cand)) return cand;
 		  return "en";
 		}
+		var STAR_DISMISS_KEY = "dsh.star." + STAR_NS + ".v2.dismissed";
+		var STAR_DISMISS_KEY_V1 = "dsh.star." + STAR_NS + ".dismissed";
 		function starDismissed() {
 		  try {
-		    return localStorage.getItem("dsh.star." + STAR_NS + ".dismissed") === "1";
+		    if (localStorage.getItem(STAR_DISMISS_KEY_V1) !== null) {
+		      localStorage.removeItem(STAR_DISMISS_KEY_V1);
+		    }
+		    return localStorage.getItem(STAR_DISMISS_KEY) === "1";
 		  } catch {
 		    return false;
 		  }
 		}
 		function starDismiss() {
 		  try {
-		    localStorage.setItem("dsh.star." + STAR_NS + ".dismissed", "1");
+		    localStorage.setItem(STAR_DISMISS_KEY, "1");
 		  } catch {
 		  }
 		}
-		function injectStarSStyle(d) {
-		  if (d.getElementById(STAR_S_STYLE_ID)) return;
+		function injectFootStyle(d) {
+		  if (d.getElementById(STAR_FOOT_STYLE_ID)) return;
 		  const style = d.createElement("style");
-		  style.id = STAR_S_STYLE_ID;
-		  style.textContent = STAR_S_STYLE;
+		  style.id = STAR_FOOT_STYLE_ID;
+		  style.textContent = STAR_FOOT_STYLE;
 		  d.head.appendChild(style);
 		}
-		function openRepo(d) {
-		  const a = d.createElement("a");
-		  a.href = REPO_URL;
-		  a.target = "_blank";
-		  a.rel = "noopener noreferrer";
-		  a.click();
+		function footItem(d, tag, text, href) {
+		  const el = d.createElement(tag);
+		  el.className = "dsh-star-ask";
+		  if (tag === "a" && href) {
+		    const a = el;
+		    a.href = href;
+		    a.target = "_blank";
+		    a.rel = "noopener noreferrer";
+		  }
+		  el.textContent = text;
+		  return el;
 		}
-		function extendedStarRow(link, d) {
+		function footDot(d) {
+		  const dot = d.createElement("span");
+		  dot.className = "dsh-star-dot";
+		  dot.textContent = "·";
+		  return dot;
+		}
+		function extendedStarRow(neutral, d) {
 		  if (STAR_VARIANT !== "S") return null;
-		  if (starDismissed()) return link;
-		  injectStarSStyle(d);
-		  link.className = "dsh-star-link";
-		  const lang = starLang();
+		  if (starDismissed()) return null;
+		  injectFootStyle(d);
+		  const copy = STAR_FOOT_COPY[starLang()] ?? STAR_FOOT_COPY.en;
+		  const issuesUrl = REPO_URL.replace(/\/+$/, "") + "/issues/new";
 		  const row2 = d.createElement("div");
-		  row2.className = "dsh-star-row-s";
-		  row2.appendChild(link);
-		  const ask = d.createElement("span");
-		  ask.className = "dsh-star-ask";
-		  ask.textContent = STAR_COPY[lang].ask;
-		  row2.appendChild(ask);
-		  const cta = d.createElement("button");
-		  cta.type = "button";
-		  cta.className = "dsh-star-cta";
-		  cta.textContent = "★ " + STAR_CTA[lang];
-		  cta.addEventListener("click", (event) => {
-		    event.preventDefault();
-		    event.stopPropagation();
-		    openRepo(d);
-		  });
-		  row2.appendChild(cta);
-		  const hide = d.createElement("button");
-		  hide.type = "button";
-		  hide.className = "dsh-star-hide";
-		  hide.textContent = "×";
-		  hide.title = STAR_HIDE[lang];
-		  hide.setAttribute("aria-label", STAR_HIDE[lang]);
-		  hide.addEventListener("click", (event) => {
-		    event.preventDefault();
-		    event.stopPropagation();
+		  row2.className = "dsh-star-foot";
+		  const ver = d.createElement("span");
+		  ver.className = "dsh-star-ver";
+		  ver.textContent = "v" + STAR_VERSION;
+		  row2.appendChild(ver);
+		  row2.appendChild(footDot(d));
+		  row2.appendChild(footItem(d, "span", copy.ask));
+		  const star = footItem(d, "a", "⭐ " + copy.star, REPO_URL);
+		  const issue = footItem(d, "a", "💬 " + copy.issue, issuesUrl);
+		  row2.appendChild(star);
+		  row2.appendChild(footDot(d));
+		  row2.appendChild(issue);
+		  const collapse = () => {
 		    starDismiss();
 		    if (row2.parentNode) {
-		      row2.parentNode.replaceChild(link, row2);
-		      link.className = "dsh-star-row";
+		      neutral.className = "dsh-star-row";
+		      row2.parentNode.replaceChild(neutral, row2);
 		    }
-		  });
-		  row2.appendChild(hide);
+		  };
+		  star.addEventListener("click", collapse);
+		  issue.addEventListener("click", collapse);
 		  return row2;
 		}
 		function mountStarRow(doc) {
