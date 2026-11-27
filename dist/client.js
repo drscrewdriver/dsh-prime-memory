@@ -48998,7 +48998,7 @@ var __create = Object.create;
 		  }
 		  return STAR_COPY.en;
 		}
-		var STAR_VERSION = "0.29.4";
+		var STAR_VERSION = "0.29.5";
 		var STAR_FOOT_COPY = {
 		  zh: { ask: "觉得好用？", star: "去 GitHub 点个 Star", issue: "反馈建议 / 提 issue" },
 		  en: { ask: "Finding it useful?", star: "Star on GitHub", issue: "Feedback / open an issue" },

@@ -68,7 +68,9 @@ export function withFileLog(dataDir, logger) {
     };
     const timer = setInterval(flushNow, FLUSH_INTERVAL_MS);
     timer.unref?.();
-    process.once('beforeExit', () => {
+    // 退出前兜底同步刷盘。必须命名:close() 要用同一个函数引用解绑,
+    // 匿名监听器摘不掉(issue #51:apply 重跑一次就多一份)。
+    const onBeforeExit = () => {
         if (buffer.length > 0) {
             const batch = buffer;
             buffer = [];
@@ -79,7 +81,8 @@ export function withFileLog(dataDir, logger) {
                 /* ignore */
             }
         }
-    });
+    };
+    process.once('beforeExit', onBeforeExit);
     const write = (level, msg) => {
         try {
             buffer.push(line(level, msg));
@@ -91,6 +94,15 @@ export function withFileLog(dataDir, logger) {
         }
     };
     return {
+        /**
+         * 释放本实例持有的全局资源:Cordis 卸载/重跑 apply 时调用,幂等。
+         * 收尾再 flushNow 一次,让卸载前缓冲的几行仍落进 memory.log。
+         */
+        close: () => {
+            clearInterval(timer);
+            process.off('beforeExit', onBeforeExit);
+            flushNow();
+        },
         debug: (m) => logger.debug?.(m),
         info: (m) => {
             logger.info(m);

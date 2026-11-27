@@ -104,6 +104,9 @@ export async function apply(ctx, config) {
     // dsh 宿主无持久化日志,镜像 info+ 到数据目录 memory.log 供蒸馏问题诊断
     const fileLogger = withFileLog(dataDir, logger);
     logger = fileLogger;
+    // webServer/tools 等注入服务重启会让 Cordis 重跑 apply:不登记逆的话,
+    // 每跑一次就多留一个 beforeExit 监听器 + 一个 500ms 定时器(issue #51)。
+    ctx.effect(() => () => fileLogger.close());
     // 供应商拓扑变化(增删/改配置)→ 思考档位能力缓存失效,下次调用重新探询
     ctx.on('llm/adapters-updated', () => invalidateEffortCache());
     // 存储初始化失败只降级(禁用捕获/蒸馏),绝不拖垮宿主——

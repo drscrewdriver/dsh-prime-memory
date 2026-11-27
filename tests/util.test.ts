@@ -135,6 +135,39 @@ describe('filelog', () => {
     expect(logs).toContain('hello-file'); // 控制台镜像不丢
   });
 
+  it('close() releases the beforeExit listener and interval (issue #51)', async () => {
+    const base = { info: () => {}, warn: () => {}, error: () => {} };
+    const before = process.listenerCount('beforeExit');
+    // 12 份 > 默认阈值 10:修前这里会直接抛 MaxListenersExceededWarning 级别的泄漏,
+    // 临时抬高阈值只是为了让用例失败点落在断言上而不是警告上
+    const prevMax = process.getMaxListeners();
+    process.setMaxListeners(before + 64);
+    const handles = [];
+    try {
+      for (let i = 0; i < 12; i++) handles.push(withFileLog(await tmp(), base));
+      expect(process.listenerCount('beforeExit')).toBe(before + 12);
+      for (const h of handles) h.close();
+      expect(process.listenerCount('beforeExit')).toBe(before);
+      handles[0].close(); // 幂等:重复 close 不抛、不重复减
+      expect(process.listenerCount('beforeExit')).toBe(before);
+    } finally {
+      process.setMaxListeners(prevMax);
+    }
+  });
+
+  it('close() flushes buffered lines before releasing', async () => {
+    const closeDir = await mkdtemp(join(tmpdir(), 'dsh-filelog-close-'));
+    try {
+      const logger = withFileLog(closeDir, { info: () => {}, warn: () => {}, error: () => {} });
+      logger.info('bye-file');
+      logger.close();
+      await new Promise((r) => setTimeout(r, 50));
+      expect(await readFile(join(closeDir, 'memory.log'), 'utf-8')).toContain('[info] bye-file');
+    } finally {
+      await rm(closeDir, { recursive: true, force: true });
+    }
+  });
+
   it('errDetail renders message with first stack frame', () => {
     const e = new Error('boom');
     expect(errDetail(e)).toContain('boom');

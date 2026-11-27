@@ -26,7 +26,10 @@ export function errDetail(err: unknown): string {
   return String(err);
 }
 
-export function withFileLog(dataDir: string, logger: MemoryLogger): MemoryLogger {
+/** 文件日志句柄:在 MemoryLogger 之上多一个 close(),供 apply 用 ctx.effect 登记释放(issue #51)。 */
+export type FileLogHandle = MemoryLogger & { close: () => void };
+
+export function withFileLog(dataDir: string, logger: MemoryLogger): FileLogHandle {
   const logPath = join(dataDir, 'memory.log');
   let buffer: string[] = [];
   let rotateFailures = 0;
@@ -73,7 +76,9 @@ export function withFileLog(dataDir: string, logger: MemoryLogger): MemoryLogger
 
   const timer = setInterval(flushNow, FLUSH_INTERVAL_MS);
   timer.unref?.();
-  process.once('beforeExit', () => {
+  // 退出前兜底同步刷盘。必须命名:close() 要用同一个函数引用解绑,
+  // 匿名监听器摘不掉(issue #51:apply 重跑一次就多一份)。
+  const onBeforeExit = (): void => {
     if (buffer.length > 0) {
       const batch = buffer;
       buffer = [];
@@ -83,7 +88,8 @@ export function withFileLog(dataDir: string, logger: MemoryLogger): MemoryLogger
         /* ignore */
       }
     }
-  });
+  };
+  process.once('beforeExit', onBeforeExit);
 
   const write = (level: string, msg: string): void => {
     try {
@@ -95,6 +101,15 @@ export function withFileLog(dataDir: string, logger: MemoryLogger): MemoryLogger
   };
 
   return {
+    /**
+     * 释放本实例持有的全局资源:Cordis 卸载/重跑 apply 时调用,幂等。
+     * 收尾再 flushNow 一次,让卸载前缓冲的几行仍落进 memory.log。
+     */
+    close: () => {
+      clearInterval(timer);
+      process.off('beforeExit', onBeforeExit);
+      flushNow();
+    },
     debug: (m) => logger.debug?.(m),
     info: (m) => {
       logger.info(m);

@@ -3,4 +3,8 @@ import type { MemoryLogger } from '../types.js';
 export declare const SIZE_CHECK_INTERVAL = 32;
 /** 错误对象转带堆栈的单行描述(诊断日志用,非 Error 直接字符串化)。 */
 export declare function errDetail(err: unknown): string;
-export declare function withFileLog(dataDir: string, logger: MemoryLogger): MemoryLogger;
+/** 文件日志句柄:在 MemoryLogger 之上多一个 close(),供 apply 用 ctx.effect 登记释放(issue #51)。 */
+export type FileLogHandle = MemoryLogger & {
+    close: () => void;
+};
+export declare function withFileLog(dataDir: string, logger: MemoryLogger): FileLogHandle;

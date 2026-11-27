@@ -1,3 +1,12 @@
+## 0.29.5 (2026-11-27)
+
+**修掉 #51：`withFileLog` 的 `beforeExit` 监听器与 500ms 定时器在插件卸载/重跑时不释放，随 webServer/tools 重启单调累积。**
+
+- `src/util/filelog.ts`：`beforeExit` 处理器具名（匿名摘不掉），返回值由 `MemoryLogger` 扩成 `FileLogHandle = MemoryLogger & { close() }`；`close()` = `clearInterval` + `process.off('beforeExit', onBeforeExit)` + 收尾 `flushNow()`（卸载前缓冲的几行仍落进 `memory.log`），幂等。
+- `src/index.ts`：apply 里 `ctx.effect(() => () => fileLogger.close())` 登记逆，与既有 `db.close()`/`disposeBench()` 同款范式——插件 inject 了 `webServer`/`tools`，任一服务重启都会重跑 apply，没有逆登记就每跑一次多留一份。
+- 实测（修前）：一次性连开 12 份句柄，`process.listenerCount('beforeExit')` 0 → 12，`close` 不存在（0/12）；旧计时器继续每 500ms 跑旧闭包的 `flushNow`。
+- `tests/util.test.ts` 补两例：12 份句柄 `close()` 后监听器计数回到基线且重复 close 幂等；close 前写入的行仍落盘。修前红（2 failed）/修后绿（18 passed）。
+
 ## 0.29.1 (2026-11-26)
 
 **设置面新增面板常驻 Star 快车道（panel-star-row S 档试点仓）。**
