@@ -1,3 +1,17 @@
+## 0.29.6 (2026-11-28)
+
+**人格泄露三道防线：定期抽查（只报告）+ 蒸馏侧过滤（去特征不整条丢）+ 存量去人格化命令。**
+
+- **审计**（`src/audit/persona-terms.ts` + `persona-leak.ts` + `src/persona-audit-wiring.ts`）：定期扫 L1 / L0 / md 投影，发现 spirit 人格词即产出 `<dataDir>/audit/persona-leak.json` 并 warn。**默认开、只报告不删**（`audit.autoRetire=false`）。
+- 词表三级回退：`$DSH_HOME/spirit/persona.md` → `spirit.db: persona_current.card_json` → 内置 `['本鱼']`。换人设不用改代码，读不到时不静默失效。
+- **判定纯关键词、零 LLM、零 embedding**：审计自己不能成为新的漂移源。分级 high（自称/角色名/人设行标签，任意出现即命中）/ medium（昵称词需**紧邻字符**边界 + 排除词 淘宝/支付宝/宝藏/宝马）。
+- 首跑深扫 / 常态增量：无 `audit/.persona-leak-state.json` ⇒ 全库扫（不受窗口限制）；有 ⇒ 只扫 `updated_time > lastRanAt` 的 L1、`timestamp > lastRanAt` 的 L0、mtime 变化的 md。真机首跑实测：L1 2436 / L0 29955 / md 2770，耗时 < 2s。
+- 配置新增 `audit` 节四键（`enabled` / `intervalMs` / `windowDays` / `autoRetire`），全部带默认值；定时器 `ctx.effect + setInterval` 可 dispose，开关在 tick 内判（运行时打开即时生效），首轮在启动 5 分钟后。
+- **蒸馏过滤**：`sanitizeText` 增人格区块剥离（只剥连续方括号人设行块，不碰正文里的普通方括号）；L1 抽取 prompt 三处【不应该提取的内容】各加人格化禁令；L1 落库前 `scrubPersonaArtifacts` **摘特征后保留**——「本鱼已核实 X」→「已核实 X」，摘完为空才丢并 warn，字数变化打 info。
+- **存量去人格化**（`src/audit/persona-retire.ts`）：`dryRun` 默认 true；实跑时改正文同步更新 `l1_fts`，摘空者写全仓统一的 `dsh_superseded` 退场标记（不删行、可恢复）。
+- 测试：`tests/persona-leak-audit.test.ts`（19 例）、`tests/persona-filter.test.ts`（13 例）、`tests/persona-retire.test.ts`（3 例）、`tests/persona-leak-live.test.ts`（真机一次性，`PM_LIVE_AUDIT=1` 才跑）。
+- 门禁：typecheck 干净 / lint 0 error / 249 文件 2587 测试全绿。
+
 ## 0.29.5 (2026-11-27)
 
 **修掉 #51：`withFileLog` 的 `beforeExit` 监听器与 500ms 定时器在插件卸载/重跑时不释放，随 webServer/tools 重启单调累积。**

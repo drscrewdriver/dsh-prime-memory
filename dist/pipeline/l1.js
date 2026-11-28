@@ -22,6 +22,8 @@ import { stampValidity, validToSourceOf } from '../store/validity.js';
 import { familyForType, normPersistence, normScope, resolveRecordFamily, resolveRecordScope, WING_FALLBACK } from '../types.js';
 import { normApplicability, resolveRepoScope } from '../repo-scope.js';
 import { routeWorkspace } from '../workspace-route.js';
+import { loadPersonaTerms } from '../audit/persona-terms.js';
+import { scrubPersonaArtifacts } from '../audit/persona-scrub.js';
 /**
  * L1 抽取单块字符硬顶(修复 #10 分批过大)
  *
@@ -347,6 +349,9 @@ routeHealth) {
         logger.info(`[memory] L1 输入超预算(${pending.length} 条消息),分 ${chunks.length} 块抽取(每块 ≤${perChunk} 字符)`);
     }
     const extracted = [];
+    // 人格词表：整轮读一次（读文件/只读库，不在逐条循环里重复 IO）。
+    // 读不到 ⇒ 空词表，只剥人设行（退化为"至少不让人设块落库"，绝不静默放行）。
+    const personaTerms = loadPersonaTerms();
     // R1′ 抽取块级失败的消息(留桶下轮重投，实现部分消费)
     const failedMessages = [];
     let lastScene = chainState.lastSceneName;
@@ -420,8 +425,21 @@ routeHealth) {
                 const routed = cfg.workspaceSource?.enabled === true
                     ? routeWorkspace(`${m.content}\n${scene.scene_name}`, cfg.workspaceSource.routes)
                     : undefined;
+                // ── 输出侧人格闸（persona-leak-guardrails C3）──
+                // 裁决①：**摘特征后保留**，不是整条丢——「本鱼已核实 X」的事实部分仍然有效。
+                // 摘完为空（纯人设条目）才丢，且必须 warn：静默丢会让"蒸馏怎么少了一条"无从查起。
+                // 只在净化真的改动了文本时打 info，正常记忆（绝大多数）零日志。
+                const scrubbed = scrubPersonaArtifacts(m.content, personaTerms);
+                if (scrubbed === '') {
+                    logger.warn(`[memory] L1 整条皆人格化，跳过: ${scene.scene_name}`);
+                    continue;
+                }
+                if (scrubbed !== m.content) {
+                    logger.info(`[memory] L1 去人格化后入库: ${scene.scene_name}（原 ${m.content.length} → ${scrubbed.length} 字）`);
+                }
                 extracted.push({
                     ...m,
+                    content: scrubbed,
                     // 开关关着时**不把 title 带进管线**：旧记录形状逐字不变（不新增键、不参与任何判据）。
                     ...(cfg.naming?.enabled === true && m.title !== undefined && m.title !== null
                         ? { title: m.title }

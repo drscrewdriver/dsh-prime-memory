@@ -339,6 +339,22 @@ export interface MemoryConfig {
     enabled: boolean;
   };
   /**
+   * 人格泄露审计（persona-leak-guardrails 模块 B）：定期扫 L1/L0/画像 md，
+   * 发现 spirit 人格词（自称/昵称/角色名/人设行）即产出报告并告警。
+   *
+   * **默认开、只报告不删**——审计本身零 LLM、零 embedding（纯关键词），
+   * 自动删记忆违反显式优先纪律且误删不可逆。
+   */
+  audit: {
+    enabled: boolean;
+    /** 审计周期（ms）。默认 24h。 */
+    intervalMs: number;
+    /** 常态增量的窗口天数（首跑不受此限：第一次把全库过一遍）。 */
+    windowDays: number;
+    /** 显式开启才动库（默认 false = 只写报告）。 */
+    autoRetire: boolean;
+  };
+  /**
    * 关键词蒸馏回填（keyword 检索轴的产出方）：**独立回填批扫**，为缺 `metadata.dsh_keywords` 的
    * L1 记录批量补关键词，喂 `l1_fts` 的关键词轴（`ftsKeywordText` 读该键）。由
    * `dsh-memory/keyword-backfill` 端点触发，镜像 wing 回填（单飞/后台/有界）。
@@ -973,6 +989,14 @@ export const memorySchema: ConfigSchema = Schema.object({
   // 使用场景（G1）：默认关；开时抽取 prompt 追加 usageScenario 指令（off 逐字不变）。
   usageScenario: Schema.object({
     enabled: Schema.boolean().default(false),
+  }),
+  // 人格泄露审计（persona-leak-guardrails 模块 B）：默认开、只报告不删。
+  // 关时定时器空转（tick 内判），审计报告与状态文件都不产出。
+  audit: Schema.object({
+    enabled: Schema.boolean().default(true),
+    intervalMs: Schema.number().min(60_000).max(604_800_000).default(86_400_000),
+    windowDays: Schema.number().min(1).max(90).default(7),
+    autoRetire: Schema.boolean().default(false),
   }),
   // 关键词蒸馏回填：默认关（关时不回填、不产 dsh_keywords、FTS 逐字不变）；护栏复用 backfill。
   keyword: Schema.object({

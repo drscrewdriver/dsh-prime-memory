@@ -170,6 +170,31 @@ L1/L2/L3 层级过滤）、层级 × 时间窗口表格（调用数 / 输出与�
        alt="分层记忆四层（自左上向右下逐层精炼）：L0 原始对话（对话气泡）→ L1 原子记忆（发光事实粒子）→ L2 场景块（玻璃文档板）→ L3 核心画像（发光晶核）；层间由 LLM 提取/整合/蒸馏光束相连，宽度递减表示数据逐层精炼">
 </p>
 
+## 人格泄露审计（默认开、只报告不删）
+
+记忆库不该收人格设定，但**人设会经粘贴/转发/蒸馏混进来**。本插件因此自带一道确定性审计：
+
+- **词表**从 `$DSH_HOME/spirit` 只读推导（`persona.md` → `spirit.db: persona_current` → 内置兜底），
+  换人设不用改代码；prime-memory 与 spirit 之间**只有这一条单向只读**，不反向调用。
+- **判定纯关键词、零 LLM、零 embedding**：high = 自称 / 角色名 / 人设行标签（任意出现即命中），
+  medium = 昵称词（需**紧邻字符**边界 + 排除 淘宝 / 支付宝 / 宝藏 / 宝马）。审计自己不能成为新的漂移源。
+- **首跑全库、常态增量**：首次跑（无 `audit/.persona-leak-state.json`）扫 L1 + L0 + md 全量、不受窗口限制；
+  之后只扫 `updated_time` / `timestamp` / mtime 变化的行。真机实测 2436 + 29955 + 2770 条 < 2s。
+- **只报告**：写 `<dataDir>/audit/persona-leak.json` 并对高危命中 warn，默认 `audit.autoRetire=false`——
+  误删不可逆，动库必须显式。
+- **蒸馏侧同时过滤**：`sanitizeText` 剥人格区块，L1 抽取 prompt 加禁令，落库前 `scrubPersonaArtifacts`
+  **摘特征后保留**（「本鱼已核实 X」→「已核实 X」），摘完为空才丢。
+
+配置（`config.yml` 的 `audit` 节，四键全带默认值）：
+
+```yaml
+audit:
+  enabled: true            # 审计总开关（关时定时器空转，不产任何文件）
+  intervalMs: 86400000     # 周期，默认 24h（60s ~ 7d）
+  windowDays: 7            # 常态增量窗口（首跑不受此限）
+  autoRetire: false        # 显式开启才动库；默认只报告
+```
+
 ## 会话级记忆档位
 
 <p align="center">

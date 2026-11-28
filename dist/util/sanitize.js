@@ -33,6 +33,9 @@ export function sanitizeText(text) {
     cleaned = cleaned.replace(/^System:\s*\[[\s\S]*?$/gm, '');
     // 内联 base64 图片
     cleaned = cleaned.replace(/data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/gi, '');
+    // spirit 人格区（v0.13.7 起进系统提示；v0.13.6 及以前可能经粘贴/转发混入 L0）。
+    // 只剥**连续方括号人设行块**，不碰正文里的普通方括号（markdown 链接文本要保留）。
+    cleaned = cleaned.replace(/^[ \t]*\[(?:角色|自称|昵称|语气|看重|不会做|主人的背景\(同步\))\][^\n]*(?:\n|$)(?:^[ \t]*\[(?:自称|昵称|语气|看重|不会做|主人的背景\(同步\))\][^\n]*(?:\n|$))*/gmu, '');
     // 空字符 + 折叠空白
     cleaned = cleaned.replace(/\0/g, '').replace(/\n{3,}/g, '\n\n').trim();
     return cleaned;

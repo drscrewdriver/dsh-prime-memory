@@ -393,6 +393,14 @@ export const memorySchema = Schema.object({
     usageScenario: Schema.object({
         enabled: Schema.boolean().default(false),
     }),
+    // 人格泄露审计（persona-leak-guardrails 模块 B）：默认开、只报告不删。
+    // 关时定时器空转（tick 内判），审计报告与状态文件都不产出。
+    audit: Schema.object({
+        enabled: Schema.boolean().default(true),
+        intervalMs: Schema.number().min(60_000).max(604_800_000).default(86_400_000),
+        windowDays: Schema.number().min(1).max(90).default(7),
+        autoRetire: Schema.boolean().default(false),
+    }),
     // 关键词蒸馏回填：默认关（关时不回填、不产 dsh_keywords、FTS 逐字不变）；护栏复用 backfill。
     keyword: Schema.object({
         enabled: Schema.boolean().default(false),

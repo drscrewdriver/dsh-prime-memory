@@ -83,6 +83,7 @@ import { effectiveCfg } from './pipeline/runner.js';
 import { pendingPathFor } from './store/pending.js';
 import { initTokenCost, resetTokenCost } from './token-cost.js';
 import { initTraceStore } from './store/trace.js';
+import { registerPersonaAuditTimer } from './persona-audit-wiring.js';
 
 export const name = 'dsh-memory-plugin';
 
@@ -641,6 +642,16 @@ export async function apply(ctx: Context, config: MemoryConfig): Promise<void> {
   runner.startGraphBackfillTimer();
   // 时效标注存量回填(expiry-tiering task_6.3:tieringEnabled 门控,低频、让位蒸馏)
   runner.startValidityBackfillTimer();
+  // 人格泄露审计（persona-leak-guardrails 模块 B）：默认开、只报告不删、零 LLM。
+  // 定时器自己判开关（运行时打开即时生效），首轮在启动 5 分钟后。
+  // l1 只给「显式开启 autoRetire」时用：默认路径审计对库始终只读。
+  registerPersonaAuditTimer(ctx, {
+    dataDir,
+    dbPath: path.join(dataDir, 'memory.db'),
+    cfg: config,
+    logger,
+    ...(storageOk && !db.isDegraded() ? { l1: stores.l1 } : {}),
+  });
 
   // 重建控制器(存储降级时不建——RPC 端点走 supported=false 分支)
   const rebuild =
